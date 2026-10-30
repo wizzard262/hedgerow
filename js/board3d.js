@@ -220,10 +220,34 @@ const Board = (() => {
     if (t.visible) { const to = pieces[u.id].userData.to; t.position.set(to.x + dx, 0, to.z + dz); }
   }
 
+  // A piece that has had its move this hour is greyed out: every material swapped for a dull grey copy, and back again
+  const greyCache = {};
+  function greyOut(g, grey) {
+    if (g.userData.greyed === grey) return;
+    g.userData.greyed = grey;
+    g.traverse(c => {
+      if (!c.isMesh) return;
+      if (grey) {
+        c.userData.orig = c.material;
+        const swap = m => {
+          if (!greyCache[m.uuid]) {
+            const k = m.clone();
+            if (k.color) { const l = k.color.r * 0.3 + k.color.g * 0.59 + k.color.b * 0.11; k.color.setRGB(l * 0.8 + 0.06, l * 0.8 + 0.06, l * 0.8 + 0.06); }
+            if (k.map) k.map = null;
+            k.transparent = true; k.opacity = 0.75;
+            greyCache[m.uuid] = k;
+          }
+          return greyCache[m.uuid];
+        };
+        c.material = Array.isArray(c.material) ? c.material.map(swap) : swap(c.material);
+      } else if (c.userData.orig) c.material = c.userData.orig;
+    });
+  }
+
   function updatePieces(st) {
     for (const u of st.units) {
       const g = u.x === null ? pieces[u.id] : model(u);
-      if (g) g.visible = u.x !== null;
+      if (g) { g.visible = u.x !== null; greyOut(g, u.side === 'us' && u.acted); }
     }
     for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) arrange(st, x, y);
     for (const u of st.units) {
@@ -231,18 +255,32 @@ const Board = (() => {
       const big = u.kind === 'company' || Sim.isTank(u);
       const side = u.side === 'us' ? 1 : -1;
       marker(u, ':shock', '#9b2a22', '!', u.shocked, big ? 0.06 * side : 0.12 * side, big ? 0.12 : 0.24);
-      marker(u, ':done', '#6b6b66', '✓', u.side === 'us' && u.acted, big ? 0.18 * side : 0.22 * side, big ? 0.9 : 0.3, 3.2);
       marker(u, ':elite', '#b38a2e', '★', u.quality === 'elite' && u.kind === 'company', 0.06 * side, 0.93);
     }
   }
 
   // ---------- Highlights on the table ----------
-  const MARK = { move: '#7fc6e0', charge: '#e0705f', shoot: '#e6c95a', rally: '#8fd47a', fire: '#e8a05a', breach: '#c9a46a', attach: '#b9a0e0', select: '#fff6dc', hover: '#ffffff' };
+  // Red diagonal hatching for the fields a Move & shoot can go to (fire from there)
+  let hatchTex = null;
+  function hatch() {
+    if (!hatchTex) {
+      const c = document.createElement('canvas'); c.width = c.height = 128;
+      const g = c.getContext('2d');
+      g.strokeStyle = 'rgba(232,53,42,.85)'; g.lineWidth = 10;
+      for (let k = -128; k < 256; k += 32) { g.beginPath(); g.moveTo(k, 128); g.lineTo(k + 128, 0); g.stroke(); }
+      hatchTex = new T.CanvasTexture(c);
+      hatchTex.wrapS = hatchTex.wrapT = T.RepeatWrapping;
+    }
+    return hatchTex;
+  }
+  const MARK = { hatch: '#e8352a', move: '#7fc6e0', charge: '#e0705f', shoot: '#e6c95a', rally: '#8fd47a', fire: '#e8a05a', breach: '#c9a46a', attach: '#b9a0e0', select: '#fff6dc', hover: '#ffffff' };
 
   // A coloured square of light on a field, with a brighter rim
   function mark(x, y, kind, inset = 0.05) {
     const c = new T.Color(MARK[kind]);
-    const plane = new T.Mesh(new T.PlaneGeometry(1 - inset * 2, 1 - inset * 2), new T.MeshBasicMaterial({ color: c, transparent: true, opacity: kind === 'hover' ? 0.06 : 0.16, depthWrite: false }));
+    const plane = new T.Mesh(new T.PlaneGeometry(1 - inset * 2, 1 - inset * 2), kind === 'hatch'
+      ? new T.MeshBasicMaterial({ map: hatch(), transparent: true, opacity: 0.75, depthWrite: false })
+      : new T.MeshBasicMaterial({ color: c, transparent: true, opacity: kind === 'hover' ? 0.06 : 0.16, depthWrite: false }));
     at(plane, x + 0.5, 0.004, y + 0.5, -Math.PI / 2, 0, 0); marks.add(plane);
     if (kind === 'hover') return;
     const s = 0.5 - inset, pts = [[-s, -s], [s, -s], [s, s], [-s, s], [-s, -s]].map(([a, b]) => new T.Vector3(x + 0.5 + a, 0.006, y + 0.5 + b));
@@ -285,6 +323,96 @@ const Board = (() => {
     }
   }
 
+  // ---------- Shooting on the table ----------
+  // Each new shot plays once: a muzzle flash at the shooter, then tracers (rifles a few, machine guns a stream) or one
+  // glowing shell (tanks and guns) or a rocket trail flying to the target; where it lands, dust and sparks for bullets,
+  // a bright strike on armour, or a high-explosive burst with smoke when a gun fires on men. Artillery and mortars burst only
+  const glowTex = {};
+  function glow(colour) {
+    if (!glowTex[colour]) {
+      const c = document.createElement('canvas'); c.width = c.height = 64;
+      const g = c.getContext('2d'), r = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+      r.addColorStop(0, 'rgba(255,255,255,1)'); r.addColorStop(0.25, colour); r.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = r; g.fillRect(0, 0, 64, 64);
+      glowTex[colour] = new T.CanvasTexture(c);
+    }
+    return new T.Sprite(new T.SpriteMaterial({ map: glowTex[colour], transparent: true, depthWrite: false, blending: T.AdditiveBlending }));
+  }
+  const smokeTex = (() => { let t = null; return () => {
+    if (!t) { const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d'), r = g.createRadialGradient(32, 32, 4, 32, 32, 32); r.addColorStop(0, 'rgba(110,104,96,.9)'); r.addColorStop(1, 'rgba(110,104,96,0)'); g.fillStyle = r; g.fillRect(0, 0, 64, 64); t = new T.CanvasTexture(c); }
+    return t; }; })();
+
+  let shots = [];              // effects playing: { fx, t0 }
+  const seenFx = new WeakSet();
+
+  function startShots(st) {
+    for (const f of st.fx) {
+      if (seenFx.has(f)) continue;
+      seenFx.add(f);
+      shots.push({ f, t0: performance.now() + shots.filter(s => performance.now() - s.t0 < 300).length * 180, objs: [] });
+    }
+  }
+
+  // Where a shot leaves from and lands: the middle of the pieces' bases, a little above the table
+  function shotEnds(f) {
+    const tu = { id: f.to && f.to.id, x: f.x, y: f.y, kind: f.armour ? 'sherman' : 'company' };
+    const to = pieces[tu.id] ? pieceCentre(tu) : new T.Vector3(f.x + 0.5, 0, f.y + 0.5);
+    let from = null;
+    if (f.from) from = pieces[f.from.id] ? pieceCentre({ id: f.from.id, x: f.from.x, y: f.from.y }) : new T.Vector3(f.from.x + 0.5, 0, f.from.y + 0.5);
+    return { from, to };
+  }
+
+  function playShots(now) {
+    for (const s of shots) { for (const o of s.objs) marks.remove(o); s.objs = []; }
+    shots = shots.filter(s => now - s.t0 < 1600);
+    for (const s of shots) {
+      const f = s.f, t = (now - s.t0) / 1000;
+      if (t < 0) continue;
+      const add = o => { marks.add(o); s.objs.push(o); return o; };
+      const { from, to } = shotEnds(f);
+      const h = f.weapon === 'gun' ? 0.16 : 0.12;
+      const flight = f.weapon === 'gun' ? 0.25 : f.weapon === 'rocket' ? 0.45 : 0.35;
+      // Muzzle flash
+      if (from && t < 0.12) { const m = add(glow('rgba(255,200,90,.95)')); m.scale.setScalar(f.weapon === 'gun' ? 0.32 : 0.16); m.position.set(from.x + 0.05, h, from.z); }
+      // Tracers, a shell or a rocket on its way
+      if (from && t < flight + 0.2) {
+        const n = f.weapon === 'mg' ? 9 : f.weapon === 'rifle' ? 4 : 1;
+        for (let k = 0; k < n; k++) {
+          const tk = t - k * (f.weapon === 'mg' ? 0.035 : 0.07);
+          if (tk < 0 || tk > flight) continue;
+          const p = tk / flight, spread = (k % 3 - 1) * 0.03;
+          const head = new T.Vector3(T.MathUtils.lerp(from.x, to.x, p), h - 0.04 * p + 0.05 * Math.sin(p * Math.PI) * (f.weapon === 'rocket' ? 1 : 0.3), T.MathUtils.lerp(from.z, to.z, p) + spread);
+          const back = Math.max(0, p - (f.weapon === 'gun' ? 0.18 : 0.1));
+          const tail = new T.Vector3(T.MathUtils.lerp(from.x, to.x, back), h - 0.04 * back, T.MathUtils.lerp(from.z, to.z, back) + spread);
+          // The streak: glowing beads from tail to head, red tracer for the Americans, green for the Germans, a white-hot shell
+          const colour = f.weapon === 'gun' ? 'rgba(255,236,170,1)' : f.weapon === 'rocket' ? 'rgba(255,170,90,1)' : f.side === 'de' ? 'rgba(120,255,110,1)' : 'rgba(255,70,40,1)';
+          for (let b = 0; b <= 4; b++) {
+            const bead = add(glow(colour));
+            bead.scale.setScalar((f.weapon === 'gun' ? 0.1 : 0.06) * (0.45 + b * 0.14));
+            bead.position.lerpVectors(tail, head, b / 4);
+          }
+          if (f.weapon === 'rocket') { const sm = add(new T.Sprite(new T.SpriteMaterial({ map: smokeTex(), transparent: true, depthWrite: false, opacity: 0.6 }))); sm.scale.setScalar(0.08); sm.position.copy(tail); }
+        }
+      }
+      // Where it lands
+      const land = from ? flight : 0, lt = t - land;
+      if (lt < 0) continue;
+      const big = f.kind === 'shell' || (f.weapon === 'gun' && !f.armour) || f.weapon === 'rocket';
+      if (big) {
+        // High explosive: a flash, a ball of fire, a column of smoke
+        if (lt < 0.35) { const b = add(glow('rgba(255,150,50,.95)')); b.scale.setScalar((f.kind === 'shell' ? 0.6 : 0.45) * (0.5 + lt * 2)); b.position.set(to.x, 0.12, to.z); }
+        if (lt < 1.2) for (let k = 0; k < 3; k++) { const sm = add(new T.Sprite(new T.SpriteMaterial({ map: smokeTex(), transparent: true, depthWrite: false, opacity: Math.max(0, 0.8 - lt * 0.65) }))); sm.scale.setScalar(0.18 + lt * 0.35); sm.position.set(to.x + (k - 1) * 0.08, 0.1 + lt * 0.25 + k * 0.03, to.z); }
+      } else if (f.armour && f.weapon === 'gun') {
+        // A shell striking armour: a white-hot spark
+        if (lt < 0.25) { const b = add(glow('rgba(255,255,220,1)')); b.scale.setScalar(0.25 * (1 - lt * 2)); b.position.set(to.x, 0.12, to.z); }
+      } else if (lt < 0.6) {
+        // Bullets: little spurts of dust round the target
+        for (let k = 0; k < (f.weapon === 'mg' ? 6 : 3); k++) { const d = add(new T.Sprite(new T.SpriteMaterial({ map: smokeTex(), transparent: true, depthWrite: false, opacity: 0.6 - lt }))); d.scale.setScalar(0.05 + lt * 0.1); d.position.set(to.x + Math.sin(k * 2.3) * 0.12, 0.03 + lt * 0.05, to.z + Math.cos(k * 1.7) * 0.1); }
+      }
+    }
+    return shots.length > 0;
+  }
+
   // ---------- Dice on the table ----------
   // Each shot leaves its dice by the target: hits stand on top of each other's line, misses lie further off
   function showDice(st) {
@@ -324,9 +452,11 @@ const Board = (() => {
       const ring = new T.Mesh(new T.RingGeometry(big ? 0.3 : 0.17, big ? 0.335 : 0.195, 48), new T.MeshBasicMaterial({ color: can ? 0x7fd06a : 0x77776f, transparent: true, opacity: can ? 0.8 : 0.6, depthWrite: false }));
       at(ring, p.x, 0.006, p.z, -Math.PI / 2, 0, 0); marks.add(ring);
     }
-    if (st.fxShown !== st.fx || st.fxCount !== st.fx.length) { showDice(st); st.fxShown = st.fx; st.fxCount = st.fx.length; }
+    if (st.fxShown !== st.fx || st.fxCount !== st.fx.length) { showDice(st); startShots(st); st.fxShown = st.fx; st.fxCount = st.fx.length; }
     const moving = glide(dt);
+    const firing = playShots(now);
     renderer.render(scene, camera);
+    if (firing) return true;
     // Targets pulse, so keep drawing while they show
     return moving || !!(view.targets && view.targets.length);
   }

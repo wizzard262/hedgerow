@@ -82,7 +82,7 @@ const Sim = (() => {
     const R = rng(seed);
     const st = {
       seed, turn: 1, hedges: {}, wire: {}, units: [], report: [], fx: [],
-      points: {},
+      fired: {},          // fire support used this hour (the mortars and the guns each fire once an hour)
       ammo: { mortars: MORTARS.ammo, artillery: ARTILLERY.ammo },
       deMortarAmmo: DE_MORTAR.ammo, won: false, lost: false,
     };
@@ -103,7 +103,6 @@ const Sim = (() => {
     for (const d of DE_START) if (d.attach) unitById(st, d.attach).attachedTo = d.id;
     st.rand = R;
     deploy(st, 'us'); deploy(st, 'de');
-    earnPoints(st);
     st.report = [`${START_DATE}, 06:00. The company attacks into the bocage. Take ${st.objective.name} and hold it at the end of an hour${TURNS ? ` by ${hourText(TURNS + 1)}` : ''}.`];
     return st;
   }
@@ -160,9 +159,9 @@ const Sim = (() => {
 
   const hourText = turn => { const h = START_HOUR + turn - 1; return `${h >= 24 ? `day ${Math.floor(h / 24) + 1}, ` : ''}${String(h % 24).padStart(2, '0')}:00`; };
 
-  // ---------- Command points ----------
+  // ---------- Who commands whom ----------
 
-  // The command group a piece belongs to: its company (with its attached teams), the tank company, or the battalion (the captain and lone teams)
+  // The group a piece is listed under: its rifle platoon (with its attached teams), the tanks, or company HQ (the captain and lone teams)
   function groupOf(u) {
     if (u.side !== 'us') return null;
     if (u.kind === 'company') return u.id;
@@ -178,27 +177,8 @@ const Sim = (() => {
   // The pieces in a group
   function members(st, g) { return st.units.filter(u => u.side === 'us' && u.x !== null && groupOf(u) === g); }
 
-  // Points a group earns an hour, kept to its bank: a company one for itself and two thirds for each team with it;
-  // the tank company two thirds for each platoon; the battalion a fixed number (the captain, fire missions, lone teams)
-  function earnPoints(st) {
-    const groups = new Set(st.units.filter(u => u.side === 'us' && u.x !== null).map(groupOf));
-    for (const g of groups) {
-      if (g === 'bn') continue;
-      const n = members(st, g).length;
-      const share = g === 'T' ? n * COMMAND_SHARE : 1 + (n - 1) * COMMAND_SHARE;
-      st.points[g] = Math.min(COMMAND_BANK, (st.points[g] || 0) + share);
-    }
-    st.points.bn = Math.min(BN_BANK, (st.points.bn || 0) + BN_POINTS);
-  }
-
-  // Whole points a piece's group has to spend
-  function pointsFor(st, u) {
-    const g = groupOf(u);
-    return g ? Math.floor((st.points[g] || 0) + 1e-9) : 0;
-  }
-
+  // A piece has used its move for the hour
   function spend(st, u) {
-    st.points[groupOf(u)] -= 1;
     u.acted = true;
     for (const o of st.units) o.halfShot = false;
   }
@@ -350,22 +330,25 @@ const Sim = (() => {
     const pre = withdraw ? pullBack(st, target, shooter) : null;
     if (pre && pre.ok) { softHits = Math.floor(softHits * WITHDRAW.keep); hardHits = Math.floor(hardHits * WITHDRAW.keep); }
     const out = (pre ? [pre.line] : []).concat(damage(st, target, softHits, hardHits));
-    st.fx.push({ x: target.x, y: target.y, kind: softHits + hardHits ? 'hit' : 'miss', faces, need: Math.min(6, need + (isTank(target) ? PIECES[target.kind].armour : 0)), side: shooter.side });
+    // What the table shows: the weapon's muzzle flash and tracers from the shooter, and what lands on the target
+    const weapon = isTank(shooter) || shooter.kind === 'pak' ? 'gun' : shooter.kind === 'mg' || shooter.kind === 'mg42' ? 'mg' : shooter.kind === 'bazooka' || shooter.kind === 'schreck' ? 'rocket' : 'rifle';
+    st.fx.push({ from: { id: shooter.id, x: shooter.x, y: shooter.y }, to: { id: target.id }, weapon, armour: isTank(target), x: target.x, y: target.y, kind: softHits + hardHits ? 'hit' : 'miss', faces, need: Math.min(6, need + (isTank(target) ? PIECES[target.kind].armour : 0)), side: shooter.side });
     return out.length ? out : [`${target.name}: no hits`];
   }
 
-  // A piece fired on tries to pull back: one of its company's points, a chance on its quality, and a field away from the fire
+  // A piece fired on tries to pull back: it gives up its move for the next hour, it works on a chance by its quality,
+  // and it falls back a field away from the fire
   function pullBack(st, u, from) {
-    st.points[groupOf(u)] -= 1;
+    u.spentNext = true;
     if (st.rand() >= WITHDRAW[u.quality || 'standard']) return { ok: false, line: `${u.name} tries to pull back but is pinned` };
     const spot = retreatSpot(st, u, from);
     if (spot) step(st, u, spot.x, spot.y);
     return { ok: true, line: `${u.name} pulls back${spot ? '' : ' into cover'}` };
   }
 
-  // Can this piece react now: an American piece whose company has a whole point left
+  // Can this piece react now: an American piece that hasn't already given up its next move
   function canReact(st, u) {
-    return u.side === 'us' && u.x !== null && u.kind !== 'captain' && !PIECES[u.kind].fixed && pointsFor(st, u) > 0;
+    return u.side === 'us' && u.x !== null && u.kind !== 'captain' && !PIECES[u.kind].fixed && !u.spentNext;
   }
 
   // Pieces a shooter could fire at: enemies next to it (across any hedge) or two fields away along a clear line, that its side can see
@@ -505,7 +488,7 @@ const Sim = (() => {
   // Each returns { ok, lines } and spends a command point when it works. A piece acts once an hour
 
   function canAct(st, u) {
-    return !!u && u.side === 'us' && u.x !== null && !st.won && !st.lost && !st.de && !u.shocked && !u.acted && pointsFor(st, u) > 0;
+    return !!u && u.side === 'us' && u.x !== null && !st.won && !st.lost && !st.de && !u.shocked && !u.acted;
   }
 
   function actShoot(st, u, target) {
@@ -514,9 +497,21 @@ const Sim = (() => {
     return { ok: true, lines: [`🔫 ${u.name} fires on ${target.name}: ` + fireAt(st, u, target, 1).join(', ') + '.'] };
   }
 
+  // The fields Move & shoot can go to: only those from which the piece will have someone to shoot (Steve)
+  function moveShootSpots(st, u) {
+    if (u.kind === 'captain') return [];
+    const home = { x: u.x, y: u.y, at: u.at }, out = [];
+    for (const p of moves(st, u)) {
+      u.at = dirTo(home, p); u.x = p.x; u.y = p.y;
+      if (targets(st, u).length) out.push(p);
+      u.x = home.x; u.y = home.y; u.at = home.at;
+    }
+    return out;
+  }
+
   // Move and shoot: one point moves the piece a field, then it may fire once at half power (actHalfShot) before doing anything else
   function actMoveShoot(st, u, x, y) {
-    if (!canAct(st, u) || u.kind === 'captain' || !canStep(st, u, x, y)) return { ok: false };
+    if (!canAct(st, u) || !moveShootSpots(st, u).some(p => p.x === x && p.y === y)) return { ok: false };
     spend(st, u);
     const how = step(st, u, x, y);
     u.halfShot = targets(st, u).length > 0;
@@ -641,21 +636,21 @@ const Sim = (() => {
 
   // Attach a team to the company in its field (it moves with it and comes under its command), or detach it. Costs a battalion point
   function actAttach(st, team, company) {
-    if (!isTeam(team) || team.side !== 'us' || (st.points.bn || 0) < 1 || PIECES[team.kind].fixed || st.de) return { ok: false };
+    if (!isTeam(team) || team.side !== 'us' || !canAct(st, team) || PIECES[team.kind].fixed) return { ok: false };
     if (team.attachedTo) {
       // Out into a free field next door, as its own unit again
       const spot = NEIGHBOURS.map(([dx, dy]) => ({ x: team.x + dx, y: team.y + dy })).find(p => inside(p.x, p.y) && tileType(p.x, p.y) !== 'river' && !hedge(st, team.x, team.y, p.x, p.y) && roomFor(st, team, p.x, p.y));
       if (!spot) return { ok: false };
       team.attachedTo = null;
       team.x = spot.x; team.y = spot.y;
-      st.points.bn -= 1;
+      team.acted = true;
       return { ok: true, lines: [`🔗 ${team.name} leaves its platoon.`] };
     }
     if (!company || company.kind !== 'company' || company.side !== 'us' || !adjacent(company, team)) return { ok: false };
     if (teamsOf(st, company).length >= 2) return { ok: false };
     team.attachedTo = company.id;
     team.x = company.x; team.y = company.y; team.at = company.at;
-    st.points.bn -= 1;
+    team.acted = true;
     return { ok: true, lines: [`🔗 ${team.name} joins ${company.name}.`] };
   }
 
@@ -675,7 +670,7 @@ const Sim = (() => {
         const faces = [];
         const soft = roll(st, n, need, faces), hard = isTank(t) ? roll(st, S.hard || 0, need + PIECES[t.kind].armour, faces) : 0;
         lines.push(...damage(st, t, soft, hard));
-        st.fx.push({ x: fx, y: fy, kind: 'shell', faces, need, side });
+        st.fx.push({ x: fx, y: fy, kind: 'shell', faces, need, side, to: { id: t.id } });
       }
       if (!at(st, fx, fy, enemyOf(side)).length) st.fx.push({ x: fx, y: fy, kind: 'shell' });
     };
@@ -685,8 +680,8 @@ const Sim = (() => {
   }
 
   function actFire(st, which, x, y) {
-    if (st.won || st.lost || st.de || (st.points.bn || 0) < 1 || st.ammo[which] <= 0 || !canCallFire(st, x, y)) return { ok: false };
-    st.points.bn -= 1;
+    if (st.won || st.lost || st.de || st.fired[which] || st.ammo[which] <= 0 || !canCallFire(st, x, y)) return { ok: false };
+    st.fired[which] = true;
     st.ammo[which]--;
     const S = which === 'mortars' ? MORTARS : ARTILLERY;
     const lines = fireMission(st, which, x, y);
@@ -899,25 +894,25 @@ const Sim = (() => {
     st.report = rep.length ? rep : ['A quiet hour.'];
   }
 
-  // A new hour: rest the shaken, fresh command points (saving what was left), ammo and reinforcements
+  // A new hour: rest the shaken, a fresh move for every piece (except those that pulled back), fire support, ammo and reinforcements
   function newTurn(st, rep) {
     st.turn++;
     for (const u of st.units) {
       if (u.side !== 'us' || u.x === null) continue;
       if (u.shocked && !u.hit) { u.shocked = false; rep.push(`😮‍💨 ${u.name} has rested and recovered.`); }
-      u.hit = false; u.acted = false;
+      u.hit = false; u.acted = !!u.spentNext; u.spentNext = false;
     }
     if ((st.turn - 1) % MORTARS.resupplyEvery === 0) st.ammo.mortars++;
     if ((st.turn - 1) % ARTILLERY.resupplyEvery === 0) st.ammo.artillery++;
+    st.fired = {};
     reinforcements(st, rep);
-    earnPoints(st);
   }
 
   return {
     newGame, endTurn, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, moves, chargeSpots,
-    rallyTargets, canAct, pointsFor, groupOf, groupName, members, canReact, firepower, teamsOf, canCallFire, holdsObjective, hourText, roomFor,
+    rallyTargets, canAct, groupOf, groupName, members, canReact, firepower, teamsOf, canCallFire, holdsObjective, hourText, roomFor,
     startGermanHour, germanStep, answer, finishHour,
-    actShoot, actMoveShoot, actHalfShot, actMove, actCharge, actRally, actAttach, actFire, actBreach, breachSpots, sight, isSmall, cover, wire, lineSides, actLine, atHedge, acrossHedge, SIDE_NAMES,
+    actShoot, actMoveShoot, moveShootSpots, actHalfShot, actMove, actCharge, actRally, actAttach, actFire, actBreach, breachSpots, sight, isSmall, cover, wire, lineSides, actLine, atHedge, acrossHedge, SIDE_NAMES,
     hasCutters: u => cutter(u),
   };
 })();

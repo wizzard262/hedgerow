@@ -29,16 +29,8 @@ const TURNS = 0;                 // hours allowed (0: no limit for now, Steve); 
 const START_HOUR = 6;
 const START_DATE = 'Tue 11 July 1944';
 
-// Command points: each rifle platoon (with its attached teams), the tanks and company HQ (the captain)
-// earn points every hour and can save them. A piece acts once an hour and each action costs a point.
-// A rifle platoon earns 1 an hour for itself and this share for each team with it; the tanks this share a section,
-// so only about two thirds of the pieces can act each hour
-const COMMAND_SHARE = 2 / 3;
-const COMMAND_BANK = 3;          // most points a platoon can save
-// Company HQ's own points: the captain, fire missions, attaching teams, and teams working on their own
-const BN_POINTS = 2;
-const BN_BANK = 4;
-// Reacting in the Germans' hour: a piece fired on can spend one of its platoon's points to try to pull back
+// Every piece moves (acts) once an hour (Steve: no tokens to activate)
+// Reacting in the Germans' hour: a piece fired on can try to pull back, which uses up its move for the next hour
 const WITHDRAW = { standard: 0.6, elite: 0.75, keep: 0.5 };   // chance it works, and the share of hits it then takes
 
 // Shooting: each point of firepower rolls one six-sided die, which hits on TO_HIT or more.

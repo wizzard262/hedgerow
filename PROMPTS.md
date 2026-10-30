@@ -96,8 +96,29 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - No time limit (TURNS = 0): the game ends when the village is taken and held at the end of an hour, or the company has no rifle platoons left. The clock runs on past midnight
 - The test bot (capped at 20 hours) wins about 73%, in about 7 hours; doing nothing never wins
 
+## 16. Tracers and shells
+
+- Steve: shooting needs a graphic of tracer bullets and muzzle flash; tank on tank is a shell, but on men it is high explosive
+- Every shot now plays on the table: a muzzle flash at the shooter, then red tracer (American) or green tracer (German) streaking to the target, a stream for machine guns, a few for rifles; tanks and guns fire one white-hot shell, which strikes armour in a bright spark or bursts as high explosive with fire and smoke among men; bazookas and Panzerschrecks fly a rocket with a smoke trail. Bullets kick up dust; mortar and artillery fire bursts as high explosive
+
+## 17. Greyed out
+
+- Steve: grey out a piece that has had its move
+- A piece that has moved this hour turns grey on the table until the next hour (the ✓ token is gone)
+
+## 18. No activation tokens
+
+- Steve: lose the tokens to activate: it's one move per turn per piece
+- Command points are gone: every piece moves (acts) once an hour. Pulling back in the German hour now costs the piece its next move. The mortars and the guns each fire once an hour (while the ammunition lasts); a team joining or leaving a platoon uses its move
+
+## 19. Move & shoot only where you can shoot
+
+- Steve: don't allow Move & shoot if you can't shoot; if you can, put red hatching on the move that allows the shot
+- Move & shoot now only offers the fields from which the piece will have someone to fire at, red-hatched on the table; if there are none, the button is off. Plain moves into empty fields are Charges (up to two fields)
+- The test bot (capped at 20 hours) wins about 79%, in about 7 hours
+
 ## Sessions
 
 | # | Date | Length | What we did |
 |---|------|--------|-------------|
-| 1 | 2026-10-30 | about 6.25 hours | Prompts 1–15: rules, command points, reacting, tanks and hedge cutters, the look (pixel art to 3D tabletop), scales, river, villages, wire, six-move aim; one captain, piece menus, hedges stop moves, MG team model; bazooka teams, two-field charges; red targets; who has acted; company level; lining hedges, longer sight, the captain's guidon; one unit a field, no time limit |
+| 1 | 2026-10-30 | about 6.75 hours | Prompts 1–19: rules, command points, reacting, tanks and hedge cutters, the look (pixel art to 3D tabletop), scales, river, villages, wire, six-move aim; one captain, piece menus, hedges stop moves, MG team model; bazooka teams, two-field charges; red targets; who has acted; company level; lining hedges, longer sight, the captain's guidon; one unit a field, no time limit; tracers and shells, greyed out, no activation tokens, Move & shoot hatching |

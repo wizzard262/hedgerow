@@ -70,8 +70,7 @@ window.Game = (() => {
   function ask(shot) {
     const t = Sim.unitById(st, shot.target);
     const who = shot.mortar ? 'German mortars range on' : `${Sim.unitById(st, shot.shooter).name} opens fire on`;
-    const g = Sim.groupOf(t), left = Math.floor((st.points[g] || 0) + 1e-9);
-    $('#ask-text').innerHTML = `${who} <b>${t.name}</b>. ${Sim.groupName(st, g)} has ${left} point${left === 1 ? '' : 's'}: spend one to try to pull back a field and take half the hits?`;
+    $('#ask-text').innerHTML = `${who} <b>${t.name}</b>. Try to pull back a field and take half the hits? It would give up its move next hour.`;
     $('#ask').hidden = false;
     changed();
   }

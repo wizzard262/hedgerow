@@ -35,7 +35,6 @@ check('nothing goes negative, out of range or into the river in 100 games', () =
       assert(u.platoons > 0 && Sim.inside(u.x, u.y), `seed ${seed}: ${u.name} at ${u.x},${u.y} with ${u.platoons}`);
       assert(Sim.tileType(u.x, u.y) !== 'river', `seed ${seed}: ${u.name} in the river`);
     }
-    for (const g in st.points) assert(st.points[g] >= -1e-9, `seed ${seed}: ${g} has ${st.points[g]} points`);
     assert(st.ammo.mortars >= 0 && st.ammo.artillery >= 0, `seed ${seed}: negative ammunition`);
     assert(!TURNS || st.won || st.lost, `seed ${seed}: game did not end`);
     assert(!TURNS || st.turn <= TURNS, `seed ${seed}: ran past the last hour`);
@@ -44,23 +43,34 @@ check('nothing goes negative, out of range or into the river in 100 games', () =
   }
 });
 
-check('a company earns a point an hour (two thirds more for each team with it), the tanks two thirds a platoon; banks are kept', () => {
+check('every piece can move each hour; a piece that pulled back loses its next move', () => {
   const st = Sim.newGame(3);
-  const able = Sim.members(st, 'A').length;
-  assert(Math.abs(st.points.A - (1 + (able - 1) * COMMAND_SHARE)) < 1e-9, `Able has ${st.points.A} points with ${able} pieces`);
-  assert(Math.abs(st.points.T - 2 * COMMAND_SHARE) < 1e-9, `the tanks have ${st.points.T} points`);
-  for (let h = 0; h < 5; h++) Sim.endTurn(st);
-  assert(st.points.A <= COMMAND_BANK + 1e-9, `Able saved ${st.points.A}, more than the bank`);
+  assert(st.units.filter(u => u.side === 'us' && u.x !== null).every(u => !u.acted), 'a piece starts the game having moved');
 });
 
 check('a piece acts once an hour', () => {
   const st = Sim.newGame(3);
   const able = Sim.unitById(st, 'A');
-  st.points.A = 3; st.hedges = {}; st.wire = {};
-  const m = Sim.moves(st, able)[0];
-  assert(Sim.actMoveShoot(st, able, m.x, m.y).ok, 'first move refused');
-  const m2 = Sim.moves(st, able)[0];
-  assert(!Sim.actMoveShoot(st, able, m2.x, m2.y).ok, 'a second action in the same hour was allowed');
+  st.hedges = {}; st.wire = {};
+  const m = Sim.chargeSpots(st, able)[0];
+  assert(Sim.actCharge(st, able, m.x, m.y).ok, 'first move refused');
+  const m2 = Sim.chargeSpots(st, able)[0];
+  assert(!m2 || !Sim.actCharge(st, able, m2.x, m2.y).ok, 'a second action in the same hour was allowed');
+});
+
+check('Move & shoot only goes where the piece will have someone to shoot', () => {
+  for (let seed = 1; seed <= 10; seed++) {
+    const st = Sim.newGame(seed);
+    for (const u of st.units.filter(u => u.side === 'us' && u.x !== null)) {
+      for (const p of Sim.moveShootSpots(st, u)) {
+        const home = { x: u.x, y: u.y, at: u.at, acted: u.acted };
+        Sim.actMoveShoot(st, u, p.x, p.y);
+        assert(Sim.targets(st, u).length > 0, `seed ${seed}: ${u.name} moved to ${p.x},${p.y} with nobody to shoot`);
+        Object.assign(u, home); u.halfShot = false;
+        break;
+      }
+    }
+  }
 });
 
 check('a charge reaches two fields, a move one', () => {
@@ -68,7 +78,7 @@ check('a charge reaches two fields, a move one', () => {
   st.hedges = {}; st.wire = {};
   const able = Sim.unitById(st, 'A');
   for (const u of st.units) if (u !== able) u.x = u.y = null;
-  able.x = 0; able.y = 6; st.points.A = 3;
+  able.x = 0; able.y = 6;
   assert(Sim.chargeSpots(st, able).some(p => Math.abs(p.x - able.x) + Math.abs(p.y - able.y) === 2), 'no charge reaches two fields');
   assert(Sim.moves(st, able).every(p => Math.abs(p.x - able.x) + Math.abs(p.y - able.y) === 1), 'a move went further than one field');
   assert(Sim.actCharge(st, able, 2, 6).ok && able.x === 2, 'the two-field charge did not arrive');
@@ -81,9 +91,8 @@ check('Shermans cut through hedges; Fireflies need a gap or must break through; 
   for (const u of st.units) if (![sher, ff, co].includes(u)) u.x = u.y = null;
   const key = (ax, ay, bx, by) => (ax < bx || (ax === bx && ay < by) ? `${ax},${ay}|${bx},${by}` : `${bx},${by}|${ax},${ay}`);
   const setUp = (u, y) => { u.x = 0; u.y = y; const k = key(0, y, 1, y); delete st.hedges[k]; delete st.wire[k]; return k; };
-  st.points.T = 3; st.points.B = 3;
   const k1 = setUp(sher, 0); st.hedges[k1] = true;
-  assert(Sim.actMoveShoot(st, sher, 1, 0).ok, 'the Sherman could not drive through the hedge');
+  assert(Sim.actCharge(st, sher, 1, 0).ok && sher.x === 1, 'the Sherman could not drive through the hedge');
   assert(!st.hedges[k1], 'the Sherman left the hedge standing');
   const k2 = setUp(ff, 6); st.hedges[k2] = true;
   assert(!Sim.moves(st, ff).some(p => p.x === 1 && p.y === 6), 'the Firefly could climb a hedge');
@@ -91,7 +100,7 @@ check('Shermans cut through hedges; Fireflies need a gap or must break through; 
   const k3 = setUp(co, 3); st.wire[k3] = true;
   assert(!Sim.moves(st, co).some(p => p.x === 1 && p.y === 3), 'men walked through barbed wire');
   assert(Sim.actBreach(st, co, 1, 3).ok && !st.wire[k3] && co.x === 1, 'the company could not cut through the wire');
-  const k4 = setUp(co, 5); co.acted = false; st.points.B = 3; st.hedges[k4] = true;
+  const k4 = setUp(co, 5); co.acted = false; st.hedges[k4] = true;
   assert(!Sim.moves(st, co).some(p => p.x === 1 && p.y === 5) && !Sim.chargeSpots(st, co).some(p => p.x === 1 && p.y === 5), 'men walked or charged across a hedge into an empty field');
 });
 
@@ -118,17 +127,23 @@ check('dice: every face is 1 to 6 and hits are the ones at or over the score nee
   }
 });
 
-check('pulling back costs a point whether it works or not', () => {
+check('pulling back gives up the next move, whether it works or not', () => {
   const st = Sim.newGame(9);
   for (let h = 0; h < 8 && !st.won && !st.lost; h++) {
     Sim.startGermanHour(st);
-    for (let r = Sim.germanStep(st); !r.done; r = Sim.germanStep(st)) {
-      const t = Sim.unitById(st, r.ask.target), g = Sim.groupOf(t), before = st.points[g];
-      Sim.answer(st, true);
-      assert(Math.abs(st.points[g] - (before - 1)) < 1e-9, `${g} went from ${before} to ${st.points[g]}`);
-    }
+    const pulled = [];
+    for (let r = Sim.germanStep(st); !r.done; r = Sim.germanStep(st)) { pulled.push(Sim.unitById(st, r.ask.target)); Sim.answer(st, true); }
     Sim.finishHour(st);
+    for (const t of pulled) if (t.x !== null && !st.won && !st.lost) assert(t.acted, `${t.name} pulled back but can still move`);
   }
+});
+
+check('the mortars and the guns fire once an hour each', () => {
+  const st = Sim.newGame(6);
+  st.units.find(u => u.id === 'A').x = st.objective.x - 1; st.units.find(u => u.id === 'A').y = st.objective.y;
+  const o = st.objective;
+  const first = Sim.actFire(st, 'mortars', o.x, o.y), second = Sim.actFire(st, 'mortars', o.x, o.y);
+  assert(first.ok && !second.ok, 'the mortars fired twice in an hour, or not at all');
 });
 
 check('across a hedge: lining it you fire through; in the open you need them lining it (and one more); both in the open, no shot', () => {
