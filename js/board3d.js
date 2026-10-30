@@ -352,6 +352,18 @@ const Board = (() => {
     marks.add(w);
   }
 
+  // Thin red lines from the shooter to each target in sight, the one under the pointer brighter
+  function sightLines(shooter, list, hot) {
+    const from = pieceCentre(shooter);
+    for (const t of list) {
+      const to = pieceCentre(t), lit = hot && hot.id === t.id;
+      const pts = [new T.Vector3(from.x, 0.16, from.z), new T.Vector3(to.x, 0.16, to.z)];
+      const line = new T.Line(new T.BufferGeometry().setFromPoints(pts), new T.LineDashedMaterial({ color: lit ? 0xff5a40 : 0xe8352a, dashSize: 0.06, gapSize: 0.04, transparent: true, opacity: lit ? 1 : 0.7, depthTest: false }));
+      line.computeLineDistances();
+      marks.add(line);
+    }
+  }
+
   // ---------- Red targets over the pieces that can be shot ----------
   // A red ring and cross-hairs floating over the piece, always facing the camera, and a red ring on the table under it
   let reticleTex = null;
@@ -735,6 +747,8 @@ const Board = (() => {
       at(ring, p.x, 0.009, p.z, -Math.PI / 2, 0, 0); marks.add(ring);
     }
     if (view.targets && view.targets.length) markTargets(view.targets, view.hotTarget);
+    // Shooting: a line of sight from the shooter to each target it can see
+    if (view.shooter && view.shooter.x !== null && pieces[view.shooter.id]) sightLines(view.shooter, view.targets || [], view.hotTarget);
     if (view.ready) for (const u of st.units) {
       if (u.side !== 'us' || u.x === null || !pieces[u.id]) continue;
       const can = view.ready(u);

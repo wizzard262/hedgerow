@@ -463,7 +463,8 @@ const Models = (() => {
   function house(seed) {
     const g = new T.Group();
     g.add(at(box(0.3, 0.14, 0.16, M.stone), 0, 0.07, 0));
-    const roof = profile([[-0.17, 0], [0.17, 0], [0, 0.09]], 0.32, M.slate, 0.004); roof.rotation.y = Math.PI / 2; at(roof, 0, 0.14, 0, 0, Math.PI / 2, 0);
+    // The roof barely overhangs the walls (Steve), so pieces and the view past the house aren't hidden
+    const roof = profile([[-0.088, 0], [0.088, 0], [0, 0.075]], 0.306, M.slate, 0.004); roof.rotation.y = Math.PI / 2; at(roof, 0, 0.14, 0, 0, Math.PI / 2, 0);
     g.add(roof);
     g.add(at(box(0.03, 0.08, 0.03, M.stone), 0.09, 0.22, 0.03));
     for (const x of [-0.09, 0.09]) { g.add(at(box(0.04, 0.035, 0.004, M.window), x, 0.085, 0.081)); for (const s of [-1, 1]) g.add(at(box(0.016, 0.035, 0.004, M.shutter), x + s * 0.03, 0.085, 0.082)); }

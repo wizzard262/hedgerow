@@ -31,7 +31,9 @@ window.Game = (() => {
       }
       // Green rings under pieces that can still act this hour, grey under those that have
       const ready = st.de || st.won || st.lost ? null : u => Sim.canAct(st, u);
-      dirty = Board.render(st, { spots, selected: UI.selected(), hover, targets: UI.targets(), hotTarget, ready });
+      // The shooter, for the lines of sight to its targets
+      const shooter = ['shoot', 'halfShot'].includes(UI.view.mode) ? UI.selected() : null;
+      dirty = Board.render(st, { spots, selected: UI.selected(), hover, targets: UI.targets(), hotTarget, ready, shooter });
       const p = Board.screenPoint(st.objective.x + 0.5, st.objective.y, 0.35), r = board.getBoundingClientRect();
       Object.assign($('#label').style, { left: p.x - r.left + 'px', top: p.y - r.top + 'px' });
       $('#label').textContent = `🎯 ${st.objective.name}`;
