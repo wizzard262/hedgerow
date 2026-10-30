@@ -591,7 +591,8 @@ const Sim = (() => {
     const routes = [];
     for (const a of chargeSteps(st, u, u.x, u.y)) {
       if (!a.pass) routes.push([a]);
-      if (a.assault) continue;
+      // A charge stops at an assault, and can't go on through a village or hamlet: no charging through houses (Steve)
+      if (a.assault || ['village', 'hamlet'].includes(tileType(a.x, a.y))) continue;
       for (const b of chargeSteps(st, u, a.x, a.y)) {
         if ((b.x === u.x && b.y === u.y) || b.pass) continue;
         if (!routes.some(r => r[r.length - 1].x === b.x && r[r.length - 1].y === b.y)) routes.push([a, b]);
@@ -610,8 +611,11 @@ const Sim = (() => {
     spend(st, u);
     const lines = [];
     // The first field of a two-field charge is crossed on the way
+    const home = { x: u.x, y: u.y, at: u.at };
     if (route.length === 2) { const how = step(st, u, route[0].x, route[0].y); if (how) lines.push(moveLine(u, how).replace(/\.$/, '')); }
     lines.push(...charge(st, u, x, y));
+    // Beaten back after passing through friends: it can't stay in their field, so it ends back where it started
+    if (route.length === 2 && route[0].pass && u.x === route[0].x && u.y === route[0].y) { u.x = home.x; u.y = home.y; u.at = home.at; }
     return { ok: true, lines: [lines.join(', ') + '.'] };
   }
 

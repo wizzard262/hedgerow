@@ -81,6 +81,21 @@ check('a charge can pass through a field of friends but not stop in it', () => {
   assert(Sim.actCharge(st, tank, 2, 6).ok && tank.x === 2, 'the charge through the platoon did not arrive');
 });
 
+check('no charging through a house', () => {
+  for (let seed = 1; seed <= 10; seed++) {
+    const st = Sim.newGame(seed);
+    st.hedges = {}; st.wire = {};
+    for (const u of st.units.filter(u => u.side === 'us' && u.x !== null)) {
+      // Every two-field charge's first field is not a village or hamlet
+      for (const p of Sim.chargeSpots(st, u)) {
+        if (Math.abs(p.x - u.x) + Math.abs(p.y - u.y) < 2) continue;
+        const mids = [{ x: (u.x + p.x) / 2, y: (u.y + p.y) / 2 }, { x: p.x, y: u.y }, { x: u.x, y: p.y }].filter(m => Number.isInteger(m.x) && Number.isInteger(m.y) && Math.abs(m.x - u.x) + Math.abs(m.y - u.y) === 1);
+        assert(mids.some(m => !['village', 'hamlet'].includes(Sim.tileType(m.x, m.y))), `seed ${seed}: ${u.name} charges through houses to ${p.x},${p.y}`);
+      }
+    }
+  }
+});
+
 check('Move & shoot only goes where the piece will have someone to shoot', () => {
   for (let seed = 1; seed <= 10; seed++) {
     const st = Sim.newGame(seed);
