@@ -226,6 +226,13 @@ check('a shaken piece can try to rally itself once; the captain rallies up to th
   assert(Sim.rallyTargets(st, cap).includes(B), 'the captain could not reach three fields');
 });
 
+check('machine guns cannot move and fire', () => {
+  for (let seed = 1; seed <= 10; seed++) {
+    const st = Sim.newGame(seed);
+    for (const u of st.units.filter(u => (u.kind === 'mg' || u.kind === 'mg42') && u.x !== null)) assert(!Sim.moveShootSpots(st, u).length, `seed ${seed}: ${u.name} could move and fire`);
+  }
+});
+
 check('leaving everything alone never wins', () => {
   for (let seed = 1; seed <= 30; seed++) assert(!play(seed, false).won, `seed ${seed} won by doing nothing`);
 });

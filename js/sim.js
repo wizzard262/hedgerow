@@ -517,7 +517,8 @@ const Sim = (() => {
 
   // The fields Move & shoot can go to: only those from which the piece will have someone to shoot (Steve)
   function moveShootSpots(st, u) {
-    if (u.kind === 'captain') return [];
+    // Captains don't shoot, and machine guns can't fire on the move (Steve): they set up, then shoot
+    if (u.kind === 'captain' || u.kind === 'mg' || u.kind === 'mg42') return [];
     const home = { x: u.x, y: u.y, at: u.at }, out = [];
     for (const p of moves(st, u)) {
       u.at = dirTo(home, p); u.x = p.x; u.y = p.y;
