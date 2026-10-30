@@ -53,9 +53,9 @@ const PIECES = {
   firefly:  { name: 'Firefly section', soft: 1, hard: 2, tank: true, armour: 0, cutter: true },
   pz4:      { name: 'Panzer IV section', soft: 1.5, hard: 1.5, tank: true, armour: 0, cutter: true },
   panther:  { name: 'Panther section', soft: 1.5, hard: 3, tank: true, armour: 1, cutter: true },
-  mg:       { name: 'MG team', soft: 2, hard: 0, team: true },
+  mg:       { name: 'MG team', soft: 5, hard: 0, team: true },          // machine guns fire 5 dice (Steve)
   bazooka:  { name: 'Bazooka team', soft: 0, hard: 2, team: true },
-  mg42:     { name: 'MG 42 team', soft: 2.5, hard: 0, team: true },
+  mg42:     { name: 'MG 42 team', soft: 5, hard: 0, team: true },
   schreck:  { name: 'Panzerschreck team', soft: 0, hard: 2.5, team: true },
   pak:      { name: 'PaK 40 gun', soft: 0.5, hard: 3, team: true, fixed: true },
   captain:  { name: 'Captain', soft: 0, hard: 0 },

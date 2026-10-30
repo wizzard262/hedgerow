@@ -274,14 +274,14 @@ const Board = (() => {
     }
     return hatchTex;
   }
-  const MARK = { hatch: '#e8352a', move: '#7fc6e0', charge: '#e0705f', shoot: '#e6c95a', rally: '#8fd47a', fire: '#e8a05a', breach: '#c9a46a', attach: '#b9a0e0', select: '#fff6dc', hover: '#ffffff' };
+  const MARK = { hatch: '#e8352a', assault: '#ff2a1a', move: '#7fc6e0', charge: '#e0705f', shoot: '#e6c95a', rally: '#8fd47a', fire: '#e8a05a', breach: '#c9a46a', attach: '#b9a0e0', select: '#fff6dc', hover: '#ffffff' };
 
   // A coloured square of light on a field, with a brighter rim
   function mark(x, y, kind, inset = 0.05) {
     const c = new T.Color(MARK[kind]);
     const plane = new T.Mesh(new T.PlaneGeometry(1 - inset * 2, 1 - inset * 2), kind === 'hatch'
       ? new T.MeshBasicMaterial({ map: hatch(), transparent: true, opacity: 0.75, depthWrite: false })
-      : new T.MeshBasicMaterial({ color: c, transparent: true, opacity: kind === 'hover' ? 0.06 : 0.16, depthWrite: false }));
+      : new T.MeshBasicMaterial({ color: c, transparent: true, opacity: kind === 'hover' ? 0.06 : kind === 'assault' ? 0.32 : 0.16, depthWrite: false }));
     at(plane, x + 0.5, 0.004, y + 0.5, -Math.PI / 2, 0, 0); marks.add(plane);
     if (kind === 'hover') return;
     const s = 0.5 - inset, pts = [[-s, -s], [s, -s], [s, s], [-s, s], [-s, -s]].map(([a, b]) => new T.Vector3(x + 0.5 + a, 0.006, y + 0.5 + b));

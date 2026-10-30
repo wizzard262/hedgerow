@@ -33,7 +33,8 @@ const UI = (() => {
     if (view.mode === 'shoot' || view.mode === 'halfShot') list = fields(Sim.targets(st, u));
     if (view.mode === 'rally') list = fields(Sim.rallyTargets(st, u));
     if (view.mode === 'breach') list = Sim.breachSpots(st, u);
-    return uniq(list).map(p => Object.assign(p, { kind }));
+    // A charge into a field the Germans hold is a hand-to-hand fight: marked differently
+    return uniq(list).map(p => Object.assign(p, { kind: view.mode === 'charge' && Sim.at(st, p.x, p.y, 'de').length ? 'assault' : kind }));
   }
 
   // The pieces the chosen piece could shoot now, to mark with red targets: while choosing Shoot, or the shot of a Move & shoot.
@@ -116,6 +117,10 @@ const UI = (() => {
         menu.append(b);
       }
       if (!acts.some(a => a.ok)) menu.append(el('div', 'mnote', u.shocked ? 'Shaken: it has moved this hour; it can rest, or the captain can rally it' : 'It has moved this hour'));
+      else if (!u.acted && !u.shocked && u.kind !== 'pak' && !Sim.chargeSpots(st, u).length) {
+        // Boxed in: say why it can't charge, and how to get out
+        menu.append(el('div', 'mnote', Sim.breachSpots(st, u).length ? 'Hedges or wire all round, or friends in the way: Break through to get out' : 'Nowhere to charge to: every way is blocked'));
+      }
     }
     menu.hidden = false;
     // Keep the menu inside the table's box
@@ -137,7 +142,8 @@ const UI = (() => {
       return b;
     }
     if (u.kind === 'company' || Sim.isTank(u)) {
-      add('charge', '⚔️ Charge', Sim.chargeSpots(st, u).length > 0, 'Up to two fields without shooting; hand to hand if the Germans hold the field it ends in');
+      const fight = Sim.chargeSpots(st, u).some(p => Sim.at(st, p.x, p.y, 'de').length);
+      add('charge', fight ? '⚔️ Charge (hand to hand)' : '⚔️ Charge', Sim.chargeSpots(st, u).length > 0, 'Up to two fields without shooting; hand to hand if the Germans hold the field it ends in');
       add('moveShoot', '➡️ Move & shoot', Sim.moveShootSpots(st, u).length > 0, 'One field to where it can fire (the red-hatched fields), then fire needing one more on the dice');
       add('shoot', '🎯 Shoot', Sim.targets(st, u).length > 0, 'Fire with every die');
       if (Sim.breachSpots(st, u).length) add('breach', '⛏️ Break through', true, 'Through a hedge or wire into the next field, leaving a gap: a move with no shooting');
@@ -195,6 +201,7 @@ const UI = (() => {
       : view.mode.startsWith('fire:') ? 'Click a field with Germans your troops can see.'
       : view.mode === 'halfShot' ? 'Moved. Click a red target to fire on it (one more needed on the move), or Esc to hold fire.'
       : view.mode === 'shoot' ? 'Click a red target to fire on it. Esc cancels.'
+      : view.mode === 'charge' ? 'Click a field to charge to; the bright red ones are held by the Germans: a hand-to-hand fight. Esc cancels.'
       : view.mode === 'moveShoot' ? `Click a red-hatched field: ${u ? u.name : 'the piece'} moves there and can fire. Esc cancels.`
       : `Click a highlighted field for ${u ? u.name : 'the piece'}. Esc cancels.`;
     $('#hint').textContent = text;

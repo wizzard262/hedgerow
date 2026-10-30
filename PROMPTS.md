@@ -197,8 +197,19 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - Steve: make double the squares and twice the move distance; then: leave it for now: with pathfinding coming later there's no point
 - Nothing changed; it goes with the organic board and free movement on the to-do list
 
+## 35. Machine guns fire five
+
+- Steve: an MG can't move (and fire) but fires five bullets
+- MG teams (American and MG 42) now fire 5 dice. Steve chose: they still Charge to a new spot, but never Move & shoot
+
+## 36. Why it can't move; hand to hand
+
+- Steve: sometimes a piece can only shoot and not move; and can we move into hand-to-hand combat?
+- Why: a piece boxed in by hedges, wire or friends has no Charge; it has to Break through first. The menu now says so ("Hedges or wire all round…: Break through to get out")
+- Hand to hand: a rifle platoon or tank charges into a field the Germans hold. The menu now says "Charge (hand to hand)" when it can reach Germans, and those fields are bright red on the table (the hint line explains). Teams and the captain can't fight hand to hand, and infantry can't charge a field of tanks alone
+
 ## Sessions
 
 | # | Date | Length | What we did |
 |---|------|--------|-------------|
-| 1 | 2026-10-30 | about 8.75 hours | Prompts 1–34: rules, command points, reacting, tanks and hedge cutters, the look (pixel art to 3D tabletop), scales, river, villages, wire, six-move aim; one captain, piece menus, hedges stop moves, MG team model; bazooka teams, two-field charges; red targets; who has acted; company level; lining hedges, longer sight, the captain's guidon; one unit a field, no time limit; tracers and shells, greyed out, no activation tokens, Move & shoot hatching; tanks through hedges, charges for all; no plain move; teams and captain with a platoon, no attaching; one piece at a time; charging through friends; range, cover and moving +1 each; words off the target, tanks turn and recoil; rallying; MGs can't move and fire; easier targets; Move & shoot one action; tanks impervious to small arms; more gaps; no charging through houses |
+| 1 | 2026-10-30 | about 9 hours | Prompts 1–36: rules, command points, reacting, tanks and hedge cutters, the look (pixel art to 3D tabletop), scales, river, villages, wire, six-move aim; one captain, piece menus, hedges stop moves, MG team model; bazooka teams, two-field charges; red targets; who has acted; company level; lining hedges, longer sight, the captain's guidon; one unit a field, no time limit; tracers and shells, greyed out, no activation tokens, Move & shoot hatching; tanks through hedges, charges for all; no plain move; teams and captain with a platoon, no attaching; one piece at a time; charging through friends; range, cover and moving +1 each; words off the target, tanks turn and recoil; rallying; MGs can't move and fire; easier targets; Move & shoot one action; tanks impervious to small arms; more gaps; no charging through houses; MGs fire five; hand to hand shown |

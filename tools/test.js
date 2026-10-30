@@ -241,6 +241,10 @@ check('a shaken piece can try to rally itself once; the captain rallies up to th
   assert(Sim.rallyTargets(st, cap).includes(B), 'the captain could not reach three fields');
 });
 
+check('machine guns fire five dice', () => {
+  assert(PIECES.mg.soft === 5 && PIECES.mg42.soft === 5, 'an MG team does not fire five dice');
+});
+
 check('machine guns cannot move and fire', () => {
   for (let seed = 1; seed <= 10; seed++) {
     const st = Sim.newGame(seed);
