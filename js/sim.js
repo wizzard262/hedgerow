@@ -558,22 +558,25 @@ const Sim = (() => {
       const blocked = hedge(st, fx, fy, x, y) && !cutter(u);
       if (enemies.length) { if (fightsHandToHand(u)) out.push({ x, y, assault: true }); }
       else if (!blocked && roomFor(st, u, x, y)) out.push({ x, y, assault: false });
+      // A field full of friends: a charge can pass through it (Steve), but not stop there
+      else if (!blocked && at(st, x, y).length) out.push({ x, y, assault: false, pass: true });
     }
     return out;
   }
 
   const fightsHandToHand = u => u.kind === 'company' || isTank(u);
 
-  // A charge goes twice as far as a move: up to two fields, the second can be an assault. Each route is the fields it passes
+  // A charge goes twice as far as a move: up to two fields, the second can be an assault, and it can pass through a field
+  // of friendly pieces on the way (a tank through infantry, infantry past a tank). Each route is the fields it passes
   function chargeRoutes(st, u) {
     // Every piece but a dug-in gun can charge; captains and teams only into empty fields (see chargeSteps)
     if (PIECES[u.kind].fixed) return [];
     const routes = [];
     for (const a of chargeSteps(st, u, u.x, u.y)) {
-      routes.push([a]);
+      if (!a.pass) routes.push([a]);
       if (a.assault) continue;
       for (const b of chargeSteps(st, u, a.x, a.y)) {
-        if (b.x === u.x && b.y === u.y) continue;
+        if ((b.x === u.x && b.y === u.y) || b.pass) continue;
         if (!routes.some(r => r[r.length - 1].x === b.x && r[r.length - 1].y === b.y)) routes.push([a, b]);
       }
     }

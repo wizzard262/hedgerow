@@ -69,6 +69,18 @@ check('a piece acts once an hour', () => {
   assert(!m2 || !Sim.actCharge(st, able, m2.x, m2.y).ok, 'a second action in the same hour was allowed');
 });
 
+check('a charge can pass through a field of friends but not stop in it', () => {
+  const st = Sim.newGame(3);
+  st.hedges = {}; st.wire = {};
+  const tank = Sim.unitById(st, 'T1'), able = Sim.unitById(st, 'A');
+  for (const u of st.units) if (u !== tank && u !== able) u.x = u.y = null;
+  tank.x = 0; tank.y = 6; able.x = 1; able.y = 6;
+  const spots = Sim.chargeSpots(st, tank);
+  assert(spots.some(p => p.x === 2 && p.y === 6), 'the tank could not charge through the platoon');
+  assert(!spots.some(p => p.x === 1 && p.y === 6), "the tank could stop in the platoon's field");
+  assert(Sim.actCharge(st, tank, 2, 6).ok && tank.x === 2, 'the charge through the platoon did not arrive');
+});
+
 check('Move & shoot only goes where the piece will have someone to shoot', () => {
   for (let seed = 1; seed <= 10; seed++) {
     const st = Sim.newGame(seed);
