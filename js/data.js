@@ -36,6 +36,9 @@ const WITHDRAW = { standard: 0.6, elite: 0.75, keep: 0.5 };   // chance it works
 // Shooting: each point of firepower rolls one six-sided die, which hits on TO_HIT or more.
 // Cover adds to the score needed, elite troops take one off; a 6 always hits
 const TO_HIT = 3;                // a die needs this or more to hit, before cover, range and moving (Steve: 3+)
+const MOVE_SHOOT_MOVES = 2;      // fields a Move & shoot can cover (Steve: one more than before)
+const CHARGE_MOVES = 3;          // fields a charge can cover
+const CLIMB = 1;                 // extra moves it costs men to climb a hedge bank or cut through wire (tanks drive through)
 const SHAKEN_SHOOT = 1;          // a shaken (pinned) piece needs one more to hit
 const WOUND_CHANCE = 0.5;        // each hit is a coin toss: heads it wounds (a section, a team or a tank lost); every hit pins
 const QUALITY = { elite: { name: 'Elite', shoot: 1, assault: 1.3, rally: 0.9 }, standard: { name: 'Standard', shoot: 0, assault: 1, rally: 0.7 } };

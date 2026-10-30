@@ -154,19 +154,19 @@ const UI = (() => {
     }
     if (u.kind === 'company' || Sim.isTank(u)) {
       const fight = Sim.chargeSpots(st, u).some(p => Sim.at(st, p.x, p.y, 'de').length);
-      add('charge', fight ? '⚔️ Charge (hand to hand)' : '⚔️ Charge', Sim.chargeSpots(st, u).length > 0, 'Up to two fields without shooting; hand to hand if the Germans hold the field it ends in');
-      add('moveShoot', '➡️ Move & shoot', Sim.moveShootSpots(st, u).length > 0, 'One field to where it can fire (the red-hatched fields), then fire needing one more on the dice');
+      add('charge', fight ? '⚔️ Charge (hand to hand)' : '⚔️ Charge', Sim.chargeSpots(st, u).length > 0, 'Up to three fields without shooting (men climbing a hedge or cutting wire use one more); hand to hand if the Germans hold the field it ends in');
+      add('moveShoot', '➡️ Move & shoot', Sim.moveShootSpots(st, u).length > 0, 'Up to two fields to where it can fire (the red-hatched fields), then fire needing one more on the dice');
       add('shoot', '🎯 Shoot', Sim.targets(st, u).length > 0, 'Fire with every die');
       if (Sim.breachSpots(st, u).length) add('breach', '⛏️ Break through', true, 'Through a hedge or wire into the next field, leaving a gap: a move with no shooting');
     } else if (u.kind === 'captain') {
       // The four actions (Steve): Charge, Move & shoot, Shoot, Rally. The captain charges or rallies
-      add('charge', '⚔️ Charge', Sim.chargeSpots(st, u).length > 0, 'Up to two fields, no shooting');
+      add('charge', '⚔️ Charge', Sim.chargeSpots(st, u).length > 0, 'Up to three fields, no shooting (climbing a hedge uses one more)');
       add('rally', '📣 Rally', Sim.rallyTargets(st, u).length > 0, 'Use his move to steady a shaken friendly piece up to three fields away');
       if (Sim.breachSpots(st, u).length) add('breach', '⛏️ Break through', true, 'Through a hedge or wire into the next field: no shooting');
     } else {
-      add('charge', '⚔️ Charge', Sim.chargeSpots(st, u).length > 0, 'Up to two fields, no shooting');
+      add('charge', '⚔️ Charge', Sim.chargeSpots(st, u).length > 0, 'Up to three fields, no shooting (climbing a hedge uses one more)');
       // Machine guns can't move and fire: they Charge to a new spot, then Shoot next hour
-      if (u.kind !== 'mg' && u.kind !== 'mg42') add('moveShoot', '➡️ Move & shoot', Sim.moveShootSpots(st, u).length > 0, 'One field to where it can fire (the red-hatched fields), then fire needing one more on the dice');
+      if (u.kind !== 'mg' && u.kind !== 'mg42') add('moveShoot', '➡️ Move & shoot', Sim.moveShootSpots(st, u).length > 0, 'Up to two fields to where it can fire (the red-hatched fields), then fire needing one more on the dice');
       add('shoot', '🎯 Shoot', Sim.targets(st, u).length > 0, 'Fire with every die');
       if (Sim.breachSpots(st, u).length) add('breach', '⛏️ Break through', true, 'Through a hedge or wire into the next field: no shooting');
     }

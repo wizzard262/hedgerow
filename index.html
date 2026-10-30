@@ -80,7 +80,7 @@
 <body>
 <aside id="panel">
   <div class="top">
-    <h1>HEDGEROW <span id="ver" style="font-size:11px;color:var(--muted);letter-spacing:0">v34</span></h1>
+    <h1>HEDGEROW <span id="ver" style="font-size:11px;color:var(--muted);letter-spacing:0">v35</span></h1>
     <div class="links"><button id="sound-btn" title="Sound on or off">🔊</button><button id="help-btn">How to play</button><button id="new-btn">New game</button></div>
   </div>
   <div id="clock"></div>
@@ -119,15 +119,15 @@
     <ul>
       <li>🪖 <b>Pieces</b>: your company: three rifle platoons (three sections of four men each, moving together; a fourth platoon comes later), the captain, machine-gun and bazooka teams, and two tank sections: Shermans and Fireflies. 1st Platoon is elite.</li>
       <li>📋 <b>One move each</b>: every piece moves (acts) once an hour. A piece that has moved is greyed out until the next hour.</li>
-      <li>🎲 <b>Actions</b> (click a piece for its menu): <b>Charge</b>: twice a move, up to two fields, without shooting, and through a field of your own pieces on the way, but not through a village or hamlet (rifle platoons and tanks fight hand to hand if Germans hold the field it ends in), <b>Move &amp; shoot</b> (one field to a red-hatched field, from where it will have someone to fire at, then fire needing one more; machine guns can't fire on the move; they Charge to a new spot, then fire 5 dice), <b>Shoot</b> (full dice), <b>Break through</b> a hedge or wire into the next field (no shooting), and the captain's <b>Rally</b> (he can Charge too). There is no plain move: to move without shooting, Charge.</li>
+      <li>🎲 <b>Actions</b> (click a piece for its menu): <b>Charge</b>: up to three fields, without shooting, and through a field of your own pieces on the way, but not through a village or hamlet (rifle platoons and tanks fight hand to hand if Germans hold the field it ends in), <b>Move &amp; shoot</b> (up to two fields, to a red-hatched field from where it will have someone to fire at, then fire needing one more; machine guns can't fire on the move: they Charge to a new spot, then fire), <b>Shoot</b> (full dice), <b>Break through</b> a hedge or wire into the next field, leaving a gap (no shooting), and the captain's <b>Rally</b> (he can Charge too). There is no plain move: to move without shooting, Charge.</li>
       <li>👁️ <b>Who can shoot whom</b>: up to three fields away along a line of sight over open fields and lanes; villages, hamlets and orchards in between block it, and so does any hedge except the ones the shooter or the target lines (below). Beyond the next field, one more is needed on the dice. Red targets show who a piece can hit, with the score its dice need.</li>
       <li>🌳 <b>Lining a hedge</b>: a piece stands either lining one hedge of its field or out in the open. It ends a move lining the hedge on the far side. Across a hedge: a piece lining it can fire through; a piece in the open can only fire at an enemy who lines it, needing one more on the dice; two pieces in the open can't see each other; two both lining it fire at each other needing one more. <b>Line a hedge</b> (in the menu) takes a piece to another hedge of its field: its move for the hour.</li>
       <li>🧍 <b>One unit to a field</b>: only hand-to-hand fighting brings both sides into the same field. MG and bazooka teams and the captain can also stand in a rifle platoon's field (up to three with it); they still move on their own.</li>
       <li>🏘️ <b>Villages and hamlets</b>: houses round a yard. Hard to hit in.</li>
       <li>🌊 <b>The river</b> can only be crossed at its two bridges.</li>
       <li>🔊 <b>Sound</b>: rifles, the American .30-cal and the German MG 42, bazookas, tank guns, mortar bombs and shells whistling in, men running, tanks driving, and a battle going on in the distance. The 🔊 button at the top turns it all off.</li>
-      <li>✂️ <b>Barbed wire</b> closes some gaps between fields: men can't cross it except by Break through (cutting it); tanks roll over and flatten it.</li>
-      <li>🌳 <b>Hedges</b>: Nothing can charge or move across a hedge except tanks, which drive straight through, leaving a gap. Everyone else goes through gaps and lanes, or uses <b>Break through</b>: into the next field through the hedge, leaving a gap, with no shooting that hour. Charging across a hedge at Germans behind it is allowed, but they fight back hard.</li>
+      <li>✂️ <b>Barbed wire</b> closes some gaps between fields: men cut through it as they go, which uses one more move; tanks roll over and flatten it.</li>
+      <li>🌳 <b>Hedges</b>: men climb over a hedge bank as they move, which uses one more move (the hedge stays); tanks drive straight through, leaving a gap. <b>Break through</b> pushes a piece through into the next field and leaves a gap for others. Charging across a hedge at Germans behind it is allowed, but they fight back hard.</li>
       <li>🛡️ <b>Tanks</b> can't be hurt by rifles or machine guns: only bazookas, Panzerschrecks, anti-tank guns, other tanks and the artillery can knock them out, and infantry can't charge a field held only by tanks. A tank firing on men hits every piece on foot in that field (not the captain), like a mortar.</li>
       <li>🎲 <b>Dice</b>: every shot rolls six-sided dice by the target: 3 or more hits. One more is needed for each of: a target in cover (lining a hedge, in a village or hamlet), long range (beyond the next field), firing on the move, and the shooter being shaken; a 6 always hits. Elite troops need one less; the Panther's armour one more. Every hit pins the target; then a coin toss for each hit says whether it wounds: a section, a team or a tank lost. The last three rolls stay in the target's field, with a tag saying who fired, the score needed and the hits: bright dice hit, dark ones missed.</li>
       <li>🟢 <b>Who can move</b>: a green ring under a piece means it can still move this hour; a piece that has moved is greyed out.</li>
@@ -143,12 +143,12 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="js/data.js?v=34"></script>
-<script src="js/sim.js?v=34"></script>
-<script src="js/sound.js?v=34"></script>
-<script src="js/models.js?v=34"></script>
-<script src="js/board3d.js?v=34"></script>
-<script src="js/ui.js?v=34"></script>
-<script src="js/main.js?v=34"></script>
+<script src="js/data.js?v=35"></script>
+<script src="js/sim.js?v=35"></script>
+<script src="js/sound.js?v=35"></script>
+<script src="js/models.js?v=35"></script>
+<script src="js/board3d.js?v=35"></script>
+<script src="js/ui.js?v=35"></script>
+<script src="js/main.js?v=35"></script>
 </body>
 </html>

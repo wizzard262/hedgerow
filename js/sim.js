@@ -408,7 +408,7 @@ const Sim = (() => {
   // Returns what happened to the hedge: 'cut' (driven through), 'climbed' (men clambered over) or ''
   function step(st, u, x, y, assault = false) {
     let how = '';
-    if (wire(st, u.x, u.y, x, y) && isTank(u)) { delete st.wire[edgeKey(u.x, u.y, x, y)]; how = 'flattened'; }
+    if (wire(st, u.x, u.y, x, y)) { delete st.wire[edgeKey(u.x, u.y, x, y)]; how = isTank(u) ? 'flattened' : 'wirecut'; }
     if (hedge(st, u.x, u.y, x, y)) {
       if (cutter(u)) { delete st.hedges[edgeKey(u.x, u.y, x, y)]; how = 'cut'; } else how = 'climbed';
     }
@@ -527,26 +527,35 @@ const Sim = (() => {
     return { ok: true, lines: [`🔫 ${u.name} fires on ${target.name}: ` + fireAt(st, u, target, 1).join(', ') + '.'] };
   }
 
-  // The fields Move & shoot can go to: only those from which the piece will have someone to shoot (Steve)
-  function moveShootSpots(st, u) {
-    // Captains don't shoot, and machine guns can't fire on the move (Steve): they set up, then shoot
-    if (u.kind === 'captain' || u.kind === 'mg' || u.kind === 'mg42') return [];
+  // The routes Move & shoot can take: up to MOVE_SHOOT_MOVES moves, ending only where the piece will have someone to
+  // shoot (Steve). Captains don't shoot, and machine guns can't fire on the move (Steve): they set up, then shoot
+  function moveShootRoutes(st, u) {
+    if (u.kind === 'captain' || u.kind === 'mg' || u.kind === 'mg42' || PIECES[u.kind].fixed) return [];
     const home = { x: u.x, y: u.y, at: u.at }, out = [];
-    for (const p of moves(st, u)) {
-      u.at = dirTo(home, p); u.x = p.x; u.y = p.y;
-      if (targets(st, u).length) out.push(p);
+    for (const route of routesFor(st, u, MOVE_SHOOT_MOVES, false)) {
+      // Try it: stand at the goal, facing the way it came in
+      const goal = route[route.length - 1], from = route.length > 1 ? route[route.length - 2] : home;
+      u.at = dirTo(from, goal); u.x = goal.x; u.y = goal.y;
+      if (targets(st, u).length) out.push(route);
       u.x = home.x; u.y = home.y; u.at = home.at;
     }
     return out;
   }
 
+  function moveShootSpots(st, u) {
+    return moveShootRoutes(st, u).map(r => ({ x: r[r.length - 1].x, y: r[r.length - 1].y }));
+  }
+
   // Move and shoot: the piece moves a field, then it may fire once on the move, needing one more (actHalfShot), before doing anything else
   function actMoveShoot(st, u, x, y) {
-    if (!canAct(st, u) || !moveShootSpots(st, u).some(p => p.x === x && p.y === y)) return { ok: false };
+    const route = canAct(st, u) && moveShootRoutes(st, u).find(r => r[r.length - 1].x === x && r[r.length - 1].y === y);
+    if (!route) return { ok: false };
     spend(st, u);
+    const lines = followRoute(st, u, route);
     const how = step(st, u, x, y);
+    lines.push(moveLine(u, how).replace(/\.$/, ''));
     u.halfShot = targets(st, u).length > 0;
-    return { ok: true, lines: [moveLine(u, how)] };
+    return { ok: true, lines: [lines.join(', ') + '.'] };
   }
 
   function actHalfShot(st, u, target) {
@@ -559,6 +568,7 @@ const Sim = (() => {
     if (how === 'cut') return `🚜 ${u.name} smashes through the hedge, leaving a gap.`;
     if (how === 'climbed') return `🧗 ${u.name} struggles over the hedge bank.`;
     if (how === 'flattened') return `🚜 ${u.name} flattens the barbed wire.`;
+    if (how === 'wirecut') return `✂️ ${u.name} cuts through the wire.`;
     return `➡️ ${u.name} moves up.`;
   }
 
@@ -571,45 +581,76 @@ const Sim = (() => {
     return { ok: true, lines: [moveLine(u, how)] };
   }
 
-  // The fields a charge can reach in one step from a field: empty ones it can enter, or ones the enemy holds to assault.
-  // Men charge across a hedge only to assault the enemy behind it; into an empty field they must break through
-  function chargeSteps(st, u, fx, fy) {
-    const out = [];
-    for (const [dx, dy] of NEIGHBOURS) {
-      const x = fx + dx, y = fy + dy;
-      if (!inside(x, y) || tileType(x, y) === 'river') continue;
-      if (isTank(u) && !cutter(u) && hedge(st, fx, fy, x, y)) continue;
-      if (!isTank(u) && wire(st, fx, fy, x, y)) continue;
-      const enemies = at(st, x, y, enemyOf(u.side));
-      const blocked = hedge(st, fx, fy, x, y) && !cutter(u);
-      // Hand to hand: not against a field of tanks alone unless the charger can hurt tanks
-      if (enemies.length) { if (fightsHandToHand(u) && (enemies.some(e => !isTank(e)) || firepower(st, u).hard > 0)) out.push({ x, y, assault: true }); }
-      else if (!blocked && roomFor(st, u, x, y)) out.push({ x, y, assault: false });
-      // A field full of friends: a charge can pass through it (Steve), but not stop there
-      else if (!blocked && at(st, x, y).length) out.push({ x, y, assault: false, pass: true });
-    }
-    return out;
-  }
-
   const fightsHandToHand = u => u.kind === 'company' || isTank(u);
 
-  // A charge goes twice as far as a move: up to two fields, the second can be an assault, and it can pass through a field
-  // of friendly pieces on the way (a tank through infantry, infantry past a tank). Each route is the fields it passes
-  function chargeRoutes(st, u) {
-    // Every piece but a dug-in gun can charge; captains and teams only into empty fields (see chargeSteps). A shaken
-    // (pinned) piece can't charge until it rallies (Steve)
-    if (PIECES[u.kind].fixed || u.shocked) return [];
-    const routes = [];
-    for (const a of chargeSteps(st, u, u.x, u.y)) {
-      if (!a.pass) routes.push([a]);
-      // A charge stops at an assault, and can't go on through a village or hamlet: no charging through houses (Steve)
-      if (a.assault || ['village', 'hamlet'].includes(tileType(a.x, a.y))) continue;
-      for (const b of chargeSteps(st, u, a.x, a.y)) {
-        if ((b.x === u.x && b.y === u.y) || b.pass) continue;
-        if (!routes.some(r => r[r.length - 1].x === b.x && r[r.length - 1].y === b.y)) routes.push([a, b]);
+  // What it costs to go from one field into the next (Steve): one move, and CLIMB more for men climbing a hedge bank (it
+  // stays standing) or cutting through wire (it's cut); tanks drive straight through both. null where it can't go at all
+  function stepCost(st, u, fx, fy, x, y) {
+    if (!inside(x, y) || tileType(x, y) === 'river' || PIECES[u.kind].fixed) return null;
+    const crossing = hedge(st, fx, fy, x, y) || wire(st, fx, fy, x, y);
+    if (isTank(u)) return hedge(st, fx, fy, x, y) && !cutter(u) ? null : 1;
+    return crossing ? 1 + CLIMB : 1;
+  }
+
+  // Every field a piece can reach with `budget` moves, each with the cheapest way there: a list of the fields it passes
+  // through, the last one its goal. It can pass through a field of friends (Steve) but not stop there, can end in a
+  // village or hamlet but not go on through one (no charging through houses), and when charging, a field the enemy holds
+  // ends the route in a hand-to-hand fight (rifle platoons and tanks only, and not against tanks alone unless it can hurt them)
+  function routesFor(st, u, budget, charging) {
+    const cheapest = {}, routeTo = {};
+    cheapest[u.x + ',' + u.y] = 0;
+    const open = [{ x: u.x, y: u.y, cost: 0, path: [] }];
+    while (open.length) {
+      // Take the cheapest place reached so far
+      open.sort((a, b) => a.cost - b.cost);
+      const here = open.shift();
+      // Houses: a route can end in a village or hamlet but not go on through it
+      if (here.path.length && ['village', 'hamlet'].includes(tileType(here.x, here.y))) continue;
+      for (const [dx, dy] of NEIGHBOURS) {
+        const x = here.x + dx, y = here.y + dy, key = x + ',' + y;
+        const c = stepCost(st, u, here.x, here.y, x, y);
+        if (c === null || here.cost + c > budget) continue;
+        const cost = here.cost + c;
+        if (cheapest[key] !== undefined && cheapest[key] <= cost) continue;
+        const enemies = at(st, x, y, enemyOf(u.side));
+        if (enemies.length) {
+          // The enemy's field: only a charge goes in, to fight hand to hand, and it stops there
+          const canFight = charging && fightsHandToHand(u) && (enemies.some(e => !isTank(e)) || firepower(st, u).hard > 0);
+          if (canFight) { cheapest[key] = cost; routeTo[key] = here.path.concat([{ x, y, assault: true }]); }
+          continue;
+        }
+        cheapest[key] = cost;
+        if (roomFor(st, u, x, y)) {
+          // Room to stop: a goal, and maybe on from here
+          const path = here.path.concat([{ x, y }]);
+          routeTo[key] = path;
+          open.push({ x, y, cost, path });
+        } else if (at(st, x, y).length) {
+          // Friends there: pass through, but not stop
+          open.push({ x, y, cost, path: here.path.concat([{ x, y, pass: true }]) });
+        }
       }
     }
-    return routes;
+    return Object.values(routeTo);
+  }
+
+  // A charge: up to CHARGE_MOVES moves, without shooting, ending in a hand-to-hand fight if it reaches the enemy.
+  // Every piece but a dug-in gun can charge; captains and teams only into empty fields. A shaken (pinned) piece can't
+  // charge until it rallies (Steve)
+  function chargeRoutes(st, u) {
+    if (PIECES[u.kind].fixed || u.shocked) return [];
+    const canFight = fightsHandToHand(u);
+    return routesFor(st, u, CHARGE_MOVES, canFight);
+  }
+
+  // Go along a route's fields up to (not into) its goal, cutting, flattening or climbing on the way. Returns the lines to report
+  function followRoute(st, u, route) {
+    const lines = [];
+    for (const p of route.slice(0, -1)) {
+      const how = step(st, u, p.x, p.y);
+      if (how) lines.push(moveLine(u, how).replace(/\.$/, ''));
+    }
+    return lines;
   }
 
   function chargeSpots(st, u) {
@@ -621,12 +662,15 @@ const Sim = (() => {
     if (!route) return { ok: false };
     spend(st, u);
     const lines = [];
-    // The first field of a two-field charge is crossed on the way
+    // The fields before the goal are crossed on the way
     const home = { x: u.x, y: u.y, at: u.at };
-    if (route.length === 2) { const how = step(st, u, route[0].x, route[0].y); if (how) lines.push(moveLine(u, how).replace(/\.$/, '')); }
+    lines.push(...followRoute(st, u, route));
     lines.push(...charge(st, u, x, y));
-    // Beaten back after passing through friends: it can't stay in their field, so it ends back where it started
-    if (route.length === 2 && route[0].pass && u.x === route[0].x && u.y === route[0].y) { u.x = home.x; u.y = home.y; u.at = home.at; }
+    // Beaten back into a field of friends it passed through: it can't stay there, so it ends back where it started
+    if (route.some(p => p.pass && p.x === u.x && p.y === u.y)) {
+      u.x = home.x; u.y = home.y; u.at = home.at;
+      for (const t of u.kind === 'company' ? teamsOf(st, u) : []) { t.x = home.x; t.y = home.y; t.at = home.at; }
+    }
     return { ok: true, lines: [lines.join(', ') + '.'] };
   }
 
@@ -950,7 +994,7 @@ const Sim = (() => {
     newGame, endTurn, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, moves, chargeSpots,
     rallyTargets, canAct, groupOf, groupName, members, canReact, firepower, teamsOf, canCallFire, holdsObjective, hourText, roomFor,
     startGermanHour, germanStep, answer, finishHour,
-    actShoot, actMoveShoot, moveShootSpots, needFor, canSelfRally, actSelfRally, actHalfShot, actMove, actCharge, actRally, actFire, actBreach, breachSpots, sight, isSmall, cover, wire, lineSides, actLine, atHedge, acrossHedge, SIDE_NAMES,
+    actShoot, actMoveShoot, moveShootSpots, chargeRoutes, needFor, canSelfRally, actSelfRally, actHalfShot, actMove, actCharge, actRally, actFire, actBreach, breachSpots, sight, isSmall, cover, wire, lineSides, actLine, atHedge, acrossHedge, SIDE_NAMES,
     hasCutters: u => cutter(u),
   };
 })();

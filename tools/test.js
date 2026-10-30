@@ -86,11 +86,11 @@ check('no charging through a house', () => {
     const st = Sim.newGame(seed);
     st.hedges = {}; st.wire = {};
     for (const u of st.units.filter(u => u.side === 'us' && u.x !== null)) {
-      // Every two-field charge's first field is not a village or hamlet
-      for (const p of Sim.chargeSpots(st, u)) {
-        if (Math.abs(p.x - u.x) + Math.abs(p.y - u.y) < 2) continue;
-        const mids = [{ x: (u.x + p.x) / 2, y: (u.y + p.y) / 2 }, { x: p.x, y: u.y }, { x: u.x, y: p.y }].filter(m => Number.isInteger(m.x) && Number.isInteger(m.y) && Math.abs(m.x - u.x) + Math.abs(m.y - u.y) === 1);
-        assert(mids.some(m => !['village', 'hamlet'].includes(Sim.tileType(m.x, m.y))), `seed ${seed}: ${u.name} charges through houses to ${p.x},${p.y}`);
+      // No charge route passes through a village or hamlet: houses can only be the end of one
+      for (const route of Sim.chargeRoutes(st, u)) {
+        const through = route.slice(0, -1).find(m => ['village', 'hamlet'].includes(Sim.tileType(m.x, m.y)));
+        const goal = route[route.length - 1];
+        assert(!through, `seed ${seed}: ${u.name} charges through houses at ${through && through.x},${through && through.y} to ${goal.x},${goal.y}`);
       }
     }
   }
@@ -111,15 +111,26 @@ check('Move & shoot only goes where the piece will have someone to shoot', () =>
   }
 });
 
-check('a charge reaches two fields, a move one', () => {
+check('a charge reaches three fields, Move & shoot two', () => {
   const st = Sim.newGame(3);
   st.hedges = {}; st.wire = {};
   const able = Sim.unitById(st, 'A');
   for (const u of st.units) if (u !== able) u.x = u.y = null;
   able.x = 0; able.y = 6;
-  assert(Sim.chargeSpots(st, able).some(p => Math.abs(p.x - able.x) + Math.abs(p.y - able.y) === 2), 'no charge reaches two fields');
-  assert(Sim.moves(st, able).every(p => Math.abs(p.x - able.x) + Math.abs(p.y - able.y) === 1), 'a move went further than one field');
-  assert(Sim.actCharge(st, able, 2, 6).ok && able.x === 2, 'the two-field charge did not arrive');
+  const far = p => Math.abs(p.x - able.x) + Math.abs(p.y - able.y);
+  assert(Sim.chargeSpots(st, able).some(p => far(p) === 3), 'no charge reaches three fields');
+  assert(Sim.chargeSpots(st, able).every(p => far(p) <= 3), 'a charge went further than three fields');
+  assert(Sim.actCharge(st, able, 3, 6).ok && able.x === 3, 'the three-field charge did not arrive');
+  // Move & shoot: put a German where it can be seen from two fields on, and none nearer
+  const st2 = Sim.newGame(3);
+  st2.hedges = {}; st2.wire = {};
+  const b = Sim.unitById(st2, 'A'), de = st2.units.find(u => u.side === 'de' && u.kind === 'company');
+  for (const u of st2.units) if (u !== b && u !== de) u.x = u.y = null;
+  b.x = 0; b.y = 6; de.x = 3; de.y = 6;
+  const spots = Sim.moveShootSpots(st2, b);
+  assert(spots.every(p => Math.abs(p.x - 0) + Math.abs(p.y - 6) <= 2), 'Move & shoot went further than two fields');
+  assert(spots.some(p => p.x === 2 && p.y === 6), 'Move & shoot could not go two fields');
+  assert(Sim.actMoveShoot(st2, b, 2, 6).ok && b.x === 2, 'the two-field Move & shoot did not arrive');
 });
 
 check('every tank drives through hedges; wire stops men but not tanks; men break through', () => {
@@ -135,10 +146,13 @@ check('every tank drives through hedges; wire stops men but not tanks; men break
   const k2 = setUp(ff, 6); st.hedges[k2] = true;
   assert(Sim.chargeSpots(st, ff).some(p => p.x === 1 && p.y === 6) && !Sim.breachSpots(st, ff).length, 'the Firefly should drive through hedges with no separate Break through');
   const k3 = setUp(co, 3); st.wire[k3] = true;
-  assert(!Sim.moves(st, co).some(p => p.x === 1 && p.y === 3), 'men walked through barbed wire');
   assert(Sim.actBreach(st, co, 1, 3).ok && !st.wire[k3] && co.x === 1, 'the company could not cut through the wire');
+  // Men climb a hedge as part of a charge, using one more move: the hedge stays, and they get one field less far
   const k4 = setUp(co, 5); co.acted = false; st.hedges[k4] = true;
-  assert(!Sim.moves(st, co).some(p => p.x === 1 && p.y === 5) && !Sim.chargeSpots(st, co).some(p => p.x === 1 && p.y === 5), 'men walked or charged across a hedge into an empty field');
+  assert(Sim.chargeSpots(st, co).some(p => p.x === 1 && p.y === 5), 'men could not climb the hedge in a charge');
+  assert(Sim.chargeSpots(st, co).some(p => p.x === 2 && p.y === 5), 'men could not go on a field after climbing');
+  assert(!Sim.chargeSpots(st, co).some(p => p.x === 3 && p.y === 5), 'climbing the hedge cost nothing');
+  assert(Sim.actCharge(st, co, 2, 5).ok && co.x === 2 && st.hedges[k4], 'the climb did not arrive, or the men knocked the hedge down');
 });
 
 check('one unit to a field', () => {
