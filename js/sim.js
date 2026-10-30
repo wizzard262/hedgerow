@@ -697,9 +697,9 @@ const Sim = (() => {
         lines.push(...damage(st, t, soft, hard));
         const lost = before - (t.x === null ? 0 : t.platoons);
         const result = t.x === null ? 'Wiped out' : lost ? (isTank(t) ? 'Tank knocked out' : 'Section lost') : t.shocked && !wasShocked ? 'Pinned' : soft + hard ? 'No effect' : 'Missed';
-        st.fx.push({ x: fx, y: fy, kind: 'shell', faces, need, side, to: { id: t.id }, result });
+        st.fx.push({ x: fx, y: fy, kind: 'shell', faces, need, side, to: { id: t.id }, result, support: which });
       }
-      if (!at(st, fx, fy, enemyOf(side)).length) st.fx.push({ x: fx, y: fy, kind: 'shell' });
+      if (!at(st, fx, fy, enemyOf(side)).length) st.fx.push({ x: fx, y: fy, kind: 'shell', support: which });
     };
     hitField(x, y, S.dice);
     if (S.splash) for (const [dx, dy] of NEIGHBOURS) if (inside(x + dx, y + dy)) hitField(x + dx, y + dy, S.splash);
@@ -810,7 +810,7 @@ const Sim = (() => {
     if (t.x === null) return;
     if (shot.mortar) {
       st.deMortarAmmo--;
-      const fx = { x: t.x, y: t.y, kind: 'shell' };
+      const fx = { x: t.x, y: t.y, kind: 'shell', support: 'mortars' };
       // Pulling back from a mortar: away from the Germans' side of the board
       const pre = withdraw ? pullBack(st, t, { x: t.x + 1, y: t.y }) : null;
       const need = TO_HIT + (t.x !== null && tileType(t.x, t.y) === 'village' ? COVER.village : 0);

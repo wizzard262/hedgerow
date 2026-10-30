@@ -404,7 +404,21 @@ const Board = (() => {
       // A tank or gun turns to face what it fires at, and stays facing it
       const shooter = f.from && st.units.find(u => u.id === f.from.id);
       if (shooter && (Sim.isTank(shooter) || shooter.kind === 'pak')) shooter.aim = Math.atan2(-(f.y - f.from.y), f.x - f.from.x);
-      shots.push({ f, t0: performance.now() + shots.filter(s => performance.now() - s.t0 < 300).length * 180, objs: [] });
+      const t0 = performance.now() + shots.filter(s => performance.now() - s.t0 < 300).length * 180;
+      shots.push({ f, t0, objs: [] });
+      // The sounds: the weapon firing, then what it does when it lands (same timing as the picture)
+      const wait = (t0 - performance.now()) / 1000;
+      if (f.from) {
+        const flight = f.weapon === 'gun' ? 0.25 : f.weapon === 'rocket' ? 0.45 : 0.35;
+        Sound.play(f.weapon, wait);
+        Sound.play(f.armour && f.weapon === 'gun' ? 'clang' : f.weapon === 'gun' || f.weapon === 'rocket' ? 'he' : 'bullets', wait + flight);
+      } else if (f.kind === 'shell') {
+        // Fire support: the mortar's thunk or the guns' whistle, then the burst (one sound for each mission)
+        if (!shots.some(s => s !== shots[shots.length - 1] && s.f.kind === 'shell' && performance.now() - s.t0 < 300)) {
+          if (f.support === 'artillery') { Sound.play('whistle', wait); Sound.play('he', wait + 0.8, true); }
+          else { Sound.play('mortar', wait); Sound.play('he', wait + 0.5); }
+        }
+      }
     }
   }
 

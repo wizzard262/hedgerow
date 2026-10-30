@@ -141,6 +141,10 @@ window.Game = (() => {
   $('#ask-pull').onclick = () => answer(true);
   $('#ask-stay').onclick = () => answer(false);
   $('#help-btn').onclick = () => { $('#help').hidden = false; };
+  // Sound on or off (remembered on this computer)
+  const soundIcon = () => { $('#sound-btn').textContent = Sound.isOn() ? '🔊' : '🔇'; };
+  $('#sound-btn').onclick = () => { Sound.wake(); Sound.toggle(); soundIcon(); };
+  soundIcon();
   $('#help [data-close]').onclick = () => { $('#help').hidden = true; };
   $('#new-btn').onclick = () => { if (confirm('Start a new game?')) start(); };
   $('#again-btn').onclick = () => { $('#result').hidden = true; start(); };

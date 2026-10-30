@@ -9,6 +9,6 @@ Local repo `C:\DEV\Repositories\GitHub\hedgerow` (not on GitHub yet: ask Steve b
 - Run `node tools/test.js` before every commit (headless checks of the rules)
 - After a rules change, run `node tools/sweep.js ""` (150 games with a simple attacking bot): with no time limit the bot plays up to 20 hours: note its win rate and average hours; doing nothing must never win
 - Plain JavaScript, classic scripts loaded in order (no modules); three.js r128 from cdnjs
-  - `js/data.js` the map and every number to tune; `js/sim.js` the rules (no DOM); `js/models.js` the 3D models; `js/board3d.js` the table, camera and picking; `js/ui.js` the left-hand panel; `js/main.js` start-up, input and the German hour
+  - `js/data.js` the map and every number to tune; `js/sim.js` the rules (no DOM); `js/sound.js` the battle sounds (Web Audio, no files); `js/models.js` the 3D models; `js/board3d.js` the table, camera and picking; `js/ui.js` the left-hand panel; `js/main.js` start-up, input and the German hour
 - The version number (`#ver` in `index.html`) goes up by 1 with every commit to the game: `git rev-list --count HEAD` + 1. Put the same number on every script link (`js/ui.js?v=2`)
 - Scales on the table (Steve): men 1:54, tanks 1:76, houses 1:144; company level (Steve): each rifle piece is a platoon of three section bases (four men each), moving together; tanks in pairs. In the code a rifle platoon's kind is still 'company' and its sections are `platoons`; loose formations that shuffle when they move. Whole board on the table, one fixed slanted camera, no fog of war
