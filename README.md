@@ -1,9 +1,9 @@
 # Hedgerow
 
-Normandy, 11 July 1944. Your American battalion fights through the bocage, field by field, to take a village and hold it, in six moves.
+Normandy, 11 July 1944. Your American rifle company fights through the bocage, field by field, to take a village and hold it, in six moves.
 
-- **Companies** of three platoons (four men a base) with their captains, machine-gun and bazooka teams, Shermans and Fireflies, against Fallschirmjäger, MG 42s, a PaK 40, Panzer IVs and Panthers
-- **Command points**: each company earns points for about two thirds of its pieces an hour and can save them; each piece acts once an hour
+- **Rifle platoons** of three sections (four men a base), the company captain, machine-gun and bazooka teams, Shermans and Fireflies, against Fallschirmjäger, MG 42s, a PaK 40, Panzer IVs and Panthers
+- **Command points**: each platoon earns points an hour and can save them; each piece acts once an hour, and only about two thirds can
 - **Charge, move and shoot, shoot, rally**; every shot rolls dice on the table
 - **Hedges** block shooting and slow everything; Shermans and Panzer IVs carry hedge cutters; **barbed wire** must be cut or flattened; the **river** is crossed only at its bridges
 - **React in the German hour**: a piece fired on can spend a point to try to pull back and take half the hits

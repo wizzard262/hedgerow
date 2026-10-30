@@ -1,6 +1,6 @@
 # Hedgerow
 
-Local repo `C:\DEV\Repositories\GitHub\hedgerow` (not on GitHub yet: ask Steve before creating the repo or pushing). A browser game: July 1944, an American battalion fights through the Normandy bocage to take a village in six moves. Shown as a wargame table in 3D (three.js): flocked mat, foam hedges, a river with bridges, villages, painted miniatures and model tanks, dice for every shot.
+Local repo `C:\DEV\Repositories\GitHub\hedgerow` (not on GitHub yet: ask Steve before creating the repo or pushing). A browser game: July 1944, an American rifle company fights through the Normandy bocage to take a village in six moves. Shown as a wargame table in 3D (three.js): flocked mat, foam hedges, a river with bridges, villages, painted miniatures and model tanks, dice for every shot.
 
 - After every prompt about the game, add a short summary of it to [PROMPTS.md](PROMPTS.md), with any assumptions made
 - At the end of each session, record its length in the **Sessions** table at the bottom of PROMPTS.md (keep that table last)
@@ -11,4 +11,4 @@ Local repo `C:\DEV\Repositories\GitHub\hedgerow` (not on GitHub yet: ask Steve b
 - Plain JavaScript, classic scripts loaded in order (no modules); three.js r128 from cdnjs
   - `js/data.js` the map and every number to tune; `js/sim.js` the rules (no DOM); `js/models.js` the 3D models; `js/board3d.js` the table, camera and picking; `js/ui.js` the left-hand panel; `js/main.js` start-up, input and the German hour
 - The version number (`#ver` in `index.html`) goes up by 1 with every commit to the game: `git rev-list --count HEAD` + 1. Put the same number on every script link (`js/ui.js?v=2`)
-- Scales on the table (Steve): men 1:54, tanks 1:76, houses 1:144; four men to a platoon base, three platoons move together as a company, tanks in pairs; loose formations that shuffle when they move. Whole board on the table, one fixed slanted camera, no fog of war
+- Scales on the table (Steve): men 1:54, tanks 1:76, houses 1:144; company level (Steve): each rifle piece is a platoon of three section bases (four men each), moving together; tanks in pairs. In the code a rifle platoon's kind is still 'company' and its sections are `platoons`; loose formations that shuffle when they move. Whole board on the table, one fixed slanted camera, no fog of war
