@@ -47,8 +47,8 @@ function playHour(st) {
   for (const c of us().filter(u => u.kind === 'captain')) {
     const co = us().filter(u => u.kind === 'company').sort((a, b) => b.platoons - a.platoons)[0];
     if (co && co.x !== null && !(co.x === c.x && co.y === c.y) && Sim.canAct(st, c)) {
-      const m = Sim.moves(st, c).sort((a, b) => (Math.abs(a.x - co.x) + Math.abs(a.y - co.y)) - (Math.abs(b.x - co.x) + Math.abs(b.y - co.y)))[0];
-      if (m) Sim.actMove(st, c, m.x, m.y);
+      const m = Sim.chargeSpots(st, c).sort((a, b) => (Math.abs(a.x - co.x) + Math.abs(a.y - co.y)) - (Math.abs(b.x - co.x) + Math.abs(b.y - co.y)))[0];
+      if (m) Sim.actCharge(st, c, m.x, m.y);
     }
   }
 }

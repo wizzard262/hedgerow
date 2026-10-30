@@ -26,11 +26,10 @@ const UI = (() => {
     if (!u || !view.mode) return [];
     const fields = list => list.map(p => ({ x: p.x, y: p.y }));
     const uniq = list => list.filter((p, i) => list.findIndex(q => q.x === p.x && q.y === p.y) === i);
-    const kind = { charge: 'charge', moveShoot: 'hatch', move: 'move', shoot: 'shoot', halfShot: 'shoot', rally: 'rally', breach: 'breach' }[view.mode];
+    const kind = { charge: 'charge', moveShoot: 'hatch', shoot: 'shoot', halfShot: 'shoot', rally: 'rally', breach: 'breach' }[view.mode];
     let list = [];
     if (view.mode === 'charge') list = Sim.chargeSpots(st, u);
     if (view.mode === 'moveShoot') list = Sim.moveShootSpots(st, u);
-    if (view.mode === 'move') list = Sim.moves(st, u);
     if (view.mode === 'shoot' || view.mode === 'halfShot') list = fields(Sim.targets(st, u));
     if (view.mode === 'rally') list = fields(Sim.rallyTargets(st, u));
     if (view.mode === 'breach') list = Sim.breachSpots(st, u);
@@ -65,7 +64,6 @@ const UI = (() => {
       if (view.mode.startsWith('fire:')) r = Sim.actFire(st, view.mode.slice(5), x, y);
       else if (view.mode === 'charge') r = Sim.actCharge(st, u, x, y);
       else if (view.mode === 'moveShoot') r = Sim.actMoveShoot(st, u, x, y);
-      else if (view.mode === 'move') r = Sim.actMove(st, u, x, y);
       else if (view.mode === 'breach') r = Sim.actBreach(st, u, x, y);
       else if (view.mode === 'shoot') r = Sim.actShoot(st, u, pickTarget(u, x, y));
       else if (view.mode === 'halfShot') r = Sim.actHalfShot(st, u, pickTarget(u, x, y));
@@ -134,13 +132,16 @@ const UI = (() => {
       add('shoot', '🎯 Shoot', Sim.targets(st, u).length > 0, 'Fire with every die');
       if (Sim.breachSpots(st, u).length) add('breach', '⛏️ Break through', true, 'Through a hedge or wire into the next field, leaving a gap: a move with no shooting');
     } else if (u.kind === 'captain') {
-      add('move', '➡️ Move', Sim.moves(st, u).length > 0, 'One field');
+      // The four actions (Steve): Charge, Move & shoot, Shoot, Rally. The captain charges or rallies
       add('charge', '⚔️ Charge', Sim.chargeSpots(st, u).length > 0, 'Up to two fields, no shooting');
       add('rally', '📣 Rally', Sim.rallyTargets(st, u).length > 0, 'Use his move to steady a shaken piece in his field or the next');
       if (Sim.breachSpots(st, u).length) add('breach', '⛏️ Break through', true, 'Through a hedge or wire into the next field: no shooting');
     } else {
-      add('move', '➡️ Move', Sim.moves(st, u).length > 0, u.attachedTo ? 'One field (it leaves its platoon)' : 'One field');
-      if (!u.attachedTo) add('charge', '⚔️ Charge', Sim.chargeSpots(st, u).length > 0, 'Up to two fields, no shooting');
+      // A team with a platoon moves with it; on its own it charges or moves and shoots
+      if (!u.attachedTo) {
+        add('charge', '⚔️ Charge', Sim.chargeSpots(st, u).length > 0, 'Up to two fields, no shooting');
+        add('moveShoot', '➡️ Move & shoot', Sim.moveShootSpots(st, u).length > 0, 'One field to where it can fire, then fire at half the dice (the red-hatched fields)');
+      }
       add('shoot', '🎯 Shoot', Sim.targets(st, u).length > 0, 'Fire with every die');
       if (Sim.breachSpots(st, u).length) add('breach', '⛏️ Break through', true, 'Through a hedge or wire into the next field: no shooting');
     }
