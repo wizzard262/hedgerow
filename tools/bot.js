@@ -28,6 +28,8 @@ function playHour(st) {
       const weak = Sim.chargeSpots(st, u).find(p => Sim.at(st, p.x, p.y, 'de').some(g => g.shocked) && u.kind === 'company' && u.platoons >= 2);
       if (weak) { Sim.actCharge(st, u, weak.x, weak.y); continue; }
       if (ts.length) { Sim.actShoot(st, u, ts[0]); continue; }
+      const across = st.units.find(g => g.side === 'de' && g.x !== null && Sim.acrossHedge(st, u, g));
+      if (across) { const side = Sim.lineSides(st, u).find(d => ({ e: [1, 0], w: [-1, 0], s: [0, 1], n: [0, -1] })[d].join() === [across.x - u.x, across.y - u.y].join()); if (side && Sim.actLine(st, u, side).ok) continue; }
       // Move towards the hamlet
       const m = Sim.moves(st, u).sort((a, b) => (Math.abs(a.x - st.objective.x) + Math.abs(a.y - st.objective.y)) - (Math.abs(b.x - st.objective.x) + Math.abs(b.y - st.objective.y)))[0];
       const empty = Sim.chargeSpots(st, u).find(p => p.x === st.objective.x && p.y === st.objective.y);

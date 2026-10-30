@@ -169,16 +169,19 @@ const Board = (() => {
     const company = here.find(u => u.kind === 'company'), armour = here.find(u => Sim.isTank(u)), small = here.filter(u => Sim.isSmall(u));
     const west = here.length && here[0].side === 'us';
     const flip = v => (west ? v : 1 - v);
+    // Pieces lining a hedge stand close to it: everything in the field is pushed that way
+    const lead = here.find(u => u.kind === 'company') || here.find(u => Sim.isTank(u)) || here[0];
+    const push = lead && lead.at ? { e: [0.14, 0], w: [-0.14, 0], s: [0, 0.12], n: [0, -0.12] }[lead.at] : [0, 0];
     const loose = (u, k) => { const R = seeded(u.id.length * 977 + x * 131 + y * 71 + k * 7 + u.id.charCodeAt(0)); return [(R() - 0.5) * 0.09, (R() - 0.5) * 0.07, (R() - 0.5) * 0.5]; };
     if (company) {
       const g = model(company), spots = armour ? [[0.2, 0.28], [0.17, 0.53], [0.22, 0.78]] : [[0.3, 0.3], [0.42, 0.55], [0.28, 0.8]];
       g.userData.bases.forEach((b, i) => { const [jx, jz, jr] = loose(company, i); b.visible = i < company.platoons; aim(b, flip(spots[i][0] + jx), spots[i][1] + jz, g.userData.face + jr); });
-      aim(g, x, y, 0);
+      aim(g, x + push[0], y + push[1], 0);
     }
     if (armour) {
       const g = model(armour);
       g.userData.bases.forEach((b, i) => { const [jx, jz, jr] = loose(armour, i); b.visible = i < armour.platoons; aim(b, flip((company ? 0.64 : 0.5) + jx * 0.6), (i ? 0.72 : 0.33) + jz * 0.5, g.userData.face + jr * 0.4); });
-      aim(g, x, y, 0);
+      aim(g, x + push[0] * 0.6, y + push[1] * 0.6, 0);
     }
     small.forEach((u, i) => {
       const g = model(u);

@@ -44,6 +44,8 @@ const WITHDRAW = { standard: 0.6, elite: 0.75, keep: 0.5 };   // chance it works
 // Cover adds to the score needed, elite troops take one off; a 6 always hits
 const TO_HIT = 5;
 const QUALITY = { elite: { name: 'Elite', shoot: 1, assault: 1.3, rally: 0.9 }, standard: { name: 'Standard', shoot: 0, assault: 1, rally: 0.7 } };
+const SIGHT_RANGE = 3;           // fields a piece can shoot across open ground (hedges, villages and orchards block the view)
+const LONG_RANGE = 1;            // added to the score needed beyond the next field
 const MOVE_SHOOT = 0.5;          // moving and shooting with one point: half the dice
 const COVER = { hedge: 1, village: 1, hamlet: 1, orchard: 0 };   // added to the score needed against a target behind a hedge, in the village, a hamlet or an orchard
 const RALLY_RANGE = 1;           // the captain rallies shaken pieces in his field or the next one
@@ -80,7 +82,7 @@ const US_START = [
   { id: 'A', kind: 'company', name: '1st Platoon', quality: 'elite', x: 0, y: 2 },
   { id: 'B', kind: 'company', name: '2nd Platoon', quality: 'standard', x: 0, y: 4 },
   { id: 'C', kind: 'company', name: '3rd Platoon', quality: 'standard', x: 0, y: 6 },
-  { id: 'cap', kind: 'captain', name: 'The Captain', x: 0, y: 4 },
+  { id: 'cap', kind: 'captain', name: 'Captain (company HQ)', x: 0, y: 4 },   // one captain, with the company guidon
   { id: 'T1', kind: 'sherman', name: '1st Tank Section', x: 1, y: 4 },
   { id: 'T2', kind: 'firefly', name: '2nd Tank Section', x: 0, y: 3 },
   { id: 'mg1', kind: 'mg', name: 'MG Team 1', x: 1, y: 4 },

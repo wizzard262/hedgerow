@@ -21,6 +21,11 @@ const Sim = (() => {
   const tileType = (x, y) => TYPES[MAP[y][x]];
   const isLane = t => t === 'laneEW' || t === 'laneNS' || t === 'crossroads' || t === 'bridge';
   const NEIGHBOURS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+  // The four sides of a field, for a piece lining a hedge
+  const DIRS = { e: [1, 0], w: [-1, 0], s: [0, 1], n: [0, -1] };
+  const SIDE_NAMES = { n: 'north', e: 'east', s: 'south', w: 'west' };
+  // Which side of a's field faces b (b next to a)
+  const dirTo = (a, b) => Object.keys(DIRS).find(d => DIRS[d][0] === b.x - a.x && DIRS[d][1] === b.y - a.y);
 
   // The same key for an edge whichever side it is looked at from
   function edgeKey(ax, ay, bx, by) {
@@ -47,7 +52,8 @@ const Sim = (() => {
 
   function makeUnit(def, side) {
     const kind = def.kind;
-    const u = Object.assign({ side, shocked: false, hit: false, acted: false, attachedTo: null }, def);
+    // at: the hedge the piece lines (n, e, s or w), or null out in the open. Both sides start lining the hedge towards the enemy
+    const u = Object.assign({ side, shocked: false, hit: false, acted: false, attachedTo: null, at: side === 'us' ? 'e' : 'w' }, def);
     if (kind === 'company') u.platoons = 3;
     else if (PIECES[kind].tank) u.platoons = 2;
     else u.platoons = 1;
@@ -196,19 +202,49 @@ const Sim = (() => {
 
   // ---------- Seeing ----------
 
-  // Two fields in a straight line with one between: you see through if neither edge has a hedge and the middle field is open
-  function clearLine(st, a, b) {
-    const dx = b.x - a.x, dy = b.y - a.y;
-    if (!((Math.abs(dx) === 2 && dy === 0) || (Math.abs(dy) === 2 && dx === 0))) return false;
-    const mx = a.x + dx / 2, my = a.y + dy / 2;
-    if (hedge(st, a.x, a.y, mx, my) || hedge(st, mx, my, b.x, b.y)) return false;
-    const mid = tileType(mx, my);
-    return mid !== 'village' && mid !== 'orchard' && mid !== 'hamlet' && at(st, mx, my).length === 0;
+  // The fields a line from the middle of one field to the middle of another passes through, in order
+  function fieldsAlong(a, b) {
+    const out = [{ x: a.x, y: a.y }];
+    let x = a.x, y = a.y;
+    const dx = b.x - a.x, dy = b.y - a.y, sx = Math.sign(dx), sy = Math.sign(dy);
+    // Distance along the line to the next vertical and horizontal field edges
+    let tx = dx ? 0.5 / Math.abs(dx) : Infinity, ty = dy ? 0.5 / Math.abs(dy) : Infinity;
+    const stepX = dx ? 1 / Math.abs(dx) : Infinity, stepY = dy ? 1 / Math.abs(dy) : Infinity;
+    while (x !== b.x || y !== b.y) {
+      if (tx <= ty) { x += sx; tx += stepX; } else { y += sy; ty += stepY; }
+      out.push({ x, y });
+    }
+    return out;
   }
 
-  // Can a side see this field? Any of its pieces next to it, or with a clear line two fields away
+  // Can one piece see another to shoot it, and how hard is the target to hit?
+  // Up to SIGHT_RANGE fields over open fields and lanes; villages, hamlets and orchards in between block the view.
+  // Hedges (Steve): the hedge next to the shooter is seen through only if the shooter lines it; the hedge next to the target
+  // only if the target lines it (it is then in cover, one more to hit); with one hedge between them either lining it will do,
+  // and the target has cover if it lines it. Any other hedge in between blocks the view. Beyond the next field: one more to hit.
+  // Returns null (can't see) or { cover } added to the score needed
+  function sight(st, from, target) {
+    const dist = Math.hypot(target.x - from.x, target.y - from.y);
+    if (dist === 0 || dist > SIGHT_RANGE + 0.01) return null;
+    const path = fieldsAlong(from, target);
+    let c = dist > 1.5 ? LONG_RANGE : 0;
+    for (let i = 0; i + 1 < path.length; i++) {
+      const p = path[i], q = path[i + 1];
+      // A field in between that blocks the view
+      if (i > 0 && ['village', 'hamlet', 'orchard'].includes(tileType(p.x, p.y))) return null;
+      if (!hedge(st, p.x, p.y, q.x, q.y)) continue;
+      const first = i === 0, last = i + 1 === path.length - 1;
+      const shooterLines = first && from.at === dirTo(p, q);
+      const targetLines = last && target.at === dirTo(q, p);
+      if (!shooterLines && !targetLines) return null;
+      if (targetLines) c += COVER.hedge;
+    }
+    return { cover: c };
+  }
+
+  // Can a side see this field (to call fire on it)? Any of its pieces next to it, or with a line of sight to it
   function sees(st, side, x, y) {
-    return st.units.some(u => u.side === side && u.x !== null && (Math.abs(u.x - x) + Math.abs(u.y - y) <= 1 || clearLine(st, u, { x, y })));
+    return st.units.some(u => u.side === side && u.x !== null && (Math.abs(u.x - x) + Math.abs(u.y - y) <= 1 || sight(st, u, { x, y, at: null })));
   }
 
   // ---------- Fire ----------
@@ -236,10 +272,16 @@ const Sim = (() => {
     return hits;
   }
 
-  // Cover for a target, added to the score needed: behind the hedge it is shot across, in a village or an orchard
+  // Is a piece lining the hedge that faces another piece next to it? And is there a hedge between two pieces next to each other?
+  const atHedge = (u, other) => !!u.at && u.at === dirTo(u, other);
+  function acrossHedge(st, from, target) {
+    return adjacent(from, target) && hedge(st, from.x, from.y, target.x, target.y);
+  }
+
+  // Cover for a target, added to the score needed: lining a hedge it is shot across, at range, in a village or an orchard
   function cover(st, from, target) {
     let c = 0;
-    if (from && adjacent(from, target) && hedge(st, from.x, from.y, target.x, target.y)) c += COVER.hedge;
+    if (from) { const s2 = sight(st, from, target); if (s2) c += s2.cover; }
     const t = tileType(target.x, target.y);
     if (t === 'village') c += COVER.village;
     if (t === 'hamlet') c += COVER.hamlet;
@@ -325,8 +367,11 @@ const Sim = (() => {
 
   // Pieces a shooter could fire at: enemies next to it (across any hedge) or two fields away along a clear line, that its side can see
   function targets(st, shooter) {
+    // Captains and anything without weapons shoot at nobody
+    const f = firepower(st, shooter);
+    if (shooter.kind === 'captain' || f.soft + f.hard <= 0) return [];
     return st.units.filter(t => t.side !== shooter.side && t.x !== null && t.kind !== 'captain'
-      && (adjacent(shooter, t) || clearLine(st, shooter, t)));
+      && !!sight(st, shooter, t));
   }
 
   // ---------- Moving ----------
@@ -354,8 +399,9 @@ const Sim = (() => {
       if (cutter(u)) { delete st.hedges[edgeKey(u.x, u.y, x, y)]; how = 'cut'; } else how = 'climbed';
     }
     const teams = u.kind === 'company' ? teamsOf(st, u) : [];
-    u.x = x; u.y = y;
-    for (const t of teams) { t.x = x; t.y = y; }
+    const heading = dirTo(u, { x, y });
+    u.x = x; u.y = y; u.at = heading;
+    for (const t of teams) { t.x = x; t.y = y; t.at = heading; }
     return how;
   }
 
@@ -562,6 +608,21 @@ const Sim = (() => {
     return { ok: true, lines: [wasWire ? `✂️ ${u.name} cuts through the wire and pushes on.` : `⛏️ ${u.name} breaks through the hedge into the next field.`] };
   }
 
+  // The hedges of its field a piece could go and line (not the one it already lines)
+  function lineSides(st, u) {
+    if (PIECES[u.kind].fixed || u.kind === 'captain') return [];
+    return Object.keys(DIRS).filter(d => d !== u.at && inside(u.x + DIRS[d][0], u.y + DIRS[d][1]) && hedge(st, u.x, u.y, u.x + DIRS[d][0], u.y + DIRS[d][1]));
+  }
+
+  // Line a hedge of its own field: the piece's move for the hour, so it can fire through that hedge
+  function actLine(st, u, side) {
+    if (!canAct(st, u) || !lineSides(st, u).includes(side)) return { ok: false };
+    spend(st, u);
+    u.at = side;
+    for (const t of u.kind === 'company' ? teamsOf(st, u) : []) t.at = side;
+    return { ok: true, lines: [`🌳 ${u.name} lines the ${SIDE_NAMES[side]} hedge.`] };
+  }
+
   // Shocked friendly pieces a captain can reach
   function rallyTargets(st, cap) {
     return st.units.filter(t => t.side === cap.side && t.x !== null && t.shocked && Math.abs(t.x - cap.x) + Math.abs(t.y - cap.y) <= RALLY_RANGE);
@@ -628,7 +689,7 @@ const Sim = (() => {
 
   // What a German piece would most like to shoot: tanks for anti-tank weapons, otherwise the weakest infantry
   function bestTarget(st, u) {
-    const ts = st.units.filter(t => t.side === 'us' && t.x !== null && t.kind !== 'captain' && (adjacent(u, t) || clearLine(st, u, t)));
+    const ts = st.units.filter(t => t.side === 'us' && t.x !== null && t.kind !== 'captain' && !!sight(st, u, t));
     if (!ts.length) return null;
     const f = firepower(st, u);
     const score = t => (isTank(t) ? f.hard * 2 : f.soft + f.hard * 0.5) * (7 - TO_HIT - cover(st, u, t)) / 2 + (t.shocked ? 1 : 0) - t.platoons * 0.1;
@@ -674,6 +735,13 @@ const Sim = (() => {
     }
     const t = bestTarget(st, u);
     if (t) return { shooter: u.id, target: t.id };
+    // Americans just across a hedge it isn't lining: go to that hedge
+    const across = st.units.find(o => o.side === 'us' && o.x !== null && acrossHedge(st, u, o) && !atHedge(u, o));
+    if (across && !PIECES[u.kind].fixed && !(isTeam(u) && u.attachedTo)) {
+      u.at = dirTo(u, across);
+      for (const tm of u.kind === 'company' ? teamsOf(st, u) : []) tm.at = u.at;
+      return null;
+    }
     // On the way to its post: march there and dig in
     if (u.post && !u.reserve && (u.x !== u.post.x || u.y !== u.post.y) && !(isTeam(u) && u.attachedTo)) {
       const next = stepToward(st, u, u.post);
@@ -841,7 +909,7 @@ const Sim = (() => {
     newGame, endTurn, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, moves, chargeSpots,
     rallyTargets, canAct, pointsFor, groupOf, groupName, members, canReact, firepower, teamsOf, canCallFire, holdsObjective, hourText, roomFor,
     startGermanHour, germanStep, answer, finishHour,
-    actShoot, actMoveShoot, actHalfShot, actMove, actCharge, actRally, actAttach, actFire, actBreach, breachSpots, clearLine, isSmall, cover, wire,
+    actShoot, actMoveShoot, actHalfShot, actMove, actCharge, actRally, actAttach, actFire, actBreach, breachSpots, sight, isSmall, cover, wire, lineSides, actLine, atHedge, acrossHedge, SIDE_NAMES,
     hasCutters: u => cutter(u),
   };
 })();

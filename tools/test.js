@@ -127,6 +127,38 @@ check('pulling back costs a point whether it works or not', () => {
   }
 });
 
+check('across a hedge: lining it you fire through; in the open you need them lining it (and one more); both in the open, no shot', () => {
+  const st = Sim.newGame(4);
+  const us = Sim.unitById(st, 'A'), de = Sim.unitById(st, 'd2');
+  for (const u of st.units) if (u !== us && u !== de) u.x = u.y = null;
+  us.x = 1; us.y = 6; de.x = 2; de.y = 6;
+  st.hedges = { '1,6|2,6': true }; st.wire = {};
+  const need = (a, b) => TO_HIT + Sim.cover(st, a, b) - QUALITY[a.quality].shoot;
+  us.at = 'e'; de.at = null;
+  assert(Sim.targets(st, us).includes(de) && Sim.cover(st, us, de) === 0, 'lining the hedge, the Americans could not fire freely at Germans in the open');
+  us.at = null; de.at = 'w';
+  assert(Sim.targets(st, us).includes(de) && Sim.cover(st, us, de) === COVER.hedge, 'in the open, firing at Germans lining the hedge should need one more');
+  us.at = null; de.at = null;
+  assert(!Sim.targets(st, us).includes(de) && !Sim.targets(st, de).includes(us), 'both in the open could see each other through the hedge');
+  us.at = 'e'; de.at = 'w';
+  assert(Sim.cover(st, us, de) === COVER.hedge && Sim.cover(st, de, us) === COVER.hedge, 'both lining the hedge should both need one more');
+  assert(need(us, de) > 0, 'score needed');
+});
+
+check('line of sight: three fields over open ground, blocked by a hedge in between or a village, one more at range', () => {
+  const st = Sim.newGame(4);
+  const us = Sim.unitById(st, 'A'), de = Sim.unitById(st, 'd2');
+  for (const u of st.units) if (u !== us && u !== de) u.x = u.y = null;
+  st.hedges = {}; st.wire = {};
+  us.x = 0; us.y = 7; de.x = 3; de.y = 7; us.at = null; de.at = null;
+  const s3 = Sim.sight(st, us, de);
+  assert(s3 && s3.cover === LONG_RANGE, 'three open fields away should be seen, one more to hit');
+  de.x = 4;
+  assert(!Sim.sight(st, us, de), 'four fields away was seen');
+  de.x = 3; st.hedges['1,7|2,7'] = true;
+  assert(!Sim.sight(st, us, de), 'a hedge in between did not block the view');
+});
+
 check('leaving everything alone always loses', () => {
   for (let seed = 1; seed <= 30; seed++) assert(!play(seed, false).won, `seed ${seed} won by doing nothing`);
 });

@@ -197,13 +197,21 @@ const Models = (() => {
     return castAll(g);
   }
 
-  // A captain: an officer with binoculars beside a small company pennant
+  // The captain: the company commander on his own base, with a tall company guidon (blue, crossed rifles in white),
+  // so he is easy to find on the table. There is one for the whole company
   function captain(side) {
     const g = new T.Group();
-    g.add(at(cyl(0.034, 0.036, 0.008, M.base, 24), 0, 0.004, 0));
-    g.add(at(soldier(side, 0, false), 0, 0.008, 0));
-    g.add(at(cyl(0.0012, 0.0012, 0.15, M.wood, 4), -0.02, 0.08, -0.02));
-    g.add(at(box(0.035, 0.022, 0.001, mat(side === 'us' ? '#3c5f8a' : '#8a3a32', 0.8)), -0.0025, 0.14, -0.02));
+    if (!M.flockTop) M.flockTop = new T.MeshStandardMaterial({ map: flockTex('#5f6d3c', GRASS, 31), roughness: 1 });
+    g.add(at(new T.Mesh(new T.CylinderGeometry(0.045, 0.047, 0.008, 28), [mat('#3b3326', 0.8), M.flockTop, M.base]), 0, 0.004, 0));
+    g.add(at(soldier(side, 0, false), 0.01, 0.008, 0.008));
+    // The guidon on its pole
+    g.add(at(cyl(0.0016, 0.0016, 0.24, M.wood, 6), -0.022, 0.128, -0.018));
+    g.add(at(sphere(0.003, mat('#c9a53a', 0.4, 0.6), 8, 6), -0.022, 0.25, -0.018));
+    const flag = new T.Group();
+    flag.add(at(box(0.07, 0.045, 0.002, mat(side === 'us' ? '#2f4f86' : '#8a3a32', 0.8)), 0.035, 0, 0));
+    for (const r of [0.6, -0.6]) flag.add(at(box(0.05, 0.004, 0.0025, mat('#f2efe6', 0.8)), 0.035, 0, 0, 0, 0, r));
+    at(flag, -0.022, 0.222, -0.018, 0, 0.35, 0);
+    g.add(flag);
     return castAll(g);
   }
 

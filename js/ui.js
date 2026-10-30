@@ -151,6 +151,8 @@ const UI = (() => {
       add('shoot', '🎯 Shoot', Sim.targets(st, u).length > 0, 'Fire with every die');
       if (Sim.breachSpots(st, u).length) add('breach', '⛏️ Break through', true, 'Through a hedge or wire into the next field: no shooting');
     }
+    // Line another hedge of its field, to fire through it
+    for (const side of Sim.lineSides(st, u)) b.push({ mode: 'line', label: `🌳 Line the ${Sim.SIDE_NAMES[side]} hedge`, ok: can, title: 'Its move: from the hedge it can fire through it', run: () => Sim.actLine(st, u, side) });
     if (u.halfShot) b.unshift({ mode: 'halfShot', label: '🎯 Fire on the move', ok: true, title: 'Half the dice, after moving' });
     return b;
   }
@@ -169,13 +171,14 @@ const UI = (() => {
     const status = u.shocked ? '<span class="pill bad">Shaken: rest or rally</span>' : u.acted ? '<span class="pill done">✓ Done this hour</span>' : '<span class="pill ready">Ready</span>';
     box.append(el('div', 'name', `${u.name}${u.quality === 'elite' ? ' ★' : ''}`));
     box.append(el('div', 'sub', `${KIND[u.kind]}${u.attachedTo ? ` with ${Sim.unitById(st, u.attachedTo).name}` : ''}${Sim.hasCutters(u) ? ' · hedge cutters' : ''}`));
-    box.append(el('div', 'stats', [strength, dice, status].filter(Boolean).map(s => `<span>${s}</span>`).join('')));
+    const where = u.kind === 'captain' || u.kind === 'pak' ? '' : u.at ? `🌳 Lining the ${Sim.SIDE_NAMES[u.at]} hedge` : 'In the open';
+    box.append(el('div', 'stats', [strength, dice, where, status].filter(Boolean).map(s => `<span>${s}</span>`).join('')));
     box.append(el('div', 'sub', `${Sim.groupName(st, g)}: ${pips(st.points[g] || 0, g === 'bn' ? BN_BANK : COMMAND_BANK)}`));
     const acts = el('div'); acts.id = 'actions'; acts.style.marginTop = '6px';
     for (const a of actionButtons(u)) {
       const btn = el('button', view.mode === a.mode ? 'on' : '', a.label);
       btn.disabled = !a.ok; btn.title = a.title;
-      btn.onclick = () => { view.mode = view.mode === a.mode ? null : a.mode; refresh(); };
+      btn.onclick = () => { if (a.run) { const r = a.run(); if (r.ok) view.log.push(...r.lines); view.mode = null; } else view.mode = view.mode === a.mode ? null : a.mode; refresh(); };
       acts.append(btn);
     }
     // Teams: join the company in their field, or leave it

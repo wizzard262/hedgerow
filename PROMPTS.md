@@ -72,8 +72,25 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - Steve: it's not battalion level, is it? That would be three companies of three platoons; this is a company, so three platoons
 - Steve chose: company level, names only. You command a rifle company: 1st (elite), 2nd and 3rd Platoons, each three section bases of four men, with 4th Platoon arriving later; the captain is the company commander; "Battalion" is now Company HQ; tanks come in sections of two; the Germans are Züge. Rules, numbers and map unchanged (the code still calls a rifle platoon `company`)
 
+## 12. Lining the hedges
+
+- Steve: a piece at a hedge can fire through it without penalty; a piece away from the hedge shooting at an opponent lining it gets a cover penalty; if both are away from the hedge they can't shoot each other; if both are at the hedge both shoot with the cover penalty
+- Each piece now either lines one hedge of its field or stands in the open. Moving into a field leaves it lining the far hedge (the way it was going); both sides start lining the hedge towards the enemy. A new action, "Line the … hedge", moves a piece to another hedge of its field (its move for the hour). On the table the pieces stand close to the hedge they line
+- The German pieces with nobody to shoot line the hedge facing any American just across one
+
+## 13. Moving and shooting, and seeing further
+
+- Steve: Move & shoot still happens and I can't shoot
+- The reason: you could only shoot into the next field, or two fields along a gap-free line, so after a move there was almost never anyone in reach. Pieces now see and shoot up to three fields over open fields and lanes; villages, hamlets and orchards in between block the view, and so does any hedge except the one the shooter or the target lines. Beyond the next field: one more on the dice
+- Captains no longer get red targets (they can't shoot)
+
+## 14. One captain
+
+- Steve: only one captain, with a flag, for the whole company
+- There is one: the company captain (company HQ). He now carries a tall blue company guidon so he is easy to find on the table
+
 ## Sessions
 
 | # | Date | Length | What we did |
 |---|------|--------|-------------|
-| 1 | 2026-10-30 | about 5.5 hours | Prompts 1–11: rules, command points, reacting, tanks and hedge cutters, the look (pixel art to 3D tabletop), scales, river, villages, wire, six-move aim; one captain, piece menus, hedges stop moves, MG team model; bazooka teams, two-field charges; red targets; who has acted; company level |
+| 1 | 2026-10-30 | about 6 hours | Prompts 1–14: rules, command points, reacting, tanks and hedge cutters, the look (pixel art to 3D tabletop), scales, river, villages, wire, six-move aim; one captain, piece menus, hedges stop moves, MG team model; bazooka teams, two-field charges; red targets; who has acted; company level; lining hedges, longer sight, the captain's guidon |
