@@ -246,10 +246,16 @@ const Board = (() => {
   }
 
   function updatePieces(st) {
+    let slid = false;
     for (const u of st.units) {
       const g = u.x === null ? pieces[u.id] : model(u);
       if (g) { g.visible = u.x !== null; greyOut(g, u.side === 'us' && u.acted); }
+      // A piece that has changed field slides across the table: its sound (once a frame, however many moved)
+      const where = u.x === null ? null : u.x + ',' + u.y;
+      if (g && g.userData.field !== undefined && g.userData.field !== where && where) slid = true;
+      if (g) g.userData.field = where;
     }
+    if (slid) Sound.play('move');
     for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) arrange(st, x, y);
     for (const u of st.units) {
       if (!pieces[u.id]) continue;

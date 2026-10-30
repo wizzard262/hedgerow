@@ -213,8 +213,13 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - Steve: let's have some rifle, machine gun, bazooka, tank, mortar and artillery sounds
 - Sounds made on the spot with the browser's Web Audio (no sound files): rifle cracks, a machine-gun rattle, a bazooka's whoosh, a tank gun's boom, a mortar's thunk, artillery's incoming whistle, and on landing: bullets kicking up dirt, a clang on armour, or a high-explosive burst. They follow the pictures' timing. 🔊 at the top turns them off and on (remembered on this computer); sound starts after the first click, as browsers require
 
+## 38. Select and move sounds
+
+- Steve: select and move noises like the ones in Future City Battle
+- Copied Future City Battle's own recordings (pieceUp.mp3 when you pick a piece, pieceSlide.mp3 when a piece moves) into `assets/audio/`. Picking one of your pieces plays the pick-up; any piece changing field (yours or the Germans') plays the slide
+
 ## Sessions
 
 | # | Date | Length | What we did |
 |---|------|--------|-------------|
-| 1 | 2026-10-30 | about 9.25 hours | Prompts 1–37: rules, command points, reacting, tanks and hedge cutters, the look (pixel art to 3D tabletop), scales, river, villages, wire, six-move aim; one captain, piece menus, hedges stop moves, MG team model; bazooka teams, two-field charges; red targets; who has acted; company level; lining hedges, longer sight, the captain's guidon; one unit a field, no time limit; tracers and shells, greyed out, no activation tokens, Move & shoot hatching; tanks through hedges, charges for all; no plain move; teams and captain with a platoon, no attaching; one piece at a time; charging through friends; range, cover and moving +1 each; words off the target, tanks turn and recoil; rallying; MGs can't move and fire; easier targets; Move & shoot one action; tanks impervious to small arms; more gaps; no charging through houses; MGs fire five; hand to hand shown; sounds |
+| 1 | 2026-10-30 | about 9.25 hours | Prompts 1–38: rules, command points, reacting, tanks and hedge cutters, the look (pixel art to 3D tabletop), scales, river, villages, wire, six-move aim; one captain, piece menus, hedges stop moves, MG team model; bazooka teams, two-field charges; red targets; who has acted; company level; lining hedges, longer sight, the captain's guidon; one unit a field, no time limit; tracers and shells, greyed out, no activation tokens, Move & shoot hatching; tanks through hedges, charges for all; no plain move; teams and captain with a platoon, no attaching; one piece at a time; charging through friends; range, cover and moving +1 each; words off the target, tanks turn and recoil; rallying; MGs can't move and fire; easier targets; Move & shoot one action; tanks impervious to small arms; more gaps; no charging through houses; MGs fire five; hand to hand shown; sounds; select and move sounds |

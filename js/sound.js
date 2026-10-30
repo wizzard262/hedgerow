@@ -1,5 +1,6 @@
 // Hedgerow: battle sounds, made on the spot with the Web Audio API (no sound files): rifles, machine guns, bazookas,
-// tank guns, mortars and artillery, and what they hit. Off until the first click (browsers insist), and can be muted
+// tank guns, mortars and artillery, and what they hit; plus Future City Battle's recorded pick-up and slide for choosing
+// and moving a piece. Off until the first click (browsers insist), and can be muted
 
 const Sound = (() => {
   let ctx = null, master = null, noiseBuf = null;
@@ -23,6 +24,19 @@ const Sound = (() => {
     noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
     const d = noiseBuf.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    // The board-game sounds from Future City Battle: picking a piece up, sliding it across the table
+    for (const [name, file] of Object.entries(FILES)) {
+      fetch(file).then(r => r.arrayBuffer()).then(b => ctx.decodeAudioData(b)).then(buf => { recorded[name] = buf; }).catch(() => { /* no file: no sound */ });
+    }
+  }
+  const FILES = { select: 'assets/audio/pieceUp.mp3', move: 'assets/audio/pieceSlide.mp3' };
+  const recorded = {};
+  function playFile(name, when, volume) {
+    if (!recorded[name]) return;
+    const src = ctx.createBufferSource(); src.buffer = recorded[name];
+    const g = ctx.createGain(); g.gain.value = volume;
+    src.connect(g); g.connect(ctx.destination);
+    src.start(when);
   }
   document.addEventListener('pointerdown', wake, { once: false, capture: true });
 
@@ -72,8 +86,9 @@ const Sound = (() => {
   };
 
   function play(name, delay = 0, big = false) {
-    if (!on || !ctx || ctx.state !== 'running' || !SOUNDS[name]) return;
-    SOUNDS[name](ctx.currentTime + delay, big);
+    if (!on || !ctx || ctx.state !== 'running') return;
+    if (FILES[name]) return playFile(name, ctx.currentTime + delay, big ? 1 : 0.8);
+    if (SOUNDS[name]) SOUNDS[name](ctx.currentTime + delay, big);
   }
 
   function toggle() {
