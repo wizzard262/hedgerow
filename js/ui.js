@@ -106,8 +106,8 @@ const UI = (() => {
       menu.append(el('div', 'mhead', `<b>${u.name}${u.quality === 'elite' ? ' ★' : ''}</b><span>${state}</span>`));
       const acts = actionButtons(u);
       if (Sim.isTeam(u) && u.kind !== 'pak') {
-        const co = Sim.at(st, u.x, u.y, 'us').find(c => c.kind === 'company');
-        acts.push({ mode: 'attach', label: u.attachedTo ? '🔗 Detach' : '🔗 Attach to platoon', ok: !!(u.attachedTo || co) && (st.points.bn || 0) >= 1, title: 'A company HQ point', run: () => Sim.actAttach(st, u, co) });
+        const co = st.units.find(c => c.side === 'us' && c.kind === 'company' && c.x !== null && Sim.adjacent(c, u));
+        acts.push({ mode: 'attach', label: u.attachedTo ? '🔗 Leave the platoon' : co ? `🔗 Join ${co.name}` : '🔗 Join a platoon next door', ok: !!(u.attachedTo || co) && (st.points.bn || 0) >= 1, title: 'A company HQ point', run: () => Sim.actAttach(st, u, co) });
       }
       for (const a of acts) {
         const b = el('button', '', a.label);
@@ -183,10 +183,10 @@ const UI = (() => {
     }
     // Teams: join the company in their field, or leave it
     if (Sim.isTeam(u) && u.kind !== 'pak') {
-      const co = Sim.at(st, u.x, u.y, 'us').find(c => c.kind === 'company');
-      const btn = el('button', '', u.attachedTo ? '🔗 Detach' : '🔗 Attach');
+      const co = st.units.find(c => c.side === 'us' && c.kind === 'company' && c.x !== null && Sim.adjacent(c, u));
+      const btn = el('button', '', u.attachedTo ? '🔗 Leave the platoon' : '🔗 Join a platoon');
       btn.disabled = !(u.attachedTo || co) || (st.points.bn || 0) < 1 || !!st.de;
-      btn.title = u.attachedTo ? 'Work on its own again (a company HQ point)' : 'Join the rifle platoon in this field: it moves with it and uses its points (a company HQ point)';
+      btn.title = u.attachedTo ? 'Work on its own again (a company HQ point)' : 'Join a rifle platoon next door: it moves into its field, goes with it and uses its points (a company HQ point)';
       btn.onclick = () => { const r = Sim.actAttach(st, u, co); if (r.ok) view.log.push(...r.lines); refresh(); };
       acts.append(btn);
     }
@@ -223,8 +223,8 @@ const UI = (() => {
   }
 
   function update() {
-    $('#clock').innerHTML = `<b>${Sim.hourText(st.turn)}</b> · hour ${st.turn} of ${TURNS} · ${START_DATE}`;
-    $('#goal').textContent = `🎯 Take ${st.objective.name} and hold it at the end of an hour, by ${Sim.hourText(TURNS + 1)}.`;
+    $('#clock').innerHTML = `<b>${Sim.hourText(st.turn)}</b> · hour ${st.turn}${TURNS ? ` of ${TURNS}` : ''} · ${START_DATE}`;
+    $('#goal').textContent = `🎯 Take ${st.objective.name} and hold it at the end of an hour${TURNS ? `, by ${Sim.hourText(TURNS + 1)}` : ' (no time limit for now)'}.`;
     $('#bn-pips').innerHTML = pips(st.points.bn || 0, BN_BANK);
     for (const which of ['mortars', 'artillery']) {
       const S = which === 'mortars' ? MORTARS : ARTILLERY, btn = $(`#fire-${which}`);

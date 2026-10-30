@@ -89,8 +89,15 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - Steve: only one captain, with a flag, for the whole company
 - There is one: the company captain (company HQ). He now carries a tall blue company guidon so he is easy to find on the table
 
+## 15. One unit to a field, no time limit
+
+- Steve: only one unit per square unless it's hand-to-hand combat; don't limit to six moves, we can't complete the game: leave it unlimited for now
+- One unit to a field for each side. A team joins a rifle platoon from the field next door (it moves in and goes with it); leaving puts it in a free field next door. The German garrison has a field each round the village (the PaK 40 now beside it)
+- No time limit (TURNS = 0): the game ends when the village is taken and held at the end of an hour, or the company has no rifle platoons left. The clock runs on past midnight
+- The test bot (capped at 20 hours) wins about 73%, in about 7 hours; doing nothing never wins
+
 ## Sessions
 
 | # | Date | Length | What we did |
 |---|------|--------|-------------|
-| 1 | 2026-10-30 | about 6 hours | Prompts 1–14: rules, command points, reacting, tanks and hedge cutters, the look (pixel art to 3D tabletop), scales, river, villages, wire, six-move aim; one captain, piece menus, hedges stop moves, MG team model; bazooka teams, two-field charges; red targets; who has acted; company level; lining hedges, longer sight, the captain's guidon |
+| 1 | 2026-10-30 | about 6.25 hours | Prompts 1–15: rules, command points, reacting, tanks and hedge cutters, the look (pixel art to 3D tabletop), scales, river, villages, wire, six-move aim; one captain, piece menus, hedges stop moves, MG team model; bazooka teams, two-field charges; red targets; who has acted; company level; lining hedges, longer sight, the captain's guidon; one unit a field, no time limit |

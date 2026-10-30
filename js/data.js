@@ -3,7 +3,8 @@
 // The board: one character per field. Each field is a tile; hedges grow on the edges between fields
 //   .  field        o  orchard (some cover)        h  hamlet: a few houses round a yard (good cover)
 //   v  village (good cover, no hedges round it)    r  river (nothing can enter it)    #  bridge (a lane across the river)
-// In a hamlet or the village there is room in the yard for one rifle platoon or one tank section, not both
+// One unit to a field (Steve); only hand-to-hand fighting brings two sides into the same field.
+// A team attached to a rifle platoon is part of it and shares its field
 //   =  lane east-west    |  lane north-south    +  crossroads (lanes have no hedges along their length)
 const MAP = [
   '..|..o.r.o',
@@ -24,7 +25,7 @@ const VILLAGES = [
 const HEDGE_GAP = 0.3;           // chance an edge between two fields has a gap (a gate or a broken bank)
 const WIRE = 0.5;                // chance a gap between two fields is closed by a barbed-wire fence: men must cut it, tanks flatten it
 
-const TURNS = 6;                 // six moves: one an hour from 06:00, the village must be held by 12:00
+const TURNS = 0;                 // hours allowed (0: no limit for now, Steve); one turn is an hour from 06:00
 const START_HOUR = 6;
 const START_DATE = 'Tue 11 July 1944';
 
@@ -93,7 +94,7 @@ const US_START = [
 const DE_START = [
   { id: 'd1', kind: 'company', name: '1. Fallschirmjäger-Zug', quality: 'elite', post: [0, 0], garrison: true, attach: 'dmg1' },
   { id: 'dmg1', kind: 'mg42', name: 'MG 42 Team', post: [0, 0], garrison: true },
-  { id: 'pak1', kind: 'pak', name: 'PaK 40', post: [0, 0], garrison: true },
+  { id: 'pak1', kind: 'pak', name: 'PaK 40', post: [1, 0], garrison: true },
   { id: 'dmg3', kind: 'mg42', name: 'MG 42 Team', post: [-1, 0], garrison: true },
   { id: 'd2', kind: 'company', name: '2. Zug', quality: 'standard', post: [0, 1], attach: 'dmg2' },
   { id: 'dmg2', kind: 'mg42', name: 'MG 42 Team', post: [0, 1] },

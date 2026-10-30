@@ -71,18 +71,10 @@ const Sim = (() => {
   const adjacent = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y) === 1;
   const teamsOf = (st, company) => st.units.filter(t => t.attachedTo === company.id && t.x !== null);
 
-  // How many pieces a field holds for one side: one company, one tank platoon and three small pieces (captains, teams, guns)
+  // Is there room for a unit in a field? One unit to a field: it must be empty, apart from the unit's own attached teams
   function roomFor(st, unit, x, y, leaving = []) {
-    const here = at(st, x, y).filter(u => !leaving.includes(u));
-    if (here.some(u => u.side !== unit.side)) return false;
-    const company = here.filter(u => u.kind === 'company').length;
-    const tanks = here.filter(isTank).length;
-    const small = here.filter(isSmall).length;
-    // A hamlet or the village has room in its yard for one company or one tank platoon, not both
-    const built = tileType(x, y) === 'village' || tileType(x, y) === 'hamlet';
-    if (unit.kind === 'company') return company === 0 && !(built && tanks);
-    if (isTank(unit)) return tanks === 0 && !(built && company);
-    return small < 3;
+    const here = at(st, x, y).filter(u => !leaving.includes(u) && u !== unit && u.attachedTo !== unit.id);
+    return here.length === 0;
   }
 
   function newGame(seed) {
@@ -112,7 +104,7 @@ const Sim = (() => {
     st.rand = R;
     deploy(st, 'us'); deploy(st, 'de');
     earnPoints(st);
-    st.report = [`${START_DATE}, 06:00. The company attacks into the bocage. Take ${st.objective.name} and hold it at ${hourText(TURNS + 1)}.`];
+    st.report = [`${START_DATE}, 06:00. The company attacks into the bocage. Take ${st.objective.name} and hold it at the end of an hour${TURNS ? ` by ${hourText(TURNS + 1)}` : ''}.`];
     return st;
   }
 
@@ -132,10 +124,17 @@ const Sim = (() => {
     };
     const leaders = st.units.filter(u => u.side === side && !u.attachedTo);
     // German posts round the objective; the garrison is already in them
-    if (side === 'de') for (const u of st.units.filter(u => u.side === 'de')) if (u.post) u.post = postField(st, u.post);
+    if (side === 'de') {
+      const taken = [];
+      for (const u of st.units.filter(u => u.side === 'de' && u.post)) {
+        const owner = u.attachedTo && unitById(st, u.attachedTo);
+        u.post = owner ? owner.post : postField(st, u.post, taken);
+        if (!owner) taken.push(u.post);
+      }
+    }
     for (const u of leaders.filter(u => u.garrison)) {
       u.x = u.post.x; u.y = u.post.y;
-      for (const c of st.units) if (c.attachedTo === u.id || (c.garrison && c.post.x === u.x && c.post.y === u.y && c.side === side)) { c.x = u.x; c.y = u.y; }
+      for (const c of st.units) if (c.attachedTo === u.id) { c.x = u.x; c.y = u.y; }
     }
     for (const u of leaders) {
       if (u.garrison) continue;
@@ -147,15 +146,19 @@ const Sim = (() => {
     }
   }
 
-  // A post given from the objective: the field there, or the nearest one that isn't river
-  function postField(st, [dx, dy]) {
+  // A post given from the objective: the field there, or the nearest one that isn't river and no other unit has
+  function postField(st, [dx, dy], taken = []) {
     const want = { x: Math.max(0, Math.min(COLS - 1, st.objective.x + dx)), y: Math.max(0, Math.min(ROWS - 1, st.objective.y + dy)) };
-    if (tileType(want.x, want.y) !== 'river') return want;
-    for (let r = 1; r < COLS; r++) for (const [ex, ey] of NEIGHBOURS) { const x = want.x - r * Math.sign(dx || 1) * Math.abs(ex), y = want.y + r * ey; if (inside(x, y) && tileType(x, y) !== 'river') return { x, y }; }
-    return want;
+    const free = (x, y) => inside(x, y) && tileType(x, y) !== 'river' && !taken.some(t => t.x === x && t.y === y);
+    let best = null, bestD = Infinity;
+    for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
+      const d = Math.abs(x - want.x) + Math.abs(y - want.y) + (x < st.objective.x ? 0.1 : 0);
+      if (free(x, y) && d < bestD) { bestD = d; best = { x, y }; }
+    }
+    return best || want;
   }
 
-  const hourText = turn => `${String(START_HOUR + turn - 1).padStart(2, '0')}:00`;
+  const hourText = turn => { const h = START_HOUR + turn - 1; return `${h >= 24 ? `day ${Math.floor(h / 24) + 1}, ` : ''}${String(h % 24).padStart(2, '0')}:00`; };
 
   // ---------- Command points ----------
 
@@ -640,15 +643,20 @@ const Sim = (() => {
   function actAttach(st, team, company) {
     if (!isTeam(team) || team.side !== 'us' || (st.points.bn || 0) < 1 || PIECES[team.kind].fixed || st.de) return { ok: false };
     if (team.attachedTo) {
+      // Out into a free field next door, as its own unit again
+      const spot = NEIGHBOURS.map(([dx, dy]) => ({ x: team.x + dx, y: team.y + dy })).find(p => inside(p.x, p.y) && tileType(p.x, p.y) !== 'river' && !hedge(st, team.x, team.y, p.x, p.y) && roomFor(st, team, p.x, p.y));
+      if (!spot) return { ok: false };
       team.attachedTo = null;
+      team.x = spot.x; team.y = spot.y;
       st.points.bn -= 1;
-      return { ok: true, lines: [`🔗 ${team.name} detached.`] };
+      return { ok: true, lines: [`🔗 ${team.name} leaves its platoon.`] };
     }
-    if (!company || company.kind !== 'company' || company.side !== 'us' || company.x !== team.x || company.y !== team.y) return { ok: false };
+    if (!company || company.kind !== 'company' || company.side !== 'us' || !adjacent(company, team)) return { ok: false };
     if (teamsOf(st, company).length >= 2) return { ok: false };
     team.attachedTo = company.id;
+    team.x = company.x; team.y = company.y; team.at = company.at;
     st.points.bn -= 1;
-    return { ok: true, lines: [`🔗 ${team.name} attached to ${company.name}.`] };
+    return { ok: true, lines: [`🔗 ${team.name} joins ${company.name}.`] };
   }
 
   // Fields the battalion can call fire on: seen, with no Americans in them
@@ -883,7 +891,7 @@ const Sim = (() => {
     } else if (!st.units.some(u => u.side === 'us' && u.kind === 'company' && u.x !== null)) {
       st.lost = true;
       rep.unshift('💀 The company has no rifle platoons left. The attack has failed.');
-    } else if (st.turn >= TURNS) {
+    } else if (TURNS && st.turn >= TURNS) {
       st.lost = true;
       rep.unshift(`⌛ ${hourText(TURNS + 1)}: the attack has run out of time short of ${st.objective.name}.`);
     }

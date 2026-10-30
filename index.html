@@ -110,7 +110,7 @@
   <div class="box"><h2>This hour</h2><ul id="log"></ul></div>
   <div class="box"><h2>Last hour</h2><ul id="report"></ul></div>
   <div class="box" id="pieces"></div>
-  <span id="ver" style="font-size:11px;color:var(--muted)">v9</span>
+  <span id="ver" style="font-size:11px;color:var(--muted)">v10</span>
 </aside>
 
 <main id="board"><div id="label"></div><div id="tip"></div><div id="menu" hidden></div></main>
@@ -130,14 +130,15 @@
 <div class="modal" id="help" hidden>
   <div class="card">
     <h2>Hedgerow</h2>
-    <p>Tuesday 11 July 1944, Normandy. Your American rifle company must fight through the bocage, field by field, and take a village (Saint-Jean or La Haye: it changes each game), then hold it at the end of an hour. You have <b>six moves</b>, one an hour, until 12:00. A German garrison holds it; more Germans march up from beyond the river.</p>
+    <p>Tuesday 11 July 1944, Normandy. Your American rifle company must fight through the bocage, field by field, and take a village (Saint-Jean or La Haye: it changes each game), then hold it at the end of an hour. Each move is an hour; there is no time limit for now. A German garrison holds it; more Germans march up from beyond the river.</p>
     <ul>
       <li>🪖 <b>Pieces</b>: your company: three rifle platoons (three sections of four men each, moving together; a fourth platoon comes later), the captain, machine-gun and bazooka teams, and two tank sections: Shermans and Fireflies. 1st Platoon is elite.</li>
       <li>📋 <b>Command points</b>: each rifle platoon earns a point an hour (and two thirds more for each team attached to it), the tanks two thirds a section, and company HQ 2 for the captain, fire support and lone teams. Points can be saved up to 3. Each piece acts once an hour and each action costs a point, so only about two thirds of your pieces act each hour.</li>
       <li>🎲 <b>Actions</b> (click a piece for its menu): <b>Charge</b> up to two fields without shooting (fight hand to hand if Germans hold the field it ends in), <b>Move &amp; shoot</b> (one field, then fire at half the dice), <b>Shoot</b> (full dice), <b>Break through</b> a hedge or wire into the next field (no shooting), and the captain's <b>Move</b> or <b>Rally</b>.</li>
       <li>👁️ <b>Who can shoot whom</b>: up to three fields away along a line of sight over open fields and lanes; villages, hamlets and orchards in between block it, and so does any hedge except the ones the shooter or the target lines (below). Beyond the next field, one more is needed on the dice. Red targets show who a piece can hit.</li>
       <li>🌳 <b>Lining a hedge</b>: a piece stands either lining one hedge of its field or out in the open. It ends a move lining the hedge on the far side. Across a hedge: a piece lining it can fire through; a piece in the open can only fire at an enemy who lines it, needing one more on the dice; two pieces in the open can't see each other; two both lining it fire at each other needing one more. <b>Line a hedge</b> (in the menu) takes a piece to another hedge of its field: its move for the hour.</li>
-      <li>🏘️ <b>Villages and hamlets</b>: houses round a yard, with room for one rifle platoon <i>or</i> one tank section. Hard to hit in.</li>
+      <li>🧍 <b>One unit to a field</b>: only hand-to-hand fighting brings both sides into the same field. A team that joins a rifle platoon (from the field next door) goes with it and shares its field.</li>
+      <li>🏘️ <b>Villages and hamlets</b>: houses round a yard. Hard to hit in.</li>
       <li>🌊 <b>The river</b> can only be crossed at its two bridges.</li>
       <li>✂️ <b>Barbed wire</b> closes some gaps between fields: men can't cross it except by Break through (cutting it); tanks roll over and flatten it.</li>
       <li>🌳 <b>Hedges</b>: Nothing can charge or move across a hedge except Shermans and Panzer IVs, which carry hedge cutters and drive straight through, leaving a gap. Everyone else goes through gaps and lanes, or uses <b>Break through</b>: into the next field through the hedge, leaving a gap, with no shooting that hour. Charging across a hedge at Germans behind it is allowed, but they fight back hard.</li>
@@ -145,7 +146,7 @@
       <li>🟢 <b>Who can act</b>: a green ring under a piece means it can still act this hour; a grey ring and a big grey ✓ token mean it has acted.</li>
       <li>😵 <b>Shaken</b> (red ! marker): a piece hit is shaken and can't act. It recovers if it rests an hour without being hit, or the captain uses his move to rally it (his field or the next).</li>
       <li>🛡️ <b>In the German hour</b>: when one of your pieces is fired on and its platoon has a point left, you can spend it to try to <b>pull back</b>: if it works the piece falls back a field and takes half the hits.</li>
-      <li>💥 <b>Fire support</b>: the mortars and the 105 mm battery fire on a field your troops can see. Only these run short of ammunition; a little comes up every few hours. Company HQ's points also attach a team to a rifle platoon in its field.</li>
+      <li>💥 <b>Fire support</b>: the mortars and the 105 mm battery fire on a field your troops can see. Only these run short of ammunition; a little comes up every few hours. Company HQ's points also let a team join a rifle platoon next door, or leave it.</li>
       <li>🚚 <b>Reinforcements</b> arrive on your west edge: more bazookas, 4th Platoon, a machine gun and replacements. The Germans have a pair of Panzer IVs and a pair of Panthers on the way.</li>
       <li>🧩 <b>The table</b>: 28 mm-style models: four men to a section base, three sections to a platoon; tanks in pairs. The men are bigger models (1:54) than the tanks (1:76), and the houses smaller (1:144), as on many wargame tables.</li>
     </ul>
@@ -155,11 +156,11 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="js/data.js?v=9"></script>
-<script src="js/sim.js?v=9"></script>
-<script src="js/models.js?v=9"></script>
-<script src="js/board3d.js?v=9"></script>
-<script src="js/ui.js?v=9"></script>
-<script src="js/main.js?v=9"></script>
+<script src="js/data.js?v=10"></script>
+<script src="js/sim.js?v=10"></script>
+<script src="js/models.js?v=10"></script>
+<script src="js/board3d.js?v=10"></script>
+<script src="js/ui.js?v=10"></script>
+<script src="js/main.js?v=10"></script>
 </body>
 </html>

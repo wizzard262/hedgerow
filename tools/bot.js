@@ -17,9 +17,9 @@ function playHour(st) {
     const t = Sim.rallyTargets(st, c).sort((a, b) => (b.kind === 'company') - (a.kind === 'company'))[0];
     if (t) Sim.actRally(st, c, t);
   }
-  // Teams join the company in their field
+  // Teams join a rifle platoon next door
   for (const t of us().filter(u => Sim.isTeam(u) && !u.attachedTo)) {
-    const co = Sim.at(st, t.x, t.y, 'us').find(u => u.kind === 'company');
+    const co = us().find(u => u.kind === 'company' && Sim.adjacent(u, t));
     if (co) Sim.actAttach(st, t, co);
   }
   for (const u of us().filter(u => u.kind === 'company' || Sim.isTank(u))) {
@@ -57,9 +57,10 @@ function decide(st, shot) {
   return t.shocked || t.platoons < (t.kind === 'company' ? 3 : 2);
 }
 
-function play(seed, bot) {
+// Play a game; with no time limit it stops after maxHours if neither side has won
+function play(seed, bot, maxHours = 20) {
   const st = Sim.newGame(seed);
-  while (!st.won && !st.lost) { if (bot) playHour(st); Sim.endTurn(st, bot ? shot => decide(st, shot) : undefined); }
+  while (!st.won && !st.lost && st.turn <= maxHours) { if (bot) playHour(st); Sim.endTurn(st, bot ? shot => decide(st, shot) : undefined); }
   return st;
 }
 

@@ -10,6 +10,7 @@ for (const arg of process.argv.slice(2).length ? process.argv.slice(2) : ['']) {
   const ctx = vm.createContext({ Math, Date, console, module: undefined, require });
   const bot = read('tools/bot.js').replace(/const fs = [\s\S]*?load\('sim.js'\); \}/, '').replace(/if \(require.main[\s\S]*$/, 'this.play = play;');
   vm.runInContext(data + '\n' + read('js/sim.js') + '\nthis.Sim = Sim;\n' + bot, ctx);
+  // With no time limit the bot plays up to 20 hours a game
   let wins = 0, idle = 0, turns = 0;
   const n = 150;
   for (let s = 1; s <= n; s++) { const st = ctx.play(s, true); if (st.won) { wins++; turns += st.turn; } if (ctx.play(s, false).won) idle++; }

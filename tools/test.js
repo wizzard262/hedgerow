@@ -37,8 +37,10 @@ check('nothing goes negative, out of range or into the river in 100 games', () =
     }
     for (const g in st.points) assert(st.points[g] >= -1e-9, `seed ${seed}: ${g} has ${st.points[g]} points`);
     assert(st.ammo.mortars >= 0 && st.ammo.artillery >= 0, `seed ${seed}: negative ammunition`);
-    assert(st.won || st.lost, `seed ${seed}: game did not end`);
-    assert(st.turn <= TURNS, `seed ${seed}: ran past the last hour`);
+    assert(!TURNS || st.won || st.lost, `seed ${seed}: game did not end`);
+    assert(!TURNS || st.turn <= TURNS, `seed ${seed}: ran past the last hour`);
+    // One unit to a field, each side (attached teams share their platoon's field)
+    for (const u of live(st)) assert(!live(st).some(o => o !== u && o.x === u.x && o.y === u.y && (o.attachedTo || o.id) !== (u.attachedTo || u.id)), `seed ${seed}: two units share ${u.x},${u.y}`);
   }
 });
 
@@ -93,12 +95,14 @@ check('Shermans cut through hedges; Fireflies need a gap or must break through; 
   assert(!Sim.moves(st, co).some(p => p.x === 1 && p.y === 5) && !Sim.chargeSpots(st, co).some(p => p.x === 1 && p.y === 5), 'men walked or charged across a hedge into an empty field');
 });
 
-check('a hamlet or the village holds one company or one tank platoon, not both', () => {
+check('one unit to a field', () => {
   const st = Sim.newGame(2);
-  let hx = -1, hy = -1;
-  for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) if (Sim.tileType(x, y) === 'hamlet' && !Sim.at(st, x, y).length && hx < 0) { hx = x; hy = y; }
-  const co = Sim.unitById(st, 'B'); co.x = hx; co.y = hy;
-  assert(!Sim.roomFor(st, Sim.unitById(st, 'T1'), hx, hy), 'a tank platoon fitted in beside a company');
+  for (let seed = 1; seed <= 20; seed++) {
+    const s2 = Sim.newGame(seed), here = live(s2);
+    for (const u of here) assert(!here.some(o => o !== u && o.x === u.x && o.y === u.y && (o.attachedTo || o.id) !== (u.attachedTo || u.id)), `seed ${seed}: ${u.name} starts sharing a field`);
+  }
+  const co = Sim.unitById(st, 'B');
+  assert(!Sim.roomFor(st, Sim.unitById(st, 'T1'), co.x, co.y), 'a tank section fitted in beside a rifle platoon');
 });
 
 check('dice: every face is 1 to 6 and hits are the ones at or over the score needed', () => {
@@ -159,7 +163,7 @@ check('line of sight: three fields over open ground, blocked by a hedge in betwe
   assert(!Sim.sight(st, us, de), 'a hedge in between did not block the view');
 });
 
-check('leaving everything alone always loses', () => {
+check('leaving everything alone never wins', () => {
   for (let seed = 1; seed <= 30; seed++) assert(!play(seed, false).won, `seed ${seed} won by doing nothing`);
 });
 
