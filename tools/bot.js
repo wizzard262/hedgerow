@@ -1,0 +1,67 @@
+// A simple attacking player for headless checks: node tools/bot.js [games]
+// Each hour: guns and mortars on seen Germans, captains rally, then every piece shoots, charges a weak field, or moves east
+const fs = require('fs'), vm = require('vm'), path = require('path');
+const load = f => vm.runInThisContext(fs.readFileSync(path.join(__dirname, '..', 'js', f), 'utf8'));
+load('data.js'); load('sim.js');
+
+function playHour(st) {
+  const us = () => st.units.filter(u => u.side === 'us' && u.x !== null);
+  // Fire support on the strongest German field we can see
+  for (const which of ['artillery', 'mortars']) {
+    const seen = st.units.filter(g => g.side === 'de' && g.x !== null && Sim.canCallFire(st, g.x, g.y));
+    const t = seen.sort((a, b) => b.platoons - a.platoons)[0];
+    if (t) Sim.actFire(st, which, t.x, t.y);
+  }
+  // Captains rally whoever is shaken nearby
+  for (const c of us().filter(u => u.kind === 'captain')) {
+    const t = Sim.rallyTargets(st, c)[0];
+    if (t) Sim.actRally(st, c, t);
+  }
+  // Teams join the company in their field
+  for (const t of us().filter(u => Sim.isTeam(u) && !u.attachedTo)) {
+    const co = Sim.at(st, t.x, t.y, 'us').find(u => u.kind === 'company');
+    if (co) Sim.actAttach(st, t, co);
+  }
+  for (const u of us().filter(u => u.kind === 'company' || Sim.isTank(u))) {
+    for (let k = 0; k < 1 && Sim.canAct(st, u); k++) {
+      const ts = Sim.targets(st, u);
+      const weak = Sim.chargeSpots(st, u).find(p => Sim.at(st, p.x, p.y, 'de').some(g => g.shocked) && u.kind === 'company' && u.platoons >= 2);
+      if (weak) { Sim.actCharge(st, u, weak.x, weak.y); continue; }
+      if (ts.length) { Sim.actShoot(st, u, ts[0]); continue; }
+      // Move towards the hamlet
+      const m = Sim.moves(st, u).sort((a, b) => (Math.abs(a.x - OBJECTIVE.x) + Math.abs(a.y - OBJECTIVE.y)) - (Math.abs(b.x - OBJECTIVE.x) + Math.abs(b.y - OBJECTIVE.y)))[0];
+      const empty = Sim.chargeSpots(st, u).find(p => p.x === OBJECTIVE.x && p.y === OBJECTIVE.y);
+      if (empty) { Sim.actCharge(st, u, empty.x, empty.y); continue; }
+      if (m && Math.abs(m.x - OBJECTIVE.x) + Math.abs(m.y - OBJECTIVE.y) < Math.abs(u.x - OBJECTIVE.x) + Math.abs(u.y - OBJECTIVE.y)) { Sim.actMoveShoot(st, u, m.x, m.y); const t = Sim.targets(st, u)[0]; if (t) Sim.actHalfShot(st, u, t); }
+      else break;
+    }
+  }
+  // Captains follow their companies
+  for (const c of us().filter(u => u.kind === 'captain')) {
+    const co = Sim.unitById(st, c.company);
+    if (co && co.x !== null && !(co.x === c.x && co.y === c.y) && Sim.canAct(st, c)) {
+      const m = Sim.moves(st, c).sort((a, b) => (Math.abs(a.x - co.x) + Math.abs(a.y - co.y)) - (Math.abs(b.x - co.x) + Math.abs(b.y - co.y)))[0];
+      if (m) Sim.actMove(st, c, m.x, m.y);
+    }
+  }
+}
+
+// Pull back when a weakened or shaken piece is fired on
+function decide(st, shot) {
+  const t = Sim.unitById(st, shot.target);
+  return t.shocked || t.platoons < (t.kind === 'company' ? 3 : 2);
+}
+
+function play(seed, bot) {
+  const st = Sim.newGame(seed);
+  while (!st.won && !st.lost) { if (bot) playHour(st); Sim.endTurn(st, bot ? shot => decide(st, shot) : undefined); }
+  return st;
+}
+
+if (require.main === module) {
+  const n = +process.argv[2] || 100;
+  let wins = 0, idle = 0, turns = 0;
+  for (let s = 1; s <= n; s++) { const st = play(s, true); if (st.won) { wins++; turns += st.turn; } if (play(s, false).won) idle++; }
+  console.log(`attacking bot wins ${Math.round(wins / n * 100)}% (avg turn ${wins ? (turns / wins).toFixed(1) : '-'}), idle wins ${Math.round(idle / n * 100)}%`);
+}
+module.exports = { play, playHour };
