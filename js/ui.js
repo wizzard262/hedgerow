@@ -36,7 +36,7 @@ const UI = (() => {
     return uniq(list).map(p => Object.assign(p, { kind }));
   }
 
-  // The pieces the chosen piece could shoot now, to mark with red targets: while choosing Shoot or Fire on the move.
+  // The pieces the chosen piece could shoot now, to mark with red targets: while choosing Shoot, or the shot of a Move & shoot.
   // Each with the score its dice need (shown on the target)
   function targets() {
     const u = selected();
@@ -155,7 +155,12 @@ const UI = (() => {
     }
     // Line another hedge of its field, to fire through it
     for (const side of Sim.lineSides(st, u)) b.push({ mode: 'line', label: `🌳 Line the ${Sim.SIDE_NAMES[side]} hedge`, ok: can, title: 'Its move: from the hedge it can fire through it', run: () => Sim.actLine(st, u, side) });
-    if (u.halfShot) b.unshift({ mode: 'halfShot', label: '🎯 Fire on the move', ok: true, title: 'One more needed on the dice, after moving' });
+    // Move & shoot is one action (Steve): after the move, the same button picks the target
+    if (u.halfShot) {
+      const i = b.findIndex(a => a.mode === 'moveShoot');
+      if (i >= 0) b.splice(i, 1);
+      b.unshift({ mode: 'halfShot', label: '➡️ Move & shoot', ok: true, title: 'Moved: now click a red target (one more needed on the dice)' });
+    }
     return b;
   }
 

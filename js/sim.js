@@ -540,7 +540,7 @@ const Sim = (() => {
   function actHalfShot(st, u, target) {
     if (!u || !u.halfShot || u.shocked || u.x === null || !targets(st, u).includes(target)) return { ok: false };
     u.halfShot = false;
-    return { ok: true, lines: [`🔫 ${u.name} fires on the move at ${target.name}: ` + fireAt(st, u, target, 1, false, true).join(', ') + '.'] };
+    return { ok: true, lines: [`🔫 ${u.name} moves and fires on ${target.name}: ` + fireAt(st, u, target, 1, false, true).join(', ') + '.'] };
   }
 
   function moveLine(u, how) {
