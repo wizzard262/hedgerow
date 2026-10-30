@@ -286,7 +286,8 @@ const Sim = (() => {
         u.platoons = Math.max(0, u.platoons - hardHits);
         out.push(`${name}: ${hardHits} tank${hardHits > 1 ? 's' : ''} knocked out`);
       }
-      if ((softHits >= 2 || hardHits > 0) && u.platoons > 0) { if (!u.shocked) out.push(`${name} shocked`); u.shocked = true; }
+      // Rifles and machine guns can't hurt a tank (Steve): only anti-tank hits count
+      if (hardHits > 0 && u.platoons > 0) { if (!u.shocked) out.push(`${name} shocked`); u.shocked = true; }
     } else if (isTeam(u) || u.kind === 'captain') {
       const hits = softHits + hardHits;
       if (hits >= 2 || (hits >= 1 && u.shocked)) { u.platoons = 0; out.push(`${name} wiped out`); }
@@ -372,7 +373,8 @@ const Sim = (() => {
     // Captains and anything without weapons shoot at nobody
     const f = firepower(st, shooter);
     if (shooter.kind === 'captain' || f.soft + f.hard <= 0) return [];
-    return st.units.filter(t => t.side !== shooter.side && t.x !== null && t.kind !== 'captain'
+    // Tanks only to those with anti-tank weapons: rifles and machine guns can't hurt them
+    return st.units.filter(t => t.side !== shooter.side && t.x !== null && t.kind !== 'captain' && (!isTank(t) || f.hard > 0)
       && !!sight(st, shooter, t));
   }
 
@@ -570,7 +572,8 @@ const Sim = (() => {
       if (!isTank(u) && wire(st, fx, fy, x, y)) continue;
       const enemies = at(st, x, y, enemyOf(u.side));
       const blocked = hedge(st, fx, fy, x, y) && !cutter(u);
-      if (enemies.length) { if (fightsHandToHand(u)) out.push({ x, y, assault: true }); }
+      // Hand to hand: not against a field of tanks alone unless the charger can hurt tanks
+      if (enemies.length) { if (fightsHandToHand(u) && (enemies.some(e => !isTank(e)) || firepower(st, u).hard > 0)) out.push({ x, y, assault: true }); }
       else if (!blocked && roomFor(st, u, x, y)) out.push({ x, y, assault: false });
       // A field full of friends: a charge can pass through it (Steve), but not stop there
       else if (!blocked && at(st, x, y).length) out.push({ x, y, assault: false, pass: true });
@@ -712,7 +715,7 @@ const Sim = (() => {
 
   // What a German piece would most like to shoot: tanks for anti-tank weapons, otherwise the weakest infantry
   function bestTarget(st, u) {
-    const ts = st.units.filter(t => t.side === 'us' && t.x !== null && t.kind !== 'captain' && !!sight(st, u, t));
+    const ts = st.units.filter(t => t.side === 'us' && t.x !== null && t.kind !== 'captain' && (!isTank(t) || firepower(st, u).hard > 0) && !!sight(st, u, t));
     if (!ts.length) return null;
     const f = firepower(st, u);
     const score = t => (isTank(t) ? f.hard * 2 : f.soft + f.hard * 0.5) * (7 - TO_HIT - cover(st, u, t)) / 2 + (t.shocked ? 1 : 0) - t.platoons * 0.1;

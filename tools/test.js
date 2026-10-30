@@ -233,6 +233,17 @@ check('machine guns cannot move and fire', () => {
   }
 });
 
+check('tanks are impervious to rifles and machine guns', () => {
+  const st = Sim.newGame(2);
+  st.hedges = {}; st.wire = {};
+  const mg = Sim.unitById(st, 'mg1'), A = Sim.unitById(st, 'A'), pz = st.units.find(u => u.side === 'de' && u.kind === 'company');
+  for (const u of st.units) if (![mg, A, pz].includes(u)) u.x = u.y = null;
+  pz.kind = 'pz4'; pz.platoons = 2;
+  mg.x = 0; mg.y = 6; A.x = 0; A.y = 7; pz.x = 1; pz.y = 6; mg.at = 'e'; A.at = 'e';
+  assert(!Sim.targets(st, mg).includes(pz) && !Sim.targets(st, A).includes(pz), 'a rifle platoon or MG could fire on a tank');
+  assert(!Sim.chargeSpots(st, A).some(p => p.x === 1 && p.y === 6), 'a rifle platoon could charge a field of tanks');
+});
+
 check('leaving everything alone never wins', () => {
   for (let seed = 1; seed <= 30; seed++) assert(!play(seed, false).won, `seed ${seed} won by doing nothing`);
 });
