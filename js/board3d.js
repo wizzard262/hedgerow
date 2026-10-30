@@ -115,22 +115,42 @@ const Board = (() => {
     bases.forEach((mm, k) => bm.setMatrixAt(k, mm));
     bm.receiveShadow = true;
     hedgeGroup.add(bm);
-    // Barbed-wire fences: wooden posts with three strands of wire, sagging a little
+    // Barbed-wire fences: wooden posts, two twisted strands with barbs, and a coil of concertina wire along the foot
     const posts = [], strands = [];
     for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
       for (const [dx, dy] of [[1, 0], [0, 1]]) {
         if (!Sim.inside(x + dx, y + dy) || !Sim.wire(st, x, y, x + dx, y + dy)) continue;
         const along = dx ? 'z' : 'x', cx = dx ? x + 1 : x + 0.5, cz = dx ? y + 0.5 : y + 1;
-        const pt = (a, h) => (along === 'z' ? new T.Vector3(cx, h, cz + a) : new T.Vector3(cx + a, h, cz));
-        for (let a = -0.45; a <= 0.46; a += 0.15) posts.push(new T.Matrix4().compose(pt(a, 0.035), new T.Quaternion(), new T.Vector3(1, 1, 1)));
-        for (const h of [0.022, 0.042, 0.062]) for (let a = -0.45; a < 0.45; a += 0.15) { strands.push(pt(a, h), pt(a + 0.075, h - 0.004), pt(a + 0.075, h - 0.004), pt(a + 0.15, h)); }
+        // A point `a` along the fence, `h` up, `s` to one side
+        const pt = (a, h, s = 0) => (along === 'z' ? new T.Vector3(cx + s, h, cz + a) : new T.Vector3(cx + a, h, cz + s));
+        for (let a = -0.45; a <= 0.46; a += 0.15) posts.push(new T.Matrix4().compose(pt(a, 0.045), new T.Quaternion(), new T.Vector3(1, 1, 1)));
+        // Each strand kinks and wanders, with a barb (a little cross) every few steps
+        for (const h of [0.055, 0.075]) {
+          let prev = pt(-0.45, h);
+          for (let k = 1; k <= 90; k++) {
+            const a = -0.45 + k * 0.01;
+            const next = pt(a, h + 0.005 * Math.sin(k * 1.7 + h * 100), 0.005 * Math.cos(k * 1.3));
+            strands.push(prev, next);
+            prev = next;
+            if (k % 4 === 0) strands.push(pt(a, h - 0.005, -0.004), pt(a, h + 0.005, 0.004), pt(a, h + 0.005, -0.004), pt(a, h - 0.005, 0.004));
+          }
+        }
+        // The concertina: a loose coil rolled along the bottom, its loops leaning back and forth
+        let prev = null;
+        for (let i = 0; i <= 900; i++) {
+          const turn = i * Math.PI * 2 / 36;
+          const a = -0.45 + i * 0.001 + 0.012 * Math.sin(turn);
+          const next = pt(a, 0.03 + 0.028 * Math.cos(turn), 0.028 * Math.sin(turn));
+          if (prev) strands.push(prev, next);
+          prev = next;
+        }
       }
     }
     if (posts.length) {
-      const pm = new T.InstancedMesh(new T.CylinderGeometry(0.004, 0.005, 0.07, 6), Models.M.wood, posts.length);
+      const pm = new T.InstancedMesh(new T.CylinderGeometry(0.004, 0.005, 0.09, 6), Models.M.wood, posts.length);
       posts.forEach((mm, k) => pm.setMatrixAt(k, mm)); pm.castShadow = true;
       hedgeGroup.add(pm);
-      hedgeGroup.add(new T.LineSegments(new T.BufferGeometry().setFromPoints(strands), new T.LineBasicMaterial({ color: 0x8a8a84 })));
+      hedgeGroup.add(new T.LineSegments(new T.BufferGeometry().setFromPoints(strands), new T.LineBasicMaterial({ color: 0x5e5e58 })));
     }
     scene.add(hedgeGroup);
     hedgeKey = key;
@@ -246,16 +266,17 @@ const Board = (() => {
   }
 
   function updatePieces(st) {
-    let slid = false;
+    let ran = false, drove = false;
     for (const u of st.units) {
       const g = u.x === null ? pieces[u.id] : model(u);
       if (g) { g.visible = u.x !== null; greyOut(g, u.side === 'us' && u.acted); }
-      // A piece that has changed field slides across the table: its sound (once a frame, however many moved)
+      // A piece that has changed field: men run, tanks rumble (each sound once a frame, however many moved)
       const where = u.x === null ? null : u.x + ',' + u.y;
-      if (g && g.userData.field !== undefined && g.userData.field !== where && where) slid = true;
+      if (g && g.userData.field !== undefined && g.userData.field !== where && where) { if (Sim.isTank(u)) drove = true; else ran = true; }
       if (g) g.userData.field = where;
     }
-    if (slid) Sound.play('move');
+    if (ran) Sound.play('run');
+    if (drove) Sound.play('tank');
     for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) arrange(st, x, y);
     for (const u of st.units) {
       if (!pieces[u.id]) continue;

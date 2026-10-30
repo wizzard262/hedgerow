@@ -218,8 +218,33 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - Steve: select and move noises like the ones in Future City Battle
 - Copied Future City Battle's own recordings (pieceUp.mp3 when you pick a piece, pieceSlide.mp3 when a piece moves) into `assets/audio/`. Picking one of your pieces plays the pick-up; any piece changing field (yours or the Germans') plays the slide
 
+## 39. Running and tank sounds
+
+- Steve: keep the select noise, but for men a running noise and for tanks a tank noise
+- The pick-up stays. Moving now sounds like what moved: men running (boots on soft ground, kit rattling), or a tank's engine growl and track clatter. The slide recording is no longer used (removed)
+
+## 40. Twisty barbed wire
+
+- Steve: make the barbed wire more twisty
+- The strands now kink and wander with little barbs along them, and a loose coil of concertina wire rolls along the foot of each fence
+
+## 41. A tank ka-boom
+
+- Steve: more of a tank ka-boom noise for shooting
+- Tank and anti-tank guns now crack, then a deep boom and blast, then an echo rolling back off the hedges
+
+## 42. Nothing under End the hour
+
+- Steve: lose all the text below End the hour
+- Gone: the "This hour" log, the "Last hour" report and the list of your pieces. The version number sits by the title now
+
+## 43. A better running noise
+
+- Steve: a better running noise
+- Now four men's boots at slightly different paces, each step a heel thud and a crunch of grit, with kit rattling, fading as they go
+
 ## Sessions
 
 | # | Date | Length | What we did |
 |---|------|--------|-------------|
-| 1 | 2026-10-30 | about 9.25 hours | Prompts 1–38: rules, command points, reacting, tanks and hedge cutters, the look (pixel art to 3D tabletop), scales, river, villages, wire, six-move aim; one captain, piece menus, hedges stop moves, MG team model; bazooka teams, two-field charges; red targets; who has acted; company level; lining hedges, longer sight, the captain's guidon; one unit a field, no time limit; tracers and shells, greyed out, no activation tokens, Move & shoot hatching; tanks through hedges, charges for all; no plain move; teams and captain with a platoon, no attaching; one piece at a time; charging through friends; range, cover and moving +1 each; words off the target, tanks turn and recoil; rallying; MGs can't move and fire; easier targets; Move & shoot one action; tanks impervious to small arms; more gaps; no charging through houses; MGs fire five; hand to hand shown; sounds; select and move sounds |
+| 1 | 2026-10-30 | about 9.75 hours | Prompts 1–43: rules, command points, reacting, tanks and hedge cutters, the look (pixel art to 3D tabletop), scales, river, villages, wire, six-move aim; one captain, piece menus, hedges stop moves, MG team model; bazooka teams, two-field charges; red targets; who has acted; company level; lining hedges, longer sight, the captain's guidon; one unit a field, no time limit; tracers and shells, greyed out, no activation tokens, Move & shoot hatching; tanks through hedges, charges for all; no plain move; teams and captain with a platoon, no attaching; one piece at a time; charging through friends; range, cover and moving +1 each; words off the target, tanks turn and recoil; rallying; MGs can't move and fire; easier targets; Move & shoot one action; tanks impervious to small arms; more gaps; no charging through houses; MGs fire five; hand to hand shown; sounds; select and move sounds; running and tank sounds; twisty wire, tank boom, a cleaner panel, better running |

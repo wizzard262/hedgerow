@@ -1,6 +1,6 @@
 // Hedgerow: battle sounds, made on the spot with the Web Audio API (no sound files): rifles, machine guns, bazookas,
-// tank guns, mortars and artillery, and what they hit; plus Future City Battle's recorded pick-up and slide for choosing
-// and moving a piece. Off until the first click (browsers insist), and can be muted
+// tank guns, mortars and artillery, and what they hit; men running and tanks moving; plus Future City Battle's recorded
+// pick-up for choosing a piece. Off until the first click (browsers insist), and can be muted
 
 const Sound = (() => {
   let ctx = null, master = null, noiseBuf = null;
@@ -29,7 +29,7 @@ const Sound = (() => {
       fetch(file).then(r => r.arrayBuffer()).then(b => ctx.decodeAudioData(b)).then(buf => { recorded[name] = buf; }).catch(() => { /* no file: no sound */ });
     }
   }
-  const FILES = { select: 'assets/audio/pieceUp.mp3', move: 'assets/audio/pieceSlide.mp3' };
+  const FILES = { select: 'assets/audio/pieceUp.mp3' };
   const recorded = {};
   function playFile(name, when, volume) {
     if (!recorded[name]) return;
@@ -74,7 +74,17 @@ const Sound = (() => {
     // A bazooka or Panzerschreck: a whoosh as the rocket leaves
     rocket(t) { noise(t, 0.6, 900, 0.4, 0.5, 'bandpass'); tone(t, 0.5, 300, 900, 0.08, 'sawtooth'); },
     // A tank or anti-tank gun: a deep boom with a crack on top
-    gun(t) { tone(t, 0.5, 120, 40, 0.9); noise(t, 0.35, 3000, 0.6, 0.6, 'bandpass'); noise(t, 0.9, 400, 0.4, 0.6); },
+    gun(t) {
+      // The crack of the round leaving, then the deep boom and its blast
+      noise(t, 0.12, 3500, 0.7, 0.8, 'bandpass');
+      tone(t, 1.3, 85, 26, 1);
+      tone(t, 0.25, 160, 60, 0.7, 'triangle');
+      noise(t, 1.6, 220, 0.3, 0.9);
+      noise(t + 0.02, 0.6, 900, 0.5, 0.45);
+      // Its echo rolling back off the hedges
+      tone(t + 0.32, 0.9, 70, 30, 0.35);
+      noise(t + 0.32, 1.1, 260, 0.3, 0.3);
+    },
     // A mortar: a hollow thunk from far off, then the round lands
     mortar(t) { tone(t, 0.18, 260, 140, 0.25, 'triangle'); },
     // Artillery: a whistle coming in
@@ -82,6 +92,28 @@ const Sound = (() => {
     // Impacts: bullets kicking up dirt, a shell striking armour, high explosive going off
     bullets(t) { for (let k = 0; k < 5; k++) noise(t + k * 0.06 + Math.random() * 0.04, 0.07, 1200, 0.8, 0.18, 'bandpass'); },
     clang(t) { tone(t, 0.6, 900, 700, 0.18, 'square'); noise(t, 0.2, 4000, 2, 0.35, 'bandpass'); },
+    // Men running: four sets of boots, each step a heel thud and a crunch of grit, kit rattling, fading as they go
+    run(t) {
+      for (let m = 0; m < 4; m++) {
+        const start = t + Math.random() * 0.12, pace = 0.15 + Math.random() * 0.03;
+        for (let s = 0; s < 8; s++) {
+          const w = start + s * pace + Math.random() * 0.015, loud = 1 - s / 9;
+          noise(w, 0.06, 150 + Math.random() * 60, 0.7, 0.26 * loud);
+          for (let g = 0; g < 3; g++) noise(w + 0.012 + g * 0.014, 0.025, 1300 + Math.random() * 1400, 1.4, 0.07 * loud, 'bandpass');
+          if (s % 2) noise(w + 0.04, 0.03, 5200 + Math.random() * 1500, 5, 0.035 * loud, 'bandpass');
+        }
+      }
+    },
+    // A tank moving: the engine's low growl and the clatter of the tracks, rising and dying away
+    tank(t) {
+      const o = ctx.createOscillator(); o.type = 'sawtooth';
+      o.frequency.setValueAtTime(38, t); o.frequency.linearRampToValueAtTime(52, t + 0.6); o.frequency.linearRampToValueAtTime(40, t + 1.6);
+      const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 220;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.45, t + 0.25); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.7);
+      o.connect(f); f.connect(g); g.connect(master); o.start(t); o.stop(t + 1.8);
+      for (let k = 0; k < 18; k++) noise(t + 0.1 + k * 0.08, 0.04, 1500, 1.5, 0.02 + 0.1 * Math.sin(Math.PI * k / 18), 'bandpass');
+    },
     he(t, big) { tone(t, big ? 1.2 : 0.8, 90, 30, big ? 1 : 0.8); noise(t, big ? 1.6 : 1.1, 300, 0.4, big ? 0.9 : 0.7); noise(t, 0.3, 2500, 0.5, 0.4, 'bandpass'); },
   };
 

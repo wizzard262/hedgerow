@@ -38,18 +38,7 @@
   #card .bad { color: var(--bad); font-weight: 700; }
   #actions { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
   #hint { min-height: 1.4em; font-size: 13px; color: var(--warn); }
-  #pieces .group { margin-bottom: 6px; }
-  #pieces .gname { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); border-bottom: 1px dotted var(--line); margin-bottom: 2px; }
-  #pieces .piece { display: flex; justify-content: space-between; gap: 6px; padding: 2px 6px; border-radius: 4px; cursor: pointer; font-size: 13px; }
-  #pieces .piece:hover { background: rgba(255,255,255,.05); }
-  #pieces .piece.sel { background: rgba(217,180,90,.18); }
-  #pieces .piece.done { color: var(--muted); text-decoration: line-through; text-decoration-color: rgba(181,169,143,.5); }
-  #pieces .tag { font-size: 12px; color: var(--muted); white-space: nowrap; }
-  #pieces .tag.bad { color: var(--bad); }
   #end { width: 100%; padding: 10px; font: 16px "Special Elite", monospace; background: #6b4f2a; border-color: #8a6a3a; }
-  #log li, #report li { margin: 2px 0; font-size: 13px; }
-  #log, #report { margin: 0; padding-left: 16px; }
-  #log:empty::before { content: 'Nothing yet this hour.'; color: var(--muted); font-size: 13px; margin-left: -16px; }
 
   /* The table on the right */
   #board { flex: 1 1 auto; position: relative; min-width: 0; height: 100%; }
@@ -91,7 +80,7 @@
 <body>
 <aside id="panel">
   <div class="top">
-    <h1>HEDGEROW</h1>
+    <h1>HEDGEROW <span id="ver" style="font-size:11px;color:var(--muted);letter-spacing:0">v30</span></h1>
     <div class="links"><button id="sound-btn" title="Sound on or off">🔊</button><button id="help-btn">How to play</button><button id="new-btn">New game</button></div>
   </div>
   <div id="clock"></div>
@@ -107,10 +96,6 @@
 
   <button id="end">End the hour ▶</button>
 
-  <div class="box"><h2>This hour</h2><ul id="log"></ul></div>
-  <div class="box"><h2>Last hour</h2><ul id="report"></ul></div>
-  <div class="box" id="pieces"></div>
-  <span id="ver" style="font-size:11px;color:var(--muted)">v29</span>
 </aside>
 
 <main id="board"><div id="label"></div><div id="tip"></div><div id="menu" hidden></div></main>
@@ -157,12 +142,12 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="js/data.js?v=29"></script>
-<script src="js/sim.js?v=29"></script>
-<script src="js/sound.js?v=29"></script>
-<script src="js/models.js?v=29"></script>
-<script src="js/board3d.js?v=29"></script>
-<script src="js/ui.js?v=29"></script>
-<script src="js/main.js?v=29"></script>
+<script src="js/data.js?v=30"></script>
+<script src="js/sim.js?v=30"></script>
+<script src="js/sound.js?v=30"></script>
+<script src="js/models.js?v=30"></script>
+<script src="js/board3d.js?v=30"></script>
+<script src="js/ui.js?v=30"></script>
+<script src="js/main.js?v=30"></script>
 </body>
 </html>

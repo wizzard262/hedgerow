@@ -174,7 +174,7 @@ const UI = (() => {
     const u = selected(), box = $('#card');
     box.innerHTML = '';
     if (!u || u.x === null) {
-      box.innerHTML = '<div class="sub">Click one of your pieces on the table, or in the list below.</div>';
+      box.innerHTML = '<div class="sub">Click one of your pieces on the table.</div>';
       return;
     }
     const strength = u.kind === 'company' ? `${u.platoons} section${u.platoons > 1 ? 's' : ''} (${u.platoons * 4} men)` : Sim.isTank(u) ? `${u.platoons} tank${u.platoons > 1 ? 's' : ''}` : '';
@@ -207,25 +207,6 @@ const UI = (() => {
     $('#hint').textContent = text;
   }
 
-  function piecesList() {
-    const box = $('#pieces');
-    box.innerHTML = '<h2>Your pieces</h2>';
-    const groups = {};
-    for (const u of st.units) if (u.side === 'us' && u.x !== null) (groups[Sim.groupOf(u)] = groups[Sim.groupOf(u)] || []).push(u);
-    const order = Object.keys(groups).sort((a, b) => (a === 'bn') - (b === 'bn') || (a === 'T') - (b === 'T') || a.localeCompare(b));
-    for (const g of order) {
-      const div = el('div', 'group');
-      div.append(el('div', 'gname', `<span>${Sim.groupName(st, g)}</span>`));
-      for (const u of groups[g]) {
-        const tag = u.shocked ? '<span class="tag bad">shaken</span>' : u.acted ? '<span class="tag">✓ done</span>' : `<span class="tag">${u.kind === 'company' ? u.platoons + ' sec' : Sim.isTank(u) ? u.platoons + ' tanks' : ''}</span>`;
-        const row = el('div', `piece${u.id === view.sel ? ' sel' : ''}${u.acted ? ' done' : ''}`, `<span>${u.name}${u.quality === 'elite' ? ' ★' : ''}</span>${tag}`);
-        row.onclick = () => { view.sel = u.id; view.mode = null; refresh(); };
-        div.append(row);
-      }
-      box.append(div);
-    }
-  }
-
   function update() {
     $('#clock').innerHTML = `<b>${Sim.hourText(st.turn)}</b> · hour ${st.turn}${TURNS ? ` of ${TURNS}` : ''} · ${START_DATE}`;
     $('#goal').textContent = `🎯 Take ${st.objective.name} and hold it at the end of an hour${TURNS ? `, by ${Sim.hourText(TURNS + 1)}` : ' (no time limit for now)'}.`;
@@ -236,9 +217,7 @@ const UI = (() => {
       btn.disabled = st.ammo[which] <= 0 || !!st.fired[which] || st.won || st.lost || !!st.de;
       btn.classList.toggle('on', view.mode === 'fire:' + which);
     }
-    card(); hint(); piecesList();
-    $('#log').innerHTML = view.log.map(l => `<li>${l}</li>`).join('');
-    $('#report').innerHTML = st.report.map(l => `<li>${l}</li>`).join('');
+    card(); hint();
     $('#end').disabled = st.won || st.lost || !!st.de;
   }
 
