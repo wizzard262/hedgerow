@@ -209,9 +209,9 @@ const Board = (() => {
   }
 
   // Markers beside a piece: a red pin marker when shaken, a wooden order token once it has acted, a gold star for elite troops
-  function marker(u, key, colour, label, show, dx, dz) {
+  function marker(u, key, colour, label, show, dx, dz, size = 1.6) {
     const id = u.id + key;
-    if (!tokens[id]) { tokens[id] = Models.token(colour, label); tokens[id].scale.setScalar(1.6); scene.add(tokens[id]); }
+    if (!tokens[id]) { tokens[id] = Models.token(colour, label); tokens[id].scale.setScalar(size); scene.add(tokens[id]); }
     const t = tokens[id];
     t.visible = show && u.x !== null;
     if (t.visible) { const to = pieces[u.id].userData.to; t.position.set(to.x + dx, 0, to.z + dz); }
@@ -228,7 +228,7 @@ const Board = (() => {
       const big = u.kind === 'company' || Sim.isTank(u);
       const side = u.side === 'us' ? 1 : -1;
       marker(u, ':shock', '#9b2a22', '!', u.shocked, big ? 0.06 * side : 0.12 * side, big ? 0.12 : 0.24);
-      marker(u, ':done', '#8a6a42', '✓', u.side === 'us' && u.acted, big ? 0.14 * side : 0.2 * side, big ? 0.12 : 0.24);
+      marker(u, ':done', '#6b6b66', '✓', u.side === 'us' && u.acted, big ? 0.18 * side : 0.22 * side, big ? 0.9 : 0.3, 3.2);
       marker(u, ':elite', '#b38a2e', '★', u.quality === 'elite' && u.kind === 'company', 0.06 * side, 0.93);
     }
   }
@@ -313,6 +313,14 @@ const Board = (() => {
     for (const s of view.spots || []) mark(s.x, s.y, s.kind);
     if (view.selected && view.selected.x !== null) mark(view.selected.x, view.selected.y, 'select', 0.015);
     if (view.targets && view.targets.length) markTargets(view.targets);
+    if (view.ready) for (const u of st.units) {
+      if (u.side !== 'us' || u.x === null || !pieces[u.id]) continue;
+      const can = view.ready(u);
+      if (!can && !u.acted) continue;
+      const p = pieceCentre(u), big = u.kind === 'company' || Sim.isTank(u);
+      const ring = new T.Mesh(new T.RingGeometry(big ? 0.3 : 0.17, big ? 0.335 : 0.195, 48), new T.MeshBasicMaterial({ color: can ? 0x7fd06a : 0x77776f, transparent: true, opacity: can ? 0.8 : 0.6, depthWrite: false }));
+      at(ring, p.x, 0.006, p.z, -Math.PI / 2, 0, 0); marks.add(ring);
+    }
     if (st.fxShown !== st.fx || st.fxCount !== st.fx.length) { showDice(st); st.fxShown = st.fx; st.fxCount = st.fx.length; }
     const moving = glide(dt);
     renderer.render(scene, camera);

@@ -101,7 +101,8 @@ const UI = (() => {
     menu.innerHTML = '';
     for (const u of pieces) {
       const g = Sim.groupOf(u), pts = Math.floor((st.points[g] || 0) + 1e-9);
-      const state = u.shocked ? '<span class="bad">shaken</span>' : u.acted ? 'has acted' : `${pts} point${pts === 1 ? '' : 's'}`;
+      const state = u.shocked ? '<span class="pill bad">Shaken</span>' : u.acted ? '<span class="pill done">✓ Done this hour</span>'
+        : pts ? `<span class="pill ready">Ready · ${pts} point${pts === 1 ? '' : 's'}</span>` : '<span class="pill done">No points</span>';
       menu.append(el('div', 'mhead', `<b>${u.name}${u.quality === 'elite' ? ' ★' : ''}</b><span>${state}</span>`));
       const acts = actionButtons(u);
       if (Sim.isTeam(u) && u.kind !== 'pak') {
@@ -165,7 +166,7 @@ const UI = (() => {
     const f = Sim.firepower(st, u);
     const dice = u.kind === 'captain' ? '' : `🎲 ${Math.round(f.soft * 10) / 10} dice vs men${f.hard ? `, ${Math.round(f.hard * 10) / 10} vs tanks` : ''}`;
     const g = Sim.groupOf(u);
-    const status = u.shocked ? '<span class="bad">Shaken: rest or rally</span>' : u.acted ? 'Has acted this hour' : 'Ready';
+    const status = u.shocked ? '<span class="pill bad">Shaken: rest or rally</span>' : u.acted ? '<span class="pill done">✓ Done this hour</span>' : '<span class="pill ready">Ready</span>';
     box.append(el('div', 'name', `${u.name}${u.quality === 'elite' ? ' ★' : ''}`));
     box.append(el('div', 'sub', `${KIND[u.kind]}${u.attachedTo ? ` with ${Sim.unitById(st, u.attachedTo).name}` : ''}${Sim.hasCutters(u) ? ' · hedge cutters' : ''}`));
     box.append(el('div', 'stats', [strength, dice, status].filter(Boolean).map(s => `<span>${s}</span>`).join('')));
@@ -209,7 +210,7 @@ const UI = (() => {
       const div = el('div', 'group');
       div.append(el('div', 'gname', `<span>${Sim.groupName(st, g)}</span>${pips(st.points[g] || 0, g === 'bn' ? BN_BANK : COMMAND_BANK)}`));
       for (const u of groups[g]) {
-        const tag = u.shocked ? '<span class="tag bad">shaken</span>' : u.acted ? '<span class="tag">done</span>' : `<span class="tag">${u.kind === 'company' ? u.platoons + ' pl' : Sim.isTank(u) ? u.platoons + ' tanks' : ''}</span>`;
+        const tag = u.shocked ? '<span class="tag bad">shaken</span>' : u.acted ? '<span class="tag">✓ done</span>' : `<span class="tag">${u.kind === 'company' ? u.platoons + ' pl' : Sim.isTank(u) ? u.platoons + ' tanks' : ''}</span>`;
         const row = el('div', `piece${u.id === view.sel ? ' sel' : ''}${u.acted ? ' done' : ''}`, `<span>${u.name}${u.quality === 'elite' ? ' ★' : ''}</span>${tag}`);
         row.onclick = () => { view.sel = u.id; view.mode = null; refresh(); };
         div.append(row);

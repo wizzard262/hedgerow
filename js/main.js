@@ -29,7 +29,9 @@ window.Game = (() => {
         if (s) spots.push({ x: s.x, y: s.y, kind: 'charge' });
         spots.push({ x: t.x, y: t.y, kind: 'shoot' });
       }
-      dirty = Board.render(st, { spots, selected: UI.selected(), hover, targets: UI.targets() });
+      // Green rings under pieces that can still act this hour, grey under those that have
+      const ready = st.de || st.won || st.lost ? null : u => Sim.canAct(st, u);
+      dirty = Board.render(st, { spots, selected: UI.selected(), hover, targets: UI.targets(), ready });
       const p = Board.screenPoint(st.objective.x + 0.5, st.objective.y, 0.35), r = board.getBoundingClientRect();
       Object.assign($('#label').style, { left: p.x - r.left + 'px', top: p.y - r.top + 'px' });
       $('#label').textContent = `🎯 ${st.objective.name}`;
