@@ -47,11 +47,11 @@ const RALLY_RANGE = 1;           // the captain rallies shaken pieces in his fie
 const PIECES = {
   company:  { name: 'Rifle platoon', soft: 1, hard: 0 },          // per section (3 sections, a base each). Its kind is 'company' in the code
   // Tanks: per tank (2 a section). armour: added to the score anti-tank dice need (the Panther's front is hard to beat).
-  // cutter: hedge cutters welded on the front, so it drives straight through a hedge and leaves a gap
+  // cutter: drives straight through a hedge, leaving a gap (Steve: every tank does; no separate Break through for tanks)
   sherman:  { name: 'Sherman section', soft: 1.5, hard: 1, tank: true, armour: 0, cutter: true },
-  firefly:  { name: 'Firefly section', soft: 1, hard: 2, tank: true, armour: 0 },
+  firefly:  { name: 'Firefly section', soft: 1, hard: 2, tank: true, armour: 0, cutter: true },
   pz4:      { name: 'Panzer IV section', soft: 1.5, hard: 1.5, tank: true, armour: 0, cutter: true },
-  panther:  { name: 'Panther section', soft: 1.5, hard: 3, tank: true, armour: 1 },
+  panther:  { name: 'Panther section', soft: 1.5, hard: 3, tank: true, armour: 1, cutter: true },
   mg:       { name: 'MG team', soft: 2, hard: 0, team: true },
   bazooka:  { name: 'Bazooka team', soft: 0, hard: 2, team: true },
   mg42:     { name: 'MG 42 team', soft: 2.5, hard: 0, team: true },

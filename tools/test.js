@@ -84,7 +84,7 @@ check('a charge reaches two fields, a move one', () => {
   assert(Sim.actCharge(st, able, 2, 6).ok && able.x === 2, 'the two-field charge did not arrive');
 });
 
-check('Shermans cut through hedges; Fireflies need a gap or must break through; wire stops men but not tanks', () => {
+check('every tank drives through hedges; wire stops men but not tanks; men break through', () => {
   const st = Sim.newGame(5);
   const sher = Sim.unitById(st, 'T1'), ff = Sim.unitById(st, 'T2'), co = Sim.unitById(st, 'B');
   // Clear the board of everyone else, and put each piece in an empty field with a field to its east
@@ -95,8 +95,7 @@ check('Shermans cut through hedges; Fireflies need a gap or must break through; 
   assert(Sim.actCharge(st, sher, 1, 0).ok && sher.x === 1, 'the Sherman could not drive through the hedge');
   assert(!st.hedges[k1], 'the Sherman left the hedge standing');
   const k2 = setUp(ff, 6); st.hedges[k2] = true;
-  assert(!Sim.moves(st, ff).some(p => p.x === 1 && p.y === 6), 'the Firefly could climb a hedge');
-  assert(Sim.actBreach(st, ff, 1, 6).ok && !st.hedges[k2] && ff.x === 1, 'the Firefly could not break through into the next field');
+  assert(Sim.chargeSpots(st, ff).some(p => p.x === 1 && p.y === 6) && !Sim.breachSpots(st, ff).length, 'the Firefly should drive through hedges with no separate Break through');
   const k3 = setUp(co, 3); st.wire[k3] = true;
   assert(!Sim.moves(st, co).some(p => p.x === 1 && p.y === 3), 'men walked through barbed wire');
   assert(Sim.actBreach(st, co, 1, 3).ok && !st.wire[k3] && co.x === 1, 'the company could not cut through the wire');

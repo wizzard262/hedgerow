@@ -551,15 +551,18 @@ const Sim = (() => {
       if (!isTank(u) && wire(st, fx, fy, x, y)) continue;
       const enemies = at(st, x, y, enemyOf(u.side));
       const blocked = hedge(st, fx, fy, x, y) && !cutter(u);
-      if (enemies.length) out.push({ x, y, assault: true });
+      if (enemies.length) { if (fightsHandToHand(u)) out.push({ x, y, assault: true }); }
       else if (!blocked && roomFor(st, u, x, y)) out.push({ x, y, assault: false });
     }
     return out;
   }
 
+  const fightsHandToHand = u => u.kind === 'company' || isTank(u);
+
   // A charge goes twice as far as a move: up to two fields, the second can be an assault. Each route is the fields it passes
   function chargeRoutes(st, u) {
-    if (u.kind !== 'company' && !isTank(u)) return [];
+    // Every piece but a dug-in gun can charge; captains and teams only into empty fields (see chargeSteps)
+    if (PIECES[u.kind].fixed) return [];
     const routes = [];
     for (const a of chargeSteps(st, u, u.x, u.y)) {
       routes.push([a]);
