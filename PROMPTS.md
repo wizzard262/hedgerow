@@ -180,8 +180,14 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - Steve: tanks are impervious to infantry and MG
 - Rifle platoons and MG teams can no longer fire on tanks (no red targets on them) and their hits never shake a tank; only bazookas, Panzerschrecks, anti-tank guns, tanks and the artillery can. Infantry can't charge a field held only by tanks
 
+## 32. More gaps; an organic board later
+
+- Steve: make more gaps in the hedges, and draw an organic, non-grid board, with pathfinding to allow free movement
+- More gaps now: 45% of the edges between fields are gaps (was 30%)
+- The organic board was costed: about 1–2 hours to draw curving, irregular fields over the hidden squares; about 5–7 hours for true free movement with pathfinding (every rule reworked for distances). Steve put both on his to-do list for later
+
 ## Sessions
 
 | # | Date | Length | What we did |
 |---|------|--------|-------------|
-| 1 | 2026-10-30 | about 8.5 hours | Prompts 1–31: rules, command points, reacting, tanks and hedge cutters, the look (pixel art to 3D tabletop), scales, river, villages, wire, six-move aim; one captain, piece menus, hedges stop moves, MG team model; bazooka teams, two-field charges; red targets; who has acted; company level; lining hedges, longer sight, the captain's guidon; one unit a field, no time limit; tracers and shells, greyed out, no activation tokens, Move & shoot hatching; tanks through hedges, charges for all; no plain move; teams and captain with a platoon, no attaching; one piece at a time; charging through friends; range, cover and moving +1 each; words off the target, tanks turn and recoil; rallying; MGs can't move and fire; easier targets; Move & shoot one action; tanks impervious to small arms |
+| 1 | 2026-10-30 | about 8.5 hours | Prompts 1–32: rules, command points, reacting, tanks and hedge cutters, the look (pixel art to 3D tabletop), scales, river, villages, wire, six-move aim; one captain, piece menus, hedges stop moves, MG team model; bazooka teams, two-field charges; red targets; who has acted; company level; lining hedges, longer sight, the captain's guidon; one unit a field, no time limit; tracers and shells, greyed out, no activation tokens, Move & shoot hatching; tanks through hedges, charges for all; no plain move; teams and captain with a platoon, no attaching; one piece at a time; charging through friends; range, cover and moving +1 each; words off the target, tanks turn and recoil; rallying; MGs can't move and fire; easier targets; Move & shoot one action; tanks impervious to small arms; more gaps |

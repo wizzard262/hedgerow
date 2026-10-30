@@ -22,7 +22,7 @@ const VILLAGES = [
   { x: 4, y: 4, name: 'Saint-Jean' },
   { x: 5, y: 1, name: 'La Haye' },
 ];
-const HEDGE_GAP = 0.3;           // chance an edge between two fields has a gap (a gate or a broken bank)
+const HEDGE_GAP = 0.45;          // chance an edge between two fields has a gap (a gate or a broken bank)
 const WIRE = 0.5;                // chance a gap between two fields is closed by a barbed-wire fence: men must cut it, tanks flatten it
 
 const TURNS = 0;                 // hours allowed (0: no limit for now, Steve); one turn is an hour from 06:00
