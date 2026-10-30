@@ -128,6 +128,7 @@ const UI = (() => {
         menu.append(b);
       }
       if (!acts.some(a => a.ok)) menu.append(el('div', 'mnote', u.shocked ? 'Shaken: it has moved this hour; it can rest, or the captain can rally it' : 'It has moved this hour'));
+      else if (u.shocked) menu.append(el('div', 'mnote', 'Shaken (pinned): it needs one more to hit and can\'t charge until it rallies'));
       else if (!u.acted && !u.shocked && u.kind !== 'pak' && !Sim.chargeSpots(st, u).length) {
         // Boxed in: say why it can't charge, and how to get out
         menu.append(el('div', 'mnote', Sim.breachSpots(st, u).length ? 'Hedges or wire all round, or friends in the way: Break through to get out' : 'Nowhere to charge to: every way is blocked'));
@@ -147,10 +148,9 @@ const UI = (() => {
     const can = Sim.canAct(st, u);
     const b = [];
     const add = (mode, label, ok, title) => b.push({ mode, label, ok: can && ok, title });
-    // A shaken piece's only move: try to rally itself
+    // A shaken piece can still act (but not charge), or use its move to try to rally itself
     if (Sim.canSelfRally(st, u)) {
       b.push({ mode: 'selfRally', label: '📣 Rally itself', ok: true, title: `Its move: a ${Math.round(SELF_RALLY[u.quality || 'standard'] * 100)}% chance to shake it off (the captain does better)`, run: () => Sim.actSelfRally(st, u) });
-      return b;
     }
     if (u.kind === 'company' || Sim.isTank(u)) {
       const fight = Sim.chargeSpots(st, u).some(p => Sim.at(st, p.x, p.y, 'de').length);
@@ -191,7 +191,7 @@ const UI = (() => {
     const strength = u.kind === 'company' ? `${u.platoons} section${u.platoons > 1 ? 's' : ''} (${u.platoons * 4} men)` : Sim.isTank(u) ? `${u.platoons} tank${u.platoons > 1 ? 's' : ''}` : '';
     const f = Sim.firepower(st, u);
     const dice = u.kind === 'captain' ? '' : `🎲 ${Math.round(f.soft * 10) / 10} dice vs men${f.hard ? `, ${Math.round(f.hard * 10) / 10} vs tanks` : ''}`;
-    const status = u.shocked ? '<span class="pill bad">Shaken: rest or rally</span>' : u.acted ? '<span class="pill done">✓ Moved this hour</span>' : '<span class="pill ready">Ready</span>';
+    const status = u.shocked ? '<span class="pill bad">Shaken: −1 to hit, no charging</span>' : u.acted ? '<span class="pill done">✓ Moved this hour</span>' : '<span class="pill ready">Ready</span>';
     box.append(el('div', 'name', `${u.name}${u.quality === 'elite' ? ' ★' : ''}`));
     box.append(el('div', 'sub', `${KIND[u.kind]}${Sim.hasCutters(u) ? ' · hedge cutters' : ''}`));
     const where = u.kind === 'captain' || u.kind === 'pak' ? '' : u.at ? `🌳 Lining the ${Sim.SIDE_NAMES[u.at]} hedge` : 'In the open';

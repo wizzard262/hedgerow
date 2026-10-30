@@ -277,31 +277,31 @@ const Sim = (() => {
     return c;
   }
 
-  // What hits do to a piece. Soft hits shock infantry and kill platoons; only hard hits knock out tanks
+  // What hits do to a piece (Steve): every hit pins it (shaken), and each hit is a coin toss whether it wounds: a section
+  // of a platoon, a whole team, or a tank lost. Only anti-tank (hard) hits count against tanks
   function damage(st, u, softHits, hardHits) {
     const name = u.name, out = [];
     u.hit = u.hit || softHits + hardHits > 0;
+    const hits = isTank(u) ? hardHits : softHits + hardHits;
+    if (hits <= 0) return out;
+    // Toss a coin for each hit
+    let wounds = 0;
+    for (let k = 0; k < hits; k++) if (st.rand() < WOUND_CHANCE) wounds++;
+    const wasShocked = u.shocked;
+    u.shocked = true;
     if (isTank(u)) {
-      if (hardHits > 0) {
-        u.platoons = Math.max(0, u.platoons - hardHits);
-        out.push(`${name}: ${hardHits} tank${hardHits > 1 ? 's' : ''} knocked out`);
-      }
-      // Rifles and machine guns can't hurt a tank (Steve): only anti-tank hits count
-      if (hardHits > 0 && u.platoons > 0) { if (!u.shocked) out.push(`${name} shocked`); u.shocked = true; }
+      const lost = Math.min(u.platoons, wounds);
+      u.platoons -= lost;
+      if (lost) out.push(`${name}: ${lost} tank${lost > 1 ? 's' : ''} knocked out`);
     } else if (isTeam(u) || u.kind === 'captain') {
-      const hits = softHits + hardHits;
-      if (hits >= 2 || (hits >= 1 && u.shocked)) { u.platoons = 0; out.push(`${name} wiped out`); }
-      else if (hits >= 1) { u.shocked = true; out.push(`${name} shocked`); }
+      // A team is one base: one wound and it's gone
+      if (wounds) { u.platoons = 0; out.push(`${name} wiped out`); }
     } else {
-      const hits = softHits + hardHits;
-      if (hits > 0) {
-        // Two hits cost a platoon; already shaken, every other hit rounds up
-        const lost = Math.min(u.platoons, u.shocked ? Math.ceil(hits / 2) : Math.floor(hits / 2));
-        u.platoons -= lost;
-        u.shocked = true;
-        out.push(lost ? `${name} loses ${lost} section${lost > 1 ? 's' : ''}` : `${name} shocked`);
-      }
+      const lost = Math.min(u.platoons, wounds);
+      u.platoons -= lost;
+      if (lost) out.push(`${name} loses ${lost} section${lost > 1 ? 's' : ''}`);
     }
+    if (!out.length && u.platoons > 0) out.push(wasShocked ? `${name} still pinned` : `${name} pinned`);
     if (u.platoons <= 0) out.push(...remove(st, u));
     return out;
   }
@@ -322,7 +322,7 @@ const Sim = (() => {
   // withdraw: the target spends a point to try to pull back: if it works it takes half the hits and falls back a field
   // The score each die needs: TO_HIT, plus cover and range, plus one on the move, less one for elite troops
   function needFor(st, shooter, target, moving = false) {
-    return TO_HIT + cover(st, shooter, target) + (moving ? ON_THE_MOVE : 0) - QUALITY[shooter.quality || 'standard'].shoot;
+    return TO_HIT + cover(st, shooter, target) + (moving ? ON_THE_MOVE : 0) + (shooter.shocked ? SHAKEN_SHOOT : 0) - QUALITY[shooter.quality || 'standard'].shoot;
   }
 
   // `blast` is set for the other pieces caught in a tank's high-explosive burst (they don't spread it again)
@@ -518,7 +518,7 @@ const Sim = (() => {
   // Each returns { ok, lines } and spends a command point when it works. A piece acts once an hour
 
   function canAct(st, u) {
-    return !!u && u.side === 'us' && u.x !== null && !st.won && !st.lost && !st.de && !u.shocked && !u.acted;
+    return !!u && u.side === 'us' && u.x !== null && !st.won && !st.lost && !st.de && !u.acted;
   }
 
   function actShoot(st, u, target) {
@@ -550,7 +550,7 @@ const Sim = (() => {
   }
 
   function actHalfShot(st, u, target) {
-    if (!u || !u.halfShot || u.shocked || u.x === null || !targets(st, u).includes(target)) return { ok: false };
+    if (!u || !u.halfShot || u.x === null || !targets(st, u).includes(target)) return { ok: false };
     u.halfShot = false;
     return { ok: true, lines: [`🔫 ${u.name} moves and fires on ${target.name}: ` + fireAt(st, u, target, 1, false, true).join(', ') + '.'] };
   }
@@ -596,8 +596,9 @@ const Sim = (() => {
   // A charge goes twice as far as a move: up to two fields, the second can be an assault, and it can pass through a field
   // of friendly pieces on the way (a tank through infantry, infantry past a tank). Each route is the fields it passes
   function chargeRoutes(st, u) {
-    // Every piece but a dug-in gun can charge; captains and teams only into empty fields (see chargeSteps)
-    if (PIECES[u.kind].fixed) return [];
+    // Every piece but a dug-in gun can charge; captains and teams only into empty fields (see chargeSteps). A shaken
+    // (pinned) piece can't charge until it rallies (Steve)
+    if (PIECES[u.kind].fixed || u.shocked) return [];
     const routes = [];
     for (const a of chargeSteps(st, u, u.x, u.y)) {
       if (!a.pass) routes.push([a]);
@@ -756,7 +757,7 @@ const Sim = (() => {
     for (const u of st.units) if (u.side === 'de') u.hit = false;
     for (const u of st.units) u.halfShot = false;
     st.fx = [];
-    st.de = { queue: st.units.filter(u => u.side === 'de' && u.x !== null && !u.shocked).map(u => u.id), mortar: st.deMortarAmmo > 0, rep: [], ask: null };
+    st.de = { queue: st.units.filter(u => u.side === 'de' && u.x !== null).map(u => u.id), mortar: st.deMortarAmmo > 0, rep: [], ask: null };
   }
 
   // What one German piece does: throw Americans out of the hamlet, counterattack a shaken company, shoot, or (reserves) move up.
@@ -764,12 +765,12 @@ const Sim = (() => {
   function germanAct(st, u) {
     const rep = st.de.rep;
     const inHamlet = at(st, st.objective.x, st.objective.y, 'us').length > 0;
-    if (inHamlet && (u.kind === 'company' || isTank(u)) && adjacent(u, st.objective) && !(isTank(u) && hedge(st, u.x, u.y, st.objective.x, st.objective.y))) {
+    if (inHamlet && !u.shocked && (u.kind === 'company' || isTank(u)) && adjacent(u, st.objective) && !(isTank(u) && hedge(st, u.x, u.y, st.objective.x, st.objective.y))) {
       rep.push('🔺 ' + charge(st, u, st.objective.x, st.objective.y).join(', ') + '.');
       return null;
     }
     const weak = st.units.find(t => t.side === 'us' && t.x !== null && t.kind === 'company' && adjacent(u, t) && t.shocked);
-    if (u.kind === 'company' && u.platoons >= 2 && weak && st.rand() < 0.5) {
+    if (u.kind === 'company' && !u.shocked && u.platoons >= 2 && weak && st.rand() < 0.5) {
       rep.push('🔺 ' + charge(st, u, weak.x, weak.y).join(', ') + '.');
       return null;
     }
@@ -844,7 +845,7 @@ const Sim = (() => {
     if (st.de.ask) return { ask: st.de.ask };
     while (st.de.queue.length) {
       const u = unitById(st, st.de.queue.shift());
-      if (u.x === null || u.shocked) continue;
+      if (u.x === null) continue;
       const shot = germanAct(st, u);
       if (!shot) continue;
       if (canReact(st, unitById(st, shot.target))) { st.de.ask = shot; return { ask: shot }; }
