@@ -1,0 +1,195 @@
+// Hedgerow: the controls on the left: the clock, the battalion's fire support, the chosen piece and what it can do,
+// the pieces by company with their command points, and what happened
+
+const UI = (() => {
+  let st;
+  const $ = s => document.querySelector(s);
+  const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html !== undefined) e.innerHTML = html; return e; };
+  // What the player has chosen: a piece, and an action waiting for a field to be clicked
+  const view = { sel: null, mode: null, log: [] };
+
+  const KIND = { company: 'Rifle company', captain: 'Captain', sherman: 'Sherman platoon', firefly: 'Firefly platoon', mg: 'Machine-gun team', bazooka: 'Bazooka team',
+                 pz4: 'Panzer IV platoon', panther: 'Panther platoon', mg42: 'MG 42 team', schreck: 'Panzerschreck team', pak: 'PaK 40 anti-tank gun' };
+
+  function setState(s) { st = s; view.sel = null; view.mode = null; view.log = []; }
+  const selected = () => (view.sel ? Sim.unitById(st, view.sel) : null);
+
+  // Command points as pips: whole points bright, the part of the next one shown as a dim pip
+  function pips(points, bank) {
+    const whole = Math.floor(points + 1e-9), part = points - whole > 0.3;
+    let h = '';
+    for (let i = 0; i < bank; i++) h += i < whole ? '●' : i === whole && part ? '<span class="off">◐</span>' : '<span class="off">○</span>';
+    return `<span class="pips" title="${whole} command point${whole === 1 ? '' : 's'} to spend">${h}</span>`;
+  }
+
+  // ---------- Which fields an action can use ----------
+
+  function spots() {
+    const u = selected();
+    if (view.mode && view.mode.startsWith('fire:')) {
+      const out = [];
+      for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) if (Sim.canCallFire(st, x, y) && Sim.at(st, x, y, 'de').length) out.push({ x, y, kind: 'fire' });
+      return out;
+    }
+    if (!u || !view.mode) return [];
+    const fields = list => list.map(p => ({ x: p.x, y: p.y }));
+    const uniq = list => list.filter((p, i) => list.findIndex(q => q.x === p.x && q.y === p.y) === i);
+    const kind = { charge: 'charge', moveShoot: 'move', move: 'move', shoot: 'shoot', halfShot: 'shoot', rally: 'rally', breach: 'breach' }[view.mode];
+    let list = [];
+    if (view.mode === 'charge') list = Sim.chargeSpots(st, u);
+    if (view.mode === 'moveShoot' || view.mode === 'move') list = Sim.moves(st, u);
+    if (view.mode === 'shoot' || view.mode === 'halfShot') list = fields(Sim.targets(st, u));
+    if (view.mode === 'rally') list = fields(Sim.rallyTargets(st, u));
+    if (view.mode === 'breach') list = Sim.breachSpots(st, u);
+    return uniq(list).map(p => Object.assign(p, { kind }));
+  }
+
+  // The best target for a shooter in a field: tanks for anti-tank weapons, otherwise the infantry
+  function pickTarget(u, x, y) {
+    const ts = Sim.targets(st, u).filter(t => t.x === x && t.y === y);
+    const f = Sim.firepower(st, u);
+    ts.sort((a, b) => ((Sim.isTank(b) ? f.hard : f.soft) - (Sim.isTank(a) ? f.hard : f.soft)));
+    return ts[0] || null;
+  }
+
+  // ---------- Clicking the table ----------
+
+  function clickField(x, y) {
+    if (st.won || st.lost || st.de) return;
+    const u = selected();
+    const spot = spots().find(p => p.x === x && p.y === y);
+    let r = null;
+    if (view.mode && spot) {
+      if (view.mode.startsWith('fire:')) r = Sim.actFire(st, view.mode.slice(5), x, y);
+      else if (view.mode === 'charge') r = Sim.actCharge(st, u, x, y);
+      else if (view.mode === 'moveShoot') r = Sim.actMoveShoot(st, u, x, y);
+      else if (view.mode === 'move') r = Sim.actMove(st, u, x, y);
+      else if (view.mode === 'breach') r = Sim.actBreach(st, u, x, y);
+      else if (view.mode === 'shoot') r = Sim.actShoot(st, u, pickTarget(u, x, y));
+      else if (view.mode === 'halfShot') r = Sim.actHalfShot(st, u, pickTarget(u, x, y));
+      else if (view.mode === 'rally') r = Sim.actRally(st, u, Sim.rallyTargets(st, u).find(t => t.x === x && t.y === y));
+      if (r && r.ok) {
+        view.log.push(...r.lines);
+        // After moving with Move & shoot, offer the half-power shot straight away
+        view.mode = view.mode === 'moveShoot' && u.halfShot ? 'halfShot' : null;
+      }
+      return;
+    }
+    // Otherwise pick an American piece in the field, the next one each click
+    const mine = Sim.at(st, x, y, 'us');
+    if (!mine.length) { view.sel = null; view.mode = null; return; }
+    const i = mine.findIndex(m => m.id === view.sel);
+    view.sel = mine[(i + 1) % mine.length].id;
+    view.mode = null;
+  }
+
+  // ---------- The left-hand panel ----------
+
+  function actionButtons(u) {
+    const can = Sim.canAct(st, u);
+    const b = [];
+    const add = (mode, label, ok, title) => b.push({ mode, label, ok: can && ok, title });
+    if (u.kind === 'company' || Sim.isTank(u)) {
+      add('charge', '⚔️ Charge', Sim.chargeSpots(st, u).length > 0, 'Into the next field without shooting; hand to hand if the Germans hold it');
+      add('moveShoot', '➡️ Move & shoot', Sim.moves(st, u).length > 0, 'One field, then fire at half the dice');
+      add('shoot', '🎯 Shoot', Sim.targets(st, u).length > 0, 'Fire with every die');
+      if (Sim.breachSpots(st, u).length) add('breach', '⛏️ Break through', true, 'Break a gap in a hedge: takes this piece its hour');
+    } else if (u.kind === 'captain') {
+      add('move', '➡️ Move', Sim.moves(st, u).length > 0, 'One field');
+      add('rally', '📣 Rally', Sim.rallyTargets(st, u).length > 0, 'Steady a shaken piece in his field or the next');
+    } else {
+      add('move', '➡️ Move', Sim.moves(st, u).length > 0, u.attachedTo ? 'One field (it leaves its company)' : 'One field');
+      add('shoot', '🎯 Shoot', Sim.targets(st, u).length > 0, 'Fire with every die');
+    }
+    if (u.halfShot) b.unshift({ mode: 'halfShot', label: '🎯 Fire on the move', ok: true, title: 'Half the dice, after moving' });
+    return b;
+  }
+
+  function card() {
+    const u = selected(), box = $('#card');
+    box.innerHTML = '';
+    if (!u || u.x === null) {
+      box.innerHTML = '<div class="sub">Click one of your pieces on the table, or in the list below.</div>';
+      return;
+    }
+    const strength = u.kind === 'company' ? `${u.platoons} platoon${u.platoons > 1 ? 's' : ''} (${u.platoons * 3} men)` : Sim.isTank(u) ? `${u.platoons} tank${u.platoons > 1 ? 's' : ''}` : '';
+    const f = Sim.firepower(st, u);
+    const dice = u.kind === 'captain' ? '' : `🎲 ${Math.round(f.soft * 10) / 10} dice vs men${f.hard ? `, ${Math.round(f.hard * 10) / 10} vs tanks` : ''}`;
+    const g = Sim.groupOf(u);
+    const status = u.shocked ? '<span class="bad">Shaken: rest or rally</span>' : u.acted ? 'Has acted this hour' : 'Ready';
+    box.append(el('div', 'name', `${u.name}${u.quality === 'elite' ? ' ★' : ''}`));
+    box.append(el('div', 'sub', `${KIND[u.kind]}${u.attachedTo ? ` with ${Sim.unitById(st, u.attachedTo).name}` : ''}${Sim.hasCutters(u) ? ' · hedge cutters' : ''}`));
+    box.append(el('div', 'stats', [strength, dice, status].filter(Boolean).map(s => `<span>${s}</span>`).join('')));
+    box.append(el('div', 'sub', `${Sim.groupName(st, g)}: ${pips(st.points[g] || 0, g === 'bn' ? BN_BANK : COMMAND_BANK)}`));
+    const acts = el('div'); acts.id = 'actions'; acts.style.marginTop = '6px';
+    for (const a of actionButtons(u)) {
+      const btn = el('button', view.mode === a.mode ? 'on' : '', a.label);
+      btn.disabled = !a.ok; btn.title = a.title;
+      btn.onclick = () => { view.mode = view.mode === a.mode ? null : a.mode; refresh(); };
+      acts.append(btn);
+    }
+    // Teams: join the company in their field, or leave it
+    if (Sim.isTeam(u) && u.kind !== 'pak') {
+      const co = Sim.at(st, u.x, u.y, 'us').find(c => c.kind === 'company');
+      const btn = el('button', '', u.attachedTo ? '🔗 Detach' : '🔗 Attach');
+      btn.disabled = !(u.attachedTo || co) || (st.points.bn || 0) < 1 || !!st.de;
+      btn.title = u.attachedTo ? 'Work on its own again (a battalion point)' : 'Join the company in this field: it moves with it and uses its points (a battalion point)';
+      btn.onclick = () => { const r = Sim.actAttach(st, u, co); if (r.ok) view.log.push(...r.lines); refresh(); };
+      acts.append(btn);
+    }
+    box.append(acts);
+  }
+
+  function hint() {
+    const u = selected();
+    const text = !view.mode ? (st.de ? 'The Germans are moving…' : '')
+      : view.mode.startsWith('fire:') ? 'Click a field with Germans your troops can see.'
+      : view.mode === 'halfShot' ? 'Click a field to fire on it at half the dice, or pick something else to skip the shot.'
+      : `Click a highlighted field for ${u ? u.name : 'the piece'}. Esc cancels.`;
+    $('#hint').textContent = text;
+  }
+
+  function piecesList() {
+    const box = $('#pieces');
+    box.innerHTML = '<h2>Your pieces</h2>';
+    const groups = {};
+    for (const u of st.units) if (u.side === 'us' && u.x !== null) (groups[Sim.groupOf(u)] = groups[Sim.groupOf(u)] || []).push(u);
+    const order = Object.keys(groups).sort((a, b) => (a === 'bn') - (b === 'bn') || (a === 'T') - (b === 'T') || a.localeCompare(b));
+    for (const g of order) {
+      const div = el('div', 'group');
+      div.append(el('div', 'gname', `<span>${Sim.groupName(st, g)}</span>${pips(st.points[g] || 0, g === 'bn' ? BN_BANK : COMMAND_BANK)}`));
+      for (const u of groups[g]) {
+        const tag = u.shocked ? '<span class="tag bad">shaken</span>' : u.acted ? '<span class="tag">done</span>' : `<span class="tag">${u.kind === 'company' ? u.platoons + ' pl' : Sim.isTank(u) ? u.platoons + ' tanks' : ''}</span>`;
+        const row = el('div', `piece${u.id === view.sel ? ' sel' : ''}${u.acted ? ' done' : ''}`, `<span>${u.name}${u.quality === 'elite' ? ' ★' : ''}</span>${tag}`);
+        row.onclick = () => { view.sel = u.id; view.mode = null; refresh(); };
+        div.append(row);
+      }
+      box.append(div);
+    }
+  }
+
+  function update() {
+    $('#clock').innerHTML = `<b>${Sim.hourText(st.turn)}</b> · hour ${st.turn} of ${TURNS} · ${START_DATE}`;
+    $('#goal').textContent = `🎯 Take ${st.objective.name} and hold it at the end of an hour, by ${Sim.hourText(TURNS + 1)}.`;
+    $('#bn-pips').innerHTML = pips(st.points.bn || 0, BN_BANK);
+    for (const which of ['mortars', 'artillery']) {
+      const S = which === 'mortars' ? MORTARS : ARTILLERY, btn = $(`#fire-${which}`);
+      btn.innerHTML = `${which === 'mortars' ? '💥 Mortars' : '💣 Guns'} · ${st.ammo[which]} left`;
+      btn.title = `${S.name}: ${S.dice} dice on a field your troops can see${S.splash ? `, ${S.splash} on each field round it` : ''}. A battalion point and one load of ammunition`;
+      btn.disabled = st.ammo[which] <= 0 || (st.points.bn || 0) < 1 || st.won || st.lost || !!st.de;
+      btn.classList.toggle('on', view.mode === 'fire:' + which);
+    }
+    card(); hint(); piecesList();
+    $('#log').innerHTML = view.log.map(l => `<li>${l}</li>`).join('');
+    $('#report').innerHTML = st.report.map(l => `<li>${l}</li>`).join('');
+    $('#end').disabled = st.won || st.lost || !!st.de;
+  }
+
+  let refresh = () => {};
+  function init(onChange) {
+    refresh = onChange;
+    for (const which of ['mortars', 'artillery']) $(`#fire-${which}`).onclick = () => { view.mode = view.mode === 'fire:' + which ? null : 'fire:' + which; refresh(); };
+  }
+
+  return { init, setState, update, clickField, spots, view, selected, pips, KIND };
+})();

@@ -2,7 +2,7 @@
 // Each hour: guns and mortars on seen Germans, captains rally, then every piece shoots, charges a weak field, or moves east
 const fs = require('fs'), vm = require('vm'), path = require('path');
 const load = f => vm.runInThisContext(fs.readFileSync(path.join(__dirname, '..', 'js', f), 'utf8'));
-load('data.js'); load('sim.js');
+if (typeof Sim === 'undefined') { load('data.js'); load('sim.js'); }
 
 function playHour(st) {
   const us = () => st.units.filter(u => u.side === 'us' && u.x !== null);
@@ -29,10 +29,10 @@ function playHour(st) {
       if (weak) { Sim.actCharge(st, u, weak.x, weak.y); continue; }
       if (ts.length) { Sim.actShoot(st, u, ts[0]); continue; }
       // Move towards the hamlet
-      const m = Sim.moves(st, u).sort((a, b) => (Math.abs(a.x - OBJECTIVE.x) + Math.abs(a.y - OBJECTIVE.y)) - (Math.abs(b.x - OBJECTIVE.x) + Math.abs(b.y - OBJECTIVE.y)))[0];
-      const empty = Sim.chargeSpots(st, u).find(p => p.x === OBJECTIVE.x && p.y === OBJECTIVE.y);
+      const m = Sim.moves(st, u).sort((a, b) => (Math.abs(a.x - st.objective.x) + Math.abs(a.y - st.objective.y)) - (Math.abs(b.x - st.objective.x) + Math.abs(b.y - st.objective.y)))[0];
+      const empty = Sim.chargeSpots(st, u).find(p => p.x === st.objective.x && p.y === st.objective.y);
       if (empty) { Sim.actCharge(st, u, empty.x, empty.y); continue; }
-      if (m && Math.abs(m.x - OBJECTIVE.x) + Math.abs(m.y - OBJECTIVE.y) < Math.abs(u.x - OBJECTIVE.x) + Math.abs(u.y - OBJECTIVE.y)) { Sim.actMoveShoot(st, u, m.x, m.y); const t = Sim.targets(st, u)[0]; if (t) Sim.actHalfShot(st, u, t); }
+      if (m && Math.abs(m.x - st.objective.x) + Math.abs(m.y - st.objective.y) < Math.abs(u.x - st.objective.x) + Math.abs(u.y - st.objective.y)) { Sim.actMoveShoot(st, u, m.x, m.y); const t = Sim.targets(st, u)[0]; if (t) Sim.actHalfShot(st, u, t); }
       else break;
     }
   }

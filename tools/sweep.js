@@ -1,4 +1,4 @@
-// Tries different values of the numbers in js/data.js with the attacking bot: node tools/sweep.js "HIT_CHANCE=0.3 & TURNS=10" ... (settings joined with &)
+// Tries different values of the numbers in js/data.js with the attacking bot: node tools/sweep.js "TO_HIT=4 & TURNS=10" ... (settings joined with &)
 const fs = require('fs'), vm = require('vm'), path = require('path');
 const read = f => fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
 for (const arg of process.argv.slice(2).length ? process.argv.slice(2) : ['']) {
@@ -8,7 +8,7 @@ for (const arg of process.argv.slice(2).length ? process.argv.slice(2) : ['']) {
     data = data.replace(new RegExp(`const ${k} = [^;]+;`), `const ${k} = ${v};`);
   }
   const ctx = vm.createContext({ Math, Date, console, module: undefined, require });
-  const bot = read('tools/bot.js').replace(/const fs = [\s\S]*?load\('sim.js'\);/, '').replace(/if \(require.main[\s\S]*$/, 'this.play = play;');
+  const bot = read('tools/bot.js').replace(/const fs = [\s\S]*?load\('sim.js'\); \}/, '').replace(/if \(require.main[\s\S]*$/, 'this.play = play;');
   vm.runInContext(data + '\n' + read('js/sim.js') + '\nthis.Sim = Sim;\n' + bot, ctx);
   let wins = 0, idle = 0, turns = 0;
   const n = 150;

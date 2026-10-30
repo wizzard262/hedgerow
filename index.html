@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hedgerow</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Special+Elite&display=swap" rel="stylesheet">
+<style>
+  :root { --bg: #1f1b15; --panel: #2c261e; --panel2: #352e24; --ink: #efe6cf; --muted: #b5a98f; --line: #4a3f30;
+          --accent: #d9b45a; --us: #7d9bc4; --de: #c48a7d; --good: #9fcf8a; --bad: #e0705f; --warn: #e6c95a; }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { background: var(--bg); color: var(--ink); font: 14px/1.4 Georgia, serif; display: flex; overflow: hidden; }
+  button { font: inherit; color: var(--ink); background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 5px 10px; cursor: pointer; }
+  button:hover:not(:disabled) { border-color: var(--accent); }
+  button:disabled { opacity: .4; cursor: default; }
+  button.on { background: var(--accent); color: #2a2214; border-color: var(--accent); }
+
+  /* The controls on the left */
+  #panel { flex: 0 0 360px; height: 100%; overflow-y: auto; background: var(--panel); border-right: 1px solid var(--line); padding: 12px 12px 20px; display: flex; flex-direction: column; gap: 10px; }
+  #panel h1 { font: 26px "Special Elite", monospace; margin: 0; letter-spacing: 2px; color: var(--accent); }
+  .top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .top .links { display: flex; gap: 6px; }
+  .top .links button { padding: 2px 8px; font-size: 12px; }
+  #clock { color: var(--muted); }
+  #clock b { color: var(--ink); }
+  #goal { font-size: 13px; color: var(--muted); }
+  .box { background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+  .box h2 { font: 14px "Special Elite", monospace; margin: 0 0 6px; color: var(--accent); display: flex; justify-content: space-between; align-items: center; }
+  .pips { letter-spacing: 2px; color: var(--accent); font-size: 13px; }
+  .pips .off { color: #5a4e3c; }
+  .row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .support button { flex: 1 1 0; }
+  #card .name { font-weight: 700; font-size: 15px; }
+  #card .sub { color: var(--muted); font-size: 13px; }
+  #card .stats { display: flex; gap: 10px; flex-wrap: wrap; margin: 4px 0 6px; font-size: 13px; }
+  #card .bad { color: var(--bad); font-weight: 700; }
+  #actions { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+  #hint { min-height: 1.4em; font-size: 13px; color: var(--warn); }
+  #pieces .group { margin-bottom: 6px; }
+  #pieces .gname { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); border-bottom: 1px dotted var(--line); margin-bottom: 2px; }
+  #pieces .piece { display: flex; justify-content: space-between; gap: 6px; padding: 2px 6px; border-radius: 4px; cursor: pointer; font-size: 13px; }
+  #pieces .piece:hover { background: rgba(255,255,255,.05); }
+  #pieces .piece.sel { background: rgba(217,180,90,.18); }
+  #pieces .piece.done { color: var(--muted); }
+  #pieces .tag { font-size: 12px; color: var(--muted); white-space: nowrap; }
+  #pieces .tag.bad { color: var(--bad); }
+  #end { width: 100%; padding: 10px; font: 16px "Special Elite", monospace; background: #6b4f2a; border-color: #8a6a3a; }
+  #log li, #report li { margin: 2px 0; font-size: 13px; }
+  #log, #report { margin: 0; padding-left: 16px; }
+  #log:empty::before { content: 'Nothing yet this hour.'; color: var(--muted); font-size: 13px; margin-left: -16px; }
+
+  /* The table on the right */
+  #board { flex: 1 1 auto; position: relative; min-width: 0; height: 100%; }
+  #board canvas { display: block; }
+  #label { position: absolute; transform: translate(-50%, -100%); font: 15px "Special Elite", monospace; color: #fff3d6; text-shadow: 0 1px 3px #000, 0 0 8px #000; pointer-events: none; white-space: nowrap; }
+  #tip { position: absolute; pointer-events: none; background: rgba(30,25,18,.92); border: 1px solid var(--line); border-radius: 6px; padding: 6px 9px; font-size: 13px; max-width: 280px; display: none; z-index: 5; }
+
+  /* Pop-ups */
+  .modal { position: fixed; inset: 0; background: rgba(10,8,5,.6); display: flex; align-items: center; justify-content: center; z-index: 10; }
+  .modal[hidden] { display: none; }
+  .modal .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; max-width: 620px; max-height: 88vh; overflow-y: auto; box-shadow: 0 10px 40px rgba(0,0,0,.6); }
+  .modal h2 { font: 20px "Special Elite", monospace; color: var(--accent); margin: 0 0 10px; }
+  .modal ul { padding-left: 18px; }
+  .modal li { margin: 4px 0; }
+  .modal .buttons { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
+  #ask { align-items: flex-end; justify-content: flex-end; background: transparent; pointer-events: none; padding: 20px; }
+  #ask .card { pointer-events: auto; max-width: 420px; }
+
+  @media (max-width: 900px) {
+    body { flex-direction: column; overflow: auto; }
+    #panel { flex: none; height: auto; border-right: 0; border-bottom: 1px solid var(--line); }
+    #board { flex: none; height: 70vh; }
+  }
+</style>
+</head>
+<body>
+<aside id="panel">
+  <div class="top">
+    <h1>HEDGEROW</h1>
+    <div class="links"><button id="help-btn">How to play</button><button id="new-btn">New game</button></div>
+  </div>
+  <div id="clock"></div>
+  <div id="goal"></div>
+
+  <div class="box support">
+    <h2>Battalion <span class="pips" id="bn-pips"></span></h2>
+    <div class="row"><button id="fire-mortars"></button><button id="fire-artillery"></button></div>
+  </div>
+
+  <div class="box" id="card"></div>
+  <div id="hint"></div>
+
+  <button id="end">End the hour ▶</button>
+
+  <div class="box"><h2>This hour</h2><ul id="log"></ul></div>
+  <div class="box"><h2>Last hour</h2><ul id="report"></ul></div>
+  <div class="box" id="pieces"></div>
+  <span id="ver" style="font-size:11px;color:var(--muted)">v2</span>
+</aside>
+
+<main id="board"><div id="label"></div><div id="tip"></div></main>
+
+<div class="modal" id="ask" hidden>
+  <div class="card">
+    <h2>Under fire</h2>
+    <p id="ask-text"></p>
+    <div class="buttons"><button id="ask-stay">Stand fast</button><button id="ask-pull" class="on">Pull back (1 point)</button></div>
+  </div>
+</div>
+
+<div class="modal" id="result" hidden>
+  <div class="card"><h2 id="result-title"></h2><p id="result-text"></p><div class="buttons"><button id="again-btn" class="on">Play again</button></div></div>
+</div>
+
+<div class="modal" id="help" hidden>
+  <div class="card">
+    <h2>Hedgerow</h2>
+    <p>Tuesday 11 July 1944, Normandy. Your American battalion must fight through the bocage, field by field, and take a village (Saint-Jean or La Haye: it changes each game), then hold it at the end of an hour. You have <b>six moves</b>, one an hour, until 12:00. A German garrison holds it; more Germans march up from beyond the river.</p>
+    <ul>
+      <li>🪖 <b>Pieces</b>: rifle companies (three platoons of three men), their captains, machine-gun and bazooka teams, and two tank platoons: Shermans and Fireflies. Able Company is elite.</li>
+      <li>📋 <b>Command points</b>: each company (with its captain and attached teams) earns points every hour, about two for every three pieces, and can save up to 3. Each piece can act once an hour and each action costs a point, so only about two thirds of your pieces act each hour. The tank company and the battalion have their own points.</li>
+      <li>🎲 <b>Actions</b>: <b>Charge</b> into the next field without shooting (fight hand to hand if Germans hold it), <b>Move &amp; shoot</b> (one field, then fire at half the dice), <b>Shoot</b> (full dice), <b>Rally</b> (a captain steadies a shaken piece in his field or the next).</li>
+      <li>🏘️ <b>Villages and hamlets</b>: houses round a yard, with room for one company <i>or</i> one tank platoon. Hard to hit in.</li>
+      <li>🌊 <b>The river</b> can only be crossed at its two bridges.</li>
+      <li>✂️ <b>Barbed wire</b> closes some gaps between fields: men can't cross it until a company cuts it (Break through); tanks roll over and flatten it.</li>
+      <li>🌳 <b>Hedges</b>: you can only shoot into the next field, or two fields along a clear line. A target behind a hedge needs one more on the dice. Men climbing over a hedge can't shoot that hour. Shermans and Panzer IVs carry hedge cutters and drive straight through, leaving a gap; Fireflies, Panthers and infantry can <b>Break through</b>, which takes their hour.</li>
+      <li>🎲 <b>Dice</b>: every shot rolls six-sided dice by the target: 5 or 6 hits in the open, 6 behind a hedge or in the village; elite troops hit on one less. The Panther's armour needs one more again.</li>
+      <li>😵 <b>Shaken</b> (red ! marker): a piece hit is shaken and can't act. It recovers if it rests an hour without being hit, or its captain rallies it.</li>
+      <li>🛡️ <b>In the German hour</b>: when one of your pieces is fired on and its company has a point left, you can spend it to try to <b>pull back</b>: if it works the piece falls back a field and takes half the hits.</li>
+      <li>💥 <b>Battalion</b>: mortars and the 105 mm battery fire on a field your troops can see. Only these run short of ammunition; a little comes up every few hours. The battalion's points also attach a team to a company in its field.</li>
+      <li>🚚 <b>Reinforcements</b> arrive on your west edge: more bazookas, Dog Company, a machine gun and replacements. The Germans have a Panzer IV and a Panther platoon on the way.</li>
+      <li>🧩 <b>The table</b>: 28 mm-style models: four men to a platoon base, three platoons to a company; tanks in pairs. The men are bigger models (1:54) than the tanks (1:76), and the houses smaller (1:144), as on many wargame tables.</li>
+    </ul>
+    <p class="sub" style="color:var(--muted)">Click a piece (or its row on the left), pick an action, then click a highlighted field. Enter ends the hour; Esc cancels.</p>
+    <div class="buttons"><button data-close class="on">To the table</button></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="js/data.js?v=2"></script>
+<script src="js/sim.js?v=2"></script>
+<script src="js/models.js?v=2"></script>
+<script src="js/board3d.js?v=2"></script>
+<script src="js/ui.js?v=2"></script>
+<script src="js/main.js?v=2"></script>
+</body>
+</html>

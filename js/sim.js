@@ -15,10 +15,10 @@ const Sim = (() => {
 
   // ---------- The board ----------
 
-  const TYPES = { '.': 'field', o: 'orchard', v: 'village', '=': 'laneEW', '|': 'laneNS', '+': 'crossroads' };
+  const TYPES = { '.': 'field', o: 'orchard', v: 'village', h: 'hamlet', r: 'river', '#': 'bridge', '=': 'laneEW', '|': 'laneNS', '+': 'crossroads' };
   const inside = (x, y) => x >= 0 && y >= 0 && x < COLS && y < ROWS;
   const tileType = (x, y) => TYPES[MAP[y][x]];
-  const isLane = t => t === 'laneEW' || t === 'laneNS' || t === 'crossroads';
+  const isLane = t => t === 'laneEW' || t === 'laneNS' || t === 'crossroads' || t === 'bridge';
   const NEIGHBOURS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 
   // The same key for an edge whichever side it is looked at from
@@ -30,14 +30,17 @@ const Sim = (() => {
   function hedgeWanted(ax, ay, bx, by) {
     const a = tileType(ax, ay), b = tileType(bx, by);
     if (a === 'village' || b === 'village') return false;
+    // The river has open banks, and a bridge carries its lane straight on
+    if (a === 'river' || b === 'river') return false;
     const eastWest = ay === by;
     // Along a lane: open. A lane running east-west has open ends to the east and west, and so on
-    const openAlong = (t, ew) => t === 'crossroads' || (t === 'laneEW' && ew) || (t === 'laneNS' && !ew);
+    const openAlong = (t, ew) => t === 'crossroads' || ((t === 'laneEW' || t === 'bridge') && ew) || (t === 'laneNS' && !ew);
     if (isLane(a) && isLane(b) && openAlong(a, eastWest) && openAlong(b, eastWest)) return false;
     return true;
   }
 
   function hedge(st, ax, ay, bx, by) { return !!st.hedges[edgeKey(ax, ay, bx, by)]; }
+  function wire(st, ax, ay, bx, by) { return !!st.wire[edgeKey(ax, ay, bx, by)]; }
 
   // ---------- Pieces ----------
 
@@ -68,8 +71,10 @@ const Sim = (() => {
     const company = here.filter(u => u.kind === 'company').length;
     const tanks = here.filter(isTank).length;
     const small = here.filter(isSmall).length;
-    if (unit.kind === 'company') return company === 0;
-    if (isTank(unit)) return tanks === 0;
+    // A hamlet or the village has room in its yard for one company or one tank platoon, not both
+    const built = tileType(x, y) === 'village' || tileType(x, y) === 'hamlet';
+    if (unit.kind === 'company') return company === 0 && !(built && tanks);
+    if (isTank(unit)) return tanks === 0 && !(built && company);
     return small < 3;
   }
 
@@ -77,17 +82,20 @@ const Sim = (() => {
     seed = seed || (Date.now() % 1e9);
     const R = rng(seed);
     const st = {
-      seed, turn: 1, hedges: {}, units: [], report: [], fx: [],
+      seed, turn: 1, hedges: {}, wire: {}, units: [], report: [], fx: [],
       points: {},
       ammo: { mortars: MORTARS.ammo, artillery: ARTILLERY.ammo },
       deMortarAmmo: DE_MORTAR.ammo, won: false, lost: false,
     };
-    // Hedges on every edge that wants one, less the gaps
+    // This game's objective: one of the villages
+    st.objective = VILLAGES[Math.floor(R() * VILLAGES.length)];
+    // Hedges on every edge that wants one, less the gaps; some gaps between fields are fenced with barbed wire
     for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
       for (const [dx, dy] of [[1, 0], [0, 1]]) {
         const bx = x + dx, by = y + dy;
-        if (!inside(bx, by)) continue;
-        if (hedgeWanted(x, y, bx, by) && R() >= HEDGE_GAP) st.hedges[edgeKey(x, y, bx, by)] = true;
+        if (!inside(bx, by) || !hedgeWanted(x, y, bx, by)) continue;
+        if (R() >= HEDGE_GAP) st.hedges[edgeKey(x, y, bx, by)] = true;
+        else if (!isLane(tileType(x, y)) && !isLane(tileType(bx, by)) && R() < WIRE) st.wire[edgeKey(x, y, bx, by)] = true;
       }
     }
     for (const d of US_START) st.units.push(makeUnit(d, 'us'));
@@ -95,9 +103,49 @@ const Sim = (() => {
     // German teams that start with a company
     for (const d of DE_START) if (d.attach) unitById(st, d.attach).attachedTo = d.id;
     st.rand = R;
+    deploy(st, 'us'); deploy(st, 'de');
     earnPoints(st);
-    st.report = [`${START_DATE}, 06:00. The battalion attacks into the bocage. Take ${OBJECTIVE.name} by ${hourText(TURNS + 1)}.`];
+    st.report = [`${START_DATE}, 06:00. The battalion attacks into the bocage. Take ${st.objective.name} and hold it at ${hourText(TURNS + 1)}.`];
     return st;
+  }
+
+  // Each side starts spread at random over its own end of the board (DEPLOY of the width), in cover where it can be:
+  // a field with a hedge facing the enemy, an orchard or the village. Captains and attached teams start with their company
+  function deploy(st, side) {
+    const cols = Math.max(1, Math.round(COLS * DEPLOY));
+    const xs = side === 'us' ? [...Array(cols).keys()] : [...Array(cols).keys()].map(i => COLS - 1 - i);
+    const fields = [];
+    for (const x of xs) for (let y = 0; y < ROWS; y++) if (tileType(x, y) !== 'river') fields.push({ x, y });
+    // How good a field is to start in: cover towards the enemy, then a little luck
+    const front = side === 'us' ? 1 : -1;
+    const worth = f => {
+      const t = tileType(f.x, f.y);
+      const hedged = inside(f.x + front, f.y) && hedge(st, f.x, f.y, f.x + front, f.y);
+      return (hedged ? 2 : 0) + (t === 'village' || t === 'hamlet' ? 2 : t === 'orchard' ? 1 : 0) + st.rand() * 2.5;
+    };
+    const leaders = st.units.filter(u => u.side === side && u.kind !== 'captain' && !u.attachedTo);
+    // German posts round the objective; the garrison is already in them
+    if (side === 'de') for (const u of st.units.filter(u => u.side === 'de')) if (u.post) u.post = postField(st, u.post);
+    for (const u of leaders.filter(u => u.garrison)) {
+      u.x = u.post.x; u.y = u.post.y;
+      for (const c of st.units) if (c.attachedTo === u.id || (c.garrison && c.post.x === u.x && c.post.y === u.y && c.side === side)) { c.x = u.x; c.y = u.y; }
+    }
+    for (const u of leaders) {
+      if (u.garrison) continue;
+      const options = fields.map(f => ({ f, w: worth(f) })).sort((a, b) => b.w - a.w);
+      const spot = options.find(o => roomFor(st, u, o.f.x, o.f.y));
+      u.x = spot.f.x; u.y = spot.f.y;
+      // Its captain and attached teams with it
+      for (const c of st.units) if ((c.kind === 'captain' && c.company === u.id) || c.attachedTo === u.id) { c.x = u.x; c.y = u.y; }
+    }
+  }
+
+  // A post given from the objective: the field there, or the nearest one that isn't river
+  function postField(st, [dx, dy]) {
+    const want = { x: Math.max(0, Math.min(COLS - 1, st.objective.x + dx)), y: Math.max(0, Math.min(ROWS - 1, st.objective.y + dy)) };
+    if (tileType(want.x, want.y) !== 'river') return want;
+    for (let r = 1; r < COLS; r++) for (const [ex, ey] of NEIGHBOURS) { const x = want.x - r * Math.sign(dx || 1) * Math.abs(ex), y = want.y + r * ey; if (inside(x, y) && tileType(x, y) !== 'river') return { x, y }; }
+    return want;
   }
 
   const hourText = turn => `${String(START_HOUR + turn - 1).padStart(2, '0')}:00`;
@@ -152,7 +200,7 @@ const Sim = (() => {
     const mx = a.x + dx / 2, my = a.y + dy / 2;
     if (hedge(st, a.x, a.y, mx, my) || hedge(st, mx, my, b.x, b.y)) return false;
     const mid = tileType(mx, my);
-    return mid !== 'village' && mid !== 'orchard' && at(st, mx, my).length === 0;
+    return mid !== 'village' && mid !== 'orchard' && mid !== 'hamlet' && at(st, mx, my).length === 0;
   }
 
   // Can a side see this field? Any of its pieces next to it, or with a clear line two fields away
@@ -172,19 +220,27 @@ const Sim = (() => {
   // Whole dice from a firepower: the fraction is a chance of one more
   const dice = (st, f) => Math.floor(f) + (st.rand() < f - Math.floor(f) ? 1 : 0);
 
-  function roll(st, n, chance) {
+  // Roll n six-sided dice needing `need` or more (a 6 always hits). The faces go into `faces` for the dice on the table
+  function roll(st, n, need, faces = []) {
     let hits = 0;
-    for (let i = 0; i < n; i++) if (st.rand() < chance) hits++;
+    const score = Math.min(6, need);
+    for (let i = 0; i < n; i++) {
+      const face = 1 + Math.floor(st.rand() * 6);
+      const hit = face >= score;
+      faces.push({ face, hit });
+      if (hit) hits++;
+    }
     return hits;
   }
 
-  // Cover for a target: behind the hedge it is shot across, in a village or an orchard
+  // Cover for a target, added to the score needed: behind the hedge it is shot across, in a village or an orchard
   function cover(st, from, target) {
-    let c = 1;
-    if (from && adjacent(from, target) && hedge(st, from.x, from.y, target.x, target.y)) c *= COVER.hedge;
+    let c = 0;
+    if (from && adjacent(from, target) && hedge(st, from.x, from.y, target.x, target.y)) c += COVER.hedge;
     const t = tileType(target.x, target.y);
-    if (t === 'village') c *= COVER.village;
-    if (t === 'orchard') c *= COVER.orchard;
+    if (t === 'village') c += COVER.village;
+    if (t === 'hamlet') c += COVER.hamlet;
+    if (t === 'orchard') c += COVER.orchard;
     return c;
   }
 
@@ -233,21 +289,21 @@ const Sim = (() => {
   // withdraw: the target spends a point to try to pull back: if it works it takes half the hits and falls back a field
   function fireAt(st, shooter, target, power, withdraw = false) {
     const f = firepower(st, shooter);
-    const q = QUALITY[shooter.quality || 'standard'].shoot;
-    const chance = HIT_CHANCE * q * cover(st, shooter, target);
+    const need = TO_HIT + cover(st, shooter, target) - QUALITY[shooter.quality || 'standard'].shoot;
+    const faces = [];
     let softHits, hardHits;
     if (isTank(target)) {
-      hardHits = roll(st, dice(st, f.hard * power), chance * PIECES[target.kind].armour);
-      softHits = roll(st, dice(st, f.soft * power), chance);
+      hardHits = roll(st, dice(st, f.hard * power), need + PIECES[target.kind].armour, faces);
+      softHits = roll(st, dice(st, f.soft * power), need, []);
     } else {
       // Anti-tank weapons are poor against men in a hedge: half value
-      softHits = roll(st, dice(st, (f.soft + f.hard * 0.5) * power), chance);
+      softHits = roll(st, dice(st, (f.soft + f.hard * 0.5) * power), need, faces);
       hardHits = 0;
     }
     const pre = withdraw ? pullBack(st, target, shooter) : null;
     if (pre && pre.ok) { softHits = Math.floor(softHits * WITHDRAW.keep); hardHits = Math.floor(hardHits * WITHDRAW.keep); }
     const out = (pre ? [pre.line] : []).concat(damage(st, target, softHits, hardHits));
-    st.fx.push({ x: target.x, y: target.y, kind: softHits + hardHits ? 'hit' : 'miss' });
+    st.fx.push({ x: target.x, y: target.y, kind: softHits + hardHits ? 'hit' : 'miss', faces, need: Math.min(6, need + (isTank(target) ? PIECES[target.kind].armour : 0)), side: shooter.side });
     return out.length ? out : [`${target.name}: no hits`];
   }
 
@@ -268,7 +324,7 @@ const Sim = (() => {
   // Pieces a shooter could fire at: enemies next to it (across any hedge) or two fields away along a clear line, that its side can see
   function targets(st, shooter) {
     return st.units.filter(t => t.side !== shooter.side && t.x !== null && t.kind !== 'captain'
-      && (adjacent(shooter, t) || clearLine(st, shooter, t)) && sees(st, shooter.side, t.x, t.y));
+      && (adjacent(shooter, t) || clearLine(st, shooter, t)));
   }
 
   // ---------- Moving ----------
@@ -278,7 +334,10 @@ const Sim = (() => {
   const cutter = u => isTank(u) && !!PIECES[u.kind].cutter;
   function canStep(st, u, x, y, leaving = []) {
     if (!inside(x, y) || !adjacent(u, { x, y })) return false;
+    if (tileType(x, y) === 'river') return false;
     if (isTank(u) && !cutter(u) && hedge(st, u.x, u.y, x, y)) return false;
+    // Barbed wire stops men until it is cut; tanks roll over it
+    if (!isTank(u) && wire(st, u.x, u.y, x, y)) return false;
     if (PIECES[u.kind].fixed) return false;
     return roomFor(st, u, x, y, leaving);
   }
@@ -287,6 +346,7 @@ const Sim = (() => {
   // Returns what happened to the hedge: 'cut' (driven through), 'climbed' (men clambered over) or ''
   function step(st, u, x, y) {
     let how = '';
+    if (wire(st, u.x, u.y, x, y) && isTank(u)) { delete st.wire[edgeKey(u.x, u.y, x, y)]; how = 'flattened'; }
     if (hedge(st, u.x, u.y, x, y)) {
       if (cutter(u)) { delete st.hedges[edgeKey(u.x, u.y, x, y)]; how = 'cut'; } else how = 'climbed';
     }
@@ -319,7 +379,7 @@ const Sim = (() => {
     }
     if (defending) {
       if (hedge(st, from.x, from.y, x, y)) s *= ASSAULT.hedgeDefence;
-      if (tileType(x, y) === 'village') s *= ASSAULT.villageDefence;
+      if (tileType(x, y) === 'village' || tileType(x, y) === 'hamlet') s *= ASSAULT.villageDefence;
     }
     return s;
   }
@@ -342,7 +402,7 @@ const Sim = (() => {
     const out = [];
     if (!defenders.length) {
       const how = step(st, u, x, y);
-      return [how === 'cut' ? `${u.name} charges through the hedge, leaving a gap` : `${u.name} charges forward`];
+      return [how === 'cut' ? `${u.name} charges through the hedge, leaving a gap` : how === 'flattened' ? `${u.name} charges over the wire, flattening it` : `${u.name} charges forward`];
     }
     // Attackers: the charging piece with its teams, plus tanks with it or next to the field
     const supporters = st.units.filter(t => t.side === u.side && t.x !== null && isTank(t) && !t.shocked && t !== u && (Math.abs(t.x - x) + Math.abs(t.y - y) <= 1));
@@ -368,6 +428,7 @@ const Sim = (() => {
         const co = unitById(st, c.company);
         if (co && co.x !== null && !(co.x === x && co.y === y)) { c.x = co.x; c.y = co.y; } else remove(st, c);
       }
+      if (wire(st, u.x, u.y, x, y)) delete st.wire[edgeKey(u.x, u.y, x, y)];
       step(st, u, x, y);
       // Winning a hedge fight still costs: a chance of losing a platoon
       if (st.rand() < 0.3) out.push(...lose(st, u, 1));
@@ -420,6 +481,7 @@ const Sim = (() => {
   function moveLine(u, how) {
     if (how === 'cut') return `🚜 ${u.name} smashes through the hedge, leaving a gap.`;
     if (how === 'climbed') return `🧗 ${u.name} struggles over the hedge bank.`;
+    if (how === 'flattened') return `🚜 ${u.name} flattens the barbed wire.`;
     return `➡️ ${u.name} moves up.`;
   }
 
@@ -437,10 +499,11 @@ const Sim = (() => {
     const out = [];
     for (const [dx, dy] of NEIGHBOURS) {
       const x = u.x + dx, y = u.y + dy;
-      if (!inside(x, y)) continue;
+      if (!inside(x, y) || tileType(x, y) === 'river') continue;
       if (isTank(u) && !cutter(u) && hedge(st, u.x, u.y, x, y)) continue;
+      if (!isTank(u) && wire(st, u.x, u.y, x, y)) continue;
       const enemies = at(st, x, y, enemyOf(u.side));
-      if (enemies.length ? sees(st, u.side, x, y) : roomFor(st, u, x, y)) out.push({ x, y });
+      if (enemies.length || roomFor(st, u, x, y)) out.push({ x, y });
     }
     return out;
   }
@@ -451,19 +514,20 @@ const Sim = (() => {
     return { ok: true, lines: [charge(st, u, x, y).join(', ') + '.'] };
   }
 
-  // Breaking a hole through a hedge: infantry, and tanks without cutters, can dig and push one through,
+  // Breaking a hole through a hedge (or cutting barbed wire): infantry, and tanks without cutters, can dig and push one through,
   // but it takes their whole hour and they stay where they are. Tanks with cutters just drive through
   function breachSpots(st, u) {
     if (u.kind !== 'company' && !(isTank(u) && !cutter(u))) return [];
-    return NEIGHBOURS.map(([dx, dy]) => ({ x: u.x + dx, y: u.y + dy })).filter(p => inside(p.x, p.y) && hedge(st, u.x, u.y, p.x, p.y));
+    return NEIGHBOURS.map(([dx, dy]) => ({ x: u.x + dx, y: u.y + dy })).filter(p => inside(p.x, p.y) && (hedge(st, u.x, u.y, p.x, p.y) || (u.kind === 'company' && wire(st, u.x, u.y, p.x, p.y))));
   }
 
   function actBreach(st, u, x, y) {
     if (!canAct(st, u) || !breachSpots(st, u).some(p => p.x === x && p.y === y)) return { ok: false };
     spend(st, u);
-    delete st.hedges[edgeKey(u.x, u.y, x, y)];
+    const key = edgeKey(u.x, u.y, x, y), wasWire = !st.hedges[key];
+    delete st.hedges[key]; delete st.wire[key];
     st.fx.push({ x: u.x, y: u.y, kind: 'miss' });
-    return { ok: true, lines: [`⛏️ ${u.name} breaks a hole through the hedge.`] };
+    return { ok: true, lines: [wasWire ? `✂️ ${u.name} cuts a way through the wire.` : `⛏️ ${u.name} breaks a hole through the hedge.`] };
   }
 
   // Shocked friendly pieces a captain can reach
@@ -506,11 +570,13 @@ const Sim = (() => {
     const hitField = (fx, fy, n) => {
       for (const t of at(st, fx, fy, enemyOf(side))) {
         if (t.x === null || t.kind === 'captain') continue;
-        const chance = HIT_CHANCE * SUPPORT_COVER * (tileType(fx, fy) === 'village' ? COVER.village : 1);
-        const soft = roll(st, n, chance), hard = isTank(t) ? roll(st, S.hard || 0, chance) : 0;
+        const need = TO_HIT + (tileType(fx, fy) === 'village' ? COVER.village : 0);
+        const faces = [];
+        const soft = roll(st, n, need, faces), hard = isTank(t) ? roll(st, S.hard || 0, need + PIECES[t.kind].armour, faces) : 0;
         lines.push(...damage(st, t, soft, hard));
+        st.fx.push({ x: fx, y: fy, kind: 'shell', faces, need, side });
       }
-      st.fx.push({ x: fx, y: fy, kind: 'shell' });
+      if (!at(st, fx, fy, enemyOf(side)).length) st.fx.push({ x: fx, y: fy, kind: 'shell' });
     };
     hitField(x, y, S.dice);
     if (S.splash) for (const [dx, dy] of NEIGHBOURS) if (inside(x + dx, y + dy)) hitField(x + dx, y + dy, S.splash);
@@ -533,7 +599,7 @@ const Sim = (() => {
     const ts = st.units.filter(t => t.side === 'us' && t.x !== null && t.kind !== 'captain' && (adjacent(u, t) || clearLine(st, u, t)));
     if (!ts.length) return null;
     const f = firepower(st, u);
-    const score = t => (isTank(t) ? f.hard * 2 : f.soft + f.hard * 0.5) * cover(st, u, t) + (t.shocked ? 1 : 0) - t.platoons * 0.1;
+    const score = t => (isTank(t) ? f.hard * 2 : f.soft + f.hard * 0.5) * (7 - TO_HIT - cover(st, u, t)) / 2 + (t.shocked ? 1 : 0) - t.platoons * 0.1;
     return ts.sort((a, b) => score(b) - score(a))[0];
   }
 
@@ -564,25 +630,31 @@ const Sim = (() => {
   // Returns a planned shot { shooter, target } instead of firing, so the target can be offered a chance to pull back
   function germanAct(st, u) {
     const rep = st.de.rep;
-    const inHamlet = at(st, OBJECTIVE.x, OBJECTIVE.y, 'us').length > 0;
-    if (inHamlet && (u.kind === 'company' || isTank(u)) && adjacent(u, OBJECTIVE) && !(isTank(u) && hedge(st, u.x, u.y, OBJECTIVE.x, OBJECTIVE.y))) {
-      rep.push('🇩🇪 ' + charge(st, u, OBJECTIVE.x, OBJECTIVE.y).join(', ') + '.');
+    const inHamlet = at(st, st.objective.x, st.objective.y, 'us').length > 0;
+    if (inHamlet && (u.kind === 'company' || isTank(u)) && adjacent(u, st.objective) && !(isTank(u) && hedge(st, u.x, u.y, st.objective.x, st.objective.y))) {
+      rep.push('🔺 ' + charge(st, u, st.objective.x, st.objective.y).join(', ') + '.');
       return null;
     }
     const weak = st.units.find(t => t.side === 'us' && t.x !== null && t.kind === 'company' && adjacent(u, t) && t.shocked);
     if (u.kind === 'company' && u.platoons >= 2 && weak && st.rand() < 0.5) {
-      rep.push('🇩🇪 ' + charge(st, u, weak.x, weak.y).join(', ') + '.');
+      rep.push('🔺 ' + charge(st, u, weak.x, weak.y).join(', ') + '.');
       return null;
     }
     const t = bestTarget(st, u);
     if (t) return { shooter: u.id, target: t.id };
+    // On the way to its post: march there and dig in
+    if (u.post && !u.reserve && (u.x !== u.post.x || u.y !== u.post.y) && !(isTeam(u) && u.attachedTo)) {
+      const next = stepToward(st, u, u.post);
+      if (next) step(st, u, next.x, next.y);
+      return null;
+    }
     // Reserves: a company goes to hold the hamlet if nobody does; the rest move up towards the nearest Americans
     if (u.reserve) {
-      if (u.x === OBJECTIVE.x && u.y === OBJECTIVE.y && u.kind === 'company') return null;
-      const garrison = at(st, OBJECTIVE.x, OBJECTIVE.y, 'de').some(g => g.kind === 'company');
+      if (u.x === st.objective.x && u.y === st.objective.y && u.kind === 'company') return null;
+      const garrison = at(st, st.objective.x, st.objective.y, 'de').some(g => g.kind === 'company');
       const us = st.units.filter(o => o.side === 'us' && o.x !== null);
       const near = us.sort((a, b) => (Math.abs(a.x - u.x) + Math.abs(a.y - u.y)) - (Math.abs(b.x - u.x) + Math.abs(b.y - u.y)))[0];
-      const goal = (!garrison && u.kind === 'company') || !near ? OBJECTIVE : near;
+      const goal = (!garrison && u.kind === 'company') || !near ? st.objective : near;
       const next = stepToward(st, u, goal);
       if (next) step(st, u, next.x, next.y);
     }
@@ -604,17 +676,19 @@ const Sim = (() => {
       const fx = { x: t.x, y: t.y, kind: 'shell' };
       // Pulling back from a mortar: away from the Germans' side of the board
       const pre = withdraw ? pullBack(st, t, { x: t.x + 1, y: t.y }) : null;
-      const chance = HIT_CHANCE * SUPPORT_COVER * (t.x !== null && tileType(t.x, t.y) === 'village' ? COVER.village : 1);
-      let hits = roll(st, DE_MORTAR.dice, chance);
+      const need = TO_HIT + (t.x !== null && tileType(t.x, t.y) === 'village' ? COVER.village : 0);
+      const faces = [];
+      let hits = roll(st, DE_MORTAR.dice, need, faces);
+      fx.faces = faces; fx.need = need; fx.side = 'de';
       if (pre && pre.ok) hits = Math.floor(hits * WITHDRAW.keep);
       const lines = (pre ? [pre.line] : []).concat(damage(st, t, hits, 0));
       st.fx.push(fx);
-      st.de.rep.push(`🇩🇪 German mortars on ${t.name}: ${lines.length ? lines.join(', ') : 'no hits'}.`);
+      st.de.rep.push(`🔺 German mortars on ${t.name}: ${lines.length ? lines.join(', ') : 'no hits'}.`);
       return;
     }
     const u = unitById(st, shot.shooter);
     if (u.x === null) return;
-    st.de.rep.push(`🇩🇪 ${u.name} fires on ${t.name}: ` + fireAt(st, u, t, 1, withdraw).join(', ') + '.');
+    st.de.rep.push(`🔺 ${u.name} fires on ${t.name}: ` + fireAt(st, u, t, 1, withdraw).join(', ') + '.');
   }
 
   // Run the German hour until it ends or a question needs the player. Returns { ask } or { done: true }
@@ -679,7 +753,7 @@ const Sim = (() => {
 
   // Does the US hold the hamlet: an American company in it and no Germans left there
   function holdsObjective(st) {
-    const here = at(st, OBJECTIVE.x, OBJECTIVE.y);
+    const here = at(st, st.objective.x, st.objective.y);
     return here.some(u => u.side === 'us' && u.kind === 'company') && !here.some(u => u.side === 'de');
   }
 
@@ -698,13 +772,14 @@ const Sim = (() => {
     st.de = null;
     if (holdsObjective(st)) {
       st.won = true;
-      rep.unshift(`🏆 ${OBJECTIVE.name} is taken and held at ${hourText(st.turn + 1)}!`);
+      // Taken and held at the end of an hour wins at once
+      rep.unshift(`🏆 ${st.objective.name} is taken and held at ${hourText(st.turn + 1)}!`);
     } else if (!st.units.some(u => u.side === 'us' && u.kind === 'company' && u.x !== null)) {
       st.lost = true;
       rep.unshift('💀 The battalion has no rifle companies left. The attack has failed.');
     } else if (st.turn >= TURNS) {
       st.lost = true;
-      rep.unshift(`⌛ ${hourText(TURNS + 1)}: the attack has run out of time short of ${OBJECTIVE.name}.`);
+      rep.unshift(`⌛ ${hourText(TURNS + 1)}: the attack has run out of time short of ${st.objective.name}.`);
     }
     if (!st.won && !st.lost) newTurn(st, rep);
     st.report = rep.length ? rep : ['A quiet hour.'];
@@ -728,7 +803,7 @@ const Sim = (() => {
     newGame, endTurn, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, moves, chargeSpots,
     rallyTargets, canAct, pointsFor, groupOf, groupName, members, canReact, firepower, teamsOf, canCallFire, holdsObjective, hourText, roomFor,
     startGermanHour, germanStep, answer, finishHour,
-    actShoot, actMoveShoot, actHalfShot, actMove, actCharge, actRally, actAttach, actFire, actBreach, breachSpots, clearLine, isSmall, cover,
+    actShoot, actMoveShoot, actHalfShot, actMove, actCharge, actRally, actAttach, actFire, actBreach, breachSpots, clearLine, isSmall, cover, wire,
     hasCutters: u => cutter(u),
   };
 })();
