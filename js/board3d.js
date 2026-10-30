@@ -246,6 +246,42 @@ const Board = (() => {
     marks.add(new T.Line(new T.BufferGeometry().setFromPoints(pts), new T.LineBasicMaterial({ color: c, transparent: true, opacity: 0.95 })));
   }
 
+  // ---------- Red targets over the pieces that can be shot ----------
+  // A red ring and cross-hairs floating over the piece, always facing the camera, and a red ring on the table under it
+  let reticleTex = null;
+  function reticle() {
+    if (!reticleTex) {
+      const c = document.createElement('canvas'); c.width = c.height = 128;
+      const g = c.getContext('2d');
+      g.strokeStyle = '#e8352a'; g.lineWidth = 9; g.shadowColor = 'rgba(0,0,0,.6)'; g.shadowBlur = 6;
+      g.beginPath(); g.arc(64, 64, 42, 0, Math.PI * 2); g.stroke();
+      g.lineWidth = 7;
+      for (const [x1, y1, x2, y2] of [[64, 6, 64, 36], [64, 92, 64, 122], [6, 64, 36, 64], [92, 64, 122, 64]]) { g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke(); }
+      g.fillStyle = '#e8352a'; g.beginPath(); g.arc(64, 64, 7, 0, Math.PI * 2); g.fill();
+      reticleTex = new T.CanvasTexture(c);
+    }
+    return new T.Sprite(new T.SpriteMaterial({ map: reticleTex, depthTest: false, transparent: true }));
+  }
+
+  // Where a piece is on the table: the middle of its bases
+  function pieceCentre(u) {
+    const g = pieces[u.id], c = new T.Vector3(), n = { k: 0 };
+    if (!g) return new T.Vector3(u.x + 0.5, 0, u.y + 0.5);
+    for (const b of g.userData.bases) if (b.visible) { c.x += (b.userData.to ? b.userData.to.x : b.position.x); c.z += (b.userData.to ? b.userData.to.z : b.position.z); n.k++; }
+    const to = g.userData.to || { x: g.position.x, z: g.position.z };
+    return n.k ? new T.Vector3(to.x + c.x / n.k, 0, to.z + c.z / n.k) : new T.Vector3(u.x + 0.5, 0, u.y + 0.5);
+  }
+
+  function markTargets(list) {
+    const pulse = 1 + 0.08 * Math.sin(performance.now() / 180);
+    for (const u of list) {
+      const p = pieceCentre(u), big = u.kind === 'company' || Sim.isTank(u);
+      const ring = new T.Mesh(new T.RingGeometry(big ? 0.26 : 0.17, big ? 0.32 : 0.22, 48), new T.MeshBasicMaterial({ color: 0xe8352a, transparent: true, opacity: 0.9, depthWrite: false }));
+      at(ring, p.x, 0.008, p.z, -Math.PI / 2, 0, 0); marks.add(ring);
+      const r = reticle(); r.scale.setScalar((big ? 0.62 : 0.5) * pulse); r.position.set(p.x, big ? 0.62 : 0.5, p.z); marks.add(r);
+    }
+  }
+
   // ---------- Dice on the table ----------
   // Each shot leaves its dice by the target: hits stand on top of each other's line, misses lie further off
   function showDice(st) {
@@ -276,10 +312,12 @@ const Board = (() => {
     if (view.hover) mark(view.hover.x, view.hover.y, 'hover', 0.02);
     for (const s of view.spots || []) mark(s.x, s.y, s.kind);
     if (view.selected && view.selected.x !== null) mark(view.selected.x, view.selected.y, 'select', 0.015);
+    if (view.targets && view.targets.length) markTargets(view.targets);
     if (st.fxShown !== st.fx || st.fxCount !== st.fx.length) { showDice(st); st.fxShown = st.fx; st.fxCount = st.fx.length; }
     const moving = glide(dt);
     renderer.render(scene, camera);
-    return moving;
+    // Targets pulse, so keep drawing while they show
+    return moving || !!(view.targets && view.targets.length);
   }
 
   // Which field is under a point on the page (by casting a ray onto the table)

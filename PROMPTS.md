@@ -55,8 +55,14 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - Fixed: the German helmet showed only its inside (it now looks like a Stahlhelm)
 - Balance: the bot wins about 38%
 
+## 9. Red targets
+
+- Steve: once I've moved, how do I shoot, and how do I see who I can shoot? We need a red target over whoever can be shot when the move is done
+- After Move & shoot the game goes straight to "Fire on the move": a red cross-hair floats over every German piece in reach, with a red ring on the table under it; click one to fire at half the dice, or Esc to hold fire. The same red targets show when choosing Shoot
+- If nobody is in reach after the move, "This hour" says so instead
+
 ## Sessions
 
 | # | Date | Length | What we did |
 |---|------|--------|-------------|
-| 1 | 2026-10-30 | about 4.75 hours | Prompts 1–8: rules, command points, reacting, tanks and hedge cutters, the look (pixel art to 3D tabletop), scales, river, villages, wire, six-move aim; one captain, piece menus, hedges stop moves, MG team model; bazooka teams, two-field charges |
+| 1 | 2026-10-30 | about 5 hours | Prompts 1–9: rules, command points, reacting, tanks and hedge cutters, the look (pixel art to 3D tabletop), scales, river, villages, wire, six-move aim; one captain, piece menus, hedges stop moves, MG team model; bazooka teams, two-field charges; red targets |

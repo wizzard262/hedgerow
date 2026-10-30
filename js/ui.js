@@ -44,6 +44,13 @@ const UI = (() => {
     return uniq(list).map(p => Object.assign(p, { kind }));
   }
 
+  // The pieces the chosen piece could shoot now, to mark with red targets: while choosing Shoot or Fire on the move
+  function targets() {
+    const u = selected();
+    if (!u || !['shoot', 'halfShot'].includes(view.mode)) return [];
+    return Sim.targets(st, u);
+  }
+
   // The best target for a shooter in a field: tanks for anti-tank weapons, otherwise the infantry
   function pickTarget(u, x, y) {
     const ts = Sim.targets(st, u).filter(t => t.x === x && t.y === y);
@@ -72,8 +79,11 @@ const UI = (() => {
       else if (view.mode === 'rally') r = Sim.actRally(st, u, Sim.rallyTargets(st, u).find(t => t.x === x && t.y === y));
       if (r && r.ok) {
         view.log.push(...r.lines);
-        // After moving with Move & shoot, offer the half-power shot straight away
-        view.mode = view.mode === 'moveShoot' && u.halfShot ? 'halfShot' : null;
+        // After moving with Move & shoot, offer the half-dice shot straight away, with red targets on who can be hit
+        if (view.mode === 'moveShoot') {
+          if (u.halfShot) view.mode = 'halfShot';
+          else { view.mode = null; view.log.push(`No Germans in reach for ${u.name} to shoot from here.`); }
+        } else view.mode = null;
       }
       return null;
     }
@@ -183,7 +193,8 @@ const UI = (() => {
     const u = selected();
     const text = !view.mode ? (st.de ? 'The Germans are moving…' : '')
       : view.mode.startsWith('fire:') ? 'Click a field with Germans your troops can see.'
-      : view.mode === 'halfShot' ? 'Click a field to fire on it at half the dice, or pick something else to skip the shot.'
+      : view.mode === 'halfShot' ? 'Moved. Click a red target to fire on it at half the dice, or Esc to hold fire.'
+      : view.mode === 'shoot' ? 'Click a red target to fire on it. Esc cancels.'
       : `Click a highlighted field for ${u ? u.name : 'the piece'}. Esc cancels.`;
     $('#hint').textContent = text;
   }
@@ -230,5 +241,5 @@ const UI = (() => {
     for (const which of ['mortars', 'artillery']) $(`#fire-${which}`).onclick = () => { view.mode = view.mode === 'fire:' + which ? null : 'fire:' + which; refresh(); };
   }
 
-  return { init, setState, update, clickField, openMenu, closeMenu, spots, view, selected, pips, KIND };
+  return { init, setState, update, clickField, openMenu, closeMenu, spots, targets, view, selected, pips, KIND };
 })();
