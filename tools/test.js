@@ -61,6 +61,17 @@ check('a piece acts once an hour', () => {
   assert(!Sim.actMoveShoot(st, able, m2.x, m2.y).ok, 'a second action in the same hour was allowed');
 });
 
+check('a charge reaches two fields, a move one', () => {
+  const st = Sim.newGame(3);
+  st.hedges = {}; st.wire = {};
+  const able = Sim.unitById(st, 'A');
+  for (const u of st.units) if (u !== able) u.x = u.y = null;
+  able.x = 0; able.y = 6; st.points.A = 3;
+  assert(Sim.chargeSpots(st, able).some(p => Math.abs(p.x - able.x) + Math.abs(p.y - able.y) === 2), 'no charge reaches two fields');
+  assert(Sim.moves(st, able).every(p => Math.abs(p.x - able.x) + Math.abs(p.y - able.y) === 1), 'a move went further than one field');
+  assert(Sim.actCharge(st, able, 2, 6).ok && able.x === 2, 'the two-field charge did not arrive');
+});
+
 check('Shermans cut through hedges; Fireflies need a gap or must break through; wire stops men but not tanks', () => {
   const st = Sim.newGame(5);
   const sher = Sim.unitById(st, 'T1'), ff = Sim.unitById(st, 'T2'), co = Sim.unitById(st, 'B');

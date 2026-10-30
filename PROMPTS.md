@@ -47,8 +47,16 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - More gaps in the hedges (30%) so the six moves are possible; the bot wins about 30%, doing nothing never
 - MG teams: three men (gunner, loader, ammunition carrier with boxes) round a tripod-mounted gun on one big base
 
+## 8. Bazooka teams and longer charges
+
+- Steve: bazooka teams like the MG teams: two men on one base, a big obvious bazooka, the other man with a big suitcase-like bag; a charge moves twice as far as Move & shoot
+- Bazooka and Panzerschreck teams: the gunner with a big tube (the Panzerschreck with its blast shield), the loader in front with a big square bag of rockets
+- Charge now reaches up to two fields; the second can be an assault. Move & shoot stays one field
+- Fixed: the German helmet showed only its inside (it now looks like a Stahlhelm)
+- Balance: the bot wins about 38%
+
 ## Sessions
 
 | # | Date | Length | What we did |
 |---|------|--------|-------------|
-| 1 | 2026-10-30 | about 4.5 hours | Prompts 1–7: rules, command points, reacting, tanks and hedge cutters, the look (pixel art to 3D tabletop), scales, river, villages, wire, six-move aim; one captain, piece menus, hedges stop moves, MG team model |
+| 1 | 2026-10-30 | about 4.75 hours | Prompts 1–8: rules, command points, reacting, tanks and hedge cutters, the look (pixel art to 3D tabletop), scales, river, villages, wire, six-move aim; one captain, piece menus, hedges stop moves, MG team model; bazooka teams, two-field charges |

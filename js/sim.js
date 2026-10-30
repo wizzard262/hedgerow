@@ -495,26 +495,51 @@ const Sim = (() => {
     return { ok: true, lines: [moveLine(u, how)] };
   }
 
-  function chargeSpots(st, u) {
-    if (u.kind !== 'company' && !isTank(u)) return [];
+  // The fields a charge can reach in one step from a field: empty ones it can enter, or ones the enemy holds to assault.
+  // Men charge across a hedge only to assault the enemy behind it; into an empty field they must break through
+  function chargeSteps(st, u, fx, fy) {
     const out = [];
     for (const [dx, dy] of NEIGHBOURS) {
-      const x = u.x + dx, y = u.y + dy;
+      const x = fx + dx, y = fy + dy;
       if (!inside(x, y) || tileType(x, y) === 'river') continue;
-      if (isTank(u) && !cutter(u) && hedge(st, u.x, u.y, x, y)) continue;
-      if (!isTank(u) && wire(st, u.x, u.y, x, y)) continue;
+      if (isTank(u) && !cutter(u) && hedge(st, fx, fy, x, y)) continue;
+      if (!isTank(u) && wire(st, fx, fy, x, y)) continue;
       const enemies = at(st, x, y, enemyOf(u.side));
-      // Men charge across a hedge only to assault the Germans behind it; into an empty field they must break through
-      const blocked = hedge(st, u.x, u.y, x, y) && !cutter(u);
-      if (enemies.length || (!blocked && roomFor(st, u, x, y))) out.push({ x, y });
+      const blocked = hedge(st, fx, fy, x, y) && !cutter(u);
+      if (enemies.length) out.push({ x, y, assault: true });
+      else if (!blocked && roomFor(st, u, x, y)) out.push({ x, y, assault: false });
     }
     return out;
   }
 
+  // A charge goes twice as far as a move: up to two fields, the second can be an assault. Each route is the fields it passes
+  function chargeRoutes(st, u) {
+    if (u.kind !== 'company' && !isTank(u)) return [];
+    const routes = [];
+    for (const a of chargeSteps(st, u, u.x, u.y)) {
+      routes.push([a]);
+      if (a.assault) continue;
+      for (const b of chargeSteps(st, u, a.x, a.y)) {
+        if (b.x === u.x && b.y === u.y) continue;
+        if (!routes.some(r => r[r.length - 1].x === b.x && r[r.length - 1].y === b.y)) routes.push([a, b]);
+      }
+    }
+    return routes;
+  }
+
+  function chargeSpots(st, u) {
+    return chargeRoutes(st, u).map(r => ({ x: r[r.length - 1].x, y: r[r.length - 1].y }));
+  }
+
   function actCharge(st, u, x, y) {
-    if (!canAct(st, u) || !chargeSpots(st, u).some(p => p.x === x && p.y === y)) return { ok: false };
+    const route = canAct(st, u) && chargeRoutes(st, u).find(r => r[r.length - 1].x === x && r[r.length - 1].y === y);
+    if (!route) return { ok: false };
     spend(st, u);
-    return { ok: true, lines: [charge(st, u, x, y).join(', ') + '.'] };
+    const lines = [];
+    // The first field of a two-field charge is crossed on the way
+    if (route.length === 2) { const how = step(st, u, route[0].x, route[0].y); if (how) lines.push(moveLine(u, how).replace(/\.$/, '')); }
+    lines.push(...charge(st, u, x, y));
+    return { ok: true, lines: [lines.join(', ') + '.'] };
   }
 
   // Breaking through a hedge (or cutting barbed wire): any piece without hedge cutters can push through into the next

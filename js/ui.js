@@ -127,7 +127,7 @@ const UI = (() => {
     const b = [];
     const add = (mode, label, ok, title) => b.push({ mode, label, ok: can && ok, title });
     if (u.kind === 'company' || Sim.isTank(u)) {
-      add('charge', '⚔️ Charge', Sim.chargeSpots(st, u).length > 0, 'Into the next field without shooting; hand to hand if the Germans hold it');
+      add('charge', '⚔️ Charge', Sim.chargeSpots(st, u).length > 0, 'Up to two fields without shooting; hand to hand if the Germans hold the field it ends in');
       add('moveShoot', '➡️ Move & shoot', Sim.moves(st, u).length > 0, 'One field, then fire at half the dice');
       add('shoot', '🎯 Shoot', Sim.targets(st, u).length > 0, 'Fire with every die');
       if (Sim.breachSpots(st, u).length) add('breach', '⛏️ Break through', true, 'Through a hedge or wire into the next field, leaving a gap: a move with no shooting');

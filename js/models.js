@@ -66,6 +66,7 @@ const Models = (() => {
     M.usWebbing = mat('#9a8f62', 0.9);
     M.deUniform = mat('#5d6862', 0.85);        // field grey
     M.deHelmet = mat('#4a524f', 0.55);
+    M.deHelmet.side = T.DoubleSide;           // the Stahlhelm is a lathed shell: both faces show
     M.deWebbing = mat('#2e2a25', 0.7);
     M.olive = mat('#4f5432', 0.65, 0.15);      // olive drab paint
     M.dunkelgelb = mat('#a8975f', 0.65, 0.15); // German dark yellow
@@ -150,7 +151,8 @@ const Models = (() => {
   }
 
   // A weapons team on a round flocked base. A machine-gun team is three men round a big gun on its tripod
-  // (gunner kneeling behind, loader beside, an ammunition carrier with his boxes); an anti-tank team is two men and the tube
+  // (gunner kneeling behind, loader beside, an ammunition carrier with his boxes); an anti-tank team is two men on one base:
+  // the gunner with a big tube, the loader with a big bag of rockets
   function team(side, kind) {
     const g = new T.Group();
     if (!M.flockTop) M.flockTop = new T.MeshStandardMaterial({ map: flockTex('#5f6d3c', GRASS, 31), roughness: 1 });
@@ -177,10 +179,20 @@ const Models = (() => {
       g.add(at(soldier(side, -1, false), -0.04, 0.008, -0.035, 0, 0.3, 0));
       for (const z of [-0.012, 0.006]) g.add(at(box(0.012, 0.01, 0.016, side === 'us' ? M.usHelmet : M.deHelmet), -0.045, 0.013, z));
     } else {
-      g.add(at(soldier(side, 1, false), -0.022, 0.008, -0.02, 0, 0.2, 0));
-      const gunner = soldier(side, -1, false); gunner.scale.y = 0.8; g.add(at(gunner, 0.02, 0.008, 0.022, 0, -0.2, 0));
-      // An anti-tank tube on the shoulder
-      g.add(at(cyl(0.0045, 0.0045, 0.075, kind === 'schreck' ? M.deHelmet : M.usHelmet, 10), 0.02, 0.1, 0.022, 0, 0, Math.PI / 2 - 0.1));
+      // Two men: the gunner with a big anti-tank tube on his shoulder, and his loader carrying the rockets in a big bag
+      const tubeMat = kind === 'schreck' ? mat('#4f5a3c', 0.6, 0.2) : mat('#56603a', 0.6, 0.2);
+      g.add(at(soldier(side, 0, false), 0.018, 0.008, -0.018, 0, -0.15, 0));
+      const tube = new T.Group();
+      tube.add(at(cyl(0.0068, 0.0068, 0.11, tubeMat, 14), 0, 0, 0, 0, 0, Math.PI / 2));
+      tube.add(at(cyl(0.009, 0.0075, 0.016, tubeMat, 14), -0.056, 0, 0, 0, 0, Math.PI / 2));   // the flared back end
+      tube.add(at(box(0.012, 0.016, 0.004, M.wood), 0.01, -0.012, 0));                         // grip and trigger
+      if (kind === 'schreck') tube.add(at(box(0.004, 0.03, 0.034, tubeMat), 0.035, 0.004, 0)); // the Panzerschreck's blast shield
+      g.add(at(tube, 0.025, 0.098, -0.016, 0, 0, 0.08));
+      // The loader in front: a big square bag of rockets carried at his side, like a suitcase
+      g.add(at(soldier(side, 1, false), -0.02, 0.008, 0.026, 0, 0.25, 0));
+      g.add(at(box(0.036, 0.04, 0.016, mat(side === 'us' ? '#7d7650' : '#5a5040', 0.9)), -0.02, 0.03, 0.05, 0, 0.25, 0));
+      g.add(at(box(0.037, 0.004, 0.017, M.boot), -0.02, 0.051, 0.05, 0, 0.25, 0));
+      g.add(at(box(0.012, 0.006, 0.004, M.boot), -0.02, 0.056, 0.05, 0, 0.25, 0));
     }
     return castAll(g);
   }
