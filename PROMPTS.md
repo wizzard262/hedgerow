@@ -165,8 +165,13 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - Steve: machine guns cannot move and fire
 - MG teams no longer have Move & shoot: they Charge to a new spot, then Shoot from there the next hour
 
+## 29. Clicking a target behind a building
+
+- Steve: make it easier to hit the red circle to shoot when the enemy is in cover behind a building
+- A click now fires on the red cross-hair nearest the pointer on the screen (within a thumb's width), wherever the click lands, even on a house in front. The cross-hair under the pointer grows, so it's clear which one a click will fire on
+
 ## Sessions
 
 | # | Date | Length | What we did |
 |---|------|--------|-------------|
-| 1 | 2026-10-30 | about 8 hours | Prompts 1–28: rules, command points, reacting, tanks and hedge cutters, the look (pixel art to 3D tabletop), scales, river, villages, wire, six-move aim; one captain, piece menus, hedges stop moves, MG team model; bazooka teams, two-field charges; red targets; who has acted; company level; lining hedges, longer sight, the captain's guidon; one unit a field, no time limit; tracers and shells, greyed out, no activation tokens, Move & shoot hatching; tanks through hedges, charges for all; no plain move; teams and captain with a platoon, no attaching; one piece at a time; charging through friends; range, cover and moving +1 each; words off the target, tanks turn and recoil; rallying; MGs can't move and fire |
+| 1 | 2026-10-30 | about 8.25 hours | Prompts 1–29: rules, command points, reacting, tanks and hedge cutters, the look (pixel art to 3D tabletop), scales, river, villages, wire, six-move aim; one captain, piece menus, hedges stop moves, MG team model; bazooka teams, two-field charges; red targets; who has acted; company level; lining hedges, longer sight, the captain's guidon; one unit a field, no time limit; tracers and shells, greyed out, no activation tokens, Move & shoot hatching; tanks through hedges, charges for all; no plain move; teams and captain with a platoon, no attaching; one piece at a time; charging through friends; range, cover and moving +1 each; words off the target, tanks turn and recoil; rallying; MGs can't move and fire; easier targets |

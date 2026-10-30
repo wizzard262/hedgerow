@@ -330,13 +330,29 @@ const Board = (() => {
     return s;
   }
 
-  function markTargets(list) {
+  // Where a target's red cross-hair floats
+  const reticleSpot = u => { const p = pieceCentre(u), big = u.kind === 'company' || Sim.isTank(u); return new T.Vector3(p.x, big ? 0.62 : 0.5, p.z); };
+
+  // The red target nearest the pointer on the screen, within easy reach (a cross-hair over a house can be clicked)
+  function targetAt(list, clientX, clientY) {
+    const r = renderer.domElement.getBoundingClientRect();
+    let best = null, bestD = 70;
+    for (const u of list) {
+      const p = reticleSpot(u).project(camera);
+      const d = Math.hypot(r.left + (p.x + 1) / 2 * r.width - clientX, r.top + (1 - p.y) / 2 * r.height - clientY);
+      if (d < bestD) { bestD = d; best = u; }
+    }
+    return best;
+  }
+
+  function markTargets(list, hot) {
     const pulse = 1 + 0.08 * Math.sin(performance.now() / 180);
     for (const u of list) {
-      const p = pieceCentre(u), big = u.kind === 'company' || Sim.isTank(u);
+      const p = pieceCentre(u), big = u.kind === 'company' || Sim.isTank(u), lit = hot && hot.id === u.id;
       const ring = new T.Mesh(new T.RingGeometry(big ? 0.26 : 0.17, big ? 0.32 : 0.22, 48), new T.MeshBasicMaterial({ color: 0xe8352a, transparent: true, opacity: 0.9, depthWrite: false }));
       at(ring, p.x, 0.008, p.z, -Math.PI / 2, 0, 0); marks.add(ring);
-      const r = reticle(); r.scale.setScalar((big ? 0.62 : 0.5) * pulse); r.position.set(p.x, big ? 0.62 : 0.5, p.z); marks.add(r);
+      // The cross-hair, bigger under the pointer
+      const r = reticle(); r.scale.setScalar((big ? 0.62 : 0.5) * pulse * (lit ? 1.45 : 1)); r.position.copy(reticleSpot(u)); marks.add(r);
       if (u.needNow) { const l = needLabel(u.needNow); l.position.set(p.x, big ? 0.3 : 0.24, p.z); marks.add(l); }
     }
   }
@@ -508,7 +524,7 @@ const Board = (() => {
       const ring = new T.Mesh(new T.RingGeometry(big ? 0.34 : 0.21, big ? 0.39 : 0.25, 56), new T.MeshBasicMaterial({ color: 0xfff6dc, transparent: true, opacity: 0.95, depthWrite: false }));
       at(ring, p.x, 0.009, p.z, -Math.PI / 2, 0, 0); marks.add(ring);
     }
-    if (view.targets && view.targets.length) markTargets(view.targets);
+    if (view.targets && view.targets.length) markTargets(view.targets, view.hotTarget);
     if (view.ready) for (const u of st.units) {
       if (u.side !== 'us' || u.x === null || !pieces[u.id]) continue;
       const can = view.ready(u);
@@ -560,5 +576,5 @@ const Board = (() => {
     return { x: r.left + (p.x + 1) / 2 * r.width, y: r.top + (1 - p.y) / 2 * r.height };
   }
 
-  return { init, resize, render, fieldAt, pieceAt, screenPoint, canvas: () => renderer.domElement };
+  return { init, resize, render, fieldAt, pieceAt, targetAt, screenPoint, canvas: () => renderer.domElement };
 })();

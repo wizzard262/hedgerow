@@ -44,6 +44,15 @@ const UI = (() => {
     return Sim.targets(st, u).map(t => { t.needNow = Math.min(6, Sim.needFor(st, u, t, view.mode === 'halfShot') + (Sim.isTank(t) ? PIECES[t.kind].armour : 0)); return t; });
   }
 
+  // Fire on a target chosen by its red cross-hair
+  function shootTarget(t) {
+    const u = selected();
+    if (!u || !t) return false;
+    const r = view.mode === 'halfShot' ? Sim.actHalfShot(st, u, t) : Sim.actShoot(st, u, t);
+    if (r.ok) { view.log.push(...r.lines); view.mode = null; }
+    return r.ok;
+  }
+
   // The best target for a shooter in a field: tanks for anti-tank weapons, otherwise the infantry
   function pickTarget(u, x, y) {
     const ts = Sim.targets(st, u).filter(t => t.x === x && t.y === y);
@@ -227,5 +236,5 @@ const UI = (() => {
     for (const which of ['mortars', 'artillery']) $(`#fire-${which}`).onclick = () => { view.mode = view.mode === 'fire:' + which ? null : 'fire:' + which; refresh(); };
   }
 
-  return { init, setState, update, clickField, openMenu, closeMenu, spots, targets, view, selected, KIND };
+  return { init, setState, update, clickField, openMenu, closeMenu, spots, targets, shootTarget, view, selected, KIND };
 })();

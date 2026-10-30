@@ -2,7 +2,7 @@
 
 window.Game = (() => {
   const G = {};
-  let st, hover = null, dirty = true;
+  let st, hover = null, hotTarget = null, dirty = true;
   const $ = s => document.querySelector(s);
   const board = $('#board');
 
@@ -31,7 +31,7 @@ window.Game = (() => {
       }
       // Green rings under pieces that can still act this hour, grey under those that have
       const ready = st.de || st.won || st.lost ? null : u => Sim.canAct(st, u);
-      dirty = Board.render(st, { spots, selected: UI.selected(), hover, targets: UI.targets(), ready });
+      dirty = Board.render(st, { spots, selected: UI.selected(), hover, targets: UI.targets(), hotTarget, ready });
       const p = Board.screenPoint(st.objective.x + 0.5, st.objective.y, 0.35), r = board.getBoundingClientRect();
       Object.assign($('#label').style, { left: p.x - r.left + 'px', top: p.y - r.top + 'px' });
       $('#label').textContent = `🎯 ${st.objective.name}`;
@@ -94,6 +94,9 @@ window.Game = (() => {
   board.addEventListener('click', e => {
     if (e.target.closest('#menu')) return;
     UI.closeMenu();
+    // Shooting: the red cross-hair nearest the click, even one over a house
+    const aimed = Board.targetAt(UI.targets(), e.clientX, e.clientY);
+    if (aimed && UI.shootTarget(aimed)) { hotTarget = null; changed(); if (st.won || st.lost) showResult(); return; }
     const f = Board.fieldAt(e.clientX, e.clientY);
     if (!f) return;
     // The one piece under the pointer (the nearest in the field if the click misses the models)
@@ -104,6 +107,9 @@ window.Game = (() => {
     if (st.won || st.lost) showResult();
   });
   board.addEventListener('mousemove', e => {
+    // The cross-hair under the pointer grows, so it is clear which target a click will fire on
+    const hot = Board.targetAt(UI.targets(), e.clientX, e.clientY);
+    if ((hot && hot.id) !== (hotTarget && hotTarget.id)) { hotTarget = hot; dirty = true; }
     const f = Board.fieldAt(e.clientX, e.clientY);
     if ((f && hover && f.x === hover.x && f.y === hover.y) || (!f && !hover)) return;
     hover = f; dirty = true;
@@ -115,12 +121,14 @@ window.Game = (() => {
   function tooltip(e, f) {
     const tip = $('#tip');
     if (!f) { tip.style.display = 'none'; return; }
-    const NAMES = { field: 'Field', orchard: 'Orchard', village: 'Saint-Jean', hamlet: 'Hamlet', river: 'River', bridge: 'Bridge', laneEW: 'Lane', laneNS: 'Lane', crossroads: 'Crossroads' };
+    const NAMES = { field: 'Field', orchard: 'Orchard', village: 'Village', hamlet: 'Hamlet', river: 'River', bridge: 'Bridge', laneEW: 'Lane', laneNS: 'Lane', crossroads: 'Crossroads' };
     const here = Sim.at(st, f.x, f.y);
     const lines = here.map(u => `${u.side === 'us' ? 'US' : 'German'} · ${u.name}${u.kind === 'company' ? ` · ${u.platoons} sections` : Sim.isTank(u) ? ` · ${u.platoons} tanks` : ''}${u.shocked ? ' · shaken' : ''}`);
     const t = Sim.tileType(f.x, f.y);
-    const cover = t === 'village' || t === 'hamlet' ? 'Houses: hard to hit (6 to hit); room for one rifle platoon or one tank section' : t === 'river' ? 'Nothing can cross except at a bridge' : t === 'orchard' ? 'Trees' : '';
-    tip.innerHTML = `<b>${NAMES[t]}</b>${cover ? `<br><span style="color:var(--muted)">${cover}</span>` : ''}${lines.length ? '<br>' + lines.join('<br>') : ''}`;
+    const cover = t === 'village' || t === 'hamlet' ? 'Houses: one more needed on the dice to hit anyone here' : t === 'river' ? 'Nothing can cross except at a bridge' : t === 'orchard' ? 'Trees: they block the view across' : '';
+    // A village field takes the name of the nearest village
+    const village = t === 'village' ? VILLAGES.slice().sort((a, b) => (Math.abs(a.x - f.x) + Math.abs(a.y - f.y)) - (Math.abs(b.x - f.x) + Math.abs(b.y - f.y)))[0].name : null;
+    tip.innerHTML = `<b>${village || NAMES[t]}</b>${cover ? `<br><span style="color:var(--muted)">${cover}</span>` : ''}${lines.length ? '<br>' + lines.join('<br>') : ''}`;
     const r = board.getBoundingClientRect();
     Object.assign(tip.style, { display: 'block', left: Math.min(r.width - 290, e.clientX - r.left + 14) + 'px', top: e.clientY - r.top + 14 + 'px' });
   }
