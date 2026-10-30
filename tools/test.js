@@ -263,6 +263,23 @@ check('tanks are impervious to rifles and machine guns', () => {
   assert(!Sim.chargeSpots(st, A).some(p => p.x === 1 && p.y === 6), 'a rifle platoon could charge a field of tanks');
 });
 
+check("a tank's high explosive hits every piece on foot in the field, like a mortar", () => {
+  const st = Sim.newGame(5);
+  st.hedges = {}; st.wire = {};
+  const T1 = Sim.unitById(st, 'T1'), A = Sim.unitById(st, 'A');
+  const platoon = st.units.find(u => u.side === 'de' && u.kind === 'company'), team = st.units.find(u => u.side === 'de' && u.kind === 'mg42');
+  for (const u of st.units) if (![T1, A, platoon, team].includes(u)) u.x = u.y = null;
+  T1.x = 0; T1.y = 6; A.x = 0; A.y = 7; platoon.x = 1; platoon.y = 6; team.x = 1; team.y = 6;
+  st.fx = [];
+  Sim.actShoot(st, T1, platoon);
+  const hitIds = st.fx.filter(f => f.faces).map(f => f.to.id);
+  assert(hitIds.includes(platoon.id) && hitIds.includes(team.id), 'only the target rolled: ' + hitIds.join(','));
+  // Rifles stay one target at a time
+  st.fx = []; A.acted = false;
+  Sim.actShoot(st, A, platoon);
+  assert(st.fx.filter(f => f.faces).length === 1, 'a rifle platoon hit more than one piece');
+});
+
 check('leaving everything alone never wins', () => {
   for (let seed = 1; seed <= 30; seed++) assert(!play(seed, false).won, `seed ${seed} won by doing nothing`);
 });

@@ -627,8 +627,14 @@ const Board = (() => {
       const tag = diceTag(shotTagText(st, f), f.side);
       tag.position.set(f.x + 0.5, 0.1, tagZ);
       scene.add(tag); dice.push(tag);
-      cursor[key] = tagZ - 0.25;
+      cursor[key] = tagZ - 0.45;
     }
+  }
+
+  // Clear the dice and their tags off the table (when the next piece is picked); they come back with the next shot
+  function clearDice() {
+    for (const d of dice) scene.remove(d);
+    dice = [];
   }
 
   // ["1st Platoon", "needs 5+ · 2 hits"]: who fired, then the score each die needed and the hits
@@ -736,5 +742,5 @@ const Board = (() => {
     return { x: r.left + (p.x + 1) / 2 * r.width, y: r.top + (1 - p.y) / 2 * r.height };
   }
 
-  return { init, resize, render, fieldAt, pieceAt, targetAt, screenPoint, canvas: () => renderer.domElement };
+  return { init, resize, render, fieldAt, pieceAt, targetAt, screenPoint, clearDice, canvas: () => renderer.domElement };
 })();

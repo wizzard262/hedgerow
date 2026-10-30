@@ -103,7 +103,8 @@ window.Game = (() => {
     const mine = UI.clickField(f.x, f.y, Board.pieceAt(st, e.clientX, e.clientY));
     changed();
     // Your pieces there: open their menu by the click
-    if (mine) { Sound.play('select'); const r = board.getBoundingClientRect(); UI.openMenu(mine, e.clientX - r.left, e.clientY - r.top, r); $('#tip').style.display = 'none'; }
+    // Picking the next piece clears the last shots' dice off the table
+    if (mine) { Sound.play('select'); Board.clearDice(); const r = board.getBoundingClientRect(); UI.openMenu(mine, e.clientX - r.left, e.clientY - r.top, r); $('#tip').style.display = 'none'; }
     if (st.won || st.lost) showResult();
   });
   board.addEventListener('mousemove', e => {

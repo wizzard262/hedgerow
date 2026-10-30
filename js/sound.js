@@ -1,7 +1,8 @@
-// Hedgerow: battle sounds, made on the spot with the Web Audio API (no sound files): rifles, the American and German
-// machine guns, bazookas, tank guns, mortars and artillery coming in, and what they hit; men running and tanks driving;
-// a battle going on in the distance all the while; plus Future City Battle's recorded pick-up for choosing a piece.
-// Off until the first click (browsers insist), and can be muted
+// Hedgerow: battle sounds. Real recordings (free to use, see assets/audio/CREDITS.md) for rifles, the two machine guns,
+// tank guns and explosions, with a deep thump added under the big ones; made on the spot with the Web Audio API for the
+// rest: bazookas, mortars and shells whistling in, armour struck, men running, tanks driving. A battle goes on in the
+// distance all the while. Future City Battle's pick-up for choosing a piece. Off until the first click (browsers
+// insist), and can be muted
 
 const Sound = (() => {
   let ctx = null, master = null, noiseBuf = null, distant = null;
@@ -38,20 +39,38 @@ const Sound = (() => {
     noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
     const d = noiseBuf.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
-    // The board-game sound from Future City Battle: picking a piece up
-    for (const [name, file] of Object.entries(FILES)) {
-      fetch(file).then(r => r.arrayBuffer()).then(b => ctx.decodeAudioData(b)).then(buf => { recorded[name] = buf; }).catch(() => { /* no file: no sound */ });
+    // The recordings: each sound has one or more takes, loaded in the background
+    for (const [name, files] of Object.entries(FILES)) {
+      recorded[name] = [];
+      for (const file of files) {
+        fetch('assets/audio/' + file).then(r => r.arrayBuffer()).then(b => ctx.decodeAudioData(b)).then(buf => { recorded[name].push(buf); }).catch(() => { /* no file: the made-up sound plays */ });
+      }
     }
     startBattle();
   }
-  const FILES = { select: 'assets/audio/pieceUp.mp3' };
+  const FILES = {
+    select: ['pieceUp.mp3'],
+    rifle: ['rifle1.mp3', 'rifle2.mp3', 'rifle3.mp3', 'rifle4.mp3', 'rifle5.mp3', 'rifle6.mp3', 'rifle7.mp3', 'rifle8.mp3'],
+    mg30: ['mg30a.mp3', 'mg30b.mp3'],
+    mg42: ['mg42a.mp3', 'mg42b.mp3'],
+    cannon: ['cannon1.mp3', 'cannon2.mp3'],
+    boom: ['boom1.mp3', 'boom3.mp3'],
+    bigBoom: ['boom2.mp3'],
+  };
   const recorded = {};
-  function playFile(name, when, volume) {
-    if (!recorded[name]) return;
-    const src = ctx.createBufferSource(); src.buffer = recorded[name];
+  const have = name => recorded[name] && recorded[name].length > 0;
+
+  // One take of a recording (picked at random), at a volume and speed (slower is deeper), into the master or `out`
+  function playFile(name, when, volume, rate = 1, out = null) {
+    if (!have(name)) return false;
+    const takes = recorded[name];
+    const src = ctx.createBufferSource();
+    src.buffer = takes[Math.floor(Math.random() * takes.length)];
+    src.playbackRate.value = rate;
     const g = ctx.createGain(); g.gain.value = volume;
-    src.connect(g); g.connect(ctx.destination);
+    src.connect(g); g.connect(out || bus);
     src.start(when);
+    return true;
   }
   document.addEventListener('pointerdown', wake, { once: false, capture: true });
 
@@ -110,16 +129,27 @@ const Sound = (() => {
 
   // Each sound, starting at time t
   const SOUNDS = {
-    // Riflemen: single shots, a few men firing at their own pace, each one crack and echo
-    rifle(t) { for (let k = 0; k < 5; k++) shot(t + k * 0.13 + Math.random() * 0.12, 0.8 + Math.random() * 0.2); },
-    // The American .30-cal: a steady chug, about eight rounds a second
-    mg(t) { burst(t, 11, 0.115, 0.9); },
-    // The German MG 42: a ripping tear, twenty rounds a second, quick bursts
-    mg42(t) { burst(t, 14, 0.05, 0.85); burst(t + 0.95, 12, 0.05, 0.8); },
+    // Riflemen: single shots, a few men firing at their own pace
+    rifle(t) {
+      for (let k = 0; k < 5; k++) {
+        const w = t + k * 0.16 + Math.random() * 0.15;
+        if (!playFile('rifle', w, 0.5 + Math.random() * 0.3, 0.92 + Math.random() * 0.16)) shot(w, 0.8 + Math.random() * 0.2);
+      }
+    },
+    // The American .30-cal: a steady chug, about ten rounds a second
+    mg(t) { if (!playFile('mg30', t, 0.85, 0.9)) burst(t, 11, 0.115, 0.9); },
+    // The German MG 42: a ripping tear, twenty rounds a second
+    mg42(t) { if (!playFile('mg42', t, 0.85, 0.85)) { burst(t, 14, 0.05, 0.85); burst(t + 0.95, 12, 0.05, 0.8); } },
     // A bazooka or Panzerschreck: the bang of the launch and the rocket's roar away
     rocket(t) { noise(t, 0.05, 2500, 0.5, 0.8, 'highpass'); noise(t, 0.7, 900, 0.4, 0.6, 'bandpass'); tone(t, 0.5, 300, 900, 0.1, 'sawtooth'); },
     // A tank or anti-tank gun: a sharp crack, a huge ka-boom, and its echo rolling back off the hedges
     gun(t) {
+      if (playFile('cannon', t, 1, 0.75 + Math.random() * 0.1)) {
+        // The recording, slowed to make it heavier, with a deep thump under it
+        tone(t, 1.3, 70, 24, 0.9);
+        noise(t, 1.2, 200, 0.3, 0.6);
+        return;
+      }
       noise(t, 0.03, 3500, 0.4, 1, 'highpass');
       tone(t, 1.5, 70, 24, 1);
       tone(t, 0.3, 180, 55, 0.9, 'triangle');
@@ -150,7 +180,10 @@ const Sound = (() => {
     // Impacts: bullets kicking up dirt, a shell striking armour, high explosive going off
     bullets(t) { for (let k = 0; k < 6; k++) noise(t + k * 0.06 + Math.random() * 0.04, 0.06, 1400, 0.8, 0.2, 'bandpass'); },
     clang(t) { tone(t, 0.7, 950, 720, 0.25, 'square'); tone(t, 0.9, 1430, 1300, 0.12, 'triangle'); noise(t, 0.2, 4000, 2, 0.45, 'bandpass'); },
-    he(t, big) { blast(t, big ? 1 : 0.75); },
+    he(t, big) {
+      if (playFile(big ? 'bigBoom' : 'boom', t, 1, 0.8 + Math.random() * 0.2)) { tone(t, 1.2, 65, 22, big ? 0.9 : 0.6); return; }
+      blast(t, big ? 1 : 0.75);
+    },
     // Men running: four sets of boots, each step a heel thud and a crunch of grit, kit rattling, fading as they go
     run(t) {
       for (let m = 0; m < 4; m++) {
@@ -205,10 +238,10 @@ const Sound = (() => {
       if (!on || !ctx || ctx.state !== 'running') return;
       const t = ctx.currentTime + 0.05, pick = Math.random();
       bus = distant.input;
-      if (pick < 0.35) { SOUNDS.distantGun(t); if (Math.random() < 0.5) blast(t + 1.5 + Math.random(), 0.6); }
-      else if (pick < 0.6) burst(t, 8 + Math.floor(Math.random() * 12), Math.random() < 0.5 ? 0.05 : 0.115, 0.7);
-      else if (pick < 0.85) for (let k = 0; k < 3; k++) shot(t + Math.random() * 1.5, 0.7);
-      else blast(t, 0.8);
+      if (pick < 0.35) { SOUNDS.distantGun(t); if (Math.random() < 0.5 && !playFile('bigBoom', t + 1.5 + Math.random(), 0.8, 0.7)) blast(t + 1.5, 0.6); }
+      else if (pick < 0.6) { if (!playFile(Math.random() < 0.5 ? 'mg42' : 'mg30', t, 0.7, 0.9)) burst(t, 10, 0.08, 0.7); }
+      else if (pick < 0.85) { for (let k = 0; k < 3; k++) { const w = t + Math.random() * 1.5; if (!playFile('rifle', w, 0.6, 0.9)) shot(w, 0.7); } }
+      else if (!playFile('boom', t, 0.8, 0.75)) blast(t, 0.8);
       bus = master;
     };
     next();
@@ -216,7 +249,7 @@ const Sound = (() => {
 
   function play(name, delay = 0, big = false) {
     if (!on || !ctx || ctx.state !== 'running') return;
-    if (FILES[name]) return playFile(name, ctx.currentTime + delay, big ? 1 : 0.8);
+    if (name === 'select') return playFile('select', ctx.currentTime + delay, 0.8, 1, ctx.destination);
     if (SOUNDS[name]) SOUNDS[name](ctx.currentTime + delay, big);
   }
 

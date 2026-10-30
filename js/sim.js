@@ -325,7 +325,8 @@ const Sim = (() => {
     return TO_HIT + cover(st, shooter, target) + (moving ? ON_THE_MOVE : 0) - QUALITY[shooter.quality || 'standard'].shoot;
   }
 
-  function fireAt(st, shooter, target, power, withdraw = false, moving = false) {
+  // `blast` is set for the other pieces caught in a tank's high-explosive burst (they don't spread it again)
+  function fireAt(st, shooter, target, power, withdraw = false, moving = false, blast = false) {
     const f = firepower(st, shooter);
     const need = needFor(st, shooter, target, moving);
     const faces = [];
@@ -352,6 +353,13 @@ const Sim = (() => {
     // What the table shows: the weapon's muzzle flash and tracers from the shooter, and what lands on the target
     const weapon = isTank(shooter) || shooter.kind === 'pak' ? 'gun' : shooter.kind === 'mg' || shooter.kind === 'mg42' ? 'mg' : shooter.kind === 'bazooka' || shooter.kind === 'schreck' ? 'rocket' : 'rifle';
     st.fx.push({ from: { id: shooter.id, x: shooter.x, y: shooter.y }, to: { id: target.id }, weapon, armour: isTank(target), x: target.x === null ? stood.x : target.x, y: target.x === null ? stood.y : target.y, kind: softHits + hardHits ? 'hit' : 'miss', faces, need: Math.min(6, need + (isTank(target) ? PIECES[target.kind].armour : 0)), side: shooter.side, result, pulled: !!(pre && pre.ok) });
+    // A tank firing high explosive at men hits the whole field, like a mortar: every other piece on foot in it rolls too
+    if (isTank(shooter) && !isTank(target) && !blast) {
+      for (const other of at(st, stood.x, stood.y, target.side)) {
+        if (other === target || isTank(other) || other.kind === 'captain') continue;
+        out.push(...fireAt(st, shooter, other, power, false, moving, true));
+      }
+    }
     return out.length ? out : [`${target.name}: no hits`];
   }
 

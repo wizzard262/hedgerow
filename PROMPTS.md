@@ -269,8 +269,29 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - The tank sections are now "Sherman pair" and "Firefly pair" (like the Germans' "Panzer IV pair" and "Panther pair")
 - Bigger guns roll more dice, not bigger hits: against tanks a pair rolls Sherman 2, Panzer IV 3, Firefly 4, Panther 6, and each hit knocks out a tank; the Panther's armour also needs one more to hit it. Against men they are much alike (Sherman, Firefly 2, Panzer IV 2–3, Panther 3)
 
+## 49. Clear the dice on the next pick
+
+- Steve: remove the hit count on the dice when the next piece is selected
+- Picking the next piece clears the dice and their tags off the table; the next shot brings new ones
+
+## 50. Targets for the mortars and guns
+
+- Steve: when guns or mortars are selected, show the pieces they can target highlighted
+- Choosing 💥 Mortars or 💣 Guns now puts a red target over every German piece in reach (seen by your troops, with none of yours in the field), with the score the dice need (5+, or 6 in a village). Click a target, or the field, to fire
+
+## 51. Real recordings
+
+- Steve chose: use real recordings (free to use) for realistic sounds
+- Rifles, both machine guns, tank guns and explosions are now real recordings (CC0 or public domain; who made them is in assets/audio/CREDITS.md), slowed a little and given a deep thump under the big ones. No CC0 tank engine was found, so the engine, the whistles, mortars firing, bazookas, men running and armour struck are still made in the browser. The distant battle uses the recordings too, muffled
+
+## 52. Do all shots need a 6? Tanks' high explosive hits the whole field
+
+- Steve: do all shots need a 6? And: a tank on men does an area attack, like the mortars or artillery
+- No: 5 or 6 hits in the open, but cover, long range and firing on the move each need one more, so a target lining a hedge or in a village needs a 6 (and a 6 always hits). The Germans mostly sit in cover, so in 60 test games about 6 in 10 American shots needed a 6
+- A tank firing on men now hits every piece on foot in the field (a platoon and the teams with it), each rolling the tank's dice, like a mortar. Not the captain, as with the mortars
+
 ## Sessions
 
 | # | Date | Length | What we did |
 |---|------|--------|-------------|
-| 1 | 2026-10-30 | about 10.5 hours | Prompts 1–48: rules, command points, reacting, tanks and hedge cutters, the look (pixel art to 3D tabletop), scales, river, villages, wire, six-move aim; one captain, piece menus, hedges stop moves, MG team model; bazooka teams, two-field charges; red targets; who has acted; company level; lining hedges, longer sight, the captain's guidon; one unit a field, no time limit; tracers and shells, greyed out, no activation tokens, Move & shoot hatching; tanks through hedges, charges for all; no plain move; teams and captain with a platoon, no attaching; one piece at a time; charging through friends; range, cover and moving +1 each; words off the target, tanks turn and recoil; rallying; MGs can't move and fire; easier targets; Move & shoot one action; tanks impervious to small arms; more gaps; no charging through houses; MGs fire five; hand to hand shown; sounds; select and move sounds; running and tank sounds; twisty wire, tank boom, a cleaner panel, better running; bigger dice with a tag; louder, more real sounds; distant battle; shells arcing in and explosions; Sherman and Firefly named |
+| 1 | 2026-10-30 | about 10.5 hours | Prompts 1–52: rules, command points, reacting, tanks and hedge cutters, the look (pixel art to 3D tabletop), scales, river, villages, wire, six-move aim; one captain, piece menus, hedges stop moves, MG team model; bazooka teams, two-field charges; red targets; who has acted; company level; lining hedges, longer sight, the captain's guidon; one unit a field, no time limit; tracers and shells, greyed out, no activation tokens, Move & shoot hatching; tanks through hedges, charges for all; no plain move; teams and captain with a platoon, no attaching; one piece at a time; charging through friends; range, cover and moving +1 each; words off the target, tanks turn and recoil; rallying; MGs can't move and fire; easier targets; Move & shoot one action; tanks impervious to small arms; more gaps; no charging through houses; MGs fire five; hand to hand shown; sounds; select and move sounds; running and tank sounds; twisty wire, tank boom, a cleaner panel, better running; bigger dice with a tag; louder, more real sounds; distant battle; shells arcing in and explosions; Sherman and Firefly named; dice cleared on the next pick; fire support targets; real recordings; tank HE hits the whole field |

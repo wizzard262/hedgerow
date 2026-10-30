@@ -40,6 +40,11 @@ const UI = (() => {
   // The pieces the chosen piece could shoot now, to mark with red targets: while choosing Shoot, or the shot of a Move & shoot.
   // Each with the score its dice need (shown on the target)
   function targets() {
+    // Mortars or guns chosen: every German piece in a field they can be called on to, with the score their dice need
+    if (view.mode && view.mode.startsWith('fire:')) {
+      const inReach = st.units.filter(t => t.side === 'de' && t.x !== null && Sim.canCallFire(st, t.x, t.y));
+      return inReach.map(t => { t.needNow = TO_HIT + (Sim.tileType(t.x, t.y) === 'village' ? COVER.village : 0); return t; });
+    }
     const u = selected();
     if (!u || !['shoot', 'halfShot'].includes(view.mode)) return [];
     return Sim.targets(st, u).map(t => { t.needNow = Math.min(6, Sim.needFor(st, u, t, view.mode === 'halfShot') + (Sim.isTank(t) ? PIECES[t.kind].armour : 0)); return t; });
@@ -47,6 +52,12 @@ const UI = (() => {
 
   // Fire on a target chosen by its red cross-hair
   function shootTarget(t) {
+    // Mortars or guns: the fire mission lands on the target's field
+    if (t && view.mode && view.mode.startsWith('fire:')) {
+      const fired = Sim.actFire(st, view.mode.slice(5), t.x, t.y);
+      if (fired.ok) { view.log.push(...fired.lines); view.mode = null; }
+      return fired.ok;
+    }
     const u = selected();
     if (!u || !t) return false;
     const r = view.mode === 'halfShot' ? Sim.actHalfShot(st, u, t) : Sim.actShoot(st, u, t);
@@ -198,7 +209,7 @@ const UI = (() => {
   function hint() {
     const u = selected();
     const text = !view.mode ? (st.de ? 'The Germans are moving…' : '')
-      : view.mode.startsWith('fire:') ? 'Click a field with Germans your troops can see.'
+      : view.mode.startsWith('fire:') ? 'Click a red target, or a field with Germans your troops can see.'
       : view.mode === 'halfShot' ? 'Moved. Click a red target to fire on it (one more needed on the move), or Esc to hold fire.'
       : view.mode === 'shoot' ? 'Click a red target to fire on it. Esc cancels.'
       : view.mode === 'charge' ? 'Click a field to charge to; the bright red ones are held by the Germans: a hand-to-hand fight. Esc cancels.'
