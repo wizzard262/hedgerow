@@ -7,7 +7,7 @@ Local repo `C:\DEV\Repositories\GitHub\hedgerow` (not on GitHub yet: ask Steve b
 - After each change to the game, save a numbered screenshot in `screenshots/` (`06-short-name.png`, …), taken in a visible browser, then add it to `screenshots/list.json`
   - Serve the game with `python -m http.server 8768` in this folder, then `node tools/shot.js <name> [hours to play]`. It borrows Playwright from `..\harrier-carrier-playwright-tests`
 - Run `node tools/test.js` before every commit (headless checks of the rules)
-- After a rules change, run `node tools/sweep.js ""` (150 games with a simple attacking bot): the bot should win roughly 35–60% and doing nothing never
+- After a rules change, run `node tools/sweep.js ""` (150 games with a simple attacking bot): the bot should win roughly 25–60% (a person plays better than it) and doing nothing never
 - Plain JavaScript, classic scripts loaded in order (no modules); three.js r128 from cdnjs
   - `js/data.js` the map and every number to tune; `js/sim.js` the rules (no DOM); `js/models.js` the 3D models; `js/board3d.js` the table, camera and picking; `js/ui.js` the left-hand panel; `js/main.js` start-up, input and the German hour
 - The version number (`#ver` in `index.html`) goes up by 1 with every commit to the game: `git rev-list --count HEAD` + 1. Put the same number on every script link (`js/ui.js?v=2`)

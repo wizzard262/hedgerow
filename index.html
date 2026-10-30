@@ -55,6 +55,14 @@
   #board { flex: 1 1 auto; position: relative; min-width: 0; height: 100%; }
   #board canvas { display: block; }
   #label { position: absolute; transform: translate(-50%, -100%); font: 15px "Special Elite", monospace; color: #fff3d6; text-shadow: 0 1px 3px #000, 0 0 8px #000; pointer-events: none; white-space: nowrap; }
+  /* The menu that opens by a piece on the table */
+  #menu { position: absolute; z-index: 6; min-width: 210px; background: rgba(36,30,23,.97); border: 1px solid var(--accent); border-radius: 8px; padding: 6px; box-shadow: 0 6px 24px rgba(0,0,0,.55); display: flex; flex-direction: column; gap: 4px; }
+  #menu[hidden] { display: none; }
+  #menu .mhead { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; padding: 2px 4px; border-bottom: 1px dotted var(--line); margin-top: 2px; }
+  #menu .mhead span { color: var(--muted); }
+  #menu .mhead .bad { color: var(--bad); }
+  #menu button { text-align: left; }
+  #menu .mnote { font-size: 12px; color: var(--muted); padding: 0 4px; }
   #tip { position: absolute; pointer-events: none; background: rgba(30,25,18,.92); border: 1px solid var(--line); border-radius: 6px; padding: 6px 9px; font-size: 13px; max-width: 280px; display: none; z-index: 5; }
 
   /* Pop-ups */
@@ -97,10 +105,10 @@
   <div class="box"><h2>This hour</h2><ul id="log"></ul></div>
   <div class="box"><h2>Last hour</h2><ul id="report"></ul></div>
   <div class="box" id="pieces"></div>
-  <span id="ver" style="font-size:11px;color:var(--muted)">v2</span>
+  <span id="ver" style="font-size:11px;color:var(--muted)">v3</span>
 </aside>
 
-<main id="board"><div id="label"></div><div id="tip"></div></main>
+<main id="board"><div id="label"></div><div id="tip"></div><div id="menu" hidden></div></main>
 
 <div class="modal" id="ask" hidden>
   <div class="card">
@@ -119,31 +127,31 @@
     <h2>Hedgerow</h2>
     <p>Tuesday 11 July 1944, Normandy. Your American battalion must fight through the bocage, field by field, and take a village (Saint-Jean or La Haye: it changes each game), then hold it at the end of an hour. You have <b>six moves</b>, one an hour, until 12:00. A German garrison holds it; more Germans march up from beyond the river.</p>
     <ul>
-      <li>🪖 <b>Pieces</b>: rifle companies (three platoons of three men), their captains, machine-gun and bazooka teams, and two tank platoons: Shermans and Fireflies. Able Company is elite.</li>
-      <li>📋 <b>Command points</b>: each company (with its captain and attached teams) earns points every hour, about two for every three pieces, and can save up to 3. Each piece can act once an hour and each action costs a point, so only about two thirds of your pieces act each hour. The tank company and the battalion have their own points.</li>
-      <li>🎲 <b>Actions</b>: <b>Charge</b> into the next field without shooting (fight hand to hand if Germans hold it), <b>Move &amp; shoot</b> (one field, then fire at half the dice), <b>Shoot</b> (full dice), <b>Rally</b> (a captain steadies a shaken piece in his field or the next).</li>
+      <li>🪖 <b>Pieces</b>: rifle companies (three platoons of four men, moving together), the battalion's captain, machine-gun and bazooka teams, and two tank platoons: Shermans and Fireflies. Able Company is elite.</li>
+      <li>📋 <b>Command points</b>: each company earns a point an hour (and two thirds more for each team attached to it), the tank company two thirds a platoon, and the battalion 2 for the captain, fire support and lone teams. Points can be saved up to 3. Each piece acts once an hour and each action costs a point, so only about two thirds of your pieces act each hour.</li>
+      <li>🎲 <b>Actions</b> (click a piece for its menu): <b>Charge</b> into the next field without shooting (fight hand to hand if Germans hold it), <b>Move &amp; shoot</b> (one field, then fire at half the dice), <b>Shoot</b> (full dice), <b>Break through</b> a hedge or wire into the next field (no shooting), and the captain's <b>Move</b> or <b>Rally</b>.</li>
       <li>🏘️ <b>Villages and hamlets</b>: houses round a yard, with room for one company <i>or</i> one tank platoon. Hard to hit in.</li>
       <li>🌊 <b>The river</b> can only be crossed at its two bridges.</li>
-      <li>✂️ <b>Barbed wire</b> closes some gaps between fields: men can't cross it until a company cuts it (Break through); tanks roll over and flatten it.</li>
-      <li>🌳 <b>Hedges</b>: you can only shoot into the next field, or two fields along a clear line. A target behind a hedge needs one more on the dice. Men climbing over a hedge can't shoot that hour. Shermans and Panzer IVs carry hedge cutters and drive straight through, leaving a gap; Fireflies, Panthers and infantry can <b>Break through</b>, which takes their hour.</li>
+      <li>✂️ <b>Barbed wire</b> closes some gaps between fields: men can't cross it except by Break through (cutting it); tanks roll over and flatten it.</li>
+      <li>🌳 <b>Hedges</b>: you can only shoot into the next field, or two fields along a clear line. A target behind a hedge needs one more on the dice. Nothing can charge or move across a hedge except Shermans and Panzer IVs, which carry hedge cutters and drive straight through, leaving a gap. Everyone else goes through gaps and lanes, or uses <b>Break through</b>: into the next field through the hedge, leaving a gap, with no shooting that hour. Charging across a hedge at Germans behind it is allowed, but they fight back hard.</li>
       <li>🎲 <b>Dice</b>: every shot rolls six-sided dice by the target: 5 or 6 hits in the open, 6 behind a hedge or in the village; elite troops hit on one less. The Panther's armour needs one more again.</li>
-      <li>😵 <b>Shaken</b> (red ! marker): a piece hit is shaken and can't act. It recovers if it rests an hour without being hit, or its captain rallies it.</li>
+      <li>😵 <b>Shaken</b> (red ! marker): a piece hit is shaken and can't act. It recovers if it rests an hour without being hit, or the captain uses his move to rally it (his field or the next).</li>
       <li>🛡️ <b>In the German hour</b>: when one of your pieces is fired on and its company has a point left, you can spend it to try to <b>pull back</b>: if it works the piece falls back a field and takes half the hits.</li>
       <li>💥 <b>Battalion</b>: mortars and the 105 mm battery fire on a field your troops can see. Only these run short of ammunition; a little comes up every few hours. The battalion's points also attach a team to a company in its field.</li>
       <li>🚚 <b>Reinforcements</b> arrive on your west edge: more bazookas, Dog Company, a machine gun and replacements. The Germans have a Panzer IV and a Panther platoon on the way.</li>
       <li>🧩 <b>The table</b>: 28 mm-style models: four men to a platoon base, three platoons to a company; tanks in pairs. The men are bigger models (1:54) than the tanks (1:76), and the houses smaller (1:144), as on many wargame tables.</li>
     </ul>
-    <p class="sub" style="color:var(--muted)">Click a piece (or its row on the left), pick an action, then click a highlighted field. Enter ends the hour; Esc cancels.</p>
+    <p class="sub" style="color:var(--muted)">Click a piece on the table for its menu, pick an action, then click a highlighted field. Enter ends the hour; Esc cancels.</p>
     <div class="buttons"><button data-close class="on">To the table</button></div>
   </div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="js/data.js?v=2"></script>
-<script src="js/sim.js?v=2"></script>
-<script src="js/models.js?v=2"></script>
-<script src="js/board3d.js?v=2"></script>
-<script src="js/ui.js?v=2"></script>
-<script src="js/main.js?v=2"></script>
+<script src="js/data.js?v=3"></script>
+<script src="js/sim.js?v=3"></script>
+<script src="js/models.js?v=3"></script>
+<script src="js/board3d.js?v=3"></script>
+<script src="js/ui.js?v=3"></script>
+<script src="js/main.js?v=3"></script>
 </body>
 </html>

@@ -47,6 +47,7 @@ window.Game = (() => {
 
   function endHour() {
     if (st.won || st.lost || st.de) return;
+    UI.closeMenu();
     UI.view.mode = null;
     Sim.startGermanHour(st);
     changed();
@@ -90,17 +91,21 @@ window.Game = (() => {
   // ---------- Input ----------
 
   board.addEventListener('click', e => {
+    if (e.target.closest('#menu')) return;
+    UI.closeMenu();
     const f = Board.fieldAt(e.clientX, e.clientY);
     if (!f) return;
-    UI.clickField(f.x, f.y);
+    const mine = UI.clickField(f.x, f.y);
     changed();
+    // Your pieces there: open their menu by the click
+    if (mine) { const r = board.getBoundingClientRect(); UI.openMenu(mine, e.clientX - r.left, e.clientY - r.top, r); $('#tip').style.display = 'none'; }
     if (st.won || st.lost) showResult();
   });
   board.addEventListener('mousemove', e => {
     const f = Board.fieldAt(e.clientX, e.clientY);
     if ((f && hover && f.x === hover.x && f.y === hover.y) || (!f && !hover)) return;
     hover = f; dirty = true;
-    tooltip(e, f);
+    if ($('#menu').hidden) tooltip(e, f);
   });
   board.addEventListener('mouseleave', () => { hover = null; dirty = true; $('#tip').style.display = 'none'; });
 
@@ -119,7 +124,7 @@ window.Game = (() => {
   }
 
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') { UI.view.mode = null; changed(); }
+    if (e.key === 'Escape') { UI.view.mode = null; UI.closeMenu(); changed(); }
     if (e.key === 'Enter' && $('#ask').hidden && $('#help').hidden && $('#result').hidden) endHour();
   });
   $('#end').onclick = endHour;

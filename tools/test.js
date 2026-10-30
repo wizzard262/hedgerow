@@ -42,10 +42,11 @@ check('nothing goes negative, out of range or into the river in 100 games', () =
   }
 });
 
-check('a company and its captain earn two thirds of a point each an hour, and save up to the bank', () => {
+check('a company earns a point an hour (two thirds more for each team with it), the tanks two thirds a platoon; banks are kept', () => {
   const st = Sim.newGame(3);
   const able = Sim.members(st, 'A').length;
-  assert(Math.abs(st.points.A - able * COMMAND_SHARE) < 1e-9, `Able has ${st.points.A} points for ${able} pieces`);
+  assert(Math.abs(st.points.A - (1 + (able - 1) * COMMAND_SHARE)) < 1e-9, `Able has ${st.points.A} points with ${able} pieces`);
+  assert(Math.abs(st.points.T - 2 * COMMAND_SHARE) < 1e-9, `the tanks have ${st.points.T} points`);
   for (let h = 0; h < 5; h++) Sim.endTurn(st);
   assert(st.points.A <= COMMAND_BANK + 1e-9, `Able saved ${st.points.A}, more than the bank`);
 });
@@ -53,7 +54,7 @@ check('a company and its captain earn two thirds of a point each an hour, and sa
 check('a piece acts once an hour', () => {
   const st = Sim.newGame(3);
   const able = Sim.unitById(st, 'A');
-  st.points.A = 3;
+  st.points.A = 3; st.hedges = {}; st.wire = {};
   const m = Sim.moves(st, able)[0];
   assert(Sim.actMoveShoot(st, able, m.x, m.y).ok, 'first move refused');
   const m2 = Sim.moves(st, able)[0];
@@ -73,10 +74,12 @@ check('Shermans cut through hedges; Fireflies need a gap or must break through; 
   assert(!st.hedges[k1], 'the Sherman left the hedge standing');
   const k2 = setUp(ff, 6); st.hedges[k2] = true;
   assert(!Sim.moves(st, ff).some(p => p.x === 1 && p.y === 6), 'the Firefly could climb a hedge');
-  assert(Sim.actBreach(st, ff, 1, 6).ok && !st.hedges[k2], 'the Firefly could not break through');
+  assert(Sim.actBreach(st, ff, 1, 6).ok && !st.hedges[k2] && ff.x === 1, 'the Firefly could not break through into the next field');
   const k3 = setUp(co, 3); st.wire[k3] = true;
   assert(!Sim.moves(st, co).some(p => p.x === 1 && p.y === 3), 'men walked through barbed wire');
-  assert(Sim.actBreach(st, co, 1, 3).ok && !st.wire[k3], 'the company could not cut the wire');
+  assert(Sim.actBreach(st, co, 1, 3).ok && !st.wire[k3] && co.x === 1, 'the company could not cut through the wire');
+  const k4 = setUp(co, 5); co.acted = false; st.points.B = 3; st.hedges[k4] = true;
+  assert(!Sim.moves(st, co).some(p => p.x === 1 && p.y === 5) && !Sim.chargeSpots(st, co).some(p => p.x === 1 && p.y === 5), 'men walked or charged across a hedge into an empty field');
 });
 
 check('a hamlet or the village holds one company or one tank platoon, not both', () => {

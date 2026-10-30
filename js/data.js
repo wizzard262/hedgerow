@@ -21,16 +21,17 @@ const VILLAGES = [
   { x: 4, y: 4, name: 'Saint-Jean' },
   { x: 5, y: 1, name: 'La Haye' },
 ];
-const HEDGE_GAP = 0.22;          // chance an edge between two fields has a gap (a gate or a broken bank)
+const HEDGE_GAP = 0.3;           // chance an edge between two fields has a gap (a gate or a broken bank)
 const WIRE = 0.5;                // chance a gap between two fields is closed by a barbed-wire fence: men must cut it, tanks flatten it
 
 const TURNS = 6;                 // six moves: one an hour from 06:00, the village must be held by 12:00
 const START_HOUR = 6;
 const START_DATE = 'Tue 11 July 1944';
 
-// Command points: each company (with its captain and attached teams), the tank company and the battalion
+// Command points: each company (with its attached teams), the tank company and the battalion (with the captain)
 // earn points every hour and can save them. A piece acts once an hour and each action costs a point.
-// A company earns this share of its pieces in points an hour (2 pieces → 1⅓), so only about two thirds can act
+// A company earns 1 an hour for itself and this share for each team with it; the tanks this share a platoon,
+// so only about two thirds of the pieces can act each hour
 const COMMAND_SHARE = 2 / 3;
 const COMMAND_BANK = 3;          // most points a company can save
 // The battalion's own points: fire missions, attaching teams, and teams working on their own
@@ -45,7 +46,7 @@ const TO_HIT = 5;
 const QUALITY = { elite: { name: 'Elite', shoot: 1, assault: 1.3, rally: 0.9 }, standard: { name: 'Standard', shoot: 0, assault: 1, rally: 0.7 } };
 const MOVE_SHOOT = 0.5;          // moving and shooting with one point: half the dice
 const COVER = { hedge: 1, village: 1, hamlet: 1, orchard: 0 };   // added to the score needed against a target behind a hedge, in the village, a hamlet or an orchard
-const RALLY_RANGE = 1;           // a captain rallies shocked pieces in his tile or the next one
+const RALLY_RANGE = 1;           // the captain rallies shaken pieces in his field or the next one
 
 // What each kind of piece fights with. soft: against infantry and guns; hard: against tanks (anti-tank)
 const PIECES = {
@@ -79,9 +80,7 @@ const US_START = [
   { id: 'A', kind: 'company', name: 'Able Company', quality: 'elite', x: 0, y: 2 },
   { id: 'B', kind: 'company', name: 'Baker Company', quality: 'standard', x: 0, y: 4 },
   { id: 'C', kind: 'company', name: 'Charlie Company', quality: 'standard', x: 0, y: 6 },
-  { id: 'capA', kind: 'captain', name: 'Capt. Able', company: 'A', x: 0, y: 2 },
-  { id: 'capB', kind: 'captain', name: 'Capt. Baker', company: 'B', x: 0, y: 4 },
-  { id: 'capC', kind: 'captain', name: 'Capt. Charlie', company: 'C', x: 0, y: 6 },
+  { id: 'cap', kind: 'captain', name: 'The Captain', x: 0, y: 4 },
   { id: 'T1', kind: 'sherman', name: '1st Tank Platoon', x: 1, y: 4 },
   { id: 'T2', kind: 'firefly', name: '2nd Tank Platoon', x: 0, y: 3 },
   { id: 'mg1', kind: 'mg', name: 'MG Team 1', x: 1, y: 4 },
@@ -105,7 +104,7 @@ const DE_START = [
 // Reinforcements: who arrives on which turn, at their own edge (US west, German east)
 const REINFORCEMENTS = [
   { turn: 2, side: 'us', unit: { id: 'bz2', kind: 'bazooka', name: 'Bazooka Team 2' } },
-  { turn: 3, side: 'us', unit: { id: 'D', kind: 'company', name: 'Dog Company', quality: 'standard' }, captain: { id: 'capD', kind: 'captain', name: 'Capt. Dog', company: 'D' } },
+  { turn: 3, side: 'us', unit: { id: 'D', kind: 'company', name: 'Dog Company', quality: 'standard' } },
   { turn: 3, side: 'de', unit: { id: 'dt1', kind: 'pz4', name: 'Panzer IV Zug', reserve: true } },
   { turn: 4, side: 'us', unit: { id: 'mg2', kind: 'mg', name: 'MG Team 2' } },
   { turn: 4, side: 'de', unit: { id: 'd4', kind: 'company', name: '4th Kompanie', quality: 'standard', reserve: true } },

@@ -54,8 +54,10 @@ const UI = (() => {
 
   // ---------- Clicking the table ----------
 
+  // A click on the table: carry out the chosen action on a highlighted field, or open the menu for your pieces there.
+  // Returns the pieces to offer in a menu, if any
   function clickField(x, y) {
-    if (st.won || st.lost || st.de) return;
+    if (st.won || st.lost || st.de) return null;
     const u = selected();
     const spot = spots().find(p => p.x === x && p.y === y);
     let r = null;
@@ -73,15 +75,50 @@ const UI = (() => {
         // After moving with Move & shoot, offer the half-power shot straight away
         view.mode = view.mode === 'moveShoot' && u.halfShot ? 'halfShot' : null;
       }
-      return;
+      return null;
     }
-    // Otherwise pick an American piece in the field, the next one each click
+    // Otherwise your pieces in the field, for the menu (the first one chosen)
     const mine = Sim.at(st, x, y, 'us');
-    if (!mine.length) { view.sel = null; view.mode = null; return; }
-    const i = mine.findIndex(m => m.id === view.sel);
-    view.sel = mine[(i + 1) % mine.length].id;
     view.mode = null;
+    if (!mine.length) { view.sel = null; return null; }
+    if (!mine.some(m => m.id === view.sel)) view.sel = mine[0].id;
+    return mine;
   }
+
+  // The menu by a piece on the table: for each of your pieces in the field, its name and state and the actions it can take now
+  function openMenu(pieces, left, top, box) {
+    const menu = document.querySelector('#menu');
+    menu.innerHTML = '';
+    for (const u of pieces) {
+      const g = Sim.groupOf(u), pts = Math.floor((st.points[g] || 0) + 1e-9);
+      const state = u.shocked ? '<span class="bad">shaken</span>' : u.acted ? 'has acted' : `${pts} point${pts === 1 ? '' : 's'}`;
+      menu.append(el('div', 'mhead', `<b>${u.name}${u.quality === 'elite' ? ' ★' : ''}</b><span>${state}</span>`));
+      const acts = actionButtons(u);
+      if (Sim.isTeam(u) && u.kind !== 'pak') {
+        const co = Sim.at(st, u.x, u.y, 'us').find(c => c.kind === 'company');
+        acts.push({ mode: 'attach', label: u.attachedTo ? '🔗 Detach' : '🔗 Attach to company', ok: !!(u.attachedTo || co) && (st.points.bn || 0) >= 1, title: 'A battalion point', run: () => Sim.actAttach(st, u, co) });
+      }
+      for (const a of acts) {
+        const b = el('button', '', a.label);
+        b.disabled = !a.ok; b.title = a.title || '';
+        b.onclick = ev => {
+          ev.stopPropagation();
+          view.sel = u.id;
+          if (a.run) { const r = a.run(); if (r.ok) view.log.push(...r.lines); view.mode = null; }
+          else view.mode = a.mode;
+          closeMenu(); refresh();
+        };
+        menu.append(b);
+      }
+      if (!acts.some(a => a.ok)) menu.append(el('div', 'mnote', u.shocked ? 'Shaken: it must rest an hour or be rallied by the captain' : u.acted ? 'It has acted this hour' : 'No points left this hour'));
+    }
+    menu.hidden = false;
+    // Keep the menu inside the table's box
+    const w = menu.offsetWidth, h = menu.offsetHeight;
+    menu.style.left = Math.max(6, Math.min(box.width - w - 6, left + 12)) + 'px';
+    menu.style.top = Math.max(6, Math.min(box.height - h - 6, top + 12)) + 'px';
+  }
+  function closeMenu() { const m = document.querySelector('#menu'); if (m) m.hidden = true; }
 
   // ---------- The left-hand panel ----------
 
@@ -93,13 +130,15 @@ const UI = (() => {
       add('charge', '⚔️ Charge', Sim.chargeSpots(st, u).length > 0, 'Into the next field without shooting; hand to hand if the Germans hold it');
       add('moveShoot', '➡️ Move & shoot', Sim.moves(st, u).length > 0, 'One field, then fire at half the dice');
       add('shoot', '🎯 Shoot', Sim.targets(st, u).length > 0, 'Fire with every die');
-      if (Sim.breachSpots(st, u).length) add('breach', '⛏️ Break through', true, 'Break a gap in a hedge: takes this piece its hour');
+      if (Sim.breachSpots(st, u).length) add('breach', '⛏️ Break through', true, 'Through a hedge or wire into the next field, leaving a gap: a move with no shooting');
     } else if (u.kind === 'captain') {
-      add('move', '➡️ Move', Sim.moves(st, u).length > 0, 'One field');
-      add('rally', '📣 Rally', Sim.rallyTargets(st, u).length > 0, 'Steady a shaken piece in his field or the next');
+      add('move', '➡️ Move', Sim.moves(st, u).length > 0, 'One field (a battalion point)');
+      add('rally', '📣 Rally', Sim.rallyTargets(st, u).length > 0, 'Use his move to steady a shaken piece in his field or the next (a battalion point)');
+      if (Sim.breachSpots(st, u).length) add('breach', '⛏️ Break through', true, 'Through a hedge or wire into the next field: no shooting');
     } else {
       add('move', '➡️ Move', Sim.moves(st, u).length > 0, u.attachedTo ? 'One field (it leaves its company)' : 'One field');
       add('shoot', '🎯 Shoot', Sim.targets(st, u).length > 0, 'Fire with every die');
+      if (Sim.breachSpots(st, u).length) add('breach', '⛏️ Break through', true, 'Through a hedge or wire into the next field: no shooting');
     }
     if (u.halfShot) b.unshift({ mode: 'halfShot', label: '🎯 Fire on the move', ok: true, title: 'Half the dice, after moving' });
     return b;
@@ -112,7 +151,7 @@ const UI = (() => {
       box.innerHTML = '<div class="sub">Click one of your pieces on the table, or in the list below.</div>';
       return;
     }
-    const strength = u.kind === 'company' ? `${u.platoons} platoon${u.platoons > 1 ? 's' : ''} (${u.platoons * 3} men)` : Sim.isTank(u) ? `${u.platoons} tank${u.platoons > 1 ? 's' : ''}` : '';
+    const strength = u.kind === 'company' ? `${u.platoons} platoon${u.platoons > 1 ? 's' : ''} (${u.platoons * 4} men)` : Sim.isTank(u) ? `${u.platoons} tank${u.platoons > 1 ? 's' : ''}` : '';
     const f = Sim.firepower(st, u);
     const dice = u.kind === 'captain' ? '' : `🎲 ${Math.round(f.soft * 10) / 10} dice vs men${f.hard ? `, ${Math.round(f.hard * 10) / 10} vs tanks` : ''}`;
     const g = Sim.groupOf(u);
@@ -191,5 +230,5 @@ const UI = (() => {
     for (const which of ['mortars', 'artillery']) $(`#fire-${which}`).onclick = () => { view.mode = view.mode === 'fire:' + which ? null : 'fire:' + which; refresh(); };
   }
 
-  return { init, setState, update, clickField, spots, view, selected, pips, KIND };
+  return { init, setState, update, clickField, openMenu, closeMenu, spots, view, selected, pips, KIND };
 })();

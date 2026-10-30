@@ -37,8 +37,18 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - Shooting is now real dice: 5+ to hit, +1 behind a hedge or in a village, elite −1
 - Balance: the bot wins about 40% within six moves; doing nothing never wins
 
+## 7. One captain, a menu, hedges that stop you
+
+- Steve: Move & shoot only worked when there was nothing to shoot; there's no point in a captain for each company as they are one to one: just one captain who can use his move to rally; clicking a unit should open a menu of its options; I can charge through a hedge, so what's the point of Break through: Break through should be a shorter move, like Move & shoot; MG teams should be three men on one base with a tripod gun, to be more obvious
+- Moving and shooting now always offers the half-dice shot (climbing no longer stopped it)
+- One captain for the battalion (battalion points): Move, or use his move to Rally a piece in his field or the next. Companies earn a point an hour for themselves, plus two thirds for each attached team; the tank company two thirds a platoon
+- Clicking your piece on the table opens a menu by it: each of your pieces in that field, its state and points, and the actions it can take now
+- Hedges now stop Charge and Move & shoot into an empty field (only Shermans and Panzer IVs drive through). Break through takes any other piece through a hedge or wire into the next field, leaving a gap, with no shooting. Charging across a hedge is still allowed to assault Germans behind it (they get the hedge bonus). The Germans break through on the march when they must
+- More gaps in the hedges (30%) so the six moves are possible; the bot wins about 30%, doing nothing never
+- MG teams: three men (gunner, loader, ammunition carrier with boxes) round a tripod-mounted gun on one big base
+
 ## Sessions
 
 | # | Date | Length | What we did |
 |---|------|--------|-------------|
-| 1 | 2026-10-30 | about 4 hours | Prompts 1–6: rules, command points, reacting, tanks and hedge cutters, the look (pixel art to 3D tabletop), scales, river, villages, wire, six-move aim |
+| 1 | 2026-10-30 | about 4.5 hours | Prompts 1–7: rules, command points, reacting, tanks and hedge cutters, the look (pixel art to 3D tabletop), scales, river, villages, wire, six-move aim; one captain, piece menus, hedges stop moves, MG team model |

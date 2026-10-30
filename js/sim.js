@@ -123,7 +123,7 @@ const Sim = (() => {
       const hedged = inside(f.x + front, f.y) && hedge(st, f.x, f.y, f.x + front, f.y);
       return (hedged ? 2 : 0) + (t === 'village' || t === 'hamlet' ? 2 : t === 'orchard' ? 1 : 0) + st.rand() * 2.5;
     };
-    const leaders = st.units.filter(u => u.side === side && u.kind !== 'captain' && !u.attachedTo);
+    const leaders = st.units.filter(u => u.side === side && !u.attachedTo);
     // German posts round the objective; the garrison is already in them
     if (side === 'de') for (const u of st.units.filter(u => u.side === 'de')) if (u.post) u.post = postField(st, u.post);
     for (const u of leaders.filter(u => u.garrison)) {
@@ -135,8 +135,8 @@ const Sim = (() => {
       const options = fields.map(f => ({ f, w: worth(f) })).sort((a, b) => b.w - a.w);
       const spot = options.find(o => roomFor(st, u, o.f.x, o.f.y));
       u.x = spot.f.x; u.y = spot.f.y;
-      // Its captain and attached teams with it
-      for (const c of st.units) if ((c.kind === 'captain' && c.company === u.id) || c.attachedTo === u.id) { c.x = u.x; c.y = u.y; }
+      // Its attached teams with it
+      for (const c of st.units) if (c.attachedTo === u.id) { c.x = u.x; c.y = u.y; }
     }
   }
 
@@ -152,11 +152,11 @@ const Sim = (() => {
 
   // ---------- Command points ----------
 
-  // The command group a piece belongs to: its company (captains and attached teams too), the tank company, or the battalion
+  // The command group a piece belongs to: its company (with its attached teams), the tank company, or the battalion (the captain and lone teams)
   function groupOf(u) {
     if (u.side !== 'us') return null;
     if (u.kind === 'company') return u.id;
-    if (u.kind === 'captain') return u.company;
+    if (u.kind === 'captain') return 'bn';
     if (isTank(u)) return 'T';
     if (isTeam(u)) return u.attachedTo || 'bn';
     return null;
@@ -168,12 +168,14 @@ const Sim = (() => {
   // The pieces in a group
   function members(st, g) { return st.units.filter(u => u.side === 'us' && u.x !== null && groupOf(u) === g); }
 
-  // Points a group earns an hour: two thirds of its pieces (the battalion a fixed number), kept to its bank
+  // Points a group earns an hour, kept to its bank: a company one for itself and two thirds for each team with it;
+  // the tank company two thirds for each platoon; the battalion a fixed number (the captain, fire missions, lone teams)
   function earnPoints(st) {
-    const groups = new Set(st.units.filter(u => u.side === 'us' && u.x !== null && u.kind !== 'captain').map(groupOf));
+    const groups = new Set(st.units.filter(u => u.side === 'us' && u.x !== null).map(groupOf));
     for (const g of groups) {
       if (g === 'bn') continue;
-      const share = members(st, g).length * COMMAND_SHARE;
+      const n = members(st, g).length;
+      const share = g === 'T' ? n * COMMAND_SHARE : 1 + (n - 1) * COMMAND_SHARE;
       st.points[g] = Math.min(COMMAND_BANK, (st.points[g] || 0) + share);
     }
     st.points.bn = Math.min(BN_BANK, (st.points.bn || 0) + BN_POINTS);
@@ -272,13 +274,12 @@ const Sim = (() => {
     return out;
   }
 
-  // A piece leaves the board. A company that goes takes its captain with it; its teams carry on alone
+  // A piece leaves the board. A company's attached teams carry on alone
   function remove(st, u) {
     u.x = null; u.y = null; u.shocked = false;
     if (u.kind === 'company') {
       for (const t of st.units) {
         if (t.attachedTo === u.id) t.attachedTo = null;
-        if (t.kind === 'captain' && t.company === u.id && t.x !== null) { t.x = null; t.y = null; }
       }
       return [`💀 ${u.name} destroyed`];
     }
@@ -335,7 +336,8 @@ const Sim = (() => {
   function canStep(st, u, x, y, leaving = []) {
     if (!inside(x, y) || !adjacent(u, { x, y })) return false;
     if (tileType(x, y) === 'river') return false;
-    if (isTank(u) && !cutter(u) && hedge(st, u.x, u.y, x, y)) return false;
+    // Only tanks with hedge cutters go across a hedge; everyone else needs a gap, a lane, or to break through
+    if (!cutter(u) && hedge(st, u.x, u.y, x, y)) return false;
     // Barbed wire stops men until it is cut; tanks roll over it
     if (!isTank(u) && wire(st, u.x, u.y, x, y)) return false;
     if (PIECES[u.kind].fixed) return false;
@@ -344,7 +346,7 @@ const Sim = (() => {
 
   // Move a piece, and the teams attached to it. A tank with hedge cutters going through a hedge leaves a gap.
   // Returns what happened to the hedge: 'cut' (driven through), 'climbed' (men clambered over) or ''
-  function step(st, u, x, y) {
+  function step(st, u, x, y, assault = false) {
     let how = '';
     if (wire(st, u.x, u.y, x, y) && isTank(u)) { delete st.wire[edgeKey(u.x, u.y, x, y)]; how = 'flattened'; }
     if (hedge(st, u.x, u.y, x, y)) {
@@ -401,7 +403,7 @@ const Sim = (() => {
     const defenders = at(st, x, y, enemyOf(u.side));
     const out = [];
     if (!defenders.length) {
-      const how = step(st, u, x, y);
+      const how = step(st, u, x, y, true);
       return [how === 'cut' ? `${u.name} charges through the hedge, leaving a gap` : how === 'flattened' ? `${u.name} charges over the wire, flattening it` : `${u.name} charges forward`];
     }
     // Attackers: the charging piece with its teams, plus tanks with it or next to the field
@@ -425,8 +427,8 @@ const Sim = (() => {
       }
       // Captains caught in the field go back with their companies, or are lost
       for (const c of defenders.filter(d => d.kind === 'captain' && d.x !== null)) {
-        const co = unitById(st, c.company);
-        if (co && co.x !== null && !(co.x === x && co.y === y)) { c.x = co.x; c.y = co.y; } else remove(st, c);
+        const spot = retreatSpot(st, c, u);
+        if (spot) { step(st, c, spot.x, spot.y); out.push(`${c.name} gets away`); } else { remove(st, c); out.push(`${c.name} is captured`); }
       }
       if (wire(st, u.x, u.y, x, y)) delete st.wire[edgeKey(u.x, u.y, x, y)];
       step(st, u, x, y);
@@ -467,8 +469,7 @@ const Sim = (() => {
     if (!canAct(st, u) || u.kind === 'captain' || !canStep(st, u, x, y)) return { ok: false };
     spend(st, u);
     const how = step(st, u, x, y);
-    // Clambering over a bank takes everything they have: no shot this hour
-    u.halfShot = how !== 'climbed' && targets(st, u).length > 0;
+    u.halfShot = targets(st, u).length > 0;
     return { ok: true, lines: [moveLine(u, how)] };
   }
 
@@ -503,7 +504,9 @@ const Sim = (() => {
       if (isTank(u) && !cutter(u) && hedge(st, u.x, u.y, x, y)) continue;
       if (!isTank(u) && wire(st, u.x, u.y, x, y)) continue;
       const enemies = at(st, x, y, enemyOf(u.side));
-      if (enemies.length || roomFor(st, u, x, y)) out.push({ x, y });
+      // Men charge across a hedge only to assault the Germans behind it; into an empty field they must break through
+      const blocked = hedge(st, u.x, u.y, x, y) && !cutter(u);
+      if (enemies.length || (!blocked && roomFor(st, u, x, y))) out.push({ x, y });
     }
     return out;
   }
@@ -514,11 +517,12 @@ const Sim = (() => {
     return { ok: true, lines: [charge(st, u, x, y).join(', ') + '.'] };
   }
 
-  // Breaking a hole through a hedge (or cutting barbed wire): infantry, and tanks without cutters, can dig and push one through,
-  // but it takes their whole hour and they stay where they are. Tanks with cutters just drive through
+  // Breaking through a hedge (or cutting barbed wire): any piece without hedge cutters can push through into the next
+  // (empty) field, leaving a gap. It is its move for the hour, with no shooting. Tanks with cutters just drive through
   function breachSpots(st, u) {
-    if (u.kind !== 'company' && !(isTank(u) && !cutter(u))) return [];
-    return NEIGHBOURS.map(([dx, dy]) => ({ x: u.x + dx, y: u.y + dy })).filter(p => inside(p.x, p.y) && (hedge(st, u.x, u.y, p.x, p.y) || (u.kind === 'company' && wire(st, u.x, u.y, p.x, p.y))));
+    if (PIECES[u.kind].fixed || cutter(u)) return [];
+    return NEIGHBOURS.map(([dx, dy]) => ({ x: u.x + dx, y: u.y + dy })).filter(p => inside(p.x, p.y) && tileType(p.x, p.y) !== 'river'
+      && (hedge(st, u.x, u.y, p.x, p.y) || (!isTank(u) && wire(st, u.x, u.y, p.x, p.y))) && roomFor(st, u, p.x, p.y));
   }
 
   function actBreach(st, u, x, y) {
@@ -527,7 +531,9 @@ const Sim = (() => {
     const key = edgeKey(u.x, u.y, x, y), wasWire = !st.hedges[key];
     delete st.hedges[key]; delete st.wire[key];
     st.fx.push({ x: u.x, y: u.y, kind: 'miss' });
-    return { ok: true, lines: [wasWire ? `✂️ ${u.name} cuts a way through the wire.` : `⛏️ ${u.name} breaks a hole through the hedge.`] };
+    step(st, u, x, y);
+    if (isTeam(u) && u.attachedTo && !(unitById(st, u.attachedTo).x === x && unitById(st, u.attachedTo).y === y)) u.attachedTo = null;
+    return { ok: true, lines: [wasWire ? `✂️ ${u.name} cuts through the wire and pushes on.` : `⛏️ ${u.name} breaks through the hedge into the next field.`] };
   }
 
   // Shocked friendly pieces a captain can reach
@@ -603,12 +609,12 @@ const Sim = (() => {
     return ts.sort((a, b) => score(b) - score(a))[0];
   }
 
-  // A step towards a goal for a reserve piece, staying out of American fields
+  // A step towards a goal for a German piece, staying out of American fields; through a hedge or wire if it must
   function stepToward(st, u, goal) {
     let best = null, bestD = Math.abs(u.x - goal.x) + Math.abs(u.y - goal.y);
     for (const [dx, dy] of NEIGHBOURS) {
       const x = u.x + dx, y = u.y + dy;
-      if (!canStep(st, u, x, y)) continue;
+      if (!canStep(st, u, x, y) && !breachSpots(st, u).some(p => p.x === x && p.y === y)) continue;
       const d = Math.abs(x - goal.x) + Math.abs(y - goal.y);
       if (d < bestD) { bestD = d; best = { x, y }; }
     }
@@ -645,7 +651,7 @@ const Sim = (() => {
     // On the way to its post: march there and dig in
     if (u.post && !u.reserve && (u.x !== u.post.x || u.y !== u.post.y) && !(isTeam(u) && u.attachedTo)) {
       const next = stepToward(st, u, u.post);
-      if (next) step(st, u, next.x, next.y);
+      if (next) germanMove(st, u, next);
       return null;
     }
     // Reserves: a company goes to hold the hamlet if nobody does; the rest move up towards the nearest Americans
@@ -656,9 +662,16 @@ const Sim = (() => {
       const near = us.sort((a, b) => (Math.abs(a.x - u.x) + Math.abs(a.y - u.y)) - (Math.abs(b.x - u.x) + Math.abs(b.y - u.y)))[0];
       const goal = (!garrison && u.kind === 'company') || !near ? st.objective : near;
       const next = stepToward(st, u, goal);
-      if (next) step(st, u, next.x, next.y);
+      if (next) germanMove(st, u, next);
     }
     return null;
+  }
+
+  // A German piece moves a field, breaking through a hedge or wire on the way if it has to
+  function germanMove(st, u, p) {
+    const key = edgeKey(u.x, u.y, p.x, p.y);
+    if (!canStep(st, u, p.x, p.y)) { delete st.hedges[key]; delete st.wire[key]; }
+    step(st, u, p.x, p.y);
   }
 
   // The German mortar picks the strongest American company next to a German field
@@ -746,7 +759,6 @@ const Sim = (() => {
       }
       const u = arrive(st, r.side, r.unit, rep);
       if (!u) continue;
-      if (r.captain) { const c = makeUnit(r.captain, r.side); c.x = u.x; c.y = u.y; st.units.push(c); }
       rep.push(r.side === 'us' ? `🪖 ${u.name} arrives on the west edge.` : `⚠️ German reinforcements reported: ${u.name}.`);
     }
   }

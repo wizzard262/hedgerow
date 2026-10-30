@@ -149,18 +149,36 @@ const Models = (() => {
     return castAll(g);
   }
 
-  // A weapons team on a round base: two men with a machine gun on its bipod, or with a bazooka / Panzerschreck tube
+  // A weapons team on a round flocked base. A machine-gun team is three men round a big gun on its tripod
+  // (gunner kneeling behind, loader beside, an ammunition carrier with his boxes); an anti-tank team is two men and the tube
   function team(side, kind) {
     const g = new T.Group();
-    g.add(at(cyl(0.05, 0.052, 0.008, M.base, 28), 0, 0.004, 0));
-    g.add(at(soldier(side, 1, false), -0.022, 0.008, -0.02, 0, 0.2, 0));
-    const gunner = soldier(side, -1, false); gunner.scale.y = 0.8; g.add(at(gunner, 0.02, 0.008, 0.022, 0, -0.2, 0));
+    if (!M.flockTop) M.flockTop = new T.MeshStandardMaterial({ map: flockTex('#5f6d3c', GRASS, 31), roughness: 1 });
+    const base = new T.Mesh(new T.CylinderGeometry(0.062, 0.064, 0.008, 32), [mat('#3b3326', 0.8), M.flockTop, M.base]);
+    g.add(at(base, 0, 0.004, 0));
     if (kind === 'mg' || kind === 'mg42') {
-      // The gun on its bipod at the front of the base
-      g.add(at(cyl(0.003, 0.003, 0.06, M.steel, 8), 0.04, 0.03, 0.022, 0, 0, Math.PI / 2));
-      g.add(at(box(0.02, 0.012, 0.008, M.steel), 0.012, 0.03, 0.022));
-      for (const s of [-1, 1]) g.add(at(cyl(0.0012, 0.0012, 0.025, M.steel, 4), 0.06, 0.02, 0.022 + s * 0.006, s * 0.4, 0, 0));
+      // The gun at the front of the base: a tripod, the receiver, a long barrel in its perforated jacket, the ammunition belt
+      const gun = new T.Group();
+      for (const [ax, az] of [[-0.03, -0.025], [-0.03, 0.025], [0.025, 0]]) {
+        const leg = cyl(0.0022, 0.0022, 0.05, M.steel, 6);
+        leg.lookAt(ax, -0.035, az); leg.rotateX(Math.PI / 2);
+        gun.add(at(leg, ax / 2, 0.022, az / 2));
+      }
+      gun.add(at(box(0.04, 0.016, 0.014, M.steel), -0.006, 0.042, 0));
+      gun.add(at(cyl(0.0055, 0.0055, 0.06, kind === 'mg42' ? M.steel : M.black, 10), 0.044, 0.044, 0, 0, 0, Math.PI / 2));
+      gun.add(at(cyl(0.0025, 0.0025, 0.022, M.steel, 6), 0.085, 0.044, 0, 0, 0, Math.PI / 2));
+      gun.add(at(box(0.008, 0.02, 0.006, M.wood), -0.03, 0.04, 0));
+      gun.add(at(box(0.02, 0.003, 0.008, mat('#8a7a3a', 0.6, 0.4)), -0.004, 0.035, 0.012, 0.6, 0, 0));
+      at(gun, 0.02, 0.008, 0);
+      g.add(gun);
+      // Gunner kneeling behind the gun, loader beside it, ammunition carrier behind with two boxes
+      const gunner = soldier(side, 0, false); gunner.scale.y = 0.72; g.add(at(gunner, -0.02, 0.008, 0, 0, 0, 0));
+      const loader = soldier(side, 1, false); loader.scale.y = 0.75; g.add(at(loader, 0.0, 0.008, 0.035, 0, -0.4, 0));
+      g.add(at(soldier(side, -1, false), -0.04, 0.008, -0.035, 0, 0.3, 0));
+      for (const z of [-0.012, 0.006]) g.add(at(box(0.012, 0.01, 0.016, side === 'us' ? M.usHelmet : M.deHelmet), -0.045, 0.013, z));
     } else {
+      g.add(at(soldier(side, 1, false), -0.022, 0.008, -0.02, 0, 0.2, 0));
+      const gunner = soldier(side, -1, false); gunner.scale.y = 0.8; g.add(at(gunner, 0.02, 0.008, 0.022, 0, -0.2, 0));
       // An anti-tank tube on the shoulder
       g.add(at(cyl(0.0045, 0.0045, 0.075, kind === 'schreck' ? M.deHelmet : M.usHelmet, 10), 0.02, 0.1, 0.022, 0, 0, Math.PI / 2 - 0.1));
     }

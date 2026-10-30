@@ -1,5 +1,5 @@
 // A simple attacking player for headless checks: node tools/bot.js [games]
-// Each hour: guns and mortars on seen Germans, captains rally, then every piece shoots, charges a weak field, or moves east
+// Each hour: guns and mortars on seen Germans, the captain rallies, then every piece shoots, charges a weak field, or moves east
 const fs = require('fs'), vm = require('vm'), path = require('path');
 const load = f => vm.runInThisContext(fs.readFileSync(path.join(__dirname, '..', 'js', f), 'utf8'));
 if (typeof Sim === 'undefined') { load('data.js'); load('sim.js'); }
@@ -12,9 +12,9 @@ function playHour(st) {
     const t = seen.sort((a, b) => b.platoons - a.platoons)[0];
     if (t) Sim.actFire(st, which, t.x, t.y);
   }
-  // Captains rally whoever is shaken nearby
+  // The captain rallies whoever is shaken nearby
   for (const c of us().filter(u => u.kind === 'captain')) {
-    const t = Sim.rallyTargets(st, c)[0];
+    const t = Sim.rallyTargets(st, c).sort((a, b) => (b.kind === 'company') - (a.kind === 'company'))[0];
     if (t) Sim.actRally(st, c, t);
   }
   // Teams join the company in their field
@@ -32,13 +32,16 @@ function playHour(st) {
       const m = Sim.moves(st, u).sort((a, b) => (Math.abs(a.x - st.objective.x) + Math.abs(a.y - st.objective.y)) - (Math.abs(b.x - st.objective.x) + Math.abs(b.y - st.objective.y)))[0];
       const empty = Sim.chargeSpots(st, u).find(p => p.x === st.objective.x && p.y === st.objective.y);
       if (empty) { Sim.actCharge(st, u, empty.x, empty.y); continue; }
-      if (m && Math.abs(m.x - st.objective.x) + Math.abs(m.y - st.objective.y) < Math.abs(u.x - st.objective.x) + Math.abs(u.y - st.objective.y)) { Sim.actMoveShoot(st, u, m.x, m.y); const t = Sim.targets(st, u)[0]; if (t) Sim.actHalfShot(st, u, t); }
-      else break;
+      const closer = p => Math.abs(p.x - st.objective.x) + Math.abs(p.y - st.objective.y) < Math.abs(u.x - st.objective.x) + Math.abs(u.y - st.objective.y);
+      if (m && closer(m)) { Sim.actMoveShoot(st, u, m.x, m.y); const t = Sim.targets(st, u)[0]; if (t) Sim.actHalfShot(st, u, t); continue; }
+      const b = Sim.breachSpots(st, u).find(closer);
+      if (b) { Sim.actBreach(st, u, b.x, b.y); continue; }
+      break;
     }
   }
-  // Captains follow their companies
+  // The captain follows the strongest company
   for (const c of us().filter(u => u.kind === 'captain')) {
-    const co = Sim.unitById(st, c.company);
+    const co = us().filter(u => u.kind === 'company').sort((a, b) => b.platoons - a.platoons)[0];
     if (co && co.x !== null && !(co.x === c.x && co.y === c.y) && Sim.canAct(st, c)) {
       const m = Sim.moves(st, c).sort((a, b) => (Math.abs(a.x - co.x) + Math.abs(a.y - co.y)) - (Math.abs(b.x - co.x) + Math.abs(b.y - co.y)))[0];
       if (m) Sim.actMove(st, c, m.x, m.y);
