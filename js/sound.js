@@ -1,9 +1,11 @@
-// Hedgerow: battle sounds, made on the spot with the Web Audio API (no sound files): rifles, machine guns, bazookas,
-// tank guns, mortars and artillery, and what they hit; men running and tanks moving; plus Future City Battle's recorded
-// pick-up for choosing a piece. Off until the first click (browsers insist), and can be muted
+// Hedgerow: battle sounds, made on the spot with the Web Audio API (no sound files): rifles, the American and German
+// machine guns, bazookas, tank guns, mortars and artillery coming in, and what they hit; men running and tanks driving;
+// a battle going on in the distance all the while; plus Future City Battle's recorded pick-up for choosing a piece.
+// Off until the first click (browsers insist), and can be muted
 
 const Sound = (() => {
-  let ctx = null, master = null, noiseBuf = null;
+  let ctx = null, master = null, noiseBuf = null, distant = null;
+  let bus = null;                 // where the next noise or tone goes: the master, or the far-off battle
   let on = true;
   try { on = localStorage.getItem('hedgerow.sound') !== 'off'; } catch (e) { /* no storage: sound stays on */ }
 
@@ -13,21 +15,34 @@ const Sound = (() => {
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
     ctx = new AC();
+    // Everything goes through a compressor, so a big gun can be loud without cracking up
+    const squeeze = ctx.createDynamicsCompressor();
+    squeeze.threshold.value = -18; squeeze.knee.value = 12; squeeze.ratio.value = 6; squeeze.attack.value = 0.003; squeeze.release.value = 0.25;
+    squeeze.connect(ctx.destination);
     master = ctx.createGain();
-    master.gain.value = 0.55;
+    master.gain.value = 0.8;
+    master.connect(squeeze);
     // A little room: a short feedback delay so shots don't sound dry
     const delay = ctx.createDelay(), fb = ctx.createGain(), wet = ctx.createGain();
-    delay.delayTime.value = 0.09; fb.gain.value = 0.25; wet.gain.value = 0.18;
-    master.connect(ctx.destination);
-    master.connect(delay); delay.connect(fb); fb.connect(delay); delay.connect(wet); wet.connect(ctx.destination);
+    delay.delayTime.value = 0.11; fb.gain.value = 0.3; wet.gain.value = 0.22;
+    master.connect(delay); delay.connect(fb); fb.connect(delay); delay.connect(wet); wet.connect(squeeze);
+    // The far-off battle: muffled by distance and quiet
+    const muffle = ctx.createBiquadFilter();
+    muffle.type = 'lowpass'; muffle.frequency.value = 900;
+    distant = ctx.createGain();
+    distant.gain.value = 0.22;
+    muffle.connect(distant); distant.connect(squeeze);
+    distant.input = muffle;
+    bus = master;
     // One second of white noise, the raw stuff of every bang
     noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
     const d = noiseBuf.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
-    // The board-game sounds from Future City Battle: picking a piece up, sliding it across the table
+    // The board-game sound from Future City Battle: picking a piece up
     for (const [name, file] of Object.entries(FILES)) {
       fetch(file).then(r => r.arrayBuffer()).then(b => ctx.decodeAudioData(b)).then(buf => { recorded[name] = buf; }).catch(() => { /* no file: no sound */ });
     }
+    startBattle();
   }
   const FILES = { select: 'assets/audio/pieceUp.mp3' };
   const recorded = {};
@@ -46,52 +61,96 @@ const Sound = (() => {
     const f = ctx.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q;
     const g = ctx.createGain();
     g.gain.setValueAtTime(0.0001, when);
-    g.gain.exponentialRampToValueAtTime(peak, when + 0.004);
+    g.gain.exponentialRampToValueAtTime(Math.max(0.0002, peak), when + 0.003);
     g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
-    src.connect(f); f.connect(g); g.connect(master);
+    src.connect(f); f.connect(g); g.connect(bus);
     src.start(when, Math.random() * 0.5); src.stop(when + dur + 0.05);
   }
 
-  // A falling tone: the thump of a big gun, or a shell's whistle when it rises
+  // A falling tone: the thump of a big gun, or a shell's whistle
   function tone(when, dur, from, to, peak, type = 'sine') {
     const o = ctx.createOscillator(); o.type = type;
     o.frequency.setValueAtTime(from, when);
     o.frequency.exponentialRampToValueAtTime(Math.max(20, to), when + dur);
     const g = ctx.createGain();
     g.gain.setValueAtTime(0.0001, when);
-    g.gain.exponentialRampToValueAtTime(peak, when + 0.01);
+    g.gain.exponentialRampToValueAtTime(Math.max(0.0002, peak), when + 0.008);
     g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
-    o.connect(g); g.connect(master);
+    o.connect(g); g.connect(bus);
     o.start(when); o.stop(when + dur + 0.05);
   }
 
-  // Each sound, starting `delay` seconds from now
+  // One gunshot: the supersonic crack, the bark of the muzzle, a thump in the chest and the echo off the hedges
+  function shot(w, size = 1) {
+    noise(w, 0.018, 4500, 0.5, 0.9 * size, 'highpass');
+    noise(w, 0.09, 1100 + Math.random() * 300, 0.9, 0.7 * size, 'bandpass');
+    tone(w, 0.12, 170, 60, 0.5 * size);
+    noise(w + 0.02, 0.5, 700, 0.4, 0.12 * size);
+  }
+
+  // A machine gun's burst: `rounds` shots `gap` seconds apart, then the echo rolling away
+  function burst(t, rounds, gap, size) {
+    for (let k = 0; k < rounds; k++) {
+      const w = t + k * gap + Math.random() * gap * 0.12;
+      noise(w, 0.014, 4200, 0.5, 0.6 * size, 'highpass');
+      noise(w, 0.05, 950, 1, 0.55 * size, 'bandpass');
+      tone(w, 0.06, 150, 70, 0.3 * size);
+    }
+    noise(t + rounds * gap, 0.9, 600, 0.4, 0.2 * size);
+  }
+
+  // A shell or bomb going off: the flash-bang, the deep blast, earth falling back
+  function blast(t, size) {
+    noise(t, 0.04, 3000, 0.4, 1 * size, 'highpass');
+    tone(t, 1.4 * size, 75, 22, 1 * size);
+    noise(t, 1.6 * size, 260, 0.3, 1 * size);
+    noise(t + 0.01, 0.5, 1200, 0.5, 0.5 * size, 'bandpass');
+    for (let k = 0; k < 8; k++) noise(t + 0.25 + Math.random() * 0.9, 0.08, 1800 + Math.random() * 2000, 1, 0.05 * size, 'bandpass');
+  }
+
+  // Each sound, starting at time t
   const SOUNDS = {
-    // A rifle: a sharp crack and a short tail; a few men firing
-    rifle(t) { for (let k = 0; k < 4; k++) { const w = t + k * 0.09 + Math.random() * 0.05; noise(w, 0.12, 2400, 0.7, 0.55, 'bandpass'); noise(w, 0.25, 700, 0.5, 0.25); } },
-    // A machine gun: a fast rattle
-    mg(t) { for (let k = 0; k < 14; k++) { const w = t + k * 0.055; noise(w, 0.06, 1800, 1, 0.5, 'bandpass'); noise(w, 0.09, 500, 0.6, 0.2); } },
-    // A bazooka or Panzerschreck: a whoosh as the rocket leaves
-    rocket(t) { noise(t, 0.6, 900, 0.4, 0.5, 'bandpass'); tone(t, 0.5, 300, 900, 0.08, 'sawtooth'); },
-    // A tank or anti-tank gun: a deep boom with a crack on top
+    // Riflemen: single shots, a few men firing at their own pace, each one crack and echo
+    rifle(t) { for (let k = 0; k < 5; k++) shot(t + k * 0.13 + Math.random() * 0.12, 0.8 + Math.random() * 0.2); },
+    // The American .30-cal: a steady chug, about eight rounds a second
+    mg(t) { burst(t, 11, 0.115, 0.9); },
+    // The German MG 42: a ripping tear, twenty rounds a second, quick bursts
+    mg42(t) { burst(t, 14, 0.05, 0.85); burst(t + 0.95, 12, 0.05, 0.8); },
+    // A bazooka or Panzerschreck: the bang of the launch and the rocket's roar away
+    rocket(t) { noise(t, 0.05, 2500, 0.5, 0.8, 'highpass'); noise(t, 0.7, 900, 0.4, 0.6, 'bandpass'); tone(t, 0.5, 300, 900, 0.1, 'sawtooth'); },
+    // A tank or anti-tank gun: a sharp crack, a huge ka-boom, and its echo rolling back off the hedges
     gun(t) {
-      // The crack of the round leaving, then the deep boom and its blast
-      noise(t, 0.12, 3500, 0.7, 0.8, 'bandpass');
-      tone(t, 1.3, 85, 26, 1);
-      tone(t, 0.25, 160, 60, 0.7, 'triangle');
-      noise(t, 1.6, 220, 0.3, 0.9);
-      noise(t + 0.02, 0.6, 900, 0.5, 0.45);
-      // Its echo rolling back off the hedges
-      tone(t + 0.32, 0.9, 70, 30, 0.35);
-      noise(t + 0.32, 1.1, 260, 0.3, 0.3);
+      noise(t, 0.03, 3500, 0.4, 1, 'highpass');
+      tone(t, 1.5, 70, 24, 1);
+      tone(t, 0.3, 180, 55, 0.9, 'triangle');
+      noise(t, 1.8, 240, 0.3, 1);
+      noise(t + 0.02, 0.7, 900, 0.5, 0.55);
+      tone(t + 0.38, 1, 60, 25, 0.4);
+      noise(t + 0.38, 1.3, 260, 0.3, 0.35);
     },
-    // A mortar: a hollow thunk from far off, then the round lands
-    mortar(t) { tone(t, 0.18, 260, 140, 0.25, 'triangle'); },
-    // Artillery: a whistle coming in
-    whistle(t) { tone(t, 0.9, 1400, 500, 0.06, 'sine'); },
+    // A mortar firing somewhere behind the lines: a hollow pop, and the bomb's rising whistle on the way up
+    mortar(t) { tone(t, 0.2, 240, 120, 0.4, 'triangle'); noise(t, 0.15, 500, 0.6, 0.3); },
+    // A round coming in: a falling whistle, getting louder, for as long as it takes to land
+    incoming(t, dur) {
+      const o = ctx.createOscillator(); o.type = 'sine';
+      o.frequency.setValueAtTime(1500, t); o.frequency.exponentialRampToValueAtTime(420, t + dur);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.14, t + dur * 0.9); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(g); g.connect(bus); o.start(t); o.stop(t + dur + 0.05);
+      // The air it tears through
+      const src = ctx.createBufferSource(); src.buffer = noiseBuf; src.loop = true;
+      const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 3;
+      f.frequency.setValueAtTime(2400, t); f.frequency.exponentialRampToValueAtTime(700, t + dur);
+      const ng = ctx.createGain();
+      ng.gain.setValueAtTime(0.0001, t); ng.gain.exponentialRampToValueAtTime(0.12, t + dur * 0.95); ng.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      src.connect(f); f.connect(ng); ng.connect(bus); src.start(t); src.stop(t + dur + 0.05);
+    },
+    // The guns far behind the lines: a low thud
+    distantGun(t) { tone(t, 0.6, 60, 30, 0.35); noise(t, 0.5, 300, 0.4, 0.25); },
     // Impacts: bullets kicking up dirt, a shell striking armour, high explosive going off
-    bullets(t) { for (let k = 0; k < 5; k++) noise(t + k * 0.06 + Math.random() * 0.04, 0.07, 1200, 0.8, 0.18, 'bandpass'); },
-    clang(t) { tone(t, 0.6, 900, 700, 0.18, 'square'); noise(t, 0.2, 4000, 2, 0.35, 'bandpass'); },
+    bullets(t) { for (let k = 0; k < 6; k++) noise(t + k * 0.06 + Math.random() * 0.04, 0.06, 1400, 0.8, 0.2, 'bandpass'); },
+    clang(t) { tone(t, 0.7, 950, 720, 0.25, 'square'); tone(t, 0.9, 1430, 1300, 0.12, 'triangle'); noise(t, 0.2, 4000, 2, 0.45, 'bandpass'); },
+    he(t, big) { blast(t, big ? 1 : 0.75); },
     // Men running: four sets of boots, each step a heel thud and a crunch of grit, kit rattling, fading as they go
     run(t) {
       for (let m = 0; m < 4; m++) {
@@ -104,18 +163,56 @@ const Sound = (() => {
         }
       }
     },
-    // A tank moving: the engine's low growl and the clatter of the tracks, rising and dying away
+    // A tank driving: a loud engine roaring up and dying away, chugging with each cylinder, the exhaust, and the
+    // tracks clanking and squealing
     tank(t) {
-      const o = ctx.createOscillator(); o.type = 'sawtooth';
-      o.frequency.setValueAtTime(38, t); o.frequency.linearRampToValueAtTime(52, t + 0.6); o.frequency.linearRampToValueAtTime(40, t + 1.6);
-      const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 220;
-      const g = ctx.createGain();
-      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.45, t + 0.25); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.7);
-      o.connect(f); f.connect(g); g.connect(master); o.start(t); o.stop(t + 1.8);
-      for (let k = 0; k < 18; k++) noise(t + 0.1 + k * 0.08, 0.04, 1500, 1.5, 0.02 + 0.1 * Math.sin(Math.PI * k / 18), 'bandpass');
+      const dur = 2.4;
+      const out = ctx.createGain();
+      out.gain.setValueAtTime(0.0001, t); out.gain.exponentialRampToValueAtTime(1, t + 0.3); out.gain.setValueAtTime(1, t + dur - 0.7); out.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      out.connect(bus);
+      // The engine: two growling notes, high enough to hear on small speakers
+      const tone1 = ctx.createOscillator(), tone2 = ctx.createOscillator();
+      tone1.type = 'sawtooth'; tone2.type = 'square';
+      for (const [o, base] of [[tone1, 48], [tone2, 97]]) {
+        o.frequency.setValueAtTime(base * 0.8, t); o.frequency.linearRampToValueAtTime(base * 1.25, t + 0.8); o.frequency.linearRampToValueAtTime(base, t + dur);
+      }
+      const roar = ctx.createBiquadFilter(); roar.type = 'lowpass'; roar.frequency.value = 650; roar.Q.value = 2;
+      const chug = ctx.createGain(); chug.gain.value = 0.5;
+      const pulse = ctx.createOscillator(), depth = ctx.createGain();
+      pulse.frequency.setValueAtTime(14, t); pulse.frequency.linearRampToValueAtTime(22, t + 0.8);
+      depth.gain.value = 0.3;
+      pulse.connect(depth); depth.connect(chug.gain);
+      const mix = ctx.createGain(); mix.gain.value = 0.5;
+      tone1.connect(roar); tone2.connect(mix); mix.connect(roar); roar.connect(chug); chug.connect(out);
+      // The exhaust: a rumble of noise
+      const ex = ctx.createBufferSource(); ex.buffer = noiseBuf; ex.loop = true;
+      const exf = ctx.createBiquadFilter(); exf.type = 'lowpass'; exf.frequency.value = 350;
+      const exg = ctx.createGain(); exg.gain.value = 0.7;
+      ex.connect(exf); exf.connect(exg); exg.connect(chug);
+      for (const n of [tone1, tone2, pulse, ex]) { n.start(t); n.stop(t + dur + 0.05); }
+      // The tracks: links clanking round, and now and then a squeal
+      for (let k = 0; k < 26; k++) noise(t + 0.15 + k * 0.08 + Math.random() * 0.02, 0.03, 2200 + Math.random() * 800, 3, 0.09, 'bandpass');
+      tone(t + 0.5, 0.5, 2100, 1900, 0.025, 'triangle');
     },
-    he(t, big) { tone(t, big ? 1.2 : 0.8, 90, 30, big ? 1 : 0.8); noise(t, big ? 1.6 : 1.1, 300, 0.4, big ? 0.9 : 0.7); noise(t, 0.3, 2500, 0.5, 0.4, 'bandpass'); },
   };
+
+  // The far-off battle: now and then guns rumbling, a machine gun, a few rifle shots, far away and muffled
+  let battleTimer = null;
+  function startBattle() {
+    if (battleTimer) return;
+    const next = () => {
+      battleTimer = setTimeout(next, 1500 + Math.random() * 4000);
+      if (!on || !ctx || ctx.state !== 'running') return;
+      const t = ctx.currentTime + 0.05, pick = Math.random();
+      bus = distant.input;
+      if (pick < 0.35) { SOUNDS.distantGun(t); if (Math.random() < 0.5) blast(t + 1.5 + Math.random(), 0.6); }
+      else if (pick < 0.6) burst(t, 8 + Math.floor(Math.random() * 12), Math.random() < 0.5 ? 0.05 : 0.115, 0.7);
+      else if (pick < 0.85) for (let k = 0; k < 3; k++) shot(t + Math.random() * 1.5, 0.7);
+      else blast(t, 0.8);
+      bus = master;
+    };
+    next();
+  }
 
   function play(name, delay = 0, big = false) {
     if (!on || !ctx || ctx.state !== 'running') return;

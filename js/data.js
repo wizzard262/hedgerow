@@ -77,8 +77,8 @@ const US_START = [
   { id: 'B', kind: 'company', name: '2nd Platoon', quality: 'standard', x: 0, y: 4 },
   { id: 'C', kind: 'company', name: '3rd Platoon', quality: 'standard', x: 0, y: 6 },
   { id: 'cap', kind: 'captain', name: 'Captain (company HQ)', x: 0, y: 4 },   // one captain, with the company guidon
-  { id: 'T1', kind: 'sherman', name: '1st Tank Section', x: 1, y: 4 },
-  { id: 'T2', kind: 'firefly', name: '2nd Tank Section', x: 0, y: 3 },
+  { id: 'T1', kind: 'sherman', name: 'Sherman pair', x: 1, y: 4 },
+  { id: 'T2', kind: 'firefly', name: 'Firefly pair', x: 0, y: 3 },
   { id: 'mg1', kind: 'mg', name: 'MG Team 1', x: 1, y: 4 },
   { id: 'bz1', kind: 'bazooka', name: 'Bazooka Team 1', x: 0, y: 5 },
 ];

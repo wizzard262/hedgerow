@@ -338,6 +338,8 @@ const Sim = (() => {
       softHits = roll(st, dice(st, (f.soft + f.hard * 0.5) * power), need, faces);
       hardHits = 0;
     }
+    // Where the target stood, so its dice still land there if it is wiped out
+    const stood = { x: target.x, y: target.y };
     const pre = withdraw ? pullBack(st, target, shooter) : null;
     if (pre && pre.ok) { softHits = Math.floor(softHits * WITHDRAW.keep); hardHits = Math.floor(hardHits * WITHDRAW.keep); }
     const before = { strength: target.platoons, shocked: target.shocked };
@@ -349,7 +351,7 @@ const Sim = (() => {
       : target.shocked && !before.shocked ? 'Pinned' : softHits + hardHits ? 'No effect' : 'Missed';
     // What the table shows: the weapon's muzzle flash and tracers from the shooter, and what lands on the target
     const weapon = isTank(shooter) || shooter.kind === 'pak' ? 'gun' : shooter.kind === 'mg' || shooter.kind === 'mg42' ? 'mg' : shooter.kind === 'bazooka' || shooter.kind === 'schreck' ? 'rocket' : 'rifle';
-    st.fx.push({ from: { id: shooter.id, x: shooter.x, y: shooter.y }, to: { id: target.id }, weapon, armour: isTank(target), x: target.x, y: target.y, kind: softHits + hardHits ? 'hit' : 'miss', faces, need: Math.min(6, need + (isTank(target) ? PIECES[target.kind].armour : 0)), side: shooter.side, result, pulled: !!(pre && pre.ok) });
+    st.fx.push({ from: { id: shooter.id, x: shooter.x, y: shooter.y }, to: { id: target.id }, weapon, armour: isTank(target), x: target.x === null ? stood.x : target.x, y: target.x === null ? stood.y : target.y, kind: softHits + hardHits ? 'hit' : 'miss', faces, need: Math.min(6, need + (isTank(target) ? PIECES[target.kind].armour : 0)), side: shooter.side, result, pulled: !!(pre && pre.ok) });
     return out.length ? out : [`${target.name}: no hits`];
   }
 

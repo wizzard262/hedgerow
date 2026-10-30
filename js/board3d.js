@@ -437,17 +437,35 @@ const Board = (() => {
       const wait = (t0 - performance.now()) / 1000;
       if (f.from) {
         const flight = f.weapon === 'gun' ? 0.25 : f.weapon === 'rocket' ? 0.45 : 0.35;
-        Sound.play(f.weapon, wait);
+        Sound.play(f.weapon === 'mg' && f.side === 'de' ? 'mg42' : f.weapon, wait);
         Sound.play(f.armour && f.weapon === 'gun' ? 'clang' : f.weapon === 'gun' || f.weapon === 'rocket' ? 'he' : 'bullets', wait + flight);
       } else if (f.kind === 'shell') {
-        // Fire support: the mortar's thunk or the guns' whistle, then the burst (one sound for each mission)
-        if (!shots.some(s => s !== shots[shots.length - 1] && s.f.kind === 'shell' && performance.now() - s.t0 < 300)) {
-          if (f.support === 'artillery') { Sound.play('whistle', wait); Sound.play('he', wait + 0.8, true); }
-          else { Sound.play('mortar', wait); Sound.play('he', wait + 0.5); }
+        // Fire support: the first round of a mission is heard fired and coming in; up to four rounds are heard landing
+        const flight = shellFlight(f);
+        const sameMission = shots.filter(s => s.f.kind === 'shell' && !s.f.from && Math.abs(s.t0 - t0) < 1500).length;
+        if (sameMission === 1) {
+          Sound.play(f.support === 'artillery' ? 'distantGun' : 'mortar', wait);
+          Sound.play('incoming', wait + 0.25, flight - 0.25);
         }
+        if (sameMission <= 4) Sound.play('he', wait + flight, f.support === 'artillery');
       }
     }
   }
+
+  // How long a mortar bomb or an artillery shell is in the air, seen arcing in
+  const shellFlight = f => (f.support === 'artillery' ? 1.6 : 1.3);
+
+  // Where a shell is on its way down, p from 0 (high up, over its own side of the table) to 1 (landing): mortar bombs drop
+  // almost straight down, artillery shells come in on a longer, flatter curve
+  function shellAt(f, to, p) {
+    const fromSide = f.side === 'de' ? 1 : -1;
+    const reach = f.support === 'artillery' ? 3 : 0.9, high = f.support === 'artillery' ? 2.4 : 3.2;
+    return new T.Vector3(to.x + fromSide * reach * (1 - p), 0.05 + high * (1 - p * p), to.z - 0.4 * (1 - p));
+  }
+
+  // Dirt thrown up by a burst: dark puffs
+  const dirtMat = () => new T.SpriteMaterial({ map: smokeTex(), color: 0x3a2c1c, transparent: true, depthWrite: false });
+  const ringGeo = new T.RingGeometry(0.8, 1, 40);
 
   // Where a shot leaves from and lands: the middle of the pieces' bases, a little above the table
   function shotEnds(f) {
@@ -460,7 +478,7 @@ const Board = (() => {
 
   function playShots(now) {
     for (const s of shots) { for (const o of s.objs) marks.remove(o); s.objs = []; }
-    shots = shots.filter(s => now - s.t0 < 2600);
+    shots = shots.filter(s => now - s.t0 < 5000);
     for (const s of shots) {
       const f = s.f, t = (now - s.t0) / 1000;
       if (t < 0) continue;
@@ -495,8 +513,23 @@ const Board = (() => {
           if (f.weapon === 'rocket') { const sm = add(new T.Sprite(new T.SpriteMaterial({ map: smokeTex(), transparent: true, depthWrite: false, opacity: 0.6 }))); sm.scale.setScalar(0.08); sm.position.copy(tail); }
         }
       }
+      // A mortar bomb or shell arcing in: a glowing round with a trail of smoke behind it
+      const land = from ? flight : f.kind === 'shell' ? shellFlight(f) : 0, lt = t - land;
+      if (!from && f.kind === 'shell' && lt < 0) {
+        const p = t / land;
+        for (let b = 0; b < 6; b++) {
+          const bead = add(glow('rgba(255,215,150,1)'));
+          bead.scale.setScalar(0.09 * (1 - b * 0.14));
+          bead.position.copy(shellAt(f, to, Math.max(0, p - b * 0.012)));
+        }
+        for (let b = 1; b <= 4; b++) {
+          if (p - b * 0.05 < 0) continue;
+          const sm = add(new T.Sprite(new T.SpriteMaterial({ map: smokeTex(), transparent: true, depthWrite: false, opacity: 0.35 - b * 0.07 })));
+          sm.scale.setScalar(0.07 + b * 0.02);
+          sm.position.copy(shellAt(f, to, p - b * 0.05));
+        }
+      }
       // Where it lands
-      const land = from ? flight : 0, lt = t - land;
       if (lt < 0) continue;
       // The words: each die in turn, Hit or Miss, rising and fading; then what it did, bigger
       if (f.faces) {
@@ -516,11 +549,7 @@ const Board = (() => {
         }
       }
       const big = f.kind === 'shell' || (f.weapon === 'gun' && !f.armour) || f.weapon === 'rocket';
-      if (big) {
-        // High explosive: a flash, a ball of fire, a column of smoke
-        if (lt < 0.35) { const b = add(glow('rgba(255,150,50,.95)')); b.scale.setScalar((f.kind === 'shell' ? 0.6 : 0.45) * (0.5 + lt * 2)); b.position.set(to.x, 0.12, to.z); }
-        if (lt < 1.2) for (let k = 0; k < 3; k++) { const sm = add(new T.Sprite(new T.SpriteMaterial({ map: smokeTex(), transparent: true, depthWrite: false, opacity: Math.max(0, 0.8 - lt * 0.65) }))); sm.scale.setScalar(0.18 + lt * 0.35); sm.position.set(to.x + (k - 1) * 0.08, 0.1 + lt * 0.25 + k * 0.03, to.z); }
-      } else if (f.armour && f.weapon === 'gun') {
+      if (big) explosion(add, f, to, lt); else if (f.armour && f.weapon === 'gun') {
         // A shell striking armour: a white-hot spark
         if (lt < 0.25) { const b = add(glow('rgba(255,255,220,1)')); b.scale.setScalar(0.25 * (1 - lt * 2)); b.position.set(to.x, 0.12, to.z); }
       } else if (lt < 0.6) {
@@ -531,21 +560,111 @@ const Board = (() => {
     return shots.length > 0;
   }
 
+  // High explosive going off: how big depends on what it was (artillery biggest, then mortars, a tank's shell, a rocket)
+  function explosion(add, f, to, lt) {
+    const size = f.support === 'artillery' ? 1 : f.kind === 'shell' ? 0.8 : f.weapon === 'gun' ? 0.75 : 0.55;
+    // The flash
+    if (lt < 0.12) { const b = add(glow('rgba(255,250,220,1)')); b.material.depthTest = false; b.scale.setScalar(1.3 * size); b.position.set(to.x, 0.15, to.z); }
+    // The ball of fire, swelling and dying
+    if (lt < 0.7) {
+      const b = add(glow('rgba(255,100,20,1)'));
+      b.material.depthTest = false;
+      b.scale.setScalar(size * (0.5 + lt * 1.8) * (1 - lt / 0.9));
+      b.position.set(to.x, 0.12 + lt * 0.3, to.z);
+    }
+    // The blast ring racing out across the ground
+    if (lt < 0.45) {
+      const r = add(new T.Mesh(ringGeo, new T.MeshBasicMaterial({ color: 0xffe2b0, transparent: true, opacity: 0.6 * (1 - lt / 0.45), depthWrite: false })));
+      r.scale.setScalar(size * (0.1 + lt * 1.6));
+      at(r, to.x, 0.012, to.z, -Math.PI / 2, 0, 0);
+    }
+    // Earth thrown up in clods that fall back
+    if (lt < 1.4) {
+      for (let k = 0; k < 14; k++) {
+        const a = k * 2.4, out = (0.3 + (k % 4) * 0.12) * size, up = (1.4 + (k % 3) * 0.4) * size;
+        const y = up * lt - 2.6 * lt * lt;
+        if (y < 0) continue;
+        const c = add(new T.Sprite(dirtMat()));
+        c.scale.setScalar(0.05 * size);
+        c.position.set(to.x + Math.cos(a) * out * lt, 0.05 + y, to.z + Math.sin(a) * out * lt);
+      }
+    }
+    // A column of smoke, rising, spreading and thinning out
+    if (lt < 3.4) {
+      for (let k = 0; k < 6; k++) {
+        const age = lt - k * 0.08;
+        if (age < 0) continue;
+        const sm = add(new T.Sprite(new T.SpriteMaterial({ map: smokeTex(), color: 0x6a645e, transparent: true, depthWrite: false, opacity: Math.max(0, 0.9 - age * 0.26) })));
+        sm.scale.setScalar(size * (0.3 + age * 0.35));
+        sm.position.set(to.x + Math.sin(k * 2.1) * 0.08 * size + age * 0.04, 0.1 + age * (0.25 + k * 0.07) * size, to.z + Math.cos(k * 1.3) * 0.06 * size);
+      }
+    }
+  }
+
   // ---------- Dice on the table ----------
-  // Each shot leaves its dice by the target: hits stand on top of each other's line, misses lie further off
+  // The last three shots leave their dice in the target's field, six to a row along its near edge (a second shot at the
+  // same field lines up behind the first). Hits are bright, misses dark, and a tag says who fired, what each die
+  // needed and how many hit
+  const DIE_SIZE = 4, DIE_GAP = 0.14;
   function showDice(st) {
     for (const d of dice) scene.remove(d);
     dice = [];
-    st.fx.filter(f => f.faces && f.faces.length).slice(-3).forEach((f, k) => {
+    const cursor = {};                                     // for each field, how far back the next shot's dice go
+    for (const f of st.fx.filter(f => f.faces && f.faces.length).slice(-3)) {
+      const key = f.x + ',' + f.y;
+      let z = cursor[key] !== undefined ? cursor[key] : f.y + 0.9;
+      // The dice, row by row
       f.faces.forEach((r, i) => {
-        const d = Models.die(r.face); d.scale.setScalar(1.7);
-        const row = Math.floor(i / 6);
-        at(d, f.x + 0.12 + (i % 6) * 0.075, 0, f.y + 0.98 + row * 0.075 + k * 0.03, 0, (i * 1.7) % 0.6 - 0.3, 0);
+        const d = Models.die(r.face); d.scale.setScalar(DIE_SIZE);
+        at(d, f.x + 0.15 + (i % 6) * DIE_GAP, 0, z - Math.floor(i / 6) * DIE_GAP, 0, (i * 1.7) % 0.6 - 0.3, 0);
         // Misses are dimmed so the hits stand out
-        if (!r.hit) d.traverse(c => { if (c.isMesh && c.material === Models.M.die) { c.material = c.material.clone(); c.material.color.multiplyScalar(0.45); } });
+        if (!r.hit) d.traverse(c => { if (c.isMesh && c.material === Models.M.die) { c.material = c.material.clone(); c.material.color.multiplyScalar(0.4); } });
         scene.add(d); dice.push(d);
       });
-    });
+      // The tag just behind them
+      const rows = Math.ceil(f.faces.length / 6);
+      const tagZ = z - (rows - 1) * DIE_GAP - 0.2;
+      const tag = diceTag(shotTagText(st, f), f.side);
+      tag.position.set(f.x + 0.5, 0.1, tagZ);
+      scene.add(tag); dice.push(tag);
+      cursor[key] = tagZ - 0.25;
+    }
+  }
+
+  // ["1st Platoon", "needs 5+ · 2 hits"]: who fired, then the score each die needed and the hits
+  function shotTagText(st, f) {
+    const shooter = f.from ? st.units.find(u => u.id === f.from.id) : null;
+    const who = shooter ? shooter.name
+      : f.side === 'de' ? 'German mortars'
+      : f.support === 'artillery' ? 'Our guns' : 'Our mortars';
+    const need = f.need >= 6 ? 'needs 6' : `needs ${f.need}+`;
+    const hits = f.faces.filter(r => r.hit).length;
+    return [who, `${need} · ${hits} hit${hits === 1 ? '' : 's'}`];
+  }
+
+  // The tag: a small rounded label, blue for our shots and grey for the Germans', drawn once for each text
+  const tagTex = {};
+  function diceTag(lines, side) {
+    const key = side + lines.join('/');
+    if (!tagTex[key]) {
+      const c = document.createElement('canvas'), g = c.getContext('2d');
+      const font = 'bold 44px Georgia, serif';
+      g.font = font;
+      const wide = Math.max(...lines.map(l => g.measureText(l).width));
+      c.width = Math.ceil(wide) + 56; c.height = 128;
+      g.font = font;
+      g.fillStyle = side === 'de' ? 'rgba(70,72,74,.94)' : 'rgba(30,62,110,.94)';
+      g.beginPath(); g.roundRect(4, 4, c.width - 8, 120, 18); g.fill();
+      g.fillStyle = '#f4efe4'; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText(lines[0], c.width / 2, 40);
+      g.fillStyle = '#ffd98a';
+      g.fillText(lines[1], c.width / 2, 92);
+      tagTex[key] = { map: new T.CanvasTexture(c), aspect: c.width / c.height };
+    }
+    const t = tagTex[key];
+    const s = new T.Sprite(new T.SpriteMaterial({ map: t.map, transparent: true, depthTest: false }));
+    s.scale.set(0.34 * t.aspect, 0.34, 1);
+    return s;
   }
 
   // view: { spots: [{ x, y, kind }], selected: piece, hover: { x, y } }. dt: seconds since the last frame.

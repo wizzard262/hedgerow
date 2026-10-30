@@ -243,8 +243,34 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - Steve: a better running noise
 - Now four men's boots at slightly different paces, each step a heel thud and a crunch of grit, with kit rattling, fading as they go
 
+## 44. What the dice show
+
+- Steve: what do the dice show? Then: yes, add a label, and make the dice bigger
+- They are the real rolls of the last three shots. Now nearly twice the size, six to a row in the target's field, with a tag: who fired, the score each die needed, and the hits ("1st Platoon · needs 5+ · 2 hits"); blue for ours, grey for the Germans'. Bright dice hit, dark ones missed
+
+## 45. Louder, more real battle sounds
+
+- Steve: tanks need a loud engine, a ka-boom; different rifle shots for infantry and the machine guns; realistic sounds
+- Every shot now has a crack, a bark, a thump and an echo; riflemen fire single shots at their own pace; the American .30-cal chugs about eight rounds a second, the German MG 42 rips at twenty; the tank engine is a loud growl with cylinder chug, exhaust and clanking tracks, pitched so small speakers can play it; a compressor lets the big guns be loud without cracking. Still made in the browser, not recordings
+
+## 46. A battle in the distance
+
+- Steve: some background battle ambience
+- Every few seconds, far off and muffled: guns rumbling, shells landing, a machine-gun burst or a few rifle shots. The 🔊 button turns it off with the rest
+
+## 47. Mortars and artillery arcing in, and real explosions
+
+- Steve: mortars and artillery must be heard coming and seen arcing in to hit; tanks on men, artillery and mortars show explosions
+- A mortar mission: a pop far off, then each bomb drops almost straight down from over its own side of the table, whistling, glowing, with a smoke trail. Artillery: a distant thud, then shells on a longer, flatter curve, whistling louder as they come. Each burst: a white flash, a fireball, a blast ring across the ground, clods of earth thrown up and falling back, and a column of smoke that rises and thins over about three seconds. A tank's high explosive on men and a bazooka rocket burst the same way, smaller
+
+## 48. Sherman and Firefly by name; do bigger tanks do more damage?
+
+- Steve: label the US tanks Sherman and Firefly; do each army's bigger tanks do more damage?
+- The tank sections are now "Sherman pair" and "Firefly pair" (like the Germans' "Panzer IV pair" and "Panther pair")
+- Bigger guns roll more dice, not bigger hits: against tanks a pair rolls Sherman 2, Panzer IV 3, Firefly 4, Panther 6, and each hit knocks out a tank; the Panther's armour also needs one more to hit it. Against men they are much alike (Sherman, Firefly 2, Panzer IV 2–3, Panther 3)
+
 ## Sessions
 
 | # | Date | Length | What we did |
 |---|------|--------|-------------|
-| 1 | 2026-10-30 | about 9.75 hours | Prompts 1–43: rules, command points, reacting, tanks and hedge cutters, the look (pixel art to 3D tabletop), scales, river, villages, wire, six-move aim; one captain, piece menus, hedges stop moves, MG team model; bazooka teams, two-field charges; red targets; who has acted; company level; lining hedges, longer sight, the captain's guidon; one unit a field, no time limit; tracers and shells, greyed out, no activation tokens, Move & shoot hatching; tanks through hedges, charges for all; no plain move; teams and captain with a platoon, no attaching; one piece at a time; charging through friends; range, cover and moving +1 each; words off the target, tanks turn and recoil; rallying; MGs can't move and fire; easier targets; Move & shoot one action; tanks impervious to small arms; more gaps; no charging through houses; MGs fire five; hand to hand shown; sounds; select and move sounds; running and tank sounds; twisty wire, tank boom, a cleaner panel, better running |
+| 1 | 2026-10-30 | about 10.5 hours | Prompts 1–48: rules, command points, reacting, tanks and hedge cutters, the look (pixel art to 3D tabletop), scales, river, villages, wire, six-move aim; one captain, piece menus, hedges stop moves, MG team model; bazooka teams, two-field charges; red targets; who has acted; company level; lining hedges, longer sight, the captain's guidon; one unit a field, no time limit; tracers and shells, greyed out, no activation tokens, Move & shoot hatching; tanks through hedges, charges for all; no plain move; teams and captain with a platoon, no attaching; one piece at a time; charging through friends; range, cover and moving +1 each; words off the target, tanks turn and recoil; rallying; MGs can't move and fire; easier targets; Move & shoot one action; tanks impervious to small arms; more gaps; no charging through houses; MGs fire five; hand to hand shown; sounds; select and move sounds; running and tank sounds; twisty wire, tank boom, a cleaner panel, better running; bigger dice with a tag; louder, more real sounds; distant battle; shells arcing in and explosions; Sherman and Firefly named |
