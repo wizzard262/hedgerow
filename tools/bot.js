@@ -17,11 +17,6 @@ function playHour(st) {
     const t = Sim.rallyTargets(st, c).sort((a, b) => (b.kind === 'company') - (a.kind === 'company'))[0];
     if (t) Sim.actRally(st, c, t);
   }
-  // Teams join a rifle platoon next door
-  for (const t of us().filter(u => Sim.isTeam(u) && !u.attachedTo)) {
-    const co = us().find(u => u.kind === 'company' && Sim.adjacent(u, t));
-    if (co) Sim.actAttach(st, t, co);
-  }
   for (const u of us().filter(u => u.kind === 'company' || Sim.isTank(u))) {
     for (let k = 0; k < 1 && Sim.canAct(st, u); k++) {
       const ts = Sim.targets(st, u);

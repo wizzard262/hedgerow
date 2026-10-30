@@ -71,10 +71,18 @@ const Sim = (() => {
   const adjacent = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y) === 1;
   const teamsOf = (st, company) => st.units.filter(t => t.attachedTo === company.id && t.x !== null);
 
-  // Is there room for a unit in a field? One unit to a field: it must be empty, apart from the unit's own attached teams
+  // Is there room for a unit in a field? One unit to a field, except (Steve) that MG and bazooka teams and the captain
+  // can come into a rifle platoon's field: a platoon with up to three of them (they may stay together when it moves on).
+  // Tanks always need a field to themselves
   function roomFor(st, unit, x, y, leaving = []) {
     const here = at(st, x, y).filter(u => !leaving.includes(u) && u !== unit && u.attachedTo !== unit.id);
-    return here.length === 0;
+    if (!here.length) return true;
+    if (here.some(u => u.side !== unit.side)) return false;
+    const platoon = here.some(u => u.kind === 'company');
+    const others = here.filter(u => u.kind !== 'company');
+    if (isSmall(unit) && !PIECES[unit.kind].fixed) return platoon && others.every(isSmall) && others.length < 3;
+    if (unit.kind === 'company') return !platoon && others.every(u => isSmall(u) && !PIECES[u.kind].fixed);
+    return false;
   }
 
   function newGame(seed) {
@@ -100,7 +108,6 @@ const Sim = (() => {
     for (const d of US_START) st.units.push(makeUnit(d, 'us'));
     for (const d of DE_START) st.units.push(makeUnit(d, 'de'));
     // German teams that start with a company
-    for (const d of DE_START) if (d.attach) unitById(st, d.attach).attachedTo = d.id;
     st.rand = R;
     deploy(st, 'us'); deploy(st, 'de');
     st.report = [`${START_DATE}, 06:00. The company attacks into the bocage. Take ${st.objective.name} and hold it at the end of an hour${TURNS ? ` by ${hourText(TURNS + 1)}` : ''}.`];
@@ -125,23 +132,21 @@ const Sim = (() => {
     // German posts round the objective; the garrison is already in them
     if (side === 'de') {
       const taken = [];
-      for (const u of st.units.filter(u => u.side === 'de' && u.post)) {
-        const owner = u.attachedTo && unitById(st, u.attachedTo);
-        u.post = owner ? owner.post : postField(st, u.post, taken);
-        if (!owner) taken.push(u.post);
+      const withPost = st.units.filter(u => u.side === 'de' && u.post);
+      const offset = {};
+      for (const u of withPost.filter(u => u.kind === 'company')) { offset[u.post.join()] = u; u.post = postField(st, u.post, taken); taken.push(u.post); }
+      for (const u of withPost.filter(u => u.kind !== 'company')) {
+        const platoon = isSmall(u) && !PIECES[u.kind].fixed && offset[u.post.join()];
+        u.post = platoon ? platoon.post : postField(st, u.post, taken);
+        if (!platoon) taken.push(u.post);
       }
     }
-    for (const u of leaders.filter(u => u.garrison)) {
-      u.x = u.post.x; u.y = u.post.y;
-      for (const c of st.units) if (c.attachedTo === u.id) { c.x = u.x; c.y = u.y; }
-    }
+    for (const u of leaders.filter(u => u.garrison)) { u.x = u.post.x; u.y = u.post.y; }
     for (const u of leaders) {
       if (u.garrison) continue;
       const options = fields.map(f => ({ f, w: worth(f) })).sort((a, b) => b.w - a.w);
       const spot = options.find(o => roomFor(st, u, o.f.x, o.f.y));
       u.x = spot.f.x; u.y = spot.f.y;
-      // Its attached teams with it
-      for (const c of st.units) if (c.attachedTo === u.id) { c.x = u.x; c.y = u.y; }
     }
   }
 
@@ -161,13 +166,13 @@ const Sim = (() => {
 
   // ---------- Who commands whom ----------
 
-  // The group a piece is listed under: its rifle platoon (with its attached teams), the tanks, or company HQ (the captain and lone teams)
+  // The group a piece is listed under: its rifle platoon, the tanks, or company HQ (the captain and the teams)
   function groupOf(u) {
     if (u.side !== 'us') return null;
     if (u.kind === 'company') return u.id;
     if (u.kind === 'captain') return 'bn';
     if (isTank(u)) return 'T';
-    if (isTeam(u)) return u.attachedTo || 'bn';
+    if (isTeam(u)) return 'bn';
     return null;
   }
 
@@ -637,26 +642,6 @@ const Sim = (() => {
     return { ok: true, lines: [ok ? `📣 ${cap.name} rallies ${target.name}.` : `📣 ${cap.name} can't get ${target.name} moving yet.`] };
   }
 
-  // Attach a team to the company in its field (it moves with it and comes under its command), or detach it. Costs a battalion point
-  function actAttach(st, team, company) {
-    if (!isTeam(team) || team.side !== 'us' || !canAct(st, team) || PIECES[team.kind].fixed) return { ok: false };
-    if (team.attachedTo) {
-      // Out into a free field next door, as its own unit again
-      const spot = NEIGHBOURS.map(([dx, dy]) => ({ x: team.x + dx, y: team.y + dy })).find(p => inside(p.x, p.y) && tileType(p.x, p.y) !== 'river' && !hedge(st, team.x, team.y, p.x, p.y) && roomFor(st, team, p.x, p.y));
-      if (!spot) return { ok: false };
-      team.attachedTo = null;
-      team.x = spot.x; team.y = spot.y;
-      team.acted = true;
-      return { ok: true, lines: [`🔗 ${team.name} leaves its platoon.`] };
-    }
-    if (!company || company.kind !== 'company' || company.side !== 'us' || !adjacent(company, team)) return { ok: false };
-    if (teamsOf(st, company).length >= 2) return { ok: false };
-    team.attachedTo = company.id;
-    team.x = company.x; team.y = company.y; team.at = company.at;
-    team.acted = true;
-    return { ok: true, lines: [`🔗 ${team.name} joins ${company.name}.`] };
-  }
-
   // Fields the battalion can call fire on: seen, with no Americans in them
   function canCallFire(st, x, y) {
     return inside(x, y) && sees(st, 'us', x, y) && at(st, x, y, 'us').length === 0;
@@ -915,7 +900,7 @@ const Sim = (() => {
     newGame, endTurn, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, moves, chargeSpots,
     rallyTargets, canAct, groupOf, groupName, members, canReact, firepower, teamsOf, canCallFire, holdsObjective, hourText, roomFor,
     startGermanHour, germanStep, answer, finishHour,
-    actShoot, actMoveShoot, moveShootSpots, actHalfShot, actMove, actCharge, actRally, actAttach, actFire, actBreach, breachSpots, sight, isSmall, cover, wire, lineSides, actLine, atHedge, acrossHedge, SIDE_NAMES,
+    actShoot, actMoveShoot, moveShootSpots, actHalfShot, actMove, actCharge, actRally, actFire, actBreach, breachSpots, sight, isSmall, cover, wire, lineSides, actLine, atHedge, acrossHedge, SIDE_NAMES,
     hasCutters: u => cutter(u),
   };
 })();

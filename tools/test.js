@@ -11,6 +11,17 @@ function check(name, fn) {
 }
 function assert(ok, message) { if (!ok) throw new Error(message); }
 const live = st => st.units.filter(u => u.x !== null);
+// A field's units are allowed: either one unit, or a rifle platoon with up to three teams or the captain.
+// (Teams and the captain can only come into a platoon's field, but may be left together there when the platoon moves on)
+function fieldOk(st, x, y) {
+  for (const side of ['us', 'de']) {
+    const here = live(st).filter(u => u.x === x && u.y === y && u.side === side);
+    if (here.length <= 1) continue;
+    const platoons = here.filter(u => u.kind === 'company').length, rest = here.filter(u => u.kind !== 'company');
+    if (platoons > 1 || !rest.every(u => Sim.isSmall(u)) || rest.length > 3) return false;
+  }
+  return true;
+}
 
 check('the same seed plays the same game', () => {
   const a = play(7, true), b = play(7, true);
@@ -38,8 +49,8 @@ check('nothing goes negative, out of range or into the river in 100 games', () =
     assert(st.ammo.mortars >= 0 && st.ammo.artillery >= 0, `seed ${seed}: negative ammunition`);
     assert(!TURNS || st.won || st.lost, `seed ${seed}: game did not end`);
     assert(!TURNS || st.turn <= TURNS, `seed ${seed}: ran past the last hour`);
-    // One unit to a field, each side (attached teams share their platoon's field)
-    for (const u of live(st)) assert(!live(st).some(o => o !== u && o.x === u.x && o.y === u.y && (o.attachedTo || o.id) !== (u.attachedTo || u.id)), `seed ${seed}: two units share ${u.x},${u.y}`);
+    // One unit to a field, except teams and the captain with a rifle platoon
+    for (const u of live(st)) assert(fieldOk(st, u.x, u.y), `seed ${seed}: too many units share ${u.x},${u.y}`);
   }
 });
 
@@ -106,11 +117,15 @@ check('every tank drives through hedges; wire stops men but not tanks; men break
 check('one unit to a field', () => {
   const st = Sim.newGame(2);
   for (let seed = 1; seed <= 20; seed++) {
-    const s2 = Sim.newGame(seed), here = live(s2);
-    for (const u of here) assert(!here.some(o => o !== u && o.x === u.x && o.y === u.y && (o.attachedTo || o.id) !== (u.attachedTo || u.id)), `seed ${seed}: ${u.name} starts sharing a field`);
+    const s2 = Sim.newGame(seed);
+    for (const u of live(s2)) assert(fieldOk(s2, u.x, u.y), `seed ${seed}: ${u.name} starts sharing a field it shouldn't`);
   }
   const co = Sim.unitById(st, 'B');
   assert(!Sim.roomFor(st, Sim.unitById(st, 'T1'), co.x, co.y), 'a tank section fitted in beside a rifle platoon');
+  assert(Sim.roomFor(st, Sim.unitById(st, 'mg1'), co.x, co.y) && Sim.roomFor(st, Sim.unitById(st, 'cap'), co.x, co.y), "a team or the captain could not join a rifle platoon's field");
+  const empty = [...Array(COLS).keys()].map(x => ({ x, y: 7 })).find(p => !Sim.at(st, p.x, p.y).length && Sim.tileType(p.x, p.y) !== 'river');
+  const mg = Sim.unitById(st, 'mg1'); mg.x = empty.x; mg.y = empty.y;
+  assert(!Sim.roomFor(st, Sim.unitById(st, 'bz1'), empty.x, empty.y), 'two teams shared a field with no platoon');
 });
 
 check('dice: every face is 1 to 6 and hits are the ones at or over the score needed', () => {

@@ -94,10 +94,6 @@ const UI = (() => {
       const state = u.shocked ? '<span class="pill bad">Shaken</span>' : u.acted ? '<span class="pill done">✓ Moved this hour</span>' : '<span class="pill ready">Ready</span>';
       menu.append(el('div', 'mhead', `<b>${u.name}${u.quality === 'elite' ? ' ★' : ''}</b><span>${state}</span>`));
       const acts = actionButtons(u);
-      if (Sim.isTeam(u) && u.kind !== 'pak') {
-        const co = st.units.find(c => c.side === 'us' && c.kind === 'company' && c.x !== null && Sim.adjacent(c, u));
-        acts.push({ mode: 'attach', label: u.attachedTo ? '🔗 Leave the platoon' : co ? `🔗 Join ${co.name}` : '🔗 Join a platoon next door', ok: !!(u.attachedTo || co) && Sim.canAct(st, u), title: 'Its move for the hour', run: () => Sim.actAttach(st, u, co) });
-      }
       for (const a of acts) {
         const b = el('button', '', a.label);
         b.disabled = !a.ok; b.title = a.title || '';
@@ -137,11 +133,8 @@ const UI = (() => {
       add('rally', '📣 Rally', Sim.rallyTargets(st, u).length > 0, 'Use his move to steady a shaken piece in his field or the next');
       if (Sim.breachSpots(st, u).length) add('breach', '⛏️ Break through', true, 'Through a hedge or wire into the next field: no shooting');
     } else {
-      // A team with a platoon moves with it; on its own it charges or moves and shoots
-      if (!u.attachedTo) {
-        add('charge', '⚔️ Charge', Sim.chargeSpots(st, u).length > 0, 'Up to two fields, no shooting');
-        add('moveShoot', '➡️ Move & shoot', Sim.moveShootSpots(st, u).length > 0, 'One field to where it can fire, then fire at half the dice (the red-hatched fields)');
-      }
+      add('charge', '⚔️ Charge', Sim.chargeSpots(st, u).length > 0, 'Up to two fields, no shooting');
+      add('moveShoot', '➡️ Move & shoot', Sim.moveShootSpots(st, u).length > 0, 'One field to where it can fire, then fire at half the dice (the red-hatched fields)');
       add('shoot', '🎯 Shoot', Sim.targets(st, u).length > 0, 'Fire with every die');
       if (Sim.breachSpots(st, u).length) add('breach', '⛏️ Break through', true, 'Through a hedge or wire into the next field: no shooting');
     }
@@ -163,7 +156,7 @@ const UI = (() => {
     const dice = u.kind === 'captain' ? '' : `🎲 ${Math.round(f.soft * 10) / 10} dice vs men${f.hard ? `, ${Math.round(f.hard * 10) / 10} vs tanks` : ''}`;
     const status = u.shocked ? '<span class="pill bad">Shaken: rest or rally</span>' : u.acted ? '<span class="pill done">✓ Moved this hour</span>' : '<span class="pill ready">Ready</span>';
     box.append(el('div', 'name', `${u.name}${u.quality === 'elite' ? ' ★' : ''}`));
-    box.append(el('div', 'sub', `${KIND[u.kind]}${u.attachedTo ? ` with ${Sim.unitById(st, u.attachedTo).name}` : ''}${Sim.hasCutters(u) ? ' · hedge cutters' : ''}`));
+    box.append(el('div', 'sub', `${KIND[u.kind]}${Sim.hasCutters(u) ? ' · hedge cutters' : ''}`));
     const where = u.kind === 'captain' || u.kind === 'pak' ? '' : u.at ? `🌳 Lining the ${Sim.SIDE_NAMES[u.at]} hedge` : 'In the open';
     box.append(el('div', 'stats', [strength, dice, where, status].filter(Boolean).map(s => `<span>${s}</span>`).join('')));
     const acts = el('div'); acts.id = 'actions'; acts.style.marginTop = '6px';
@@ -171,15 +164,6 @@ const UI = (() => {
       const btn = el('button', view.mode === a.mode ? 'on' : '', a.label);
       btn.disabled = !a.ok; btn.title = a.title;
       btn.onclick = () => { if (a.run) { const r = a.run(); if (r.ok) view.log.push(...r.lines); view.mode = null; } else view.mode = view.mode === a.mode ? null : a.mode; refresh(); };
-      acts.append(btn);
-    }
-    // Teams: join the company in their field, or leave it
-    if (Sim.isTeam(u) && u.kind !== 'pak') {
-      const co = st.units.find(c => c.side === 'us' && c.kind === 'company' && c.x !== null && Sim.adjacent(c, u));
-      const btn = el('button', '', u.attachedTo ? '🔗 Leave the platoon' : '🔗 Join a platoon');
-      btn.disabled = !(u.attachedTo || co) || !Sim.canAct(st, u);
-      btn.title = u.attachedTo ? 'Work on its own again (its move)' : 'Join a rifle platoon next door: it moves into its field and goes with it (its move)';
-      btn.onclick = () => { const r = Sim.actAttach(st, u, co); if (r.ok) view.log.push(...r.lines); refresh(); };
       acts.append(btn);
     }
     box.append(acts);

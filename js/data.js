@@ -4,7 +4,7 @@
 //   .  field        o  orchard (some cover)        h  hamlet: a few houses round a yard (good cover)
 //   v  village (good cover, no hedges round it)    r  river (nothing can enter it)    #  bridge (a lane across the river)
 // One unit to a field (Steve); only hand-to-hand fighting brings two sides into the same field.
-// A team attached to a rifle platoon is part of it and shares its field
+// MG and bazooka teams and the captain can also stand in a rifle platoon's field (Steve). Teams are never attached: each moves on its own
 //   =  lane east-west    |  lane north-south    +  crossroads (lanes have no hedges along their length)
 const MAP = [
   '..|..o.r.o',
@@ -84,11 +84,11 @@ const US_START = [
 // The Germans: a garrison already dug in round the objective, the rest marching up from the east to their posts.
 // Posts are given from the objective (dx, dy); garrison pieces start at theirs
 const DE_START = [
-  { id: 'd1', kind: 'company', name: '1. Fallschirmjäger-Zug', quality: 'elite', post: [0, 0], garrison: true, attach: 'dmg1' },
+  { id: 'd1', kind: 'company', name: '1. Fallschirmjäger-Zug', quality: 'elite', post: [0, 0], garrison: true },
   { id: 'dmg1', kind: 'mg42', name: 'MG 42 Team', post: [0, 0], garrison: true },
   { id: 'pak1', kind: 'pak', name: 'PaK 40', post: [1, 0], garrison: true },
   { id: 'dmg3', kind: 'mg42', name: 'MG 42 Team', post: [-1, 0], garrison: true },
-  { id: 'd2', kind: 'company', name: '2. Zug', quality: 'standard', post: [0, 1], attach: 'dmg2' },
+  { id: 'd2', kind: 'company', name: '2. Zug', quality: 'standard', post: [0, 1] },
   { id: 'dmg2', kind: 'mg42', name: 'MG 42 Team', post: [0, 1] },
   { id: 'd5', kind: 'company', name: '5. Zug', quality: 'standard', post: [0, -1] },
   { id: 'dmg4', kind: 'mg42', name: 'MG 42 Team', post: [-1, -1] },

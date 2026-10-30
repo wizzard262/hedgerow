@@ -128,8 +128,14 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - Steve: there is no Move: it's Charge, Move & shoot, Shoot or Rally
 - The plain Move is gone from the menus. The captain Charges or Rallies; a team on its own Charges, Moves & shoots or Shoots; a team with a platoon moves with it and can Shoot. (Break through and Line a hedge stay, for getting through hedges and wire and lining them)
 
+## 22. Teams and the captain with a platoon
+
+- Steve: the bazooka and MG teams and the captain can occupy a platoon's position
+- They can now stand in the same field as a rifle platoon (up to three with it). Otherwise it is still one unit to a field; tanks always have a field to themselves
+- Steve: forget attaching to a platoon. Gone: teams always move on their own (the German MG teams start in their platoons' fields instead)
+
 ## Sessions
 
 | # | Date | Length | What we did |
 |---|------|--------|-------------|
-| 1 | 2026-10-30 | about 7 hours | Prompts 1–21: rules, command points, reacting, tanks and hedge cutters, the look (pixel art to 3D tabletop), scales, river, villages, wire, six-move aim; one captain, piece menus, hedges stop moves, MG team model; bazooka teams, two-field charges; red targets; who has acted; company level; lining hedges, longer sight, the captain's guidon; one unit a field, no time limit; tracers and shells, greyed out, no activation tokens, Move & shoot hatching; tanks through hedges, charges for all; no plain move |
+| 1 | 2026-10-30 | about 7.25 hours | Prompts 1–22: rules, command points, reacting, tanks and hedge cutters, the look (pixel art to 3D tabletop), scales, river, villages, wire, six-move aim; one captain, piece menus, hedges stop moves, MG team model; bazooka teams, two-field charges; red targets; who has acted; company level; lining hedges, longer sight, the captain's guidon; one unit a field, no time limit; tracers and shells, greyed out, no activation tokens, Move & shoot hatching; tanks through hedges, charges for all; no plain move; teams and captain with a platoon |
