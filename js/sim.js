@@ -325,6 +325,22 @@ const Sim = (() => {
     return TO_HIT + cover(st, shooter, target) + (moving ? ON_THE_MOVE : 0) + (shooter.shocked ? SHAKEN_SHOOT : 0) - QUALITY[shooter.quality || 'standard'].shoot;
   }
 
+  // Why a shot needs what it needs, for the label on the target (Steve): each thing that makes it harder (−) or easier (+)
+  function needWhy(st, shooter, target, moving = false) {
+    const why = [];
+    const s = sight(st, shooter, target);
+    const far = Math.hypot(target.x - shooter.x, target.y - shooter.y) > 1.5;
+    const t = tileType(target.x, target.y);
+    const covers = (s ? s.cover - (far ? LONG_RANGE : 0) : 0) + (COVER[t] || 0);
+    if (covers > 0) why.push(`−${covers} cover`);
+    if (far) why.push(`−${LONG_RANGE} long range`);
+    if (moving) why.push(`−${ON_THE_MOVE} moving`);
+    if (shooter.shocked) why.push(`−${SHAKEN_SHOOT} shaken`);
+    if (isTank(target) && PIECES[target.kind].armour) why.push(`−${PIECES[target.kind].armour} armour`);
+    if (QUALITY[shooter.quality || 'standard'].shoot) why.push(`+${QUALITY[shooter.quality || 'standard'].shoot} elite`);
+    return why;
+  }
+
   // `blast` is set for the other pieces caught in a tank's high-explosive burst (they don't spread it again)
   function fireAt(st, shooter, target, power, withdraw = false, moving = false, blast = false) {
     const f = firepower(st, shooter);
@@ -408,6 +424,7 @@ const Sim = (() => {
   // Returns what happened to the hedge: 'cut' (driven through), 'climbed' (men clambered over) or ''
   function step(st, u, x, y, assault = false) {
     let how = '';
+    u.trail = null;
     if (wire(st, u.x, u.y, x, y)) { delete st.wire[edgeKey(u.x, u.y, x, y)]; how = isTank(u) ? 'flattened' : 'wirecut'; }
     if (hedge(st, u.x, u.y, x, y)) {
       if (cutter(u)) { delete st.hedges[edgeKey(u.x, u.y, x, y)]; how = 'cut'; } else how = 'climbed';
@@ -533,10 +550,13 @@ const Sim = (() => {
     if (u.kind === 'captain' || u.kind === 'mg' || u.kind === 'mg42' || PIECES[u.kind].fixed) return [];
     const home = { x: u.x, y: u.y, at: u.at }, out = [];
     for (const route of routesFor(st, u, MOVE_SHOOT_MOVES, false)) {
-      // Try it: stand at the goal, facing the way it came in
-      const goal = route[route.length - 1], from = route.length > 1 ? route[route.length - 2] : home;
-      u.at = dirTo(from, goal); u.x = goal.x; u.y = goal.y;
-      if (targets(st, u).length) out.push(route);
+      // Try it: stand at the goal by each hedge in turn, or in the open; any place with a shot will do
+      const goal = route[route.length - 1];
+      u.x = goal.x; u.y = goal.y;
+      for (const side of ['n', 'e', 's', 'w', null]) {
+        u.at = side;
+        if (targets(st, u).length) { out.push(route); break; }
+      }
       u.x = home.x; u.y = home.y; u.at = home.at;
     }
     return out;
@@ -547,12 +567,16 @@ const Sim = (() => {
   }
 
   // Move and shoot: the piece moves a field, then it may fire once on the move, needing one more (actHalfShot), before doing anything else
-  function actMoveShoot(st, u, x, y) {
+  function actMoveShoot(st, u, x, y, side) {
     const route = canAct(st, u) && moveShootRoutes(st, u).find(r => r[r.length - 1].x === x && r[r.length - 1].y === y);
     if (!route) return { ok: false };
     spend(st, u);
     const lines = followRoute(st, u, route);
     const how = step(st, u, x, y);
+    // Where it stands: where it was sent, or (none given) the first place in the field with a shot
+    const place = side !== undefined ? side : [u.at, 'n', 'e', 's', 'w', null].find(p => { u.at = p; return targets(st, u).length; });
+    standAt(st, u, place === undefined ? u.at : place);
+    setTrail(st, u, route);
     lines.push(moveLine(u, how).replace(/\.$/, ''));
     u.halfShot = targets(st, u).length > 0;
     return { ok: true, lines: [lines.join(', ') + '.'] };
@@ -657,7 +681,22 @@ const Sim = (() => {
     return chargeRoutes(st, u).map(r => ({ x: r[r.length - 1].x, y: r[r.length - 1].y }));
   }
 
-  function actCharge(st, u, x, y) {
+  // The fields a piece went through on its way (for the table to show it going round, not across houses)
+  function setTrail(st, u, route) {
+    const trail = route.slice(0, -1).map(p => ({ x: p.x, y: p.y }));
+    u.trail = trail;
+    for (const t of u.kind === 'company' ? teamsOf(st, u) : []) t.trail = trail;
+  }
+
+  // Where in its field a piece stands after a move (Steve: where the click was): lining that hedge, or out in the open
+  // (side null). Its teams stand with it
+  function standAt(st, u, side) {
+    if (side === undefined) return;
+    u.at = side;
+    for (const t of u.kind === 'company' ? teamsOf(st, u) : []) t.at = side;
+  }
+
+  function actCharge(st, u, x, y, side) {
     const route = canAct(st, u) && chargeRoutes(st, u).find(r => r[r.length - 1].x === x && r[r.length - 1].y === y);
     if (!route) return { ok: false };
     spend(st, u);
@@ -666,6 +705,8 @@ const Sim = (() => {
     const home = { x: u.x, y: u.y, at: u.at };
     lines.push(...followRoute(st, u, route));
     lines.push(...charge(st, u, x, y));
+    // Arrived (not beaten back): it stands where it was sent, and the table shows the way it came
+    if (u.x === x && u.y === y) { standAt(st, u, side); setTrail(st, u, route); }
     // Beaten back into a field of friends it passed through: it can't stay there, so it ends back where it started
     if (route.some(p => p.pass && p.x === u.x && p.y === u.y)) {
       u.x = home.x; u.y = home.y; u.at = home.at;
@@ -994,7 +1035,7 @@ const Sim = (() => {
     newGame, endTurn, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, moves, chargeSpots,
     rallyTargets, canAct, groupOf, groupName, members, canReact, firepower, teamsOf, canCallFire, holdsObjective, hourText, roomFor,
     startGermanHour, germanStep, answer, finishHour,
-    actShoot, actMoveShoot, moveShootSpots, chargeRoutes, needFor, canSelfRally, actSelfRally, actHalfShot, actMove, actCharge, actRally, actFire, actBreach, breachSpots, sight, isSmall, cover, wire, lineSides, actLine, atHedge, acrossHedge, SIDE_NAMES,
+    actShoot, actMoveShoot, moveShootSpots, chargeRoutes, DIRS, needWhy, needFor, canSelfRally, actSelfRally, actHalfShot, actMove, actCharge, actRally, actFire, actBreach, breachSpots, sight, isSmall, cover, wire, lineSides, actLine, atHedge, acrossHedge, SIDE_NAMES,
     hasCutters: u => cutter(u),
   };
 })();

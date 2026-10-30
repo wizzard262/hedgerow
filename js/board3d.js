@@ -191,7 +191,8 @@ const Board = (() => {
     const flip = v => (west ? v : 1 - v);
     // Pieces lining a hedge stand close to it: everything in the field is pushed that way
     const lead = here.find(u => u.kind === 'company') || here.find(u => Sim.isTank(u)) || here[0];
-    const push = lead && lead.at ? { e: [0.14, 0], w: [-0.14, 0], s: [0, 0.12], n: [0, -0.12] }[lead.at] : [0, 0];
+    const push = lead && lead.at && Sim.inside(x + Sim.DIRS[lead.at][0], y + Sim.DIRS[lead.at][1]) && Sim.hedge(st, x, y, x + Sim.DIRS[lead.at][0], y + Sim.DIRS[lead.at][1])
+      ? { e: [0.2, 0], w: [-0.2, 0], s: [0, 0.17], n: [0, -0.17] }[lead.at] : [0, 0];
     const loose = (u, k) => { const R = seeded(u.id.length * 977 + x * 131 + y * 71 + k * 7 + u.id.charCodeAt(0)); return [(R() - 0.5) * 0.09, (R() - 0.5) * 0.07, (R() - 0.5) * 0.5]; };
     if (company) {
       const g = model(company), spots = armour ? [[0.2, 0.28], [0.17, 0.53], [0.22, 0.78]] : [[0.3, 0.3], [0.42, 0.55], [0.28, 0.8]];
@@ -222,7 +223,10 @@ const Board = (() => {
     let moving = false;
     const k = 1 - Math.exp(-dt * 6);
     scene.traverse(o => {
-      const to = o.userData.to;
+      // On a longer move, through each field of the way in turn
+      const way = o.userData.way;
+      if (way && way.length && Math.hypot(way[0].x - o.position.x, way[0].z - o.position.z) < 0.12) way.shift();
+      const to = way && way.length ? Object.assign({}, way[0], { ry: o.userData.to.ry }) : o.userData.to;
       if (!to) return;
       const dx = to.x - o.position.x, dz = to.z - o.position.z, dr = to.ry - o.rotation.y;
       if (Math.abs(dx) + Math.abs(dz) + Math.abs(dr) < 0.002) { o.position.x = to.x; o.position.z = to.z; o.rotation.y = to.ry; return; }
@@ -272,12 +276,20 @@ const Board = (() => {
       if (g) { g.visible = u.x !== null; greyOut(g, u.side === 'us' && u.acted); }
       // A piece that has changed field: men run, tanks rumble (each sound once a frame, however many moved)
       const where = u.x === null ? null : u.x + ',' + u.y;
-      if (g && g.userData.field !== undefined && g.userData.field !== where && where) { if (Sim.isTank(u)) drove = true; else ran = true; }
+      if (g && g.userData.field !== undefined && g.userData.field !== where && where) { if (Sim.isTank(u)) drove = true; else ran = true; g.userData.newTrail = u.trail || []; }
       if (g) g.userData.field = where;
     }
     if (ran) Sound.play('run');
     if (drove) Sound.play('tank');
     for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) arrange(st, x, y);
+    // The way a piece that just moved goes: through each field it passed, keeping its place in the field
+    for (const u of st.units) {
+      const g = pieces[u.id];
+      if (!g || !g.userData.newTrail || u.x === null) continue;
+      const offX = g.userData.to.x - u.x, offZ = g.userData.to.z - u.y;
+      g.userData.way = g.userData.newTrail.map(p => ({ x: p.x + offX, z: p.y + offZ }));
+      g.userData.newTrail = null;
+    }
     for (const u of st.units) {
       if (!pieces[u.id]) continue;
       const big = u.kind === 'company' || Sim.isTank(u);
@@ -301,7 +313,7 @@ const Board = (() => {
     }
     return hatchTex;
   }
-  const MARK = { hatch: '#e8352a', assault: '#ff2a1a', move: '#7fc6e0', charge: '#e0705f', shoot: '#e6c95a', rally: '#8fd47a', fire: '#e8a05a', breach: '#c9a46a', attach: '#b9a0e0', select: '#fff6dc', hover: '#ffffff' };
+  const MARK = { hatch: '#e8352a', assault: '#ff2a1a', cover: '#7dff5a', line: '#7dff5a', move: '#7fc6e0', charge: '#e0705f', shoot: '#e6c95a', rally: '#8fd47a', fire: '#e8a05a', breach: '#c9a46a', attach: '#b9a0e0', select: '#fff6dc', hover: '#ffffff' };
 
   // A coloured square of light on a field, with a brighter rim
   function mark(x, y, kind, inset = 0.05) {
@@ -313,6 +325,31 @@ const Board = (() => {
     if (kind === 'hover') return;
     const s = 0.5 - inset, pts = [[-s, -s], [s, -s], [s, s], [-s, s], [-s, -s]].map(([a, b]) => new T.Vector3(x + 0.5 + a, 0.006, y + 0.5 + b));
     marks.add(new T.Line(new T.BufferGeometry().setFromPoints(pts), new T.LineBasicMaterial({ color: c, transparent: true, opacity: 0.95 })));
+  }
+
+  // Over a field a piece can move to: where it would stand (by the hedge under the pointer, or in the open), and
+  // whether that is cover: a bright green bar along a hedge it would line, the field outlined green in houses or trees
+  function showStand(st, view) {
+    const h = view.hover;
+    const spot = h && (view.spots || []).find(s => s.x === h.x && s.y === h.y && ['charge', 'hatch', 'line'].includes(s.kind));
+    if (!spot) return;
+    const type = Sim.tileType(h.x, h.y);
+    const d = h.side && Sim.DIRS[h.side];
+    const byHedge = d && Sim.inside(h.x + d[0], h.y + d[1]) && Sim.hedge(st, h.x, h.y, h.x + d[0], h.y + d[1]);
+    const inCover = ['village', 'hamlet', 'orchard'].includes(type);
+    const green = new T.MeshBasicMaterial({ color: 0x7dff5a, transparent: true, opacity: 0.85, depthWrite: false, depthTest: false });
+    if (byHedge) {
+      // The bar along the hedge it would line
+      const along = h.side === 'n' || h.side === 's';
+      const bar = new T.Mesh(new T.PlaneGeometry(along ? 0.9 : 0.11, along ? 0.11 : 0.9), green);
+      const cx = h.x + 0.5 + d[0] * 0.36, cz = h.y + 0.5 + d[1] * 0.36;
+      at(bar, cx, 0.02, cz, -Math.PI / 2, 0, 0); marks.add(bar);
+    }
+    if (inCover) mark(h.x, h.y, 'cover', 0.08);
+    const text = byHedge ? 'Cover: hedge' : inCover ? `Cover: ${type === 'orchard' ? 'trees' : 'houses'}` : 'In the open';
+    const w = word(text, byHedge || inCover ? '#9dff7a' : '#f0e8d6', false);
+    w.position.set(h.x + 0.5 + (d ? d[0] * 0.25 : 0), 0.32, h.y + 0.5 + (d ? d[1] * 0.25 : 0));
+    marks.add(w);
   }
 
   // ---------- Red targets over the pieces that can be shot ----------
@@ -341,19 +378,24 @@ const Board = (() => {
     return n.k ? new T.Vector3(to.x + c.x / n.k, 0, to.z + c.z / n.k) : new T.Vector3(u.x + 0.5, 0, u.y + 0.5);
   }
 
-  // "5+": the score each die needs, in a small red label
+  // "5+": the score each die needs, in a small red label, and under it why (Steve): "−1 cover · −1 long range"
   const labelTex = {};
-  function needLabel(n) {
-    if (!labelTex[n]) {
-      const c = document.createElement('canvas'); c.width = 128; c.height = 64;
-      const g = c.getContext('2d');
-      g.fillStyle = 'rgba(150,25,20,.92)'; g.beginPath(); g.roundRect(8, 6, 112, 52, 14); g.fill();
+  function needLabel(n, why = []) {
+    const key = n + '|' + why.join(',');
+    if (!labelTex[key]) {
+      const c = document.createElement('canvas'), g = c.getContext('2d');
+      const reason = why.join(' · ');
+      g.font = 'bold 30px Georgia, serif';
+      c.width = Math.max(128, Math.ceil(g.measureText(reason).width) + 32); c.height = why.length ? 104 : 64;
+      g.fillStyle = 'rgba(150,25,20,.92)'; g.beginPath(); g.roundRect(4, 6, c.width - 8, c.height - 12, 14); g.fill();
       g.fillStyle = '#fff4e8'; g.font = 'bold 40px Georgia, serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
-      g.fillText(n >= 6 ? '6' : n + '+', 64, 34);
-      labelTex[n] = new T.CanvasTexture(c);
+      g.fillText(n >= 6 ? '6' : n + '+', c.width / 2, 34);
+      if (why.length) { g.font = 'bold 30px Georgia, serif'; g.fillStyle = '#ffd9a0'; g.fillText(reason, c.width / 2, 76); }
+      labelTex[key] = { map: new T.CanvasTexture(c), w: c.width, h: c.height };
     }
-    const s = new T.Sprite(new T.SpriteMaterial({ map: labelTex[n], transparent: true, depthTest: false }));
-    s.scale.set(0.3, 0.15, 1);
+    const t = labelTex[key];
+    const s = new T.Sprite(new T.SpriteMaterial({ map: t.map, transparent: true, depthTest: false }));
+    s.scale.set(0.45 * t.w / 128, 0.225 * t.h / 64, 1);
     return s;
   }
 
@@ -380,7 +422,8 @@ const Board = (() => {
       at(ring, p.x, 0.008, p.z, -Math.PI / 2, 0, 0); marks.add(ring);
       // The cross-hair, bigger under the pointer
       const r = reticle(); r.scale.setScalar((big ? 0.62 : 0.5) * pulse * (lit ? 1.45 : 1)); r.position.copy(reticleSpot(u)); marks.add(r);
-      if (u.needNow) { const l = needLabel(u.needNow); l.position.set(p.x, big ? 0.3 : 0.24, p.z); marks.add(l); }
+      // The score and why, just in front of the piece so the cross-hair doesn't hide it
+      if (u.needNow) { const l = needLabel(u.needNow, u.needWhy || []); l.position.set(p.x, 0.12, p.z + (big ? 0.36 : 0.28)); marks.add(l); }
     }
   }
 
@@ -685,6 +728,7 @@ const Board = (() => {
     while (marks.children.length) marks.remove(marks.children[0]);
     if (view.hover) mark(view.hover.x, view.hover.y, 'hover', 0.02);
     for (const s of view.spots || []) mark(s.x, s.y, s.kind);
+    showStand(st, view);
     if (view.selected && view.selected.x !== null && pieces[view.selected.id]) {
       const p = pieceCentre(view.selected), big = view.selected.kind === 'company' || Sim.isTank(view.selected);
       const ring = new T.Mesh(new T.RingGeometry(big ? 0.34 : 0.21, big ? 0.39 : 0.25, 56), new T.MeshBasicMaterial({ color: 0xfff6dc, transparent: true, opacity: 0.95, depthWrite: false }));
@@ -716,7 +760,12 @@ const Board = (() => {
     const p = new T.Vector3();
     if (!ray.ray.intersectPlane(table, p)) return null;
     const x = Math.floor(p.x), y = Math.floor(p.z);
-    return Sim.inside(x, y) ? { x, y } : null;
+    if (!Sim.inside(x, y)) return null;
+    // The nearest edge, if the point is near one: that's the hedge a piece sent there will line
+    const edges = { w: p.x - x, e: x + 1 - p.x, n: p.z - y, s: y + 1 - p.z };
+    const nearest = Object.keys(edges).sort((a, b) => edges[a] - edges[b])[0];
+    const side = edges[nearest] < 0.3 ? nearest : null;
+    return { x, y, side };
   }
 
   // Which of your pieces is under a point on the page: the model the ray hits first, or else the nearest piece in that field

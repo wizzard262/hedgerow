@@ -7,14 +7,14 @@
 // MG and bazooka teams and the captain can also stand in a rifle platoon's field (Steve). Teams are never attached: each moves on its own
 //   =  lane east-west    |  lane north-south    +  crossroads (lanes have no hedges along their length)
 const MAP = [
-  '..|..o.r.o',
+  '..|o.o.r.o',
   '..|.vv.r.h',
   '..+====#==',
-  '.o|.v..r..',
+  '.o|.v..ro.',
   '.h|.vv.r.o',
   '==+====#==',
-  '..|.o..r.h',
-  'o.|...hr..',
+  '..|.oo.r.h',
+  'o.|.o.hr..',
 ];
 const COLS = MAP[0].length, ROWS = MAP.length;
 // The villages; each game one of them is the objective: the field to take and hold, its church in the middle
@@ -45,7 +45,7 @@ const QUALITY = { elite: { name: 'Elite', shoot: 1, assault: 1.3, rally: 0.9 }, 
 const SIGHT_RANGE = 3;           // fields a piece can shoot across open ground (hedges, villages and orchards block the view)
 const LONG_RANGE = 1;            // added to the score needed beyond the next field (the three penalties stack; a 6 always hits)
 const ON_THE_MOVE = 1;           // added to the score needed when firing after a move (Steve: like range and cover, +1 each)
-const COVER = { hedge: 1, village: 1, hamlet: 1, orchard: 0 };   // added to the score needed against a target behind a hedge, in the village, a hamlet or an orchard
+const COVER = { hedge: 1, village: 1, hamlet: 1, orchard: 1 };   // added to the score needed against a target behind a hedge, in the village, a hamlet or an orchard
 const RALLY_RANGE = 3;           // the captain rallies a shaken friendly piece up to this many fields away (Steve)
 const SELF_RALLY = { standard: 0.5, elite: 0.65 };   // a shaken piece can use its move to try to rally itself: its chance
 

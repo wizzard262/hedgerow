@@ -34,7 +34,10 @@ const UI = (() => {
     if (view.mode === 'rally') list = fields(Sim.rallyTargets(st, u));
     if (view.mode === 'breach') list = Sim.breachSpots(st, u);
     // A charge into a field the Germans hold is a hand-to-hand fight: marked differently
-    return uniq(list).map(p => Object.assign(p, { kind: view.mode === 'charge' && Sim.at(st, p.x, p.y, 'de').length ? 'assault' : kind }));
+    const marked = uniq(list).map(p => Object.assign(p, { kind: view.mode === 'charge' && Sim.at(st, p.x, p.y, 'de').length ? 'assault' : kind }));
+    // Charging: its own field is marked too, to go and line another of its hedges (the old Line a hedge, Steve: implicit)
+    if (view.mode === 'charge' && Sim.canAct(st, u) && Sim.lineSides(st, u).length) marked.push({ x: u.x, y: u.y, kind: 'line' });
+    return marked;
   }
 
   // The pieces the chosen piece could shoot now, to mark with red targets: while choosing Shoot, or the shot of a Move & shoot.
@@ -43,11 +46,21 @@ const UI = (() => {
     // Mortars or guns chosen: every German piece in a field they can be called on to, with the score their dice need
     if (view.mode && view.mode.startsWith('fire:')) {
       const inReach = st.units.filter(t => t.side === 'de' && t.x !== null && Sim.canCallFire(st, t.x, t.y));
-      return inReach.map(t => { t.needNow = TO_HIT + (Sim.tileType(t.x, t.y) === 'village' ? COVER.village : 0); return t; });
+      return inReach.map(t => {
+        const inVillage = Sim.tileType(t.x, t.y) === 'village';
+        t.needNow = TO_HIT + (inVillage ? COVER.village : 0);
+        t.needWhy = inVillage ? [`−${COVER.village} cover`] : [];
+        return t;
+      });
     }
     const u = selected();
     if (!u || !['shoot', 'halfShot'].includes(view.mode)) return [];
-    return Sim.targets(st, u).map(t => { t.needNow = Math.min(6, Sim.needFor(st, u, t, view.mode === 'halfShot') + (Sim.isTank(t) ? PIECES[t.kind].armour : 0)); return t; });
+    const moving = view.mode === 'halfShot';
+    return Sim.targets(st, u).map(t => {
+      t.needNow = Math.min(6, Sim.needFor(st, u, t, moving) + (Sim.isTank(t) ? PIECES[t.kind].armour : 0));
+      t.needWhy = Sim.needWhy(st, u, t, moving);
+      return t;
+    });
   }
 
   // Fire on a target chosen by its red cross-hair
@@ -77,15 +90,16 @@ const UI = (() => {
 
   // A click on the table: carry out the chosen action on a highlighted field, or choose the piece clicked (one piece,
   // not the whole field). Returns that piece, for its menu
-  function clickField(x, y, picked) {
+  function clickField(x, y, picked, side) {
     if (st.won || st.lost || st.de) return null;
     const u = selected();
     const spot = spots().find(p => p.x === x && p.y === y);
     let r = null;
     if (view.mode && spot) {
       if (view.mode.startsWith('fire:')) r = Sim.actFire(st, view.mode.slice(5), x, y);
-      else if (view.mode === 'charge') r = Sim.actCharge(st, u, x, y);
-      else if (view.mode === 'moveShoot') r = Sim.actMoveShoot(st, u, x, y);
+      else if (view.mode === 'charge' && spot.kind === 'line') r = Sim.lineSides(st, u).includes(side) ? Sim.actLine(st, u, side) : null;
+      else if (view.mode === 'charge') r = Sim.actCharge(st, u, x, y, side);
+      else if (view.mode === 'moveShoot') r = Sim.actMoveShoot(st, u, x, y, side);
       else if (view.mode === 'breach') r = Sim.actBreach(st, u, x, y);
       else if (view.mode === 'shoot') r = Sim.actShoot(st, u, pickTarget(u, x, y));
       else if (view.mode === 'halfShot') r = Sim.actHalfShot(st, u, pickTarget(u, x, y));
@@ -171,7 +185,6 @@ const UI = (() => {
       if (Sim.breachSpots(st, u).length) add('breach', '⛏️ Break through', true, 'Through a hedge or wire into the next field: no shooting');
     }
     // Line another hedge of its field, to fire through it
-    for (const side of Sim.lineSides(st, u)) b.push({ mode: 'line', label: `🌳 Line the ${Sim.SIDE_NAMES[side]} hedge`, ok: can, title: 'Its move: from the hedge it can fire through it', run: () => Sim.actLine(st, u, side) });
     // Move & shoot is one action (Steve): after the move, the same button picks the target
     if (u.halfShot) {
       const i = b.findIndex(a => a.mode === 'moveShoot');
@@ -212,8 +225,8 @@ const UI = (() => {
       : view.mode.startsWith('fire:') ? 'Click a red target, or a field with Germans your troops can see.'
       : view.mode === 'halfShot' ? 'Moved. Click a red target to fire on it (one more needed on the move), or Esc to hold fire.'
       : view.mode === 'shoot' ? 'Click a red target to fire on it. Esc cancels.'
-      : view.mode === 'charge' ? 'Click a field to charge to; the bright red ones are held by the Germans: a hand-to-hand fight. Esc cancels.'
-      : view.mode === 'moveShoot' ? `Click a red-hatched field: ${u ? u.name : 'the piece'} moves there and can fire. Esc cancels.`
+      : view.mode === 'charge' ? 'Click where in a field to go: by a hedge to line it (green: cover), or the middle for the open. Bright red fields are held by the Germans: a hand-to-hand fight. Its own field (green): line another hedge. Esc cancels.'
+      : view.mode === 'moveShoot' ? `Click where in a red-hatched field to go (by a hedge to line it, green: cover): ${u ? u.name : 'the piece'} moves there and can fire. Esc cancels.`
       : `Click a highlighted field for ${u ? u.name : 'the piece'}. Esc cancels.`;
     $('#hint').textContent = text;
   }

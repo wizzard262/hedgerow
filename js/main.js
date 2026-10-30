@@ -100,7 +100,7 @@ window.Game = (() => {
     const f = Board.fieldAt(e.clientX, e.clientY);
     if (!f) return;
     // The one piece under the pointer (the nearest in the field if the click misses the models)
-    const mine = UI.clickField(f.x, f.y, Board.pieceAt(st, e.clientX, e.clientY));
+    const mine = UI.clickField(f.x, f.y, Board.pieceAt(st, e.clientX, e.clientY), f.side);
     changed();
     // Your pieces there: open their menu by the click
     // Picking the next piece clears the last shots' dice off the table
@@ -112,9 +112,10 @@ window.Game = (() => {
     const hot = Board.targetAt(UI.targets(), e.clientX, e.clientY);
     if ((hot && hot.id) !== (hotTarget && hotTarget.id)) { hotTarget = hot; dirty = true; }
     const f = Board.fieldAt(e.clientX, e.clientY);
-    if ((f && hover && f.x === hover.x && f.y === hover.y) || (!f && !hover)) return;
+    const sameField = f && hover && f.x === hover.x && f.y === hover.y;
+    if ((sameField && f.side === hover.side) || (!f && !hover)) return;
     hover = f; dirty = true;
-    if ($('#menu').hidden) tooltip(e, f);
+    if (!sameField && $('#menu').hidden) tooltip(e, f);
   });
   board.addEventListener('mouseleave', () => { hover = null; dirty = true; $('#tip').style.display = 'none'; });
 

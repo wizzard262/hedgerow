@@ -294,6 +294,36 @@ check("a tank's high explosive hits every piece on foot in the field, like a mor
   assert(st.fx.filter(f => f.faces).length === 1, 'a rifle platoon hit more than one piece');
 });
 
+check('no one shoots through a village, hamlet or orchard', () => {
+  for (let seed = 1; seed <= 20; seed++) {
+    const st = Sim.newGame(seed);
+    const all = st.units.filter(u => u.x !== null);
+    // Put pieces all over the board and check every shot anyone could take
+    for (const a of all) for (const b of all) {
+      if (a.side === b.side || !Sim.sight(st, a, b)) continue;
+      const dx = b.x - a.x, dy = b.y - a.y, n = Math.max(Math.abs(dx), Math.abs(dy));
+      for (let k = 1; k < n; k++) {
+        const fx = Math.round(a.x + dx * k / n), fy = Math.round(a.y + dy * k / n);
+        if (fx === a.x && fy === a.y) continue;
+        if (fx === b.x && fy === b.y) continue;
+        assert(!['village', 'hamlet', 'orchard'].includes(Sim.tileType(fx, fy)), `seed ${seed}: ${a.name} sees ${b.name} through ${Sim.tileType(fx, fy)} at ${fx},${fy}`);
+      }
+    }
+  }
+});
+
+check('a piece arriving by a hedge lines it, in the middle stands in the open', () => {
+  const st = Sim.newGame(3);
+  st.hedges = {}; st.wire = {};
+  const able = Sim.unitById(st, 'A');
+  for (const u of st.units) if (u !== able) u.x = u.y = null;
+  able.x = 0; able.y = 6;
+  st.hedges['2,6|3,6'] = true;
+  assert(Sim.actCharge(st, able, 2, 6, 'e').ok && able.at === 'e', 'it did not line the hedge it was sent to');
+  able.acted = false;
+  assert(Sim.actCharge(st, able, 1, 6, null).ok && able.at === null, 'it did not stand in the open');
+});
+
 check('leaving everything alone never wins', () => {
   for (let seed = 1; seed <= 30; seed++) assert(!play(seed, false).won, `seed ${seed} won by doing nothing`);
 });
