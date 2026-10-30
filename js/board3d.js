@@ -442,7 +442,11 @@ const Board = (() => {
     while (marks.children.length) marks.remove(marks.children[0]);
     if (view.hover) mark(view.hover.x, view.hover.y, 'hover', 0.02);
     for (const s of view.spots || []) mark(s.x, s.y, s.kind);
-    if (view.selected && view.selected.x !== null) mark(view.selected.x, view.selected.y, 'select', 0.015);
+    if (view.selected && view.selected.x !== null && pieces[view.selected.id]) {
+      const p = pieceCentre(view.selected), big = view.selected.kind === 'company' || Sim.isTank(view.selected);
+      const ring = new T.Mesh(new T.RingGeometry(big ? 0.34 : 0.21, big ? 0.39 : 0.25, 56), new T.MeshBasicMaterial({ color: 0xfff6dc, transparent: true, opacity: 0.95, depthWrite: false }));
+      at(ring, p.x, 0.009, p.z, -Math.PI / 2, 0, 0); marks.add(ring);
+    }
     if (view.targets && view.targets.length) markTargets(view.targets);
     if (view.ready) for (const u of st.units) {
       if (u.side !== 'us' || u.x === null || !pieces[u.id]) continue;
@@ -472,11 +476,28 @@ const Board = (() => {
     return Sim.inside(x, y) ? { x, y } : null;
   }
 
+  // Which of your pieces is under a point on the page: the model the ray hits first, or else the nearest piece in that field
+  function pieceAt(st, clientX, clientY, side = 'us') {
+    const r = renderer.domElement.getBoundingClientRect();
+    ray.setFromCamera(new T.Vector2((clientX - r.left) / r.width * 2 - 1, -(clientY - r.top) / r.height * 2 + 1), camera);
+    const mine = st.units.filter(u => u.side === side && u.x !== null && pieces[u.id] && pieces[u.id].visible);
+    const hits = ray.intersectObjects(mine.map(u => pieces[u.id]), true);
+    if (hits.length) {
+      // Climb from the mesh hit to the piece's own group
+      for (let o = hits[0].object; o; o = o.parent) { const u = mine.find(m => pieces[m.id] === o); if (u) return u; }
+    }
+    const p = new T.Vector3();
+    if (!ray.ray.intersectPlane(table, p)) return null;
+    const fx = Math.floor(p.x), fy = Math.floor(p.z);
+    const here = mine.filter(u => u.x === fx && u.y === fy);
+    return here.sort((a, b) => pieceCentre(a).distanceTo(p) - pieceCentre(b).distanceTo(p))[0] || null;
+  }
+
   // Where a field's top edge is on the page, for labels
   function screenPoint(x, y, h = 0) {
     const p = new T.Vector3(x, h, y).project(camera), r = renderer.domElement.getBoundingClientRect();
     return { x: r.left + (p.x + 1) / 2 * r.width, y: r.top + (1 - p.y) / 2 * r.height };
   }
 
-  return { init, resize, render, fieldAt, screenPoint, canvas: () => renderer.domElement };
+  return { init, resize, render, fieldAt, pieceAt, screenPoint, canvas: () => renderer.domElement };
 })();

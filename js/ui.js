@@ -53,9 +53,9 @@ const UI = (() => {
 
   // ---------- Clicking the table ----------
 
-  // A click on the table: carry out the chosen action on a highlighted field, or open the menu for your pieces there.
-  // Returns the pieces to offer in a menu, if any
-  function clickField(x, y) {
+  // A click on the table: carry out the chosen action on a highlighted field, or choose the piece clicked (one piece,
+  // not the whole field). Returns that piece, for its menu
+  function clickField(x, y, picked) {
     if (st.won || st.lost || st.de) return null;
     const u = selected();
     const spot = spots().find(p => p.x === x && p.y === y);
@@ -78,12 +78,11 @@ const UI = (() => {
       }
       return null;
     }
-    // Otherwise your pieces in the field, for the menu (the first one chosen)
-    const mine = Sim.at(st, x, y, 'us');
+    // Otherwise the one piece clicked
     view.mode = null;
-    if (!mine.length) { view.sel = null; return null; }
-    if (!mine.some(m => m.id === view.sel)) view.sel = mine[0].id;
-    return mine;
+    if (!picked) { view.sel = null; return null; }
+    view.sel = picked.id;
+    return [picked];
   }
 
   // The menu by a piece on the table: for each of your pieces in the field, its name and state and the actions it can take now
