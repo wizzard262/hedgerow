@@ -144,8 +144,13 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - Steve: pieces can move through others with a charge: a tank can move through a friendly unit and vice versa, the same with infantry
 - A two-field charge can now pass through a field held by your own pieces on the way; it can't stop there
 
+## 25. Range, cover and moving
+
+- Steve: long range is less effective, as is firing into cover, as is firing on the move
+- Steve chose: the same for all three: each adds one to the score the dice need (they stack; a 6 always hits). Firing on the move now rolls full dice but needs one more (it used to be half the dice). Each red target now shows the score needed ("5+", "6")
+
 ## Sessions
 
 | # | Date | Length | What we did |
 |---|------|--------|-------------|
-| 1 | 2026-10-30 | about 7.5 hours | Prompts 1–24: rules, command points, reacting, tanks and hedge cutters, the look (pixel art to 3D tabletop), scales, river, villages, wire, six-move aim; one captain, piece menus, hedges stop moves, MG team model; bazooka teams, two-field charges; red targets; who has acted; company level; lining hedges, longer sight, the captain's guidon; one unit a field, no time limit; tracers and shells, greyed out, no activation tokens, Move & shoot hatching; tanks through hedges, charges for all; no plain move; teams and captain with a platoon, no attaching; one piece at a time; charging through friends |
+| 1 | 2026-10-30 | about 7.75 hours | Prompts 1–25: rules, command points, reacting, tanks and hedge cutters, the look (pixel art to 3D tabletop), scales, river, villages, wire, six-move aim; one captain, piece menus, hedges stop moves, MG team model; bazooka teams, two-field charges; red targets; who has acted; company level; lining hedges, longer sight, the captain's guidon; one unit a field, no time limit; tracers and shells, greyed out, no activation tokens, Move & shoot hatching; tanks through hedges, charges for all; no plain move; teams and captain with a platoon, no attaching; one piece at a time; charging through friends; range, cover and moving +1 each |

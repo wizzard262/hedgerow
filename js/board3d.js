@@ -313,6 +313,22 @@ const Board = (() => {
     return n.k ? new T.Vector3(to.x + c.x / n.k, 0, to.z + c.z / n.k) : new T.Vector3(u.x + 0.5, 0, u.y + 0.5);
   }
 
+  // "5+": the score each die needs, in a small red label
+  const labelTex = {};
+  function needLabel(n) {
+    if (!labelTex[n]) {
+      const c = document.createElement('canvas'); c.width = 128; c.height = 64;
+      const g = c.getContext('2d');
+      g.fillStyle = 'rgba(150,25,20,.92)'; g.beginPath(); g.roundRect(8, 6, 112, 52, 14); g.fill();
+      g.fillStyle = '#fff4e8'; g.font = 'bold 40px Georgia, serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText(n >= 6 ? '6' : n + '+', 64, 34);
+      labelTex[n] = new T.CanvasTexture(c);
+    }
+    const s = new T.Sprite(new T.SpriteMaterial({ map: labelTex[n], transparent: true, depthTest: false }));
+    s.scale.set(0.3, 0.15, 1);
+    return s;
+  }
+
   function markTargets(list) {
     const pulse = 1 + 0.08 * Math.sin(performance.now() / 180);
     for (const u of list) {
@@ -320,6 +336,7 @@ const Board = (() => {
       const ring = new T.Mesh(new T.RingGeometry(big ? 0.26 : 0.17, big ? 0.32 : 0.22, 48), new T.MeshBasicMaterial({ color: 0xe8352a, transparent: true, opacity: 0.9, depthWrite: false }));
       at(ring, p.x, 0.008, p.z, -Math.PI / 2, 0, 0); marks.add(ring);
       const r = reticle(); r.scale.setScalar((big ? 0.62 : 0.5) * pulse); r.position.set(p.x, big ? 0.62 : 0.5, p.z); marks.add(r);
+      if (u.needNow) { const l = needLabel(u.needNow); l.position.set(p.x, big ? 0.3 : 0.24, p.z); marks.add(l); }
     }
   }
 

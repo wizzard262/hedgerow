@@ -38,8 +38,8 @@ const WITHDRAW = { standard: 0.6, elite: 0.75, keep: 0.5 };   // chance it works
 const TO_HIT = 5;
 const QUALITY = { elite: { name: 'Elite', shoot: 1, assault: 1.3, rally: 0.9 }, standard: { name: 'Standard', shoot: 0, assault: 1, rally: 0.7 } };
 const SIGHT_RANGE = 3;           // fields a piece can shoot across open ground (hedges, villages and orchards block the view)
-const LONG_RANGE = 1;            // added to the score needed beyond the next field
-const MOVE_SHOOT = 0.5;          // moving and shooting with one point: half the dice
+const LONG_RANGE = 1;            // added to the score needed beyond the next field (the three penalties stack; a 6 always hits)
+const ON_THE_MOVE = 1;           // added to the score needed when firing after a move (Steve: like range and cover, +1 each)
 const COVER = { hedge: 1, village: 1, hamlet: 1, orchard: 0 };   // added to the score needed against a target behind a hedge, in the village, a hamlet or an orchard
 const RALLY_RANGE = 1;           // the captain rallies shaken pieces in his field or the next one
 

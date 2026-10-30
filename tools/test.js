@@ -204,6 +204,18 @@ check('line of sight: three fields over open ground, blocked by a hedge in betwe
   assert(!Sim.sight(st, us, de), 'a hedge in between did not block the view');
 });
 
+check('long range, cover and firing on the move each need one more on the dice', () => {
+  const st = Sim.newGame(4);
+  const us = Sim.unitById(st, 'B'), de = Sim.unitById(st, 'd2');
+  for (const u of st.units) if (u !== us && u !== de) u.x = u.y = null;
+  st.hedges = {}; st.wire = {};
+  us.x = 0; us.y = 7; de.x = 1; de.y = 7; us.at = null; de.at = null;
+  const near = Sim.needFor(st, us, de);
+  de.x = 3;
+  assert(Sim.needFor(st, us, de) === near + LONG_RANGE, 'long range did not add one');
+  assert(Sim.needFor(st, us, de, true) === near + LONG_RANGE + ON_THE_MOVE, 'firing on the move did not add one');
+});
+
 check('leaving everything alone never wins', () => {
   for (let seed = 1; seed <= 30; seed++) assert(!play(seed, false).won, `seed ${seed} won by doing nothing`);
 });

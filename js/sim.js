@@ -319,9 +319,14 @@ const Sim = (() => {
 
   // Shoot at one piece. Hard dice go against tanks; soft dice against everything else (and only shake tanks).
   // withdraw: the target spends a point to try to pull back: if it works it takes half the hits and falls back a field
-  function fireAt(st, shooter, target, power, withdraw = false) {
+  // The score each die needs: TO_HIT, plus cover and range, plus one on the move, less one for elite troops
+  function needFor(st, shooter, target, moving = false) {
+    return TO_HIT + cover(st, shooter, target) + (moving ? ON_THE_MOVE : 0) - QUALITY[shooter.quality || 'standard'].shoot;
+  }
+
+  function fireAt(st, shooter, target, power, withdraw = false, moving = false) {
     const f = firepower(st, shooter);
-    const need = TO_HIT + cover(st, shooter, target) - QUALITY[shooter.quality || 'standard'].shoot;
+    const need = needFor(st, shooter, target, moving);
     const faces = [];
     let softHits, hardHits;
     if (isTank(target)) {
@@ -514,7 +519,7 @@ const Sim = (() => {
     return out;
   }
 
-  // Move and shoot: one point moves the piece a field, then it may fire once at half power (actHalfShot) before doing anything else
+  // Move and shoot: the piece moves a field, then it may fire once on the move, needing one more (actHalfShot), before doing anything else
   function actMoveShoot(st, u, x, y) {
     if (!canAct(st, u) || !moveShootSpots(st, u).some(p => p.x === x && p.y === y)) return { ok: false };
     spend(st, u);
@@ -526,7 +531,7 @@ const Sim = (() => {
   function actHalfShot(st, u, target) {
     if (!u || !u.halfShot || u.shocked || u.x === null || !targets(st, u).includes(target)) return { ok: false };
     u.halfShot = false;
-    return { ok: true, lines: [`🔫 ${u.name} fires on the move at ${target.name}: ` + fireAt(st, u, target, MOVE_SHOOT).join(', ') + '.'] };
+    return { ok: true, lines: [`🔫 ${u.name} fires on the move at ${target.name}: ` + fireAt(st, u, target, 1, false, true).join(', ') + '.'] };
   }
 
   function moveLine(u, how) {
@@ -903,7 +908,7 @@ const Sim = (() => {
     newGame, endTurn, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, moves, chargeSpots,
     rallyTargets, canAct, groupOf, groupName, members, canReact, firepower, teamsOf, canCallFire, holdsObjective, hourText, roomFor,
     startGermanHour, germanStep, answer, finishHour,
-    actShoot, actMoveShoot, moveShootSpots, actHalfShot, actMove, actCharge, actRally, actFire, actBreach, breachSpots, sight, isSmall, cover, wire, lineSides, actLine, atHedge, acrossHedge, SIDE_NAMES,
+    actShoot, actMoveShoot, moveShootSpots, needFor, actHalfShot, actMove, actCharge, actRally, actFire, actBreach, breachSpots, sight, isSmall, cover, wire, lineSides, actLine, atHedge, acrossHedge, SIDE_NAMES,
     hasCutters: u => cutter(u),
   };
 })();

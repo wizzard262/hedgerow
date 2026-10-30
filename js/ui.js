@@ -36,11 +36,12 @@ const UI = (() => {
     return uniq(list).map(p => Object.assign(p, { kind }));
   }
 
-  // The pieces the chosen piece could shoot now, to mark with red targets: while choosing Shoot or Fire on the move
+  // The pieces the chosen piece could shoot now, to mark with red targets: while choosing Shoot or Fire on the move.
+  // Each with the score its dice need (shown on the target)
   function targets() {
     const u = selected();
     if (!u || !['shoot', 'halfShot'].includes(view.mode)) return [];
-    return Sim.targets(st, u);
+    return Sim.targets(st, u).map(t => { t.needNow = Math.min(6, Sim.needFor(st, u, t, view.mode === 'halfShot') + (Sim.isTank(t) ? PIECES[t.kind].armour : 0)); return t; });
   }
 
   // The best target for a shooter in a field: tanks for anti-tank weapons, otherwise the infantry
@@ -123,7 +124,7 @@ const UI = (() => {
     const add = (mode, label, ok, title) => b.push({ mode, label, ok: can && ok, title });
     if (u.kind === 'company' || Sim.isTank(u)) {
       add('charge', '⚔️ Charge', Sim.chargeSpots(st, u).length > 0, 'Up to two fields without shooting; hand to hand if the Germans hold the field it ends in');
-      add('moveShoot', '➡️ Move & shoot', Sim.moveShootSpots(st, u).length > 0, 'One field to where it can fire, then fire at half the dice (the red-hatched fields)');
+      add('moveShoot', '➡️ Move & shoot', Sim.moveShootSpots(st, u).length > 0, 'One field to where it can fire (the red-hatched fields), then fire needing one more on the dice');
       add('shoot', '🎯 Shoot', Sim.targets(st, u).length > 0, 'Fire with every die');
       if (Sim.breachSpots(st, u).length) add('breach', '⛏️ Break through', true, 'Through a hedge or wire into the next field, leaving a gap: a move with no shooting');
     } else if (u.kind === 'captain') {
@@ -133,13 +134,13 @@ const UI = (() => {
       if (Sim.breachSpots(st, u).length) add('breach', '⛏️ Break through', true, 'Through a hedge or wire into the next field: no shooting');
     } else {
       add('charge', '⚔️ Charge', Sim.chargeSpots(st, u).length > 0, 'Up to two fields, no shooting');
-      add('moveShoot', '➡️ Move & shoot', Sim.moveShootSpots(st, u).length > 0, 'One field to where it can fire, then fire at half the dice (the red-hatched fields)');
+      add('moveShoot', '➡️ Move & shoot', Sim.moveShootSpots(st, u).length > 0, 'One field to where it can fire (the red-hatched fields), then fire needing one more on the dice');
       add('shoot', '🎯 Shoot', Sim.targets(st, u).length > 0, 'Fire with every die');
       if (Sim.breachSpots(st, u).length) add('breach', '⛏️ Break through', true, 'Through a hedge or wire into the next field: no shooting');
     }
     // Line another hedge of its field, to fire through it
     for (const side of Sim.lineSides(st, u)) b.push({ mode: 'line', label: `🌳 Line the ${Sim.SIDE_NAMES[side]} hedge`, ok: can, title: 'Its move: from the hedge it can fire through it', run: () => Sim.actLine(st, u, side) });
-    if (u.halfShot) b.unshift({ mode: 'halfShot', label: '🎯 Fire on the move', ok: true, title: 'Half the dice, after moving' });
+    if (u.halfShot) b.unshift({ mode: 'halfShot', label: '🎯 Fire on the move', ok: true, title: 'One more needed on the dice, after moving' });
     return b;
   }
 
@@ -172,7 +173,7 @@ const UI = (() => {
     const u = selected();
     const text = !view.mode ? (st.de ? 'The Germans are moving…' : '')
       : view.mode.startsWith('fire:') ? 'Click a field with Germans your troops can see.'
-      : view.mode === 'halfShot' ? 'Moved. Click a red target to fire on it at half the dice, or Esc to hold fire.'
+      : view.mode === 'halfShot' ? 'Moved. Click a red target to fire on it (one more needed on the move), or Esc to hold fire.'
       : view.mode === 'shoot' ? 'Click a red target to fire on it. Esc cancels.'
       : view.mode === 'moveShoot' ? `Click a red-hatched field: ${u ? u.name : 'the piece'} moves there and can fire. Esc cancels.`
       : `Click a highlighted field for ${u ? u.name : 'the piece'}. Esc cancels.`;
