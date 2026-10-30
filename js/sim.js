@@ -339,10 +339,16 @@ const Sim = (() => {
     }
     const pre = withdraw ? pullBack(st, target, shooter) : null;
     if (pre && pre.ok) { softHits = Math.floor(softHits * WITHDRAW.keep); hardHits = Math.floor(hardHits * WITHDRAW.keep); }
+    const before = { strength: target.platoons, shocked: target.shocked };
     const out = (pre ? [pre.line] : []).concat(damage(st, target, softHits, hardHits));
+    // In a word, what the shot did, for the words that float up off the target
+    const lost = before.strength - (target.x === null ? 0 : target.platoons);
+    const result = target.x === null ? (isTank(target) ? 'Destroyed' : 'Wiped out')
+      : lost ? (isTank(target) ? `Tank knocked out` : lost > 1 ? `${lost} sections lost` : 'Section lost')
+      : target.shocked && !before.shocked ? 'Pinned' : softHits + hardHits ? 'No effect' : 'Missed';
     // What the table shows: the weapon's muzzle flash and tracers from the shooter, and what lands on the target
     const weapon = isTank(shooter) || shooter.kind === 'pak' ? 'gun' : shooter.kind === 'mg' || shooter.kind === 'mg42' ? 'mg' : shooter.kind === 'bazooka' || shooter.kind === 'schreck' ? 'rocket' : 'rifle';
-    st.fx.push({ from: { id: shooter.id, x: shooter.x, y: shooter.y }, to: { id: target.id }, weapon, armour: isTank(target), x: target.x, y: target.y, kind: softHits + hardHits ? 'hit' : 'miss', faces, need: Math.min(6, need + (isTank(target) ? PIECES[target.kind].armour : 0)), side: shooter.side });
+    st.fx.push({ from: { id: shooter.id, x: shooter.x, y: shooter.y }, to: { id: target.id }, weapon, armour: isTank(target), x: target.x, y: target.y, kind: softHits + hardHits ? 'hit' : 'miss', faces, need: Math.min(6, need + (isTank(target) ? PIECES[target.kind].armour : 0)), side: shooter.side, result, pulled: !!(pre && pre.ok) });
     return out.length ? out : [`${target.name}: no hits`];
   }
 
@@ -397,6 +403,8 @@ const Sim = (() => {
     const teams = u.kind === 'company' ? teamsOf(st, u) : [];
     const heading = dirTo(u, { x, y });
     u.x = x; u.y = y; u.at = heading;
+    // The way it is facing, for the table (tanks turn to fire, and turn again when they move)
+    u.aim = { e: 0, n: Math.PI / 2, w: Math.PI, s: -Math.PI / 2 }[heading];
     for (const t of teams) { t.x = x; t.y = y; t.at = heading; }
     return how;
   }
@@ -665,8 +673,11 @@ const Sim = (() => {
         const need = TO_HIT + (tileType(fx, fy) === 'village' ? COVER.village : 0);
         const faces = [];
         const soft = roll(st, n, need, faces), hard = isTank(t) ? roll(st, S.hard || 0, need + PIECES[t.kind].armour, faces) : 0;
+        const before = t.platoons, wasShocked = t.shocked;
         lines.push(...damage(st, t, soft, hard));
-        st.fx.push({ x: fx, y: fy, kind: 'shell', faces, need, side, to: { id: t.id } });
+        const lost = before - (t.x === null ? 0 : t.platoons);
+        const result = t.x === null ? 'Wiped out' : lost ? (isTank(t) ? 'Tank knocked out' : 'Section lost') : t.shocked && !wasShocked ? 'Pinned' : soft + hard ? 'No effect' : 'Missed';
+        st.fx.push({ x: fx, y: fy, kind: 'shell', faces, need, side, to: { id: t.id }, result });
       }
       if (!at(st, fx, fy, enemyOf(side)).length) st.fx.push({ x: fx, y: fy, kind: 'shell' });
     };

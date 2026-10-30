@@ -180,7 +180,8 @@ const Board = (() => {
     }
     if (armour) {
       const g = model(armour);
-      g.userData.bases.forEach((b, i) => { const [jx, jz, jr] = loose(armour, i); b.visible = i < armour.platoons; aim(b, flip((company ? 0.64 : 0.5) + jx * 0.6), (i ? 0.72 : 0.33) + jz * 0.5, g.userData.face + jr * 0.4); });
+      const facing = armour.aim !== undefined ? armour.aim : g.userData.face;
+      g.userData.bases.forEach((b, i) => { const [jx, jz, jr] = loose(armour, i); b.visible = i < armour.platoons; aim(b, flip((company ? 0.64 : 0.5) + jx * 0.6), (i ? 0.72 : 0.33) + jz * 0.5, facing + jr * 0.4); });
       aim(g, x + push[0] * 0.6, y + push[1] * 0.6, 0);
     }
     small.forEach((u, i) => {
@@ -359,6 +360,24 @@ const Board = (() => {
     if (!t) { const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d'), r = g.createRadialGradient(32, 32, 4, 32, 32, 32); r.addColorStop(0, 'rgba(110,104,96,.9)'); r.addColorStop(1, 'rgba(110,104,96,0)'); g.fillStyle = r; g.fillRect(0, 0, 64, 64); t = new T.CanvasTexture(c); }
     return t; }; })();
 
+  // Words floating up off a target: a canvas label on a sprite, drawn once for each word and colour
+  const wordTex = {};
+  function word(text, colour, big) {
+    const key = text + colour + big;
+    if (!wordTex[key]) {
+      const c = document.createElement('canvas'); c.width = 512; c.height = 128;
+      const g = c.getContext('2d');
+      g.font = `bold ${big ? 74 : 60}px Georgia, serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.lineWidth = 12; g.strokeStyle = 'rgba(20,14,8,.85)'; g.strokeText(text, 256, 66);
+      g.fillStyle = colour; g.fillText(text, 256, 66);
+      wordTex[key] = new T.CanvasTexture(c);
+    }
+    const s = new T.Sprite(new T.SpriteMaterial({ map: wordTex[key], transparent: true, depthTest: false }));
+    s.scale.set(big ? 1.05 : 0.78, (big ? 1.05 : 0.78) / 4, 1);
+    return s;
+  }
+  const RESULT_COLOUR = { 'Missed': '#d8d2c4', 'No effect': '#e6d29a', 'Pinned': '#ffb04a', 'Section lost': '#ff6a50', 'Tank knocked out': '#ff6a50', 'Wiped out': '#ff3b2e', 'Destroyed': '#ff3b2e' };
+
   let shots = [];              // effects playing: { fx, t0 }
   const seenFx = new WeakSet();
 
@@ -366,6 +385,9 @@ const Board = (() => {
     for (const f of st.fx) {
       if (seenFx.has(f)) continue;
       seenFx.add(f);
+      // A tank or gun turns to face what it fires at, and stays facing it
+      const shooter = f.from && st.units.find(u => u.id === f.from.id);
+      if (shooter && (Sim.isTank(shooter) || shooter.kind === 'pak')) shooter.aim = Math.atan2(-(f.y - f.from.y), f.x - f.from.x);
       shots.push({ f, t0: performance.now() + shots.filter(s => performance.now() - s.t0 < 300).length * 180, objs: [] });
     }
   }
@@ -381,12 +403,17 @@ const Board = (() => {
 
   function playShots(now) {
     for (const s of shots) { for (const o of s.objs) marks.remove(o); s.objs = []; }
-    shots = shots.filter(s => now - s.t0 < 1600);
+    shots = shots.filter(s => now - s.t0 < 2600);
     for (const s of shots) {
       const f = s.f, t = (now - s.t0) / 1000;
       if (t < 0) continue;
       const add = o => { marks.add(o); s.objs.push(o); return o; };
       const { from, to } = shotEnds(f);
+      // A tank firing: it has turned to its target (see startShots); for a moment it rocks back with the recoil
+      if (from && f.weapon === 'gun' && pieces[f.from.id] && t < 0.35) {
+        const back = Math.sin(Math.min(1, t / 0.35) * Math.PI) * 0.04, d = new T.Vector3(to.x - from.x, 0, to.z - from.z).normalize();
+        for (const b of pieces[f.from.id].userData.bases) if (b.userData.to) { b.position.x = b.userData.to.x - d.x * back; b.position.z = b.userData.to.z - d.z * back; }
+      }
       const h = f.weapon === 'gun' ? 0.16 : 0.12;
       const flight = f.weapon === 'gun' ? 0.25 : f.weapon === 'rocket' ? 0.45 : 0.35;
       // Muzzle flash
@@ -414,6 +441,23 @@ const Board = (() => {
       // Where it lands
       const land = from ? flight : 0, lt = t - land;
       if (lt < 0) continue;
+      // The words: each die in turn, Hit or Miss, rising and fading; then what it did, bigger
+      if (f.faces) {
+        const n = Math.min(f.faces.length, 8);
+        f.faces.slice(0, n).forEach((r, k) => {
+          const wt = lt - k * 0.14;
+          if (wt < 0 || wt > 1.1) return;
+          const w = add(word(r.hit ? 'Hit!' : 'Miss', r.hit ? '#ffcf6a' : '#cfcac0', false));
+          w.material.opacity = Math.min(1, 2.5 * (1.1 - wt));
+          w.position.set(to.x + ((k % 3) - 1) * 0.3, 0.38 + wt * 0.4 + Math.floor(k / 3) * 0.12, to.z);
+        });
+        const rt = lt - n * 0.14 - 0.1;
+        if (f.result && rt > 0 && rt < 1.6) {
+          const w = add(word((f.pulled ? 'Pulled back · ' : '') + f.result, RESULT_COLOUR[f.result] || '#ffffff', true));
+          w.material.opacity = Math.min(1, 2 * (1.6 - rt));
+          w.position.set(to.x, 0.75 + rt * 0.15, to.z);
+        }
+      }
       const big = f.kind === 'shell' || (f.weapon === 'gun' && !f.armour) || f.weapon === 'rocket';
       if (big) {
         // High explosive: a flash, a ball of fire, a column of smoke
