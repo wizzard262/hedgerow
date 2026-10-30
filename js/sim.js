@@ -650,6 +650,18 @@ const Sim = (() => {
     return st.units.filter(t => t.side === cap.side && t.x !== null && t.shocked && Math.abs(t.x - cap.x) + Math.abs(t.y - cap.y) <= RALLY_RANGE);
   }
 
+  // A shaken piece uses its move to try to pull itself together (Steve: pieces can rally themselves)
+  function canSelfRally(st, u) {
+    return !!u && u.side === 'us' && u.x !== null && u.shocked && !u.acted && !st.won && !st.lost && !st.de && u.kind !== 'captain';
+  }
+  function actSelfRally(st, u) {
+    if (!canSelfRally(st, u)) return { ok: false };
+    u.acted = true;
+    const ok = st.rand() < SELF_RALLY[u.quality || 'standard'];
+    if (ok) u.shocked = false;
+    return { ok: true, lines: [ok ? `📣 ${u.name} pulls itself together.` : `📣 ${u.name} stays pinned down.`] };
+  }
+
   function actRally(st, cap, target) {
     if (!canAct(st, cap) || cap.kind !== 'captain' || !rallyTargets(st, cap).includes(target)) return { ok: false };
     spend(st, cap);
@@ -919,7 +931,7 @@ const Sim = (() => {
     newGame, endTurn, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, moves, chargeSpots,
     rallyTargets, canAct, groupOf, groupName, members, canReact, firepower, teamsOf, canCallFire, holdsObjective, hourText, roomFor,
     startGermanHour, germanStep, answer, finishHour,
-    actShoot, actMoveShoot, moveShootSpots, needFor, actHalfShot, actMove, actCharge, actRally, actFire, actBreach, breachSpots, sight, isSmall, cover, wire, lineSides, actLine, atHedge, acrossHedge, SIDE_NAMES,
+    actShoot, actMoveShoot, moveShootSpots, needFor, canSelfRally, actSelfRally, actHalfShot, actMove, actCharge, actRally, actFire, actBreach, breachSpots, sight, isSmall, cover, wire, lineSides, actLine, atHedge, acrossHedge, SIDE_NAMES,
     hasCutters: u => cutter(u),
   };
 })();

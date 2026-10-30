@@ -155,8 +155,13 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - Every shot now sends words floating up off the target: "Hit!" or "Miss" for each die in turn, then what it did, bigger: Missed, No effect, Pinned, Section lost, Tank knocked out, Wiped out (and "Pulled back" first if it got away)
 - A tank or anti-tank gun turns to face what it fires at and rocks back with the recoil; it keeps facing that way until it moves
 
+## 27. Rallying
+
+- Steve: pieces can self-rally, or the captain has a rally range of three squares and can rally friendlies
+- A shaken piece can now use its move to "Rally itself" (50%, elite 65%). The captain's Rally reaches any shaken friendly piece up to three fields away (70%, elite 90%). Resting an hour unhit still recovers it
+
 ## Sessions
 
 | # | Date | Length | What we did |
 |---|------|--------|-------------|
-| 1 | 2026-10-30 | about 8 hours | Prompts 1–26: rules, command points, reacting, tanks and hedge cutters, the look (pixel art to 3D tabletop), scales, river, villages, wire, six-move aim; one captain, piece menus, hedges stop moves, MG team model; bazooka teams, two-field charges; red targets; who has acted; company level; lining hedges, longer sight, the captain's guidon; one unit a field, no time limit; tracers and shells, greyed out, no activation tokens, Move & shoot hatching; tanks through hedges, charges for all; no plain move; teams and captain with a platoon, no attaching; one piece at a time; charging through friends; range, cover and moving +1 each; words off the target, tanks turn and recoil |
+| 1 | 2026-10-30 | about 8 hours | Prompts 1–27: rules, command points, reacting, tanks and hedge cutters, the look (pixel art to 3D tabletop), scales, river, villages, wire, six-move aim; one captain, piece menus, hedges stop moves, MG team model; bazooka teams, two-field charges; red targets; who has acted; company level; lining hedges, longer sight, the captain's guidon; one unit a field, no time limit; tracers and shells, greyed out, no activation tokens, Move & shoot hatching; tanks through hedges, charges for all; no plain move; teams and captain with a platoon, no attaching; one piece at a time; charging through friends; range, cover and moving +1 each; words off the target, tanks turn and recoil; rallying |

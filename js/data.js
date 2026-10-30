@@ -41,7 +41,8 @@ const SIGHT_RANGE = 3;           // fields a piece can shoot across open ground 
 const LONG_RANGE = 1;            // added to the score needed beyond the next field (the three penalties stack; a 6 always hits)
 const ON_THE_MOVE = 1;           // added to the score needed when firing after a move (Steve: like range and cover, +1 each)
 const COVER = { hedge: 1, village: 1, hamlet: 1, orchard: 0 };   // added to the score needed against a target behind a hedge, in the village, a hamlet or an orchard
-const RALLY_RANGE = 1;           // the captain rallies shaken pieces in his field or the next one
+const RALLY_RANGE = 3;           // the captain rallies a shaken friendly piece up to this many fields away (Steve)
+const SELF_RALLY = { standard: 0.5, elite: 0.65 };   // a shaken piece can use its move to try to rally itself: its chance
 
 // What each kind of piece fights with. soft: against infantry and guns; hard: against tanks (anti-tank)
 const PIECES = {

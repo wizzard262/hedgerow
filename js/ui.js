@@ -106,7 +106,7 @@ const UI = (() => {
         };
         menu.append(b);
       }
-      if (!acts.some(a => a.ok)) menu.append(el('div', 'mnote', u.shocked ? 'Shaken: it must rest an hour or be rallied by the captain' : 'It has moved this hour'));
+      if (!acts.some(a => a.ok)) menu.append(el('div', 'mnote', u.shocked ? 'Shaken: it has moved this hour; it can rest, or the captain can rally it' : 'It has moved this hour'));
     }
     menu.hidden = false;
     // Keep the menu inside the table's box
@@ -122,6 +122,11 @@ const UI = (() => {
     const can = Sim.canAct(st, u);
     const b = [];
     const add = (mode, label, ok, title) => b.push({ mode, label, ok: can && ok, title });
+    // A shaken piece's only move: try to rally itself
+    if (Sim.canSelfRally(st, u)) {
+      b.push({ mode: 'selfRally', label: '📣 Rally itself', ok: true, title: `Its move: a ${Math.round(SELF_RALLY[u.quality || 'standard'] * 100)}% chance to shake it off (the captain does better)`, run: () => Sim.actSelfRally(st, u) });
+      return b;
+    }
     if (u.kind === 'company' || Sim.isTank(u)) {
       add('charge', '⚔️ Charge', Sim.chargeSpots(st, u).length > 0, 'Up to two fields without shooting; hand to hand if the Germans hold the field it ends in');
       add('moveShoot', '➡️ Move & shoot', Sim.moveShootSpots(st, u).length > 0, 'One field to where it can fire (the red-hatched fields), then fire needing one more on the dice');
@@ -130,7 +135,7 @@ const UI = (() => {
     } else if (u.kind === 'captain') {
       // The four actions (Steve): Charge, Move & shoot, Shoot, Rally. The captain charges or rallies
       add('charge', '⚔️ Charge', Sim.chargeSpots(st, u).length > 0, 'Up to two fields, no shooting');
-      add('rally', '📣 Rally', Sim.rallyTargets(st, u).length > 0, 'Use his move to steady a shaken piece in his field or the next');
+      add('rally', '📣 Rally', Sim.rallyTargets(st, u).length > 0, 'Use his move to steady a shaken friendly piece up to three fields away');
       if (Sim.breachSpots(st, u).length) add('breach', '⛏️ Break through', true, 'Through a hedge or wire into the next field: no shooting');
     } else {
       add('charge', '⚔️ Charge', Sim.chargeSpots(st, u).length > 0, 'Up to two fields, no shooting');

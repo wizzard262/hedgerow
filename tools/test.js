@@ -216,6 +216,16 @@ check('long range, cover and firing on the move each need one more on the dice',
   assert(Sim.needFor(st, us, de, true) === near + LONG_RANGE + ON_THE_MOVE, 'firing on the move did not add one');
 });
 
+check('a shaken piece can try to rally itself once; the captain rallies up to three fields away', () => {
+  const st = Sim.newGame(5);
+  const B = Sim.unitById(st, 'B'), cap = Sim.unitById(st, 'cap');
+  B.shocked = true;
+  assert(Sim.canSelfRally(st, B) && Sim.actSelfRally(st, B).ok && !Sim.canSelfRally(st, B), 'self rally did not use the move');
+  B.shocked = true; B.acted = false;
+  cap.x = B.x; cap.y = Math.max(0, B.y - 3) === B.y - 3 ? B.y - 3 : B.y + 3;
+  assert(Sim.rallyTargets(st, cap).includes(B), 'the captain could not reach three fields');
+});
+
 check('leaving everything alone never wins', () => {
   for (let seed = 1; seed <= 30; seed++) assert(!play(seed, false).won, `seed ${seed} won by doing nothing`);
 });
