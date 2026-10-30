@@ -1,5 +1,5 @@
-// Hedgerow: the controls on the left: the clock, the battalion's fire support, the chosen piece and what it can do,
-// the pieces by company with their command points, and what happened
+// Hedgerow: the controls on the left: the clock, the company's fire support, the chosen piece and what it can do,
+// the pieces by platoon with their command points, and what happened
 
 const UI = (() => {
   let st;
@@ -8,8 +8,8 @@ const UI = (() => {
   // What the player has chosen: a piece, and an action waiting for a field to be clicked
   const view = { sel: null, mode: null, log: [] };
 
-  const KIND = { company: 'Rifle company', captain: 'Captain', sherman: 'Sherman platoon', firefly: 'Firefly platoon', mg: 'Machine-gun team', bazooka: 'Bazooka team',
-                 pz4: 'Panzer IV platoon', panther: 'Panther platoon', mg42: 'MG 42 team', schreck: 'Panzerschreck team', pak: 'PaK 40 anti-tank gun' };
+  const KIND = { company: 'Rifle platoon', captain: 'Captain', sherman: 'Sherman section', firefly: 'Firefly section', mg: 'Machine-gun team', bazooka: 'Bazooka team',
+                 pz4: 'Panzer IV section', panther: 'Panther section', mg42: 'MG 42 team', schreck: 'Panzerschreck team', pak: 'PaK 40 anti-tank gun' };
 
   function setState(s) { st = s; view.sel = null; view.mode = null; view.log = []; }
   const selected = () => (view.sel ? Sim.unitById(st, view.sel) : null);
@@ -107,7 +107,7 @@ const UI = (() => {
       const acts = actionButtons(u);
       if (Sim.isTeam(u) && u.kind !== 'pak') {
         const co = Sim.at(st, u.x, u.y, 'us').find(c => c.kind === 'company');
-        acts.push({ mode: 'attach', label: u.attachedTo ? '🔗 Detach' : '🔗 Attach to company', ok: !!(u.attachedTo || co) && (st.points.bn || 0) >= 1, title: 'A battalion point', run: () => Sim.actAttach(st, u, co) });
+        acts.push({ mode: 'attach', label: u.attachedTo ? '🔗 Detach' : '🔗 Attach to platoon', ok: !!(u.attachedTo || co) && (st.points.bn || 0) >= 1, title: 'A company HQ point', run: () => Sim.actAttach(st, u, co) });
       }
       for (const a of acts) {
         const b = el('button', '', a.label);
@@ -143,11 +143,11 @@ const UI = (() => {
       add('shoot', '🎯 Shoot', Sim.targets(st, u).length > 0, 'Fire with every die');
       if (Sim.breachSpots(st, u).length) add('breach', '⛏️ Break through', true, 'Through a hedge or wire into the next field, leaving a gap: a move with no shooting');
     } else if (u.kind === 'captain') {
-      add('move', '➡️ Move', Sim.moves(st, u).length > 0, 'One field (a battalion point)');
-      add('rally', '📣 Rally', Sim.rallyTargets(st, u).length > 0, 'Use his move to steady a shaken piece in his field or the next (a battalion point)');
+      add('move', '➡️ Move', Sim.moves(st, u).length > 0, 'One field (a company HQ point)');
+      add('rally', '📣 Rally', Sim.rallyTargets(st, u).length > 0, 'Use his move to steady a shaken piece in his field or the next (a company HQ point)');
       if (Sim.breachSpots(st, u).length) add('breach', '⛏️ Break through', true, 'Through a hedge or wire into the next field: no shooting');
     } else {
-      add('move', '➡️ Move', Sim.moves(st, u).length > 0, u.attachedTo ? 'One field (it leaves its company)' : 'One field');
+      add('move', '➡️ Move', Sim.moves(st, u).length > 0, u.attachedTo ? 'One field (it leaves its platoon)' : 'One field');
       add('shoot', '🎯 Shoot', Sim.targets(st, u).length > 0, 'Fire with every die');
       if (Sim.breachSpots(st, u).length) add('breach', '⛏️ Break through', true, 'Through a hedge or wire into the next field: no shooting');
     }
@@ -162,7 +162,7 @@ const UI = (() => {
       box.innerHTML = '<div class="sub">Click one of your pieces on the table, or in the list below.</div>';
       return;
     }
-    const strength = u.kind === 'company' ? `${u.platoons} platoon${u.platoons > 1 ? 's' : ''} (${u.platoons * 4} men)` : Sim.isTank(u) ? `${u.platoons} tank${u.platoons > 1 ? 's' : ''}` : '';
+    const strength = u.kind === 'company' ? `${u.platoons} section${u.platoons > 1 ? 's' : ''} (${u.platoons * 4} men)` : Sim.isTank(u) ? `${u.platoons} tank${u.platoons > 1 ? 's' : ''}` : '';
     const f = Sim.firepower(st, u);
     const dice = u.kind === 'captain' ? '' : `🎲 ${Math.round(f.soft * 10) / 10} dice vs men${f.hard ? `, ${Math.round(f.hard * 10) / 10} vs tanks` : ''}`;
     const g = Sim.groupOf(u);
@@ -183,7 +183,7 @@ const UI = (() => {
       const co = Sim.at(st, u.x, u.y, 'us').find(c => c.kind === 'company');
       const btn = el('button', '', u.attachedTo ? '🔗 Detach' : '🔗 Attach');
       btn.disabled = !(u.attachedTo || co) || (st.points.bn || 0) < 1 || !!st.de;
-      btn.title = u.attachedTo ? 'Work on its own again (a battalion point)' : 'Join the company in this field: it moves with it and uses its points (a battalion point)';
+      btn.title = u.attachedTo ? 'Work on its own again (a company HQ point)' : 'Join the rifle platoon in this field: it moves with it and uses its points (a company HQ point)';
       btn.onclick = () => { const r = Sim.actAttach(st, u, co); if (r.ok) view.log.push(...r.lines); refresh(); };
       acts.append(btn);
     }
@@ -210,7 +210,7 @@ const UI = (() => {
       const div = el('div', 'group');
       div.append(el('div', 'gname', `<span>${Sim.groupName(st, g)}</span>${pips(st.points[g] || 0, g === 'bn' ? BN_BANK : COMMAND_BANK)}`));
       for (const u of groups[g]) {
-        const tag = u.shocked ? '<span class="tag bad">shaken</span>' : u.acted ? '<span class="tag">✓ done</span>' : `<span class="tag">${u.kind === 'company' ? u.platoons + ' pl' : Sim.isTank(u) ? u.platoons + ' tanks' : ''}</span>`;
+        const tag = u.shocked ? '<span class="tag bad">shaken</span>' : u.acted ? '<span class="tag">✓ done</span>' : `<span class="tag">${u.kind === 'company' ? u.platoons + ' sec' : Sim.isTank(u) ? u.platoons + ' tanks' : ''}</span>`;
         const row = el('div', `piece${u.id === view.sel ? ' sel' : ''}${u.acted ? ' done' : ''}`, `<span>${u.name}${u.quality === 'elite' ? ' ★' : ''}</span>${tag}`);
         row.onclick = () => { view.sel = u.id; view.mode = null; refresh(); };
         div.append(row);
@@ -226,7 +226,7 @@ const UI = (() => {
     for (const which of ['mortars', 'artillery']) {
       const S = which === 'mortars' ? MORTARS : ARTILLERY, btn = $(`#fire-${which}`);
       btn.innerHTML = `${which === 'mortars' ? '💥 Mortars' : '💣 Guns'} · ${st.ammo[which]} left`;
-      btn.title = `${S.name}: ${S.dice} dice on a field your troops can see${S.splash ? `, ${S.splash} on each field round it` : ''}. A battalion point and one load of ammunition`;
+      btn.title = `${S.name}: ${S.dice} dice on a field your troops can see${S.splash ? `, ${S.splash} on each field round it` : ''}. A company HQ point and one load of ammunition`;
       btn.disabled = st.ammo[which] <= 0 || (st.points.bn || 0) < 1 || st.won || st.lost || !!st.de;
       btn.classList.toggle('on', view.mode === 'fire:' + which);
     }

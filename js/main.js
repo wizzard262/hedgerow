@@ -117,9 +117,9 @@ window.Game = (() => {
     if (!f) { tip.style.display = 'none'; return; }
     const NAMES = { field: 'Field', orchard: 'Orchard', village: 'Saint-Jean', hamlet: 'Hamlet', river: 'River', bridge: 'Bridge', laneEW: 'Lane', laneNS: 'Lane', crossroads: 'Crossroads' };
     const here = Sim.at(st, f.x, f.y);
-    const lines = here.map(u => `${u.side === 'us' ? 'US' : 'German'} · ${u.name}${u.kind === 'company' ? ` · ${u.platoons} platoons` : Sim.isTank(u) ? ` · ${u.platoons} tanks` : ''}${u.shocked ? ' · shaken' : ''}`);
+    const lines = here.map(u => `${u.side === 'us' ? 'US' : 'German'} · ${u.name}${u.kind === 'company' ? ` · ${u.platoons} sections` : Sim.isTank(u) ? ` · ${u.platoons} tanks` : ''}${u.shocked ? ' · shaken' : ''}`);
     const t = Sim.tileType(f.x, f.y);
-    const cover = t === 'village' || t === 'hamlet' ? 'Houses: hard to hit (6 to hit); room for one company or one tank platoon' : t === 'river' ? 'Nothing can cross except at a bridge' : t === 'orchard' ? 'Trees' : '';
+    const cover = t === 'village' || t === 'hamlet' ? 'Houses: hard to hit (6 to hit); room for one rifle platoon or one tank section' : t === 'river' ? 'Nothing can cross except at a bridge' : t === 'orchard' ? 'Trees' : '';
     tip.innerHTML = `<b>${NAMES[t]}</b>${cover ? `<br><span style="color:var(--muted)">${cover}</span>` : ''}${lines.length ? '<br>' + lines.join('<br>') : ''}`;
     const r = board.getBoundingClientRect();
     Object.assign(tip.style, { display: 'block', left: Math.min(r.width - 290, e.clientX - r.left + 14) + 'px', top: e.clientY - r.top + 14 + 'px' });

@@ -1,4 +1,5 @@
-// Hedgerow: the rules (no DOM). A US battalion attacks through the bocage; the Germans defend field by field
+// Hedgerow: the rules (no DOM). A US rifle company attacks through the bocage; the Germans defend field by field.
+// In the code a rifle platoon's kind is 'company' and its sections are counted in `platoons`
 
 const Sim = (() => {
   // Seeded random numbers, so the same seed plays the same game
@@ -105,7 +106,7 @@ const Sim = (() => {
     st.rand = R;
     deploy(st, 'us'); deploy(st, 'de');
     earnPoints(st);
-    st.report = [`${START_DATE}, 06:00. The battalion attacks into the bocage. Take ${st.objective.name} and hold it at ${hourText(TURNS + 1)}.`];
+    st.report = [`${START_DATE}, 06:00. The company attacks into the bocage. Take ${st.objective.name} and hold it at ${hourText(TURNS + 1)}.`];
     return st;
   }
 
@@ -162,7 +163,7 @@ const Sim = (() => {
     return null;
   }
 
-  const GROUP_NAMES = { T: 'Tank Company', bn: 'Battalion' };
+  const GROUP_NAMES = { T: 'Tanks', bn: 'Company HQ' };
   function groupName(st, g) { return GROUP_NAMES[g] || (unitById(st, g) || {}).name || g; }
 
   // The pieces in a group
@@ -267,7 +268,7 @@ const Sim = (() => {
         const lost = Math.min(u.platoons, u.shocked ? Math.ceil(hits / 2) : Math.floor(hits / 2));
         u.platoons -= lost;
         u.shocked = true;
-        out.push(lost ? `${name} loses ${lost} platoon${lost > 1 ? 's' : ''}` : `${name} shocked`);
+        out.push(lost ? `${name} loses ${lost} section${lost > 1 ? 's' : ''}` : `${name} shocked`);
       }
     }
     if (u.platoons <= 0) out.push(...remove(st, u));
@@ -446,7 +447,7 @@ const Sim = (() => {
   function lose(st, u, n) {
     if (u.x === null) return [];
     u.platoons = Math.max(0, u.platoons - n);
-    const out = [`${u.name} loses ${n} ${isTank(u) ? 'tank' : 'platoon'}${n > 1 ? 's' : ''}`];
+    const out = [`${u.name} loses ${n} ${isTank(u) ? 'tank' : 'section'}${n > 1 ? 's' : ''}`];
     if (u.platoons <= 0) out.push(...remove(st, u));
     return out;
   }
@@ -779,7 +780,7 @@ const Sim = (() => {
       if (r.turn !== st.turn) continue;
       if (r.replacements) {
         const weak = st.units.filter(u => u.side === 'us' && u.kind === 'company' && u.x !== null && u.platoons < 3).sort((a, b) => a.platoons - b.platoons)[0];
-        if (weak) { weak.platoons++; rep.push(`🪖 A replacement platoon joins ${weak.name}.`); }
+        if (weak) { weak.platoons++; rep.push(`🪖 A replacement section joins ${weak.name}.`); }
         continue;
       }
       const u = arrive(st, r.side, r.unit, rep);
@@ -813,7 +814,7 @@ const Sim = (() => {
       rep.unshift(`🏆 ${st.objective.name} is taken and held at ${hourText(st.turn + 1)}!`);
     } else if (!st.units.some(u => u.side === 'us' && u.kind === 'company' && u.x !== null)) {
       st.lost = true;
-      rep.unshift('💀 The battalion has no rifle companies left. The attack has failed.');
+      rep.unshift('💀 The company has no rifle platoons left. The attack has failed.');
     } else if (st.turn >= TURNS) {
       st.lost = true;
       rep.unshift(`⌛ ${hourText(TURNS + 1)}: the attack has run out of time short of ${st.objective.name}.`);

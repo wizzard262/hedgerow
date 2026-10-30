@@ -3,7 +3,7 @@
 // The board: one character per field. Each field is a tile; hedges grow on the edges between fields
 //   .  field        o  orchard (some cover)        h  hamlet: a few houses round a yard (good cover)
 //   v  village (good cover, no hedges round it)    r  river (nothing can enter it)    #  bridge (a lane across the river)
-// In a hamlet or the village there is room in the yard for one company or one tank platoon, not both
+// In a hamlet or the village there is room in the yard for one rifle platoon or one tank section, not both
 //   =  lane east-west    |  lane north-south    +  crossroads (lanes have no hedges along their length)
 const MAP = [
   '..|..o.r.o',
@@ -28,16 +28,16 @@ const TURNS = 6;                 // six moves: one an hour from 06:00, the villa
 const START_HOUR = 6;
 const START_DATE = 'Tue 11 July 1944';
 
-// Command points: each company (with its attached teams), the tank company and the battalion (with the captain)
+// Command points: each rifle platoon (with its attached teams), the tanks and company HQ (the captain)
 // earn points every hour and can save them. A piece acts once an hour and each action costs a point.
-// A company earns 1 an hour for itself and this share for each team with it; the tanks this share a platoon,
+// A rifle platoon earns 1 an hour for itself and this share for each team with it; the tanks this share a section,
 // so only about two thirds of the pieces can act each hour
 const COMMAND_SHARE = 2 / 3;
-const COMMAND_BANK = 3;          // most points a company can save
-// The battalion's own points: fire missions, attaching teams, and teams working on their own
+const COMMAND_BANK = 3;          // most points a platoon can save
+// Company HQ's own points: the captain, fire missions, attaching teams, and teams working on their own
 const BN_POINTS = 2;
 const BN_BANK = 4;
-// Reacting in the Germans' hour: a piece fired on can spend one of its company's points to try to pull back
+// Reacting in the Germans' hour: a piece fired on can spend one of its platoon's points to try to pull back
 const WITHDRAW = { standard: 0.6, elite: 0.75, keep: 0.5 };   // chance it works, and the share of hits it then takes
 
 // Shooting: each point of firepower rolls one six-sided die, which hits on TO_HIT or more.
@@ -50,13 +50,13 @@ const RALLY_RANGE = 1;           // the captain rallies shaken pieces in his fie
 
 // What each kind of piece fights with. soft: against infantry and guns; hard: against tanks (anti-tank)
 const PIECES = {
-  company:  { name: 'Rifle company', soft: 1, hard: 0 },          // per platoon (3 platoons)
-  // Tanks: per tank (2 a platoon). armour: added to the score anti-tank dice need (the Panther's front is hard to beat).
+  company:  { name: 'Rifle platoon', soft: 1, hard: 0 },          // per section (3 sections, a base each). Its kind is 'company' in the code
+  // Tanks: per tank (2 a section). armour: added to the score anti-tank dice need (the Panther's front is hard to beat).
   // cutter: hedge cutters welded on the front, so it drives straight through a hedge and leaves a gap
-  sherman:  { name: 'Sherman platoon', soft: 1.5, hard: 1, tank: true, armour: 0, cutter: true },
-  firefly:  { name: 'Firefly platoon', soft: 1, hard: 2, tank: true, armour: 0 },
-  pz4:      { name: 'Panzer IV platoon', soft: 1.5, hard: 1.5, tank: true, armour: 0, cutter: true },
-  panther:  { name: 'Panther platoon', soft: 1.5, hard: 3, tank: true, armour: 1 },
+  sherman:  { name: 'Sherman section', soft: 1.5, hard: 1, tank: true, armour: 0, cutter: true },
+  firefly:  { name: 'Firefly section', soft: 1, hard: 2, tank: true, armour: 0 },
+  pz4:      { name: 'Panzer IV section', soft: 1.5, hard: 1.5, tank: true, armour: 0, cutter: true },
+  panther:  { name: 'Panther section', soft: 1.5, hard: 3, tank: true, armour: 1 },
   mg:       { name: 'MG team', soft: 2, hard: 0, team: true },
   bazooka:  { name: 'Bazooka team', soft: 0, hard: 2, team: true },
   mg42:     { name: 'MG 42 team', soft: 2.5, hard: 0, team: true },
@@ -77,37 +77,37 @@ const DE_MORTAR = { dice: 3, ammo: 8 };   // the Germans' own mortar, one missio
 // in cover where possible (the x, y below are only where they would stand without that)
 const DEPLOY = 0.2;
 const US_START = [
-  { id: 'A', kind: 'company', name: 'Able Company', quality: 'elite', x: 0, y: 2 },
-  { id: 'B', kind: 'company', name: 'Baker Company', quality: 'standard', x: 0, y: 4 },
-  { id: 'C', kind: 'company', name: 'Charlie Company', quality: 'standard', x: 0, y: 6 },
+  { id: 'A', kind: 'company', name: '1st Platoon', quality: 'elite', x: 0, y: 2 },
+  { id: 'B', kind: 'company', name: '2nd Platoon', quality: 'standard', x: 0, y: 4 },
+  { id: 'C', kind: 'company', name: '3rd Platoon', quality: 'standard', x: 0, y: 6 },
   { id: 'cap', kind: 'captain', name: 'The Captain', x: 0, y: 4 },
-  { id: 'T1', kind: 'sherman', name: '1st Tank Platoon', x: 1, y: 4 },
-  { id: 'T2', kind: 'firefly', name: '2nd Tank Platoon', x: 0, y: 3 },
+  { id: 'T1', kind: 'sherman', name: '1st Tank Section', x: 1, y: 4 },
+  { id: 'T2', kind: 'firefly', name: '2nd Tank Section', x: 0, y: 3 },
   { id: 'mg1', kind: 'mg', name: 'MG Team 1', x: 1, y: 4 },
   { id: 'bz1', kind: 'bazooka', name: 'Bazooka Team 1', x: 0, y: 5 },
 ];
 // The Germans: a garrison already dug in round the objective, the rest marching up from the east to their posts.
 // Posts are given from the objective (dx, dy); garrison pieces start at theirs
 const DE_START = [
-  { id: 'd1', kind: 'company', name: '1st Fallschirmjäger Kompanie', quality: 'elite', post: [0, 0], garrison: true, attach: 'dmg1' },
+  { id: 'd1', kind: 'company', name: '1. Fallschirmjäger-Zug', quality: 'elite', post: [0, 0], garrison: true, attach: 'dmg1' },
   { id: 'dmg1', kind: 'mg42', name: 'MG 42 Team', post: [0, 0], garrison: true },
   { id: 'pak1', kind: 'pak', name: 'PaK 40', post: [0, 0], garrison: true },
   { id: 'dmg3', kind: 'mg42', name: 'MG 42 Team', post: [-1, 0], garrison: true },
-  { id: 'd2', kind: 'company', name: '2nd Kompanie', quality: 'standard', post: [0, 1], attach: 'dmg2' },
+  { id: 'd2', kind: 'company', name: '2. Zug', quality: 'standard', post: [0, 1], attach: 'dmg2' },
   { id: 'dmg2', kind: 'mg42', name: 'MG 42 Team', post: [0, 1] },
-  { id: 'd5', kind: 'company', name: '5th Kompanie', quality: 'standard', post: [0, -1] },
+  { id: 'd5', kind: 'company', name: '5. Zug', quality: 'standard', post: [0, -1] },
   { id: 'dmg4', kind: 'mg42', name: 'MG 42 Team', post: [-1, -1] },
   { id: 'dps1', kind: 'schreck', name: 'Panzerschreck Team', post: [-1, 1] },
-  { id: 'd3', kind: 'company', name: '3rd Kompanie', quality: 'standard', reserve: true },
+  { id: 'd3', kind: 'company', name: '3. Zug', quality: 'standard', reserve: true },
 ];
 
 // Reinforcements: who arrives on which turn, at their own edge (US west, German east)
 const REINFORCEMENTS = [
   { turn: 2, side: 'us', unit: { id: 'bz2', kind: 'bazooka', name: 'Bazooka Team 2' } },
-  { turn: 3, side: 'us', unit: { id: 'D', kind: 'company', name: 'Dog Company', quality: 'standard' } },
-  { turn: 3, side: 'de', unit: { id: 'dt1', kind: 'pz4', name: 'Panzer IV Zug', reserve: true } },
+  { turn: 3, side: 'us', unit: { id: 'D', kind: 'company', name: '4th Platoon', quality: 'standard' } },
+  { turn: 3, side: 'de', unit: { id: 'dt1', kind: 'pz4', name: 'Panzer IV pair', reserve: true } },
   { turn: 4, side: 'us', unit: { id: 'mg2', kind: 'mg', name: 'MG Team 2' } },
-  { turn: 4, side: 'de', unit: { id: 'd4', kind: 'company', name: '4th Kompanie', quality: 'standard', reserve: true } },
-  { turn: 5, side: 'us', replacements: 1 },   // a replacement platoon for the weakest company
-  { turn: 5, side: 'de', unit: { id: 'dt2', kind: 'panther', name: 'Panther Zug', reserve: true } },
+  { turn: 4, side: 'de', unit: { id: 'd4', kind: 'company', name: '4. Zug', quality: 'standard', reserve: true } },
+  { turn: 5, side: 'us', replacements: 1 },   // a replacement section for the weakest rifle platoon
+  { turn: 5, side: 'de', unit: { id: 'dt2', kind: 'panther', name: 'Panther pair', reserve: true } },
 ];
