@@ -238,7 +238,7 @@ const UI = (() => {
     $('#goal').textContent = `🎯 Take ${st.objective.name} and hold it at the end of an hour${TURNS ? `, by ${Sim.hourText(TURNS + 1)}` : ' (no time limit for now)'}.`;
     for (const which of ['mortars', 'artillery']) {
       const S = which === 'mortars' ? MORTARS : ARTILLERY, btn = $(`#fire-${which}`);
-      btn.innerHTML = `${which === 'mortars' ? '💥 Mortars' : '💣 Guns'} · ${st.ammo[which]} left`;
+      btn.innerHTML = `${which === 'mortars' ? '💥 Mortars' : '💣 Artillery'} · ${st.ammo[which]} left`;
       btn.title = `${S.name}: ${S.dice} dice on a field your troops can see${S.splash ? `, ${S.splash} on each field round it` : ''}. Once an hour, one load of ammunition`;
       btn.disabled = st.ammo[which] <= 0 || !!st.fired[which] || st.won || st.lost || !!st.de;
       btn.classList.toggle('on', view.mode === 'fire:' + which);

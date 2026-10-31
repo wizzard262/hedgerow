@@ -227,6 +227,71 @@ const Models = (() => {
     return castAll(g);
   }
 
+  // ---------- Fire support, off the edge of the board ----------
+  // A mortar team on a flocked base: the baseplate, the tube up at a steep angle on its bipod, two crew kneeling by it.
+  // The American 81 mm M1 in olive drab, the German 8 cm GrW 34 in field grey. Its front is +x
+  function mortar(side) {
+    const g = new T.Group(), us = side === 'us';
+    if (!M.flockTop) M.flockTop = new T.MeshStandardMaterial({ map: flockTex('#5f6d3c', GRASS, 31), roughness: 1 });
+    g.add(at(new T.Mesh(new T.CylinderGeometry(0.07, 0.072, 0.008, 32), [mat('#3b3326', 0.8), M.flockTop, M.base]), 0, 0.004, 0));
+    const paint = us ? M.olive : mat('#4a524f', 0.6, 0.2);
+    // Baseplate and tube
+    g.add(at(box(0.034, 0.005, 0.034, M.steel), -0.012, 0.011, 0));
+    g.add(at(cyl(0.0048, 0.0048, 0.075, paint, 12), 0.006, 0.04, 0, 0, 0, -0.62));
+    g.add(at(cyl(0.0058, 0.0058, 0.006, M.steel, 12), 0.028, 0.07, 0, 0, 0, -0.62));     // the muzzle ring
+    // The bipod: two legs splayed forward, and the sight
+    for (const s of [-1, 1]) g.add(at(cyl(0.0018, 0.0018, 0.045, M.steel, 6), 0.03, 0.03, s * 0.012, s * 0.35, 0, 0.25));
+    g.add(at(box(0.006, 0.008, 0.006, M.steel), 0.02, 0.05, 0.009));
+    // Two crew: one kneeling with a bomb ready, one by the sight
+    const loader = soldier(side, 0, false); loader.scale.y = 0.72; g.add(at(loader, -0.012, 0.008, 0.035, 0, 0.6, 0));
+    const aimer = soldier(side, 1, false); aimer.scale.y = 0.75; g.add(at(aimer, -0.03, 0.008, -0.03, 0, -0.3, 0));
+    return castAll(g);
+  }
+
+  // A field howitzer: two big wheels, the split trail behind, a small shield, the barrel raised. The American 105 mm
+  // M2A1 in olive drab, the German 10.5 cm leFH 18 in dark yellow with green and brown, with a muzzle brake. Front +x
+  function howitzer(side) {
+    const g = new T.Group(), us = side === 'us', paint = us ? M.olive : camoPaint();
+    // Wheels and axle
+    for (const s of [-1, 1]) {
+      g.add(at(wheel(0.03, 0.013, M.track), 0, 0.03, s * 0.047));
+      g.add(at(wheel(0.012, 0.015, paint), 0, 0.03, s * 0.047));
+    }
+    g.add(at(cyl(0.004, 0.004, 0.1, M.steel, 8), 0, 0.03, 0, Math.PI / 2, 0, 0));
+    // The split trail, legs spread on the ground behind
+    for (const s of [-1, 1]) g.add(at(box(0.15, 0.009, 0.01, paint), -0.075, 0.018, s * 0.03, 0, s * 0.28, -0.12));
+    for (const s of [-1, 1]) g.add(at(box(0.012, 0.012, 0.02, M.steel), -0.145, 0.006, s * 0.072));
+    // The shield, the cradle and the barrel, raised
+    g.add(at(box(0.005, 0.045, 0.1, paint), 0.012, 0.055, 0, 0, 0, -0.08));
+    const gun = new T.Group();
+    gun.add(at(box(0.08, 0.018, 0.024, paint), 0, 0, 0));
+    gun.add(at(cyl(0.0065, 0.0072, 0.14, M.steel, 12), 0.08, 0.006, 0, 0, 0, Math.PI / 2));
+    if (!us) gun.add(at(cyl(0.0095, 0.0095, 0.016, M.steel, 12), 0.152, 0.006, 0, 0, 0, Math.PI / 2));
+    at(gun, 0.005, 0.05, 0, 0, 0, 0.32);
+    g.add(gun);
+    // Two crew: one at the breech, one carrying a round up
+    g.add(at(soldier(side, 0, false), -0.07, 0.0, 0.045, 0, 0.4, 0));
+    g.add(at(soldier(side, 1, false), -0.095, 0.0, -0.05, 0, -0.5, 0));
+    return castAll(g);
+  }
+
+  // One round of ammunition, for the piles beside the guns: a brass-cased shell standing up, or a finned mortar bomb
+  function round(kind) {
+    const g = new T.Group();
+    if (kind === 'shell') {
+      g.add(at(cyl(0.0065, 0.0065, 0.024, mat('#b89a4a', 0.35, 0.8), 12), 0, 0.012, 0));
+      g.add(at(cyl(0.0062, 0.0065, 0.014, M.olive, 12), 0, 0.031, 0));
+      g.add(at(new T.Mesh(new T.ConeGeometry(0.0062, 0.016, 12), M.olive), 0, 0.046, 0));
+    } else {
+      const body = sphere(0.007, M.olive, 12, 10); body.scale.set(1, 1.8, 1);
+      g.add(at(body, 0, 0.012, 0));
+      g.add(at(cyl(0.0025, 0.0025, 0.016, M.steel, 8), 0, -0.004, 0));
+      for (const r of [0, Math.PI / 2]) g.add(at(box(0.012, 0.008, 0.001, M.steel), 0, -0.01, 0, 0, r, 0));
+      g.rotation.z = Math.PI / 2;
+    }
+    return castAll(g);
+  }
+
   // A marker token on the table, like the counters wargamers put beside a unit: a small wooden or coloured disc
   function token(colour, label) {
     const g = new T.Group();
@@ -524,5 +589,5 @@ const Models = (() => {
     return castAll(g);
   }
 
-  return { materials, M, water, bridge, soldier, squad, team, captain, pak, token, sherman, panther, panzer4, hedge, tree, house, die, table, field, lane, at };
+  return { materials, M, water, bridge, soldier, squad, team, captain, pak, mortar, howitzer, round, token, sherman, panther, panzer4, hedge, tree, house, die, table, field, lane, at };
 })();

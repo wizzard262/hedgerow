@@ -49,6 +49,65 @@ const Board = (() => {
 
   // ---------- The table: built once a game, hedges again when one is cut ----------
 
+  // The mortars and artillery of each side, off the board beyond its top corners (Steve): where they stand on the table,
+  // which way they face (towards the board), and where their pile of rounds goes
+  const GUNS = {
+    us: { artillery: { x: 0.35, z: -0.8, pile: 0.8 }, mortars: { x: 1.75, z: -0.8, pile: 2.2 } },
+    de: { mortars: { x: COLS - 1.75, z: -0.8, pile: COLS - 2.75 }, artillery: { x: COLS - 0.35, z: -0.8, pile: COLS - 1.25 } },
+  };
+  const GUN_NAMES = { us: { artillery: 'US artillery', mortars: 'US mortars' }, de: { artillery: 'German artillery', mortars: 'German mortars' } };
+  const PILE_MAX = 12;
+  let support = null;           // side → which → { model, rounds: [] }
+
+  // Facing: the Americans' guns turn towards the board and a little east, the Germans' a little west
+  const gunFacing = side => Math.atan2(-1, side === 'us' ? 0.45 : -0.45);
+  const gunDir = side => ({ x: side === 'us' ? 0.41 : -0.41, z: 0.91 });
+
+  function buildSupport() {
+    support = {};
+    for (const side of ['us', 'de']) {
+      support[side] = {};
+      for (const which of ['artillery', 'mortars']) {
+        const spot = GUNS[side][which];
+        const model = which === 'artillery' ? Models.howitzer(side) : Models.mortar(side);
+        model.scale.setScalar(which === 'artillery' ? TANKS * 1.3 : MEN);
+        built.add(at(model, spot.x, 0, spot.z, 0, gunFacing(side), 0));
+        // The pile of rounds beside it: shells standing in rows of three, mortar bombs lying in rows of four
+        const rounds = [];
+        for (let k = 0; k < PILE_MAX; k++) {
+          const r = Models.round(which === 'artillery' ? 'shell' : 'bomb');
+          r.scale.setScalar(which === 'artillery' ? TANKS * 1.3 : MEN);
+          const perRow = which === 'artillery' ? 3 : 4, gap = which === 'artillery' ? 0.055 : 0.06;
+          built.add(at(r, spot.pile + (k % perRow) * gap, which === 'artillery' ? 0 : 0.02, spot.z - 0.12 + Math.floor(k / perRow) * gap));
+          rounds.push(r);
+        }
+        // Its name, small, on the table in front
+        const name = word(GUN_NAMES[side][which], '#efe6d2', false);
+        name.scale.multiplyScalar(0.5);
+        name.material.depthTest = true;
+        name.position.set(spot.x + (side === 'us' ? 0.25 : -0.25), 0.05, spot.z + 0.42);
+        built.add(name);
+        support[side][which] = { model, rounds };
+      }
+    }
+  }
+
+  // Show as many rounds beside each gun as it has shots left
+  function updateSupport(st) {
+    if (!support) return;
+    const left = { us: { artillery: st.ammo.artillery, mortars: st.ammo.mortars }, de: { artillery: 0, mortars: st.deMortarAmmo || 0 } };
+    for (const side of ['us', 'de']) for (const which of ['artillery', 'mortars']) {
+      support[side][which].rounds.forEach((r, k) => { r.visible = k < left[side][which]; });
+    }
+  }
+
+  // Where a side's mortar or gun fires from: just in front of the model, at the muzzle
+  function muzzle(f) {
+    const side = f.side === 'de' ? 'de' : 'us', which = f.support === 'artillery' ? 'artillery' : 'mortars';
+    const spot = GUNS[side][which], d = gunDir(side), reach = which === 'artillery' ? 0.32 : 0.12;
+    return new T.Vector3(spot.x + d.x * reach, which === 'artillery' ? 0.16 : 0.15, spot.z + d.z * reach);
+  }
+
   function build(st) {
     if (built) scene.remove(built);
     built = new T.Group();
@@ -534,12 +593,12 @@ const Board = (() => {
   // How long a mortar bomb or an artillery shell is in the air, seen arcing in
   const shellFlight = f => (f.support === 'artillery' ? 1.6 : 1.3);
 
-  // Where a shell is on its way down, p from 0 (high up, over its own side of the table) to 1 (landing): mortar bombs drop
-  // almost straight down, artillery shells come in on a longer, flatter curve
+  // Where a round is on its way, p from 0 (leaving the mortar or gun off the board) to 1 (landing): mortar bombs go up
+  // high and drop steeply, artillery shells on a long arc
   function shellAt(f, to, p) {
-    const fromSide = f.side === 'de' ? 1 : -1;
-    const reach = f.support === 'artillery' ? 3 : 0.9, high = f.support === 'artillery' ? 2.4 : 3.2;
-    return new T.Vector3(to.x + fromSide * reach * (1 - p), 0.05 + high * (1 - p * p), to.z - 0.4 * (1 - p));
+    const from = muzzle(f), far = Math.hypot(to.x - from.x, to.z - from.z);
+    const high = f.support === 'artillery' ? 1.6 + far * 0.12 : 2.6 + far * 0.1;
+    return new T.Vector3(T.MathUtils.lerp(from.x, to.x, p), T.MathUtils.lerp(from.y, 0.05, p) + high * 4 * p * (1 - p), T.MathUtils.lerp(from.z, to.z, p));
   }
 
   // Dirt thrown up by a burst: dark puffs
@@ -596,6 +655,9 @@ const Board = (() => {
       const land = from ? flight : f.kind === 'shell' ? shellFlight(f) : 0, lt = t - land;
       if (!from && f.kind === 'shell' && lt < 0) {
         const p = t / land;
+        // The flash and smoke as it fires, at the mortar or gun off the board
+        if (t < 0.15) { const m = add(glow('rgba(255,200,90,.95)')); m.scale.setScalar(f.support === 'artillery' ? 0.35 : 0.2); m.position.copy(muzzle(f)); }
+        if (t < 0.9) { const sm = add(new T.Sprite(new T.SpriteMaterial({ map: smokeTex(), transparent: true, depthWrite: false, opacity: 0.6 - t * 0.6 }))); sm.scale.setScalar(0.12 + t * 0.3); sm.position.copy(muzzle(f)).add(new T.Vector3(0, t * 0.2, 0)); }
         for (let b = 0; b < 6; b++) {
           const bead = add(glow('rgba(255,215,150,1)'));
           bead.scale.setScalar(0.09 * (1 - b * 0.14));
@@ -721,7 +783,7 @@ const Board = (() => {
     const shooter = f.from ? st.units.find(u => u.id === f.from.id) : null;
     const who = shooter ? shooter.name
       : f.side === 'de' ? 'German mortars'
-      : f.support === 'artillery' ? 'Our guns' : 'Our mortars';
+      : f.support === 'artillery' ? 'Our artillery' : 'Our mortars';
     const need = f.need >= 6 ? 'needs 6' : `needs ${f.need}+`;
     const hits = f.faces.filter(r => r.hit).length;
     return [who, `${need} · ${hits} hit${hits === 1 ? '' : 's'}`];
@@ -758,7 +820,8 @@ const Board = (() => {
   function render(st, view = {}) {
     const now = performance.now(), dt = lastT ? Math.min(0.1, (now - lastT) / 1000) : 0.016;
     lastT = now;
-    if (!built || built.userData.seed !== st.seed) { for (const id in pieces) scene.remove(pieces[id]); for (const id in tokens) scene.remove(tokens[id]); pieces = {}; tokens = {}; build(st); built.userData.seed = st.seed; }
+    if (!built || built.userData.seed !== st.seed) { for (const id in pieces) scene.remove(pieces[id]); for (const id in tokens) scene.remove(tokens[id]); pieces = {}; tokens = {}; build(st); buildSupport(); built.userData.seed = st.seed; }
+    updateSupport(st);
     buildHedges(st);
     if (st.fxShown !== st.fx || st.fxCount !== st.fx.length) { showDice(st); startShots(st); st.fxShown = st.fx; st.fxCount = st.fx.length; }
     updatePieces(st);
