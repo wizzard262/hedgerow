@@ -515,6 +515,36 @@ check('nine places in a field: corners line both hedges; two pieces never share 
   }
 });
 
+check('the blind bag: a token for each piece, one piece a token, the round ends when it is empty', () => {
+  const st = Sim.newGame(3);
+  Sim.startRound(st);
+  const us = st.units.filter(u => u.side === 'us' && u.x !== null).length, de = st.units.filter(u => u.side === 'de' && u.x !== null).length;
+  assert(st.bag.us === us && st.bag.de === de, `the bag holds ${st.bag.us}+${st.bag.de}, not ${us}+${de}`);
+  const turn = st.turn;
+  let draws = 0;
+  for (let side = Sim.drawToken(st); side; side = Sim.drawToken(st)) {
+    draws++;
+    if (side === 'de') {
+      for (let r = Sim.germanStep(st); !r.done; r = Sim.germanStep(st)) Sim.answer(st, false);
+      Sim.endGermanToken(st);
+    } else {
+      // Only one piece may move on a token
+      const mine = st.units.filter(u => u.side === 'us' && Sim.canAct(st, u));
+      const a = mine.find(u => Sim.chargeSpots(st, u).length);
+      if (a) {
+        const p = Sim.chargeSpots(st, a)[0];
+        Sim.actCharge(st, a, p.x, p.y);
+        assert(!st.units.some(u => u !== a && u.side === 'us' && Sim.canAct(st, u)), 'a second piece could move on the same token');
+      }
+      Sim.passToken(st);
+    }
+    if (draws > 60) break;
+  }
+  assert(draws <= us + de, `${draws} tokens drawn from a bag of ${us + de}`);
+  Sim.endRound(st);
+  assert(st.won || st.lost || st.turn === turn + 1, 'the round did not end');
+});
+
 check('leaving everything alone never wins', () => {
   for (let seed = 1; seed <= 30; seed++) assert(!play(seed, false).won, `seed ${seed} won by doing nothing`);
 });

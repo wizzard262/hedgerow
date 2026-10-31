@@ -15,7 +15,7 @@ const UI = (() => {
 
   // ---------- Your mortars and artillery, off the board ----------
   // Clicking one chooses it like a piece (Steve): its targets show at once if it can fire this hour
-  const canFire = which => st.ammo[which] > 0 && !st.fired[which] && !st.won && !st.lost && !st.de;
+  const canFire = which => st.ammo[which] > 0 && !st.fired[which] && !st.won && !st.lost && !st.de && (!st.tokens || st.drawn === 'us');
   function selectSupport(which) {
     view.sel = null;
     view.support = which;
@@ -275,7 +275,7 @@ const UI = (() => {
 
   function hint() {
     const u = selected();
-    const text = !view.mode ? (st.de ? 'The Germans are moving…' : '')
+    const text = !view.mode ? (st.drawn === 'de' ? 'German token: a German piece moves…' : st.drawn === 'us' ? (st.activeId ? 'Finish its move, or Done.' : 'Your token: pick one piece and give it its move (or Pass).') : 'Drawing a token…')
       : view.mode.startsWith('fire:') ? 'Click a red target, or a field with Germans your troops can see.'
       : view.mode === 'halfShot' ? 'Moved. Click a red target to fire on it (one more needed on the move), or Esc to hold fire.'
       : view.mode === 'shoot' ? 'Click a red target to fire on it. Esc cancels.'
@@ -289,8 +289,43 @@ const UI = (() => {
   function update() {
     $('#clock').innerHTML = `<b>${Sim.hourText(st.turn)}</b> · hour ${st.turn}${TURNS ? ` of ${TURNS}` : ''} · ${START_DATE}`;
     $('#goal').textContent = `🎯 Take ${st.objective.name} and hold it at the end of an hour, or destroy every German${TURNS ? `, by ${Sim.hourText(TURNS + 1)}` : ' (no time limit for now)'}.`;
-    card(); hint();
-    $('#end').disabled = st.won || st.lost || !!st.de;
+    card(); hint(); bag();
+    // The bar's button: Pass on an American token (Done once its piece has moved)
+    $('#end').disabled = st.won || st.lost || st.drawn !== 'us';
+    $('#end').textContent = st.activeId ? 'Done ▶' : 'Pass ▶';
+  }
+
+  // ---------- The bag of tokens, right of the button ----------
+  // Green with a gold star for each American token still in the bag (left), grey with a black cross for each German one
+  // (right); the round beside them in big letters
+  const TOKEN = {
+    us: '<span class="tok us">★</span>',
+    de: '<span class="tok de"><svg viewBox="0 0 20 20"><path d="M7 2h6v5h5v6h-5v5H7v-5H2V7h5z" fill="#111" stroke="#eee" stroke-width="1.4"/></svg></span>',
+  };
+  function bag() {
+    const b = st.bag || { us: 0, de: 0 };
+    $('#bag-us').innerHTML = TOKEN.us.repeat(b.us);
+    $('#bag-de').innerHTML = TOKEN.de.repeat(b.de);
+    $('#round').textContent = `ROUND ${st.turn}`;
+  }
+
+  // The token drawn: it grows to about a field's size, floats to the middle of the table, and fades away; then `done`
+  function flyToken(side, done) {
+    const grid = $(side === 'us' ? '#bag-us' : '#bag-de').getBoundingClientRect();
+    const boardBox = $('#board').getBoundingClientRect();
+    const a = Board.screenPoint(COLS / 2, ROWS / 2), b = Board.screenPoint(COLS / 2 + 1, ROWS / 2);
+    const size = Math.max(60, Math.min(140, b.x - a.x));
+    const t = document.createElement('div');
+    t.innerHTML = TOKEN[side];
+    const tok = t.firstChild;
+    tok.classList.add('fly');
+    Object.assign(tok.style, { left: grid.left + grid.width / 2 - 11 + 'px', top: grid.top + grid.height / 2 - 11 + 'px' });
+    document.body.append(tok);
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      Object.assign(tok.style, { left: a.x - size / 2 + 'px', top: Math.min(boardBox.bottom - size, a.y - size / 2) + 'px', width: size + 'px', height: size + 'px', fontSize: size * 0.6 + 'px', lineHeight: size + 'px' });
+    }));
+    setTimeout(() => { tok.style.opacity = '0'; }, 950);
+    setTimeout(() => { tok.remove(); done(); }, 1350);
   }
 
   let refresh = () => {};
@@ -298,5 +333,5 @@ const UI = (() => {
     refresh = onChange;
   }
 
-  return { init, setState, update, clickField, openMenu, closeMenu, spots, targets, shootTarget, view, selected, selectSupport, supportState, KIND };
+  return { init, setState, update, clickField, openMenu, closeMenu, spots, targets, shootTarget, view, selected, selectSupport, supportState, flyToken, KIND };
 })();

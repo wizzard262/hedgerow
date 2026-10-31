@@ -20,14 +20,28 @@
   /* The controls: one bar along the bottom (Steve), the table filling the rest of the screen */
   #panel { order: 2; flex: 0 0 auto; height: 132px; overflow-x: auto; overflow-y: hidden; background: var(--panel); border-top: 1px solid var(--line); padding: 8px 12px; display: flex; flex-direction: row; align-items: stretch; gap: 10px; }
   #panel > * { flex: 0 0 auto; }
-  .brand { width: 330px; display: flex; flex-direction: column; gap: 2px; }
-  .brand #goal, .brand #clock { font-size: 12px; }
-  #card { flex: 1 1 420px; min-width: 380px; display: grid; grid-template-columns: minmax(220px, 1fr) auto; column-gap: 12px; align-content: start; overflow-y: auto; }
+  .brand { width: 240px; display: flex; flex-direction: column; gap: 2px; }
+  .brand #goal, .brand #clock { font-size: 11px; }
+  .brand h1 { font-size: 22px !important; }
+  .brand .top { flex-wrap: wrap; row-gap: 2px; }
+  .brand .top .links button { font-size: 11px; padding: 1px 6px; }
+  /* The bag: tokens left this round, Americans left, Germans right, and the round in big letters (Steve) */
+  #bagbox { display: flex; align-items: center; gap: 14px; }
+  .bagside { display: grid; grid-template-columns: repeat(4, 24px); grid-auto-rows: 24px; gap: 4px; align-content: center; }
+  #bag-us { justify-items: start; }
+  #bag-de { justify-items: end; }
+  .tok { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; box-shadow: 0 1px 3px rgba(0,0,0,.6); }
+  .tok.us { background: #3f8a36; border: 2px solid #2a5e24; color: #f2c94c; font-size: 14px; line-height: 1; }
+  .tok.de { background: #8c8c86; border: 2px solid #55554f; }
+  .tok.de svg { width: 70%; height: 70%; }
+  .tok.fly { position: fixed; z-index: 20; transition: left .8s ease, top .8s ease, width .8s ease, height .8s ease, font-size .8s ease, opacity .35s ease; }
+  #round { font: 30px "Special Elite", monospace; color: var(--accent); white-space: nowrap; letter-spacing: 2px; }
+  #card { flex: 1 1 380px; min-width: 320px; display: grid; grid-template-columns: minmax(220px, 1fr) auto; column-gap: 12px; align-content: start; overflow-y: auto; }
   #card .stats { font-size: 12px; margin: 2px 0; }
   #card #actions button { padding: 3px 8px; font-size: 13px; }
   #card > :not(#actions) { grid-column: 1; }
   #card #actions { grid-column: 2; grid-row: 1 / span 3; margin-top: 0 !important; }
-  #hint { width: 250px; overflow-y: auto; }
+  #hint { width: 190px; overflow-y: auto; }
   #panel h1 { font: 26px "Special Elite", monospace; margin: 0; letter-spacing: 2px; color: var(--accent); }
   .top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
   .top .links { display: flex; gap: 6px; }
@@ -47,7 +61,7 @@
   #card .bad { color: var(--bad); font-weight: 700; }
   #actions { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
   #hint { min-height: 1.4em; font-size: 12px; color: var(--warn); }
-  #end { width: 150px; padding: 10px; font: 16px "Special Elite", monospace; background: #6b4f2a; border-color: #8a6a3a; }
+  #end { width: 110px; padding: 10px; font: 16px "Special Elite", monospace; background: #6b4f2a; border-color: #8a6a3a; }
 
   /* The table, filling the screen above the bar */
   #board { order: 1; flex: 1 1 auto; position: relative; min-width: 0; min-height: 0; }
@@ -96,7 +110,7 @@
 <aside id="panel">
   <div class="brand">
   <div class="top">
-    <h1>HEDGEROW <span id="ver" style="font-size:11px;color:var(--muted);letter-spacing:0">v50</span></h1>
+    <h1>HEDGEROW <span id="ver" style="font-size:11px;color:var(--muted);letter-spacing:0">v51</span></h1>
     <div class="links"><button id="sound-btn" title="Sound on or off">🔊</button><button id="help-btn">How to play</button><button id="new-btn">New game</button></div>
   </div>
   <div id="clock"></div>
@@ -107,7 +121,8 @@
   <div class="box" id="card"></div>
   <div id="hint"></div>
 
-  <button id="end">End the hour ▶</button>
+  <button id="end">Pass ▶</button>
+  <div id="bagbox"><div class="bagside" id="bag-us"></div><div class="bagside" id="bag-de"></div><div id="round"></div></div>
 
 </aside>
 
@@ -131,7 +146,7 @@
     <p>Tuesday 11 July 1944, Normandy. Your American rifle company must fight through the bocage, field by field, and take a village (Saint-Jean or La Haye: it changes each game), then hold it at the end of an hour, or destroy every German on the field. Each move is an hour; there is no time limit for now. A German garrison holds it; more Germans march up from beyond the river.</p>
     <ul>
       <li>🪖 <b>Pieces</b>: your company: three rifle platoons (three sections of four men each, moving together; a fourth platoon comes later), the captain, machine-gun and bazooka teams, a sniper, and two tank sections: Shermans and Fireflies. 1st Platoon is elite.</li>
-      <li>📋 <b>One move each</b>: every piece moves (acts) once an hour. A piece that has moved is greyed out until the next hour.</li>
+      <li>📋 <b>The bag</b>: each round (an hour) a token goes in a blind bag for every piece on the table: green with a gold star for yours, grey with a black cross for the Germans'. Tokens are drawn one at a time; on yours, pick one piece and give it its move (or Pass); on theirs, a German piece moves. A piece destroyed, or one that loses its move, takes a token out. When the bag is empty the next round starts. The tokens left are shown right of the Pass button. Your mortars and artillery can fire on any of your tokens, without using it up.</li>
       <li>🖱️ <b>Picking a piece</b> shows where it can go straight away: red-hatched fields are a Move &amp; shoot (it moves there, then fires), the other marked fields a Charge. Click the field (where in it you want to stand) and that's the action. The menu by the piece has the rest.</li>
       <li>🎲 <b>Actions</b> (click a piece for its menu): <b>Charge</b>: up to three fields, without shooting, and through a field of your own pieces on the way, but not through a village or hamlet (rifle platoons and tanks fight hand to hand if Germans hold the field it ends in), <b>Move &amp; shoot</b> (up to two fields, to a red-hatched field from where it will have someone to fire at, then fire needing one more; machine guns can't fire on the move: they Charge to a new spot, then fire), <b>Shoot</b> (full dice), and the captain's <b>Rally</b>: not his move, he rallies twice an hour if he doesn't move or shoot, once if he does (before or after), himself included. He can Charge, Move &amp; shoot and Shoot too (one die). There is no plain move: to move without shooting, Charge.</li>
       <li>👁️ <b>Who can shoot whom</b>: along a line of sight (how far depends on the weapon, below) over open fields and lanes; villages, hamlets and orchards in between block it (and orchards, like houses, are cover), and so does any hedge except the ones the shooter or the target lines (below). How far: rifles 4 fields (long range beyond 2), machine guns, tanks and the PaK 6 (long range beyond 4), bazookas 3 (long range beyond 1); one more is needed on the dice at long range. The sniper sees as far as the board goes, and neither cover nor range helps his target. Men behind or beside a tank are in cover. Red targets show who a piece can hit, with the score its dice need.</li>
@@ -157,12 +172,12 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="js/data.js?v=50"></script>
-<script src="js/sim.js?v=50"></script>
-<script src="js/sound.js?v=50"></script>
-<script src="js/models.js?v=50"></script>
-<script src="js/board3d.js?v=50"></script>
-<script src="js/ui.js?v=50"></script>
-<script src="js/main.js?v=50"></script>
+<script src="js/data.js?v=51"></script>
+<script src="js/sim.js?v=51"></script>
+<script src="js/sound.js?v=51"></script>
+<script src="js/models.js?v=51"></script>
+<script src="js/board3d.js?v=51"></script>
+<script src="js/ui.js?v=51"></script>
+<script src="js/main.js?v=51"></script>
 </body>
 </html>

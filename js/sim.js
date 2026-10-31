@@ -202,8 +202,12 @@ const Sim = (() => {
   // A piece has used its move for the hour
   function spend(st, u) {
     u.acted = true;
+    if (st.tokens) st.activeId = u.id;
     for (const o of st.units) o.halfShot = false;
   }
+
+  // With the bag (the page plays this way): an American piece moves only on an American token, and only one piece a token
+  const tokenAllows = (st, u) => !st.tokens || (st.drawn === 'us' && (!st.activeId || st.activeId === u.id));
 
   // ---------- Seeing ----------
 
@@ -435,7 +439,8 @@ const Sim = (() => {
   // A piece fired on takes cover (Steve): no moving back, its men get down where they are. One more is needed to hit it
   // for the rest of the German hour, and it misses its move next hour unless the captain gets it up
   function takeCover(st, u) {
-    u.spentNext = true;
+    if (st.tokens && !u.acted) u.acted = true;
+    else u.spentNext = true;
     u.down = true;
     return { line: `${u.name} takes cover` };
   }
@@ -594,12 +599,12 @@ const Sim = (() => {
   function canAct(st, u) {
     // The captain can't move or shoot once he has used both his rallies
     if (u && u.kind === 'captain' && (u.rallied || 0) >= CAPTAIN_RALLIES.still) return false;
-    return !!u && u.side === 'us' && u.x !== null && !st.won && !st.lost && !st.de && !u.acted;
+    return !!u && u.side === 'us' && u.x !== null && !st.won && !st.lost && !st.de && !u.acted && tokenAllows(st, u);
   }
 
   // Can the captain rally now (Steve): twice an hour if he doesn't move or shoot, once if he does, before or after
   function canRally(st, cap) {
-    if (!cap || cap.kind !== 'captain' || cap.side !== 'us' || cap.x === null || st.won || st.lost || st.de) return false;
+    if (!cap || cap.kind !== 'captain' || cap.side !== 'us' || cap.x === null || st.won || st.lost || st.de || !tokenAllows(st, cap)) return false;
     const allowed = cap.acted ? CAPTAIN_RALLIES.moved : CAPTAIN_RALLIES.still;
     return (cap.rallied || 0) < allowed;
   }
@@ -828,11 +833,11 @@ const Sim = (() => {
 
   // A shaken piece uses its move to try to pull itself together (Steve: pieces can rally themselves)
   function canSelfRally(st, u) {
-    return !!u && u.side === 'us' && u.x !== null && u.shocked && !u.acted && !st.won && !st.lost && !st.de && u.kind !== 'captain';
+    return !!u && u.side === 'us' && u.x !== null && u.shocked && !u.acted && !st.won && !st.lost && !st.de && u.kind !== 'captain' && tokenAllows(st, u);
   }
   function actSelfRally(st, u) {
     if (!canSelfRally(st, u)) return { ok: false };
-    u.acted = true;
+    spend(st, u);
     const ok = st.rand() < SELF_RALLY[u.quality || 'standard'];
     if (ok) u.shocked = false;
     return { ok: true, lines: [ok ? `📣 ${u.name} pulls itself together.` : `📣 ${u.name} stays pinned down.`] };
@@ -840,8 +845,9 @@ const Sim = (() => {
 
   function actRally(st, cap, target) {
     if (!canRally(st, cap) || !rallyTargets(st, cap).includes(target)) return { ok: false };
-    // A rally isn't his move: it counts against his rallies for the hour
+    // A rally isn't his move: it counts against his rallies for the hour (and with the bag, it is his token's piece)
     cap.rallied = (cap.rallied || 0) + 1;
+    if (st.tokens) st.activeId = cap.id;
     const lines = [];
     // Down in cover: he gets them up and moving, so they can act this hour after all (Steve)
     if (target.down && target.acted) {
@@ -890,6 +896,8 @@ const Sim = (() => {
 
   function actFire(st, which, x, y) {
     if (st.won || st.lost || st.de || st.fired[which] || st.ammo[which] <= 0 || !canCallFire(st, x, y)) return { ok: false };
+    // With the bag: on an American token, and it doesn't use the token up
+    if (st.tokens && st.drawn !== 'us') return { ok: false };
     st.fired[which] = true;
     st.ammo[which]--;
     const S = which === 'mortars' ? MORTARS : ARTILLERY;
@@ -1068,6 +1076,92 @@ const Sim = (() => {
     resolveShot(st, shot, withdraw);
   }
 
+  // ---------- The blind bag (Steve) ----------
+  // Each round the bag holds a token for every piece on the table that can still move: green for the Americans, grey for
+  // the Germans. One is drawn at a time and that side moves one piece; then the next is drawn. A piece destroyed, or one
+  // that loses its move (taking cover), takes a token out with it. When the bag is empty, the round (the hour) ends
+
+  // Pieces of a side that can still move this round
+  const movable = (st, side) => st.units.filter(u => u.side === side && u.x !== null && !u.acted).length;
+
+  function startRound(st) {
+    st.tokens = true;
+    // Shocked Germans who weren't hit last round come round; some rally anyway
+    for (const u of st.units) if (u.side === 'de' && u.x !== null && u.shocked && (!u.hit || st.rand() < 0.3)) u.shocked = false;
+    for (const u of st.units) { if (u.side === 'de') u.hit = false; u.halfShot = false; }
+    st.bag = { us: movable(st, 'us'), de: movable(st, 'de') };
+    st.drawn = null;
+    st.activeId = null;
+    st.deSupportDone = false;
+    st.roundRep = [];
+  }
+
+  // No more tokens for a side than it has pieces still to move
+  function trimBag(st) {
+    st.bag.us = Math.min(st.bag.us, movable(st, 'us'));
+    st.bag.de = Math.min(st.bag.de, movable(st, 'de'));
+  }
+
+  // Draw a token: 'us', 'de', or null when the bag is empty. On a German token the Germans' move is set up (see germanStep);
+  // their mortar and artillery fire with their first token of the round
+  function drawToken(st) {
+    trimBag(st);
+    const total = st.bag.us + st.bag.de;
+    if (!total) return null;
+    const side = st.rand() * total < st.bag.us ? 'us' : 'de';
+    st.bag[side]--;
+    st.drawn = side;
+    st.activeId = null;
+    st.fx = [];
+    for (const u of st.units) u.halfShot = false;
+    if (side === 'de') {
+      const u = pickGerman(st);
+      u.acted = true;
+      st.de = { queue: [u.id], mortar: !st.deSupportDone && st.deMortarAmmo > 0, artillery: !st.deSupportDone && st.deArtilleryAmmo > 0, rep: st.roundRep, ask: null };
+      st.deSupportDone = true;
+    }
+    return side;
+  }
+
+  // Which German piece moves on a German token: one that has someone to shoot first, otherwise any still to move
+  function pickGerman(st) {
+    const ready = st.units.filter(u => u.side === 'de' && u.x !== null && !u.acted);
+    const score = u => (bestTarget(st, u) ? 2 : 0) + st.rand();
+    return ready.sort((a, b) => score(b) - score(a))[0];
+  }
+
+  // The German move is over (germanStep said done): back to the bag
+  function endGermanToken(st) {
+    st.de = null;
+    st.drawn = null;
+  }
+
+  // Is the American token used up: its piece has moved and has nothing more it can do?
+  function activationOver(st) {
+    if (!st.tokens || st.drawn !== 'us' || !st.activeId) return false;
+    const u = unitById(st, st.activeId);
+    if (u.x === null) return true;
+    const captainCanRally = u.kind === 'captain' && canRally(st, u) && rallyTargets(st, u).length > 0;
+    return !canAct(st, u) && !u.halfShot && !captainCanRally;
+  }
+
+  // Pass on an American token, or finish with it
+  function passToken(st) {
+    st.drawn = null;
+    st.activeId = null;
+    for (const u of st.units) u.halfShot = false;
+  }
+
+  // Can any American piece move on this token?
+  const usCanMove = st => st.units.some(u => u.side === 'us' && u.x !== null && (canAct(st, u) || canSelfRally(st, u) || (u.kind === 'captain' && canRally(st, u) && rallyTargets(st, u).length > 0)));
+
+  // The bag is empty: the round (the hour) ends: has the village fallen, are the Germans gone? Then the next round
+  function endRound(st) {
+    st.de = null;
+    st.drawn = null;
+    finishHour(st);
+  }
+
   // ---------- Turns ----------
 
   function arrive(st, side, def, rep) {
@@ -1112,7 +1206,7 @@ const Sim = (() => {
 
   // After the German hour: has the hamlet fallen, has the battalion gone, has time run out? Then a new hour
   function finishHour(st) {
-    const rep = st.de ? st.de.rep : [];
+    const rep = st.de ? st.de.rep : (st.roundRep || []);
     st.de = null;
     const germansLeft = st.units.some(u => u.side === 'de' && u.x !== null);
     if (holdsObjective(st)) {
@@ -1145,6 +1239,7 @@ const Sim = (() => {
       // Down in cover: it stays down through the hour it misses, then gets up
       if (!missed) u.down = false;
     }
+    for (const u of st.units) if (u.side === 'de') u.acted = false;
     if ((st.turn - 1) % MORTARS.resupplyEvery === 0) st.ammo.mortars++;
     if ((st.turn - 1) % ARTILLERY.resupplyEvery === 0) st.ammo.artillery++;
     if ((st.turn - 1) % DE_ARTILLERY.resupplyEvery === 0) st.deArtilleryAmmo++;
@@ -1155,7 +1250,7 @@ const Sim = (() => {
   return {
     newGame, endTurn, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, moves, chargeSpots,
     rallyTargets, canAct, groupOf, groupName, members, canReact, firepower, teamsOf, canCallFire, holdsObjective, hourText, roomFor,
-    startGermanHour, germanStep, answer, finishHour,
+    startGermanHour, germanStep, answer, finishHour, startRound, drawToken, endGermanToken, activationOver, passToken, usCanMove, endRound,
     actShoot, actMoveShoot, moveShootSpots, chargeRoutes, DIRS, needWhy, canRally, needFor, canSelfRally, actSelfRally, actHalfShot, actMove, actCharge, actRally, actFire, actBreach, breachSpots, sight, isSmall, cover, wire, lineSides, actLine, atHedge, acrossHedge, SIDE_NAMES, PLACES, placeXY, placeName, lines,
     hasCutters: u => cutter(u),
   };

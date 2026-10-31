@@ -1,4 +1,5 @@
-// Hedgerow: start-up, input, drawing the table, and playing the German hour with its "take cover?" questions
+// Hedgerow: start-up, input, drawing the table, and the rounds: tokens drawn from a blind bag one at a time, each side
+// moving one piece a token (the Germans with their "take cover?" questions)
 
 window.Game = (() => {
   const G = {};
@@ -10,13 +11,24 @@ window.Game = (() => {
     st = Sim.newGame(seed);
     G.state = st;
     UI.setState(st);
+    Sim.startRound(st);
     changed();
+    setTimeout(drawNext, 900);
   }
 
-  // Something changed: the panel now, the table on the next frame
+  // Something changed: the panel now, the table on the next frame. If that was the American token's piece finishing its
+  // move, the next token is drawn
+  let drawing = false;
   function changed() {
     UI.update();
     dirty = true;
+    if (!drawing && Sim.activationOver(st)) {
+      drawing = true;
+      Sim.passToken(st);
+      UI.view.mode = null;
+      UI.update();
+      setTimeout(() => { drawing = false; drawNext(); }, 700);
+    }
   }
 
   // Draw the table whenever something changed or pieces are still gliding; place the hamlet's name over it
@@ -61,32 +73,56 @@ window.Game = (() => {
     dirty = true;
   }
 
-  // ---------- The German hour ----------
+  // ---------- The bag ----------
 
-  function endHour() {
-    if (st.won || st.lost || st.de) return;
-    UI.closeMenu();
-    UI.view.mode = null;
-    Sim.startGermanHour(st);
+  // Draw the next token: it grows and floats to the middle of the table, then that side moves. An empty bag ends the round
+  function drawNext() {
+    if (st.won || st.lost) return;
+    const side = Sim.drawToken(st);
+    if (!side) {
+      Sim.endRound(st);
+      UI.view.log = [];
+      changed();
+      if (st.won || st.lost) return showResult();
+      Sim.startRound(st);
+      changed();
+      setTimeout(drawNext, 1200);
+      return;
+    }
+    Sound.play('select');
     changed();
-    runGermans();
+    UI.flyToken(side, () => {
+      if (side === 'de') return runGermans();
+      // No American piece able to move on it: the token is used up
+      if (!Sim.usCanMove(st)) { Sim.passToken(st); changed(); setTimeout(drawNext, 400); return; }
+      changed();
+    });
   }
 
-  // Play the Germans until one of them fires on a piece that could take cover, then ask
+  // Pass on an American token (the bar's button, or Enter)
+  function pass() {
+    if (st.won || st.lost || st.drawn !== 'us') return;
+    UI.closeMenu();
+    UI.view.mode = null;
+    Sim.passToken(st);
+    changed();
+    drawNext();
+  }
+
+  // The German piece moves; if it fires on a piece that could take cover, ask first
   function runGermans() {
     const r = Sim.germanStep(st);
     if (r.ask) return ask(r.ask);
-    Sim.finishHour(st);
-    UI.view.log = [];
+    Sim.endGermanToken(st);
     $('#ask').hidden = true;
     changed();
-    if (st.won || st.lost) showResult();
+    setTimeout(drawNext, 800);
   }
 
   function ask(shot) {
     const t = Sim.unitById(st, shot.target);
     const who = shot.artillery ? 'German artillery ranges on' : shot.mortar ? 'German mortars range on' : `${Sim.unitById(st, shot.shooter).name} opens fire on`;
-    $('#ask-text').innerHTML = `${who} <b>${t.name}</b>. Take cover? Its men get down where they are: one more is needed to hit it for the rest of this hour, but it misses its move next hour unless the captain gets it up.`;
+    $('#ask-text').innerHTML = `${who} <b>${t.name}</b>. Take cover? Its men get down where they are: one more is needed to hit it for the rest of this round, but it loses its move (this round's if it still has one, otherwise next round's) unless the captain gets it up.`;
     $('#ask').hidden = false;
     changed();
   }
@@ -156,9 +192,9 @@ window.Game = (() => {
 
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') { UI.view.mode = null; UI.closeMenu(); changed(); }
-    if (e.key === 'Enter' && $('#ask').hidden && $('#help').hidden && $('#result').hidden) endHour();
+    if (e.key === 'Enter' && $('#ask').hidden && $('#help').hidden && $('#result').hidden) pass();
   });
-  $('#end').onclick = endHour;
+  $('#end').onclick = pass;
   $('#ask-pull').onclick = () => answer(true);
   $('#ask-stay').onclick = () => answer(false);
   $('#help-btn').onclick = openHelp;
@@ -187,7 +223,7 @@ window.Game = (() => {
   // The rules don't open at the start (Steve): How to play opens them
   requestAnimationFrame(frame);
 
-  G.endHour = endHour;
+  G.pass = pass;
   G.restart = start;
   G.refresh = changed;
   return G;
