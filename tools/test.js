@@ -362,7 +362,7 @@ check('a piece arriving by a hedge lines it, in the middle stands in the open', 
   assert(Sim.actCharge(st, able, 1, 6, null).ok && able.at === null, 'it did not stand in the open');
 });
 
-check('the captain can shoot, but the Germans never target him', () => {
+check('the captain can shoot, and be shot like anyone else (a small target): one wound and he is gone', () => {
   const st = Sim.newGame(3);
   st.hedges = {}; st.wire = {};
   const cap = Sim.unitById(st, 'cap'), de = st.units.find(u => u.side === 'de' && u.kind === 'company');
@@ -370,7 +370,11 @@ check('the captain can shoot, but the Germans never target him', () => {
   cap.x = 0; cap.y = 6; de.x = 1; de.y = 6;
   assert(Sim.targets(st, cap).includes(de), 'the captain had no target next to him');
   assert(Sim.actShoot(st, cap, de).ok, 'the captain could not shoot');
-  assert(!Sim.targets(st, de).includes(cap), 'a German could target the captain');
+  assert(Sim.targets(st, de).includes(cap), 'a German could not target the captain');
+  assert(Sim.needWhy(st, de, cap).some(w => /small target/.test(w)), 'the captain was not a small target');
+  // Each hit: a coin toss to wound; one wound and his HQ is gone
+  for (let k = 0; k < 30 && cap.x !== null; k++) Sim.fireAt(st, de, cap, 1);
+  assert(cap.x === null, 'the captain could not be killed');
 });
 
 check('two pins kill; bazookas and tanks kill men outright; MGs and tanks reach further; tanks give cover', () => {
@@ -942,6 +946,27 @@ check('a rally that works clears shaken (a tank too) and says so on the table; o
     if (shown.ok) worked++; else failed2++;
   }
   assert(worked > 10 && failed2 > 0, `rallies worked ${worked} and failed ${failed2} of 30`);
+});
+
+check('tanks never fight hand to hand: a tank charging men makes them fall back, and takes the field', () => {
+  let fell = 0;
+  for (let seed = 1; seed <= 20; seed++) {
+    const st = Sim.newGame(seed);
+    st.hedges = {}; st.wire = {};
+    const T1 = Sim.unitById(st, 'T1'), de = st.units.find(u => u.side === 'de' && u.kind === 'company');
+    for (const u of st.units) if (u !== T1 && u !== de) u.x = u.y = null;
+    T1.x = 2; T1.y = 6; T1.at = null; T1.acted = false;
+    de.x = 3; de.y = 6; de.at = null;
+    const before = de.platoons;
+    assert(Sim.chargeSpots(st, T1).some(p => p.x === 3 && p.y === 6), `seed ${seed}: the tank could not charge the men`);
+    st.fx = [];
+    Sim.actCharge(st, T1, 3, 6);
+    assert(!st.fx.some(f => f.kind === 'melee'), `seed ${seed}: a tank fought hand to hand`);
+    assert(T1.x === 3 && T1.y === 6, `seed ${seed}: the tank did not take the field`);
+    assert(de.x === null || (de.x !== 3 || de.y !== 6), `seed ${seed}: the men stayed in the field`);
+    if (de.x !== null) { fell++; assert(de.platoons === before, `seed ${seed}: falling back cost the men a section`); assert(de.x !== 2 || de.y !== 6, `seed ${seed}: the men fell back towards the tank`); }
+  }
+  assert(fell > 10, `the men fell back in only ${fell} of 20`);
 });
 
 console.log(failed ? `\n${failed} failed` : '\nall passed');

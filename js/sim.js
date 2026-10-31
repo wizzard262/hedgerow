@@ -499,7 +499,7 @@ const Sim = (() => {
     // A tank firing high explosive at men hits the whole field, like a mortar: every other piece on foot in it rolls too
     if (isTank(shooter) && !isTank(target) && !blast) {
       for (const other of at(st, stood.x, stood.y, target.side)) {
-        if (other === target || isTank(other) || other.kind === 'captain' || shotNeed(st, shooter, other, moving) > MAX_NEED) continue;
+        if (other === target || isTank(other) || shotNeed(st, shooter, other, moving) > MAX_NEED) continue;
         out.push(...fireAt(st, shooter, other, power, false, moving, true));
       }
     }
@@ -519,7 +519,7 @@ const Sim = (() => {
   // cover uses the move it still has)
   function canReact(st, u) {
     // Tanks can't take cover (Steve): they just take it
-    return u.side === 'us' && u.x !== null && u.kind !== 'captain' && !isTank(u) && !PIECES[u.kind].fixed && !u.spentNext && !u.down && !u.acted;
+    return u.side === 'us' && u.x !== null && !isTank(u) && !PIECES[u.kind].fixed && !u.spentNext && !u.down && !u.acted;
   }
 
   // The score a shot needs, the Panther's armour included
@@ -534,7 +534,8 @@ const Sim = (() => {
     const f = firepower(st, shooter);
     if (f.soft + f.hard <= 0) return [];
     // Tanks only to those with anti-tank weapons: rifles and machine guns can't hurt them
-    return st.units.filter(t => t.side !== shooter.side && t.x !== null && t.kind !== 'captain' && (!isTank(t) || f.hard > 0)
+    // Captains too (Steve: he dies like all the others)
+    return st.units.filter(t => t.side !== shooter.side && t.x !== null && (!isTank(t) || f.hard > 0)
       && !!sight(st, shooter, t) && shotNeed(st, shooter, t, moving) <= MAX_NEED);
   }
 
@@ -611,7 +612,45 @@ const Sim = (() => {
       return [how === 'cut' ? `${u.name} charges through the hedge, leaving a gap` : how === 'flattened' ? `${u.name} charges over the wire, flattening it` : `${u.name} charges forward`];
     }
     st.fx.push({ x, y, kind: 'assault' });
+    // A tank can't fight hand to hand (Steve): it drives in and the men there fall back
+    if (isTank(u)) return tankDrivesIn(st, u, defenders, x, y);
     return handToHand(st, u, defenders, x, y);
+  }
+
+  // A tank charging men (Steve): each piece in the field falls back to a field next to it, away from the tank, that it
+  // can get into (no wire, room for it, no enemy there); one with nowhere to go is overrun. Then the tank takes the field
+  function tankDrivesIn(st, u, defenders, x, y) {
+    const from = { x: u.x, y: u.y };
+    const out = [`🚜 ${u.name} drives in on ${defenders.map(d => d.name).join(' and ')}`];
+    for (const d of defenders) {
+      const spot = fallBackSpot(st, d, from);
+      if (spot) {
+        step(st, d, spot.x, spot.y);
+        out.push(`${d.name} falls back`);
+        st.fx.push({ kind: 'rally', x: d.x, y: d.y, to: { id: d.id }, result: 'Falls back', ok: false });
+      } else {
+        out.push(`${d.name} is overrun`);
+        remove(st, d);
+      }
+    }
+    if (wire(st, u.x, u.y, x, y)) delete st.wire[edgeKey(u.x, u.y, x, y)];
+    step(st, u, x, y);
+    return out;
+  }
+
+  // Where a piece falls back to: the field next to it furthest from the attacker that it could move into
+  function fallBackSpot(st, d, from) {
+    let best = null, bestD = -1;
+    for (const [dx, dy] of NEIGHBOURS) {
+      const nx = d.x + dx, ny = d.y + dy;
+      // Not back towards the attacker, and only where its own move could take it
+      if (nx === from.x && ny === from.y) continue;
+      if (stepCost(st, d, d.x, d.y, nx, ny) === null) continue;
+      if (at(st, nx, ny, enemyOf(d.side)).length || !roomFor(st, d, nx, ny)) continue;
+      const far = Math.abs(nx - from.x) + Math.abs(ny - from.y);
+      if (far > bestD) { bestD = far; best = { x: nx, y: ny }; }
+    }
+    return best;
   }
 
   // Hand to hand (Steve): the two sides strike at each other in turn, the attacker first. Every base still standing rolls
@@ -791,7 +830,8 @@ const Sim = (() => {
     return { ok: true, lines: [moveLine(u, how)] };
   }
 
-  const fightsHandToHand = u => u.kind === 'company' || isTank(u);
+  // Only rifle platoons charge into hand to hand (Steve: tanks can't fight hand to hand)
+  const fightsHandToHand = u => u.kind === 'company';
 
   // What it costs to go from one field into the next (Steve): one move, and CLIMB more for men climbing a hedge bank (it
   // stays standing); barbed wire stops men; tanks drive straight through both. null where it can't go at all
@@ -826,7 +866,11 @@ const Sim = (() => {
         const enemies = at(st, x, y, enemyOf(u.side));
         if (enemies.length) {
           // The enemy's field: only a charge goes in, to fight hand to hand, and it stops there
-          const canFight = charging && fightsHandToHand(u) && (enemies.some(e => !isTank(e)) || firepower(st, u).hard > 0);
+          // A rifle platoon fights hand to hand (not against tanks alone unless it can hurt them); a tank drives in on men
+          // and they fall back (Steve), but not on other tanks or a dug-in gun
+          const platoonFights = fightsHandToHand(u) && (enemies.some(e => !isTank(e)) || firepower(st, u).hard > 0);
+          const tankDrivesIn = isTank(u) && enemies.every(e => !isTank(e) && !PIECES[e.kind].fixed);
+          const canFight = charging && (platoonFights || tankDrivesIn);
           if (canFight) { cheapest[key] = cost; routeTo[key] = here.path.concat([{ x, y, assault: true }]); }
           continue;
         }
@@ -850,8 +894,8 @@ const Sim = (() => {
   // far (Steve)
   function chargeRoutes(st, u) {
     if (PIECES[u.kind].fixed) return [];
-    const canFight = fightsHandToHand(u);
-    return routesFor(st, u, reach(u, CHARGE_MOVES), canFight);
+    // (routesFor decides who can go into an enemy's field: a rifle platoon to fight, a tank to drive the men out)
+    return routesFor(st, u, reach(u, CHARGE_MOVES), true);
   }
 
   // How far a piece can go (Steve): a shaken piece can always move or charge, but only half as far (at least one field)
@@ -1022,7 +1066,7 @@ const Sim = (() => {
     const hitField = (fx, fy, n, splash = false) => {
       const caught = splash ? at(st, fx, fy) : at(st, fx, fy, enemyOf(side));
       for (const t of caught) {
-        if (t.x === null || t.kind === 'captain') continue;
+        if (t.x === null) continue;
         const need = shellNeed(st, t);
         const faces = [];
         const soft = roll(st, underCover(st, t, n), need, faces), hard = isTank(t) ? roll(st, S.hard || 0, need + PIECES[t.kind].armour, faces) : 0;
@@ -1109,7 +1153,7 @@ const Sim = (() => {
       }
     }
     const inHamlet = at(st, st.objective.x, st.objective.y, 'us').length > 0;
-    if (inHamlet && !u.shocked && (u.kind === 'company' || isTank(u)) && adjacent(u, st.objective) && !(isTank(u) && hedge(st, u.x, u.y, st.objective.x, st.objective.y))) {
+    if (inHamlet && !u.shocked && fightsHandToHand(u) && adjacent(u, st.objective)) {
       deSays(st, `Charges into ${st.objective.name}`);
       rep.push('🔺 ' + charge(st, u, st.objective.x, st.objective.y).join(', ') + '.');
       return null;
@@ -1168,7 +1212,7 @@ const Sim = (() => {
   // it, and no Germans in or next to it (they don't shell their own men)
   function germanArtilleryTarget(st) {
     const near = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y) <= 1;
-    const us = st.units.filter(t => t.side === 'us' && t.x !== null && t.kind !== 'captain');
+    const us = st.units.filter(t => t.side === 'us' && t.x !== null);
     const de = st.units.filter(g => g.side === 'de' && g.x !== null);
     const ts = us.filter(t => sees(st, 'de', t.x, t.y) && !de.some(g => near(g, t)));
     const score = t => us.filter(o => near(o, t)).reduce((n, o) => n + o.platoons, 0);
