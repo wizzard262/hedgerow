@@ -116,13 +116,7 @@ const DE_START = [
   { id: 'd3', kind: 'company', name: '3. Zug', quality: 'standard', reserve: true },
 ];
 
-// Reinforcements: who arrives on which turn, at their own edge (US west, German east)
-const REINFORCEMENTS = [
-  { turn: 2, side: 'us', unit: { id: 'bz2', kind: 'bazooka', name: 'Bazooka Team 2' } },
-  { turn: 3, side: 'us', unit: { id: 'D', kind: 'company', name: '4th Platoon', quality: 'standard' } },
-  { turn: 3, side: 'de', unit: { id: 'dt1', kind: 'pz4', name: 'Panzer IV pair', reserve: true } },
-  { turn: 4, side: 'us', unit: { id: 'mg2', kind: 'mg', name: 'MG Team 2' } },
-  { turn: 4, side: 'de', unit: { id: 'd4', kind: 'company', name: '4. Zug', quality: 'standard', reserve: true } },
-  { turn: 5, side: 'us', replacements: 1 },   // a replacement section for the weakest rifle platoon
-  { turn: 5, side: 'de', unit: { id: 'dt2', kind: 'panther', name: 'Panther pair', reserve: true } },
-];
+// Reinforcements: who arrives on which turn, at their own edge (US west, German east). None for now (Steve: both sides
+// keep what they start with); an entry looks like { turn: 3, side: 'us', unit: { id, kind, name } }, or { turn, side,
+// replacements: 1 } for a replacement section
+const REINFORCEMENTS = [];
