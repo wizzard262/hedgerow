@@ -161,7 +161,15 @@ window.Game = (() => {
   $('#end').onclick = endHour;
   $('#ask-pull').onclick = () => answer(true);
   $('#ask-stay').onclick = () => answer(false);
-  $('#help-btn').onclick = () => { $('#help').hidden = false; };
+  $('#help-btn').onclick = openHelp;
+  // The rules all on the screen at once: the text gets a little smaller until it fits (Steve: no scrolling)
+  function openHelp() {
+    const help = $('#help'), card = help.querySelector('.card');
+    help.hidden = false;
+    let size = 12.5;
+    card.style.fontSize = size + 'px';
+    while (card.scrollHeight > card.clientHeight + 1 && size > 8.5) { size -= 0.25; card.style.fontSize = size + 'px'; }
+  }
   // Sound on or off (remembered on this computer)
   const soundIcon = () => { $('#sound-btn').textContent = Sound.isOn() ? '🔊' : '🔇'; };
   $('#sound-btn').onclick = () => { Sound.wake(); Sound.toggle(); soundIcon(); };
@@ -176,7 +184,7 @@ window.Game = (() => {
   UI.init(changed);
   start();
   fit();
-  $('#help').hidden = false;
+  // The rules don't open at the start (Steve): How to play opens them
   requestAnimationFrame(frame);
 
   G.endHour = endHour;

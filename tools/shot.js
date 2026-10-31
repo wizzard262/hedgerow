@@ -10,7 +10,7 @@ const { chromium } = require(path.join(__dirname, '..', '..', 'harrier-carrier-p
   page.on('pageerror', e => errors.push(e.message));
   await page.goto('http://localhost:8768/');
   await page.waitForTimeout(2500);
-  await page.click('#help [data-close]');
+  // (the rules no longer open at the start)
   // Each hour: end it, answering every "take cover?" with Stand fast
   for (let h = 0; h < +hours; h++) {
     await page.click('#end');

@@ -73,6 +73,12 @@
   .modal[hidden] { display: none; }
   .modal .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; max-width: 620px; max-height: 88vh; overflow-y: auto; box-shadow: 0 10px 40px rgba(0,0,0,.6); }
   .modal h2 { font: 20px "Special Elite", monospace; color: var(--accent); margin: 0 0 10px; }
+  /* How to play: wide, the rules in two columns, all on the screen at once (Steve: no scrolling) */
+  #help .card { width: 96vw; max-width: 1500px; max-height: 96vh; overflow: hidden; padding: 14px 20px; font-size: 12.5px; line-height: 1.35; }
+  #help .card p { margin: 0 0 6px; }
+  #help ul { columns: 2; column-gap: 28px; margin: 0; }
+  #help li { break-inside: avoid; margin: 0 0 4px; }
+  #help .buttons { margin-top: 6px; }
   .modal ul { padding-left: 18px; }
   .modal li { margin: 4px 0; }
   .modal .buttons { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
@@ -90,7 +96,7 @@
 <aside id="panel">
   <div class="brand">
   <div class="top">
-    <h1>HEDGEROW <span id="ver" style="font-size:11px;color:var(--muted);letter-spacing:0">v48</span></h1>
+    <h1>HEDGEROW <span id="ver" style="font-size:11px;color:var(--muted);letter-spacing:0">v49</span></h1>
     <div class="links"><button id="sound-btn" title="Sound on or off">🔊</button><button id="help-btn">How to play</button><button id="new-btn">New game</button></div>
   </div>
   <div id="clock"></div>
@@ -134,7 +140,7 @@
       <li>🏘️ <b>Villages and hamlets</b>: houses round a yard. Hard to hit in. Only a rifle platoon takes the village: when one can reach it, the village field shows blue hatching.</li>
       <li>🌊 <b>The river</b> can only be crossed at its two bridges.</li>
       <li>💣 <b>Fire support</b>: your 81 mm mortars and 105 mm artillery stand off the board behind your back line (left), the Germans' behind theirs (right), near the top. Click your mortars or artillery on the table to use them, like any other piece. Their rounds fly from there, and the pile of rounds beside each shows how many shots it has left. Artillery also falls on the fields round the target, on your own pieces too (the target warns you). The Germans have mortars and artillery too, and their rounds are piled the same way. A gun with no rounds left isn't on the table until more arrive (the American mortars get one more every 2 hours, the artillery every 3).</li>
-      <li>🔊 <b>Sound</b>: rifles, the American .30-cal and the German MG 42, bazookas, tank guns, mortar bombs and shells whistling in, men running, tanks driving, and a battle going on in the distance. The 🔊 button at the top turns it all off.</li>
+      <li>🔊 <b>Sound</b>: rifles, the American .30-cal and the German MG 42, bazookas, tank guns, mortar bombs and shells whistling in, men running, tanks driving, and a battle going on in the distance. The 🔊 button in the bar at the bottom turns it all off.</li>
       <li>✂️ <b>Barbed wire</b> closes some gaps between fields: only tanks get through it, rolling over and flattening it. Men must go round, or wait for a tank to flatten it.</li>
       <li>🌳 <b>Hedges</b>: men climb over a hedge bank as they move (they hop up over it on the table), which uses one more move (the hedge stays); tanks drive straight through, leaving a gap. Charging across a hedge at Germans behind it is allowed, but they fight back hard.</li>
       <li>🛡️ <b>Tanks</b> can't be hurt by rifles or machine guns: only bazookas, Panzerschrecks, anti-tank guns, other tanks and the artillery can knock them out, and infantry can't charge a field held only by tanks. A tank firing on men hits every piece on foot in that field (not the captain), like a mortar.</li>
@@ -142,22 +148,21 @@
       <li>🟢 <b>Who can move</b>: a green ring under a piece means it can still move this hour; a piece that has moved is greyed out.</li>
       <li>😵 <b>Shaken</b> (pinned, red ! marker): a piece that is hit is shaken. It can still act, but it needs one more to hit and it can't charge. It recovers if it rests an hour without being hit; it can use its move to try to rally itself (half the time, elite troops more often); or the captain can rally it, up to three fields away. A second pin on a piece already pinned kills: a section, a team or a tank lost.</li>
       <li>🛡️ <b>In the German hour</b>: when one of your pieces is fired on you can <b>take cover</b>: its men get down where they are (they crouch on the table), and one more is needed to hit it for the rest of that hour. It misses its move next hour, unless the captain gets it up (Rally, up to three fields away).</li>
-      <li>💥 <b>Fire support</b>: the mortars and the 105 mm battery fire on a field your troops can see. Only these run short of ammunition; a little comes up every few hours. Each fires once an hour.</li>
       <li>🚚 <b>Reinforcements</b> arrive on your west edge: more bazookas, 4th Platoon, a machine gun and replacements. The Germans have a pair of Panzer IVs and a pair of Panthers on the way.</li>
       <li>🧩 <b>The table</b>: 28 mm-style models: four men to a section base, three sections to a platoon; tanks in pairs. The men are bigger models (1:54) than the tanks (1:76), and the houses smaller (1:144), as on many wargame tables.</li>
     </ul>
-    <p class="sub" style="color:var(--muted)">Click a piece on the table for its menu (one piece at a time), pick an action, then click a highlighted field. Enter ends the hour; Esc cancels.</p>
+    <p class="sub" style="color:var(--muted)">Click one of your pieces: where it can go shows at once, and its menu opens; click a field, or pick from the menu. Enter ends the hour; Esc cancels.</p>
     <div class="buttons"><button data-close class="on">To the table</button></div>
   </div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="js/data.js?v=48"></script>
-<script src="js/sim.js?v=48"></script>
-<script src="js/sound.js?v=48"></script>
-<script src="js/models.js?v=48"></script>
-<script src="js/board3d.js?v=48"></script>
-<script src="js/ui.js?v=48"></script>
-<script src="js/main.js?v=48"></script>
+<script src="js/data.js?v=49"></script>
+<script src="js/sim.js?v=49"></script>
+<script src="js/sound.js?v=49"></script>
+<script src="js/models.js?v=49"></script>
+<script src="js/board3d.js?v=49"></script>
+<script src="js/ui.js?v=49"></script>
+<script src="js/main.js?v=49"></script>
 </body>
 </html>
