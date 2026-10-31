@@ -812,27 +812,26 @@ check('hand to hand: blows in turn, attacker first, until one side is gone; nobo
   assert(won > 0 && lost > 0, `the attacker won ${won} and lost ${lost} of 40: one side always wins`);
 });
 
-check('villages and orchards: seen into and out of only at their edge, never through', () => {
+check('villages and orchards: never seen through, but pieces in one see out and are seen wherever they stand', () => {
   const st = Sim.newGame(3);
   st.hedges = {}; st.wire = {};
   const B = Sim.unitById(st, 'B'), de = st.units.find(u => u.side === 'de' && u.kind === 'company');
   for (const u of st.units) if (u !== B && u !== de) u.x = u.y = null;
-  // A German in the orchard at 9,0; 2nd Platoon three fields west in the open
+  // A German in the middle of the orchard at 9,0; 2nd Platoon three fields west in the open
   B.x = 6; B.y = 0; B.at = null;
-  de.x = 9; de.y = 0;
+  de.x = 9; de.y = 0; de.at = null;
   assert(Sim.tileType(9, 0) === 'orchard', 'the test needs an orchard at 9,0');
-  de.at = null;
-  assert(!Sim.sight(st, B, de), 'a piece in the middle of an orchard was seen');
-  de.at = 'w';
-  assert(Sim.sight(st, B, de), 'a piece at the orchard edge facing the shooter was not seen');
-  assert(!Sim.needWhy(st, B, de).some(w => /hedge/.test(w)), 'an orchard edge counted as a hedge');
-  de.at = 'nw';
-  assert(Sim.sight(st, B, de), 'a piece in the orchard corner on that side was not seen');
-  // From inside: only from its edge
-  de.at = null;
-  assert(!Sim.sight(st, de, B), 'a piece in the middle of an orchard could see out');
-  de.at = 'w';
-  assert(Sim.sight(st, de, B), 'a piece at the orchard edge could not see out');
+  assert(Sim.sight(st, B, de) && Sim.sight(st, de, B), 'a piece in the middle of an orchard could not see out or be seen');
+  // In the village with 2nd Platoon at a hedge two fields away: they see each other (Steve)
+  const v = { x: 4, y: 4 };
+  assert(Sim.tileType(v.x, v.y) === 'village', 'the test needs the village at 4,4');
+  de.x = v.x; de.y = v.y; de.at = null;
+  B.x = 2; B.y = 4; B.at = 'e'; st.hedges['2,4|3,4'] = true;
+  assert(Sim.sight(st, B, de) && Sim.sight(st, de, B), 'a piece at a hedge and a German in the village could not see each other');
+  // Through a village: no
+  B.x = 3; B.y = 4; B.at = null; st.hedges = {};
+  de.x = 6; de.y = 4; de.at = null;
+  assert(Sim.tileType(5, 4) === 'village' && !Sim.sight(st, B, de), 'a piece was seen through the village');
 });
 
 check('a shaken piece still moves and charges, half as far; it needs one more to hit', () => {

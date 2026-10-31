@@ -256,7 +256,7 @@ const Sim = (() => {
     return Math.hypot(target.x - from.x, target.y - from.y) > rangeOf(from).long + 0.5;
   }
 
-  // A field whose houses or trees block the view across it, and across its edges except for a piece at that edge
+  // A field whose houses or trees block the view across it
   const screens = f => ['village', 'hamlet', 'orchard'].includes(tileType(f.x, f.y));
 
   function sight(st, from, target) {
@@ -271,16 +271,16 @@ const Sim = (() => {
       if (i > 0 && screens(p)) return null;
       // A tank in a field in between: men beyond it shelter behind it (Steve: tanks are cover for infantry)
       if (i > 0 && target.kind && !isTank(target) && at(st, p.x, p.y).some(isTank)) behindTank = true;
-      // The edge between two fields: a hedge, or the edge of a village, hamlet or orchard, is seen through only by a piece
-      // at it (along that side or in a corner of it), and a piece at it can be seen; otherwise it blocks the view (Steve)
+      // A hedge between two fields is seen through only by a piece at it (along that side or in a corner of it), and a
+      // piece at it can be seen; otherwise it blocks the view (Steve). The houses and trees of a village, hamlet or
+      // orchard only block the view across them: pieces in one see out and are seen, wherever they stand in it (Steve)
       const hedged = hedge(st, p.x, p.y, q.x, q.y);
-      if (!hedged && !screens(p) && !screens(q)) continue;
+      if (!hedged) continue;
       const first = i === 0, last = i + 1 === path.length - 1;
       const shooterLines = first && lines(from, dirTo(p, q));
       const targetLines = last && lines(target, dirTo(q, p));
       if (!shooterLines && !targetLines) return null;
-      // Only a hedge gives hedge cover (the houses and trees count as the field's own cover)
-      if (targetLines && hedged) { c += COVER.hedge; behindHedge = true; }
+      if (targetLines) { c += COVER.hedge; behindHedge = true; }
     }
     if (behindTank) c += COVER.tank;
     return { cover: c, hedge: behindHedge, behindTank };
