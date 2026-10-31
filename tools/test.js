@@ -11,13 +11,14 @@ function check(name, fn) {
 }
 function assert(ok, message) { if (!ok) throw new Error(message); }
 const live = st => st.units.filter(u => u.x !== null);
-// A field's units are allowed: at most one rifle platoon and one tank pair of a side, four pieces in all, a dug-in gun alone
+// A field's units are allowed: a tank pair or a dug-in gun alone; otherwise one rifle platoon and two smaller pieces,
+// or four smaller pieces (Steve)
 function fieldOk(st, x, y) {
   for (const side of ['us', 'de']) {
     const here = live(st).filter(u => u.x === x && u.y === y && u.side === side);
     if (here.length <= 1) continue;
-    const platoons = here.filter(u => u.kind === 'company').length, tanks = here.filter(u => Sim.isTank(u)).length;
-    if (platoons > 1 || tanks > 1 || here.length > 4 || here.some(u => u.kind === 'pak')) return false;
+    const platoons = here.filter(u => u.kind === 'company').length, smaller = here.length - platoons;
+    if (here.some(u => Sim.isTank(u) || u.kind === 'pak') || platoons > 1 || smaller > (platoons ? 2 : 4)) return false;
   }
   return true;
 }
@@ -155,19 +156,32 @@ check('every tank drives through hedges; only tanks get through wire; men climb 
   assert(Sim.actCharge(st, co, 2, 5).ok && co.x === 2 && st.hedges[k4], 'the climb did not arrive, or the men knocked the hedge down');
 });
 
-check('your pieces share a field: one platoon, one tank pair, four pieces at most', () => {
-  const st = Sim.newGame(2);
+check('your pieces share a field: a tank pair alone; one platoon and two smaller pieces, or four smaller pieces', () => {
   for (let seed = 1; seed <= 20; seed++) {
     const s2 = Sim.newGame(seed);
     for (const u of live(s2)) assert(fieldOk(s2, u.x, u.y), `seed ${seed}: ${u.name} starts sharing a field it shouldn't`);
   }
-  const co = Sim.unitById(st, 'B');
-  assert(Sim.roomFor(st, Sim.unitById(st, 'T1'), co.x, co.y), 'a tank pair could not join a rifle platoon');
-  assert(!Sim.roomFor(st, Sim.unitById(st, 'A'), co.x, co.y), 'a second rifle platoon fitted in');
-  assert(Sim.roomFor(st, Sim.unitById(st, 'mg1'), co.x, co.y) && Sim.roomFor(st, Sim.unitById(st, 'cap'), co.x, co.y), "a team or the captain could not join a rifle platoon's field");
-  const empty = [...Array(COLS).keys()].map(x => ({ x, y: 7 })).find(p => !Sim.at(st, p.x, p.y).length && Sim.tileType(p.x, p.y) !== 'river');
-  const mg = Sim.unitById(st, 'mg1'); mg.x = empty.x; mg.y = empty.y;
-  assert(Sim.roomFor(st, Sim.unitById(st, 'bz1'), empty.x, empty.y), 'two teams could not share a field');
+  const st = Sim.newGame(2);
+  // Everyone off the table, then put pieces in one empty field to try
+  for (const u of st.units) if (u.side === 'us') u.x = u.y = null;
+  const put = (id, x, y) => { const u = Sim.unitById(st, id); u.x = x; u.y = y; return u; };
+  const get = id => Sim.unitById(st, id);
+  // A rifle platoon: no tank pair, no second platoon; two smaller pieces, not three
+  put('B', 0, 6);
+  assert(!Sim.roomFor(st, get('T1'), 0, 6), 'a tank pair joined a rifle platoon');
+  assert(!Sim.roomFor(st, get('A'), 0, 6), 'a second rifle platoon fitted in');
+  assert(Sim.roomFor(st, get('mg1'), 0, 6), 'a team could not join a rifle platoon');
+  put('mg1', 0, 6);
+  assert(Sim.roomFor(st, get('cap'), 0, 6), 'the captain could not join a platoon and one team');
+  put('cap', 0, 6);
+  assert(!Sim.roomFor(st, get('bz1'), 0, 6), 'a third smaller piece joined a rifle platoon');
+  // A tank pair alone: nobody joins it
+  put('T1', 1, 6);
+  assert(!Sim.roomFor(st, get('sn1'), 1, 6) && !Sim.roomFor(st, get('T2'), 1, 6), 'a piece joined a tank pair');
+  // Smaller pieces alone: four, not five, and no platoon on top of four
+  for (const id of ['mg1', 'cap', 'bz1', 'sn1']) put(id, 0, 7);
+  assert(fieldOk(st, 0, 7), 'four smaller pieces were not allowed');
+  assert(!Sim.roomFor(st, get('A'), 0, 7), 'a platoon joined four smaller pieces');
 });
 
 check('dice: every face is 1 to 6 and hits are the ones at or over the score needed', () => {

@@ -22,6 +22,9 @@ const VILLAGES = [
   { x: 4, y: 4, name: 'Saint-Jean' },
   { x: 5, y: 1, name: 'La Haye' },
 ];
+// Sharing a field (Steve): a tank pair stands alone; one rifle platoon at most, with this many smaller pieces (teams,
+// the captain) beside it, or this many smaller pieces on their own
+const FIELD_SMALL = { withPlatoon: 2, alone: 4 };
 const HEDGE_GAP = 0.45;          // chance an edge between two fields has a gap (a gate or a broken bank)
 const WIRE = 0.5;                // chance a gap between two fields is closed by a barbed-wire fence: men must cut it, tanks flatten it
 

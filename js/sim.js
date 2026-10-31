@@ -90,15 +90,22 @@ const Sim = (() => {
 
   // Is there room for a unit in a field?
   function roomFor(st, unit, x, y, leaving = []) {
-    // Your own pieces can share a field (Steve): at most one rifle platoon and one tank pair in it, and four pieces in
-    // all (a field has nine places). Never with the enemy, except in a hand-to-hand fight. A dug-in gun stands alone
+    // Your own pieces can share a field, but not crowd it (Steve): a tank pair stands alone; otherwise one rifle platoon
+    // and two smaller pieces (teams, the captain), or four smaller pieces; never two platoons. Never with the enemy,
+    // except in a hand-to-hand fight. A dug-in gun stands alone too
     const here = at(st, x, y).filter(u => !leaving.includes(u) && u !== unit && u.attachedTo !== unit.id);
     if (!here.length) return true;
     if (here.some(u => u.side !== unit.side)) return false;
     if (PIECES[unit.kind].fixed || here.some(u => PIECES[u.kind].fixed)) return false;
-    const platoons = here.filter(u => u.kind === 'company').length + (unit.kind === 'company' ? 1 : 0);
-    const tanks = here.filter(u => isTank(u)).length + (isTank(unit) ? 1 : 0);
-    return platoons <= 1 && tanks <= 1 && here.length + 1 <= 4;
+    // Everyone who would be there
+    const all = here.concat([unit]);
+    // A tank pair: nobody else
+    if (all.some(isTank)) return false;
+    // One platoon at most; with it two smaller pieces, without it four
+    const platoons = all.filter(u => u.kind === 'company').length;
+    const smaller = all.length - platoons;
+    if (platoons > 1) return false;
+    return smaller <= (platoons ? FIELD_SMALL.withPlatoon : FIELD_SMALL.alone);
   }
 
 

@@ -236,7 +236,8 @@ const Board = (() => {
     m.position.set(T.MathUtils.lerp(c.from.x, c.to.x, e), c.to.y + 1.8 * Math.sin(Math.PI * e), T.MathUtils.lerp(c.from.z, c.to.z, e));
     m.scale.setScalar(COIN_SIZE * (1 + 0.9 * Math.sin(Math.PI * e)));
     m.rotation.set(Math.PI * 2 * (1 - e), 0, 0.3 * Math.sin(Math.PI * e));
-    if (p >= 1 && c.done) { const d = c.done; c.done = null; Sound.play('select'); d(); }
+    // (no sound as it lands, Steve)
+    if (p >= 1 && c.done) { const d = c.done; c.done = null; d(); }
     return p < 1;
   }
 
