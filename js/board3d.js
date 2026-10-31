@@ -563,10 +563,11 @@ const Board = (() => {
     const key = n + '|' + why.join(',') + '|' + tailDown;
     if (!labelTex[key]) {
       const c = document.createElement('canvas'), g = c.getContext('2d');
-      const reason = why.join(' · ');
+      // The score on top, then one row for each modifier (Steve: stacked, not all on one line)
       g.font = 'bold 30px Georgia, serif';
-      const tail = 26, boxH = why.length ? 96 : 60;
-      c.width = Math.max(128, Math.ceil(g.measureText(reason).width) + 36); c.height = boxH + tail + 8;
+      const tail = 26, row = 36, boxH = 60 + why.length * row + (why.length ? 6 : 0);
+      const widest = Math.max(0, ...why.map(w => g.measureText(w).width));
+      c.width = Math.max(128, Math.ceil(widest) + 36); c.height = boxH + tail + 8;
       const top = tailDown ? 4 : tail + 4, mid = c.width / 2;
       // The bubble and its tail in one shape, with a pale outline
       g.beginPath();
@@ -577,7 +578,8 @@ const Board = (() => {
       g.lineWidth = 3; g.strokeStyle = 'rgba(255,230,200,.85)'; g.stroke();
       g.fillStyle = '#fff4e8'; g.font = 'bold 40px Georgia, serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
       g.fillText(n >= 6 ? '6' : n + '+', mid, top + 30);
-      if (why.length) { g.font = 'bold 30px Georgia, serif'; g.fillStyle = '#ffd9a0'; g.fillText(reason, mid, top + 70); }
+      g.font = 'bold 30px Georgia, serif'; g.fillStyle = '#ffd9a0';
+      why.forEach((w, k) => g.fillText(w, mid, top + 62 + row / 2 + k * row));
       labelTex[key] = { map: new T.CanvasTexture(c), w: c.width, h: c.height };
     }
     const t = labelTex[key];
