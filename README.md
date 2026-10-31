@@ -23,4 +23,4 @@ Serve the folder and open it in a browser with WebGL:
 python -m http.server 8768
 ```
 
-Then go to http://localhost:8768/. Tests: `node tools/test.js`. The full design history is in `PROMPTS.md`.
+Then go to http://localhost:8768/. Tests: `node tools/test.js`. The full design history is in `PROMPTS.md`, also shown in the game as a page (the Prompts link beside the version).

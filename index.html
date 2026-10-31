@@ -23,6 +23,8 @@
   .brand { width: 240px; display: flex; flex-direction: column; gap: 2px; }
   .brand #goal, .brand #clock { font-size: 11px; }
   .brand h1 { font-size: 22px !important; }
+  /* The link to the prompts page, beside the version (Steve) */
+  #prompts-link { font: 11px Georgia, serif; color: var(--accent); letter-spacing: 0; vertical-align: middle; }
   .brand .top { flex-wrap: wrap; row-gap: 2px; }
   .brand .top .links button { font-size: 11px; padding: 1px 6px; }
   /* The bag: tokens left this round, Americans left, Germans right, and the round in big letters (Steve) */
@@ -119,7 +121,7 @@
 <aside id="panel">
   <div class="brand">
   <div class="top">
-    <h1>HEDGEROW <span id="ver" style="font-size:11px;color:var(--muted);letter-spacing:0">v67</span></h1>
+    <h1>HEDGEROW <span id="ver" style="font-size:11px;color:var(--muted);letter-spacing:0">v68</span> <a id="prompts-link" href="prompts.html" target="_blank" rel="noopener" title="How the game was made, prompt by prompt">Prompts</a></h1>
     <div class="links"><button id="sound-btn" title="Sound on or off">🔊</button><button id="help-btn">How to play</button><button id="new-btn">New game</button></div>
   </div>
   <div id="clock"></div>
@@ -172,12 +174,12 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="js/data.js?v=67"></script>
-<script src="js/sim.js?v=67"></script>
-<script src="js/sound.js?v=67"></script>
-<script src="js/models.js?v=67"></script>
-<script src="js/board3d.js?v=67"></script>
-<script src="js/ui.js?v=67"></script>
-<script src="js/main.js?v=67"></script>
+<script src="js/data.js?v=68"></script>
+<script src="js/sim.js?v=68"></script>
+<script src="js/sound.js?v=68"></script>
+<script src="js/models.js?v=68"></script>
+<script src="js/board3d.js?v=68"></script>
+<script src="js/ui.js?v=68"></script>
+<script src="js/main.js?v=68"></script>
 </body>
 </html>

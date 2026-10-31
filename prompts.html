@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hedgerow prompts</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Special+Elite&display=swap" rel="stylesheet">
+<style>
+  /* The same colours as the game */
+  :root { --bg: #1f1b15; --panel: #2c261e; --ink: #efe6cf; --muted: #b5a98f; --line: #4a3f30; --accent: #d9b45a; }
+  html, body { margin: 0; }
+  body { background: var(--bg); color: var(--ink); font: 16px/1.55 Georgia, serif; }
+  main { max-width: 860px; margin: 0 auto; padding: 24px 16px 60px; }
+  h1, h2 { font-family: "Special Elite", monospace; color: var(--accent); font-weight: normal; }
+  h1 { font-size: 30px; margin: 0 0 6px; }
+  h2 { font-size: 19px; margin: 30px 0 8px; padding-top: 12px; border-top: 1px dotted var(--line); }
+  a { color: var(--accent); }
+  li { margin: 4px 0; }
+  code { background: var(--panel); padding: 1px 5px; border-radius: 4px; }
+  /* The sessions table at the end */
+  table { border-collapse: collapse; width: 100%; font-size: 14px; display: block; overflow-x: auto; }
+  th, td { border: 1px solid var(--line); padding: 6px 8px; text-align: left; vertical-align: top; }
+  th { background: var(--panel); color: var(--accent); }
+  .back { font-size: 14px; color: var(--muted); }
+  #status { color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <p class="back"><a href="index.html">← Back to the game</a></p>
+  <div id="prompts"><p id="status">Loading the prompts…</p></div>
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
+<script>
+  // How the game was made, prompt by prompt (Steve): PROMPTS.md shown as a page
+  const box = document.querySelector('#prompts');
+  fetch('PROMPTS.md?' + Date.now())
+    .then(r => { if (!r.ok) throw new Error(r.status); return r.text(); })
+    .then(text => { box.innerHTML = marked.parse(text); })
+    .catch(() => { box.innerHTML = '<p id="status">The prompts could not be loaded. They are in PROMPTS.md in the repo.</p>'; });
+</script>
+</body>
+</html>
