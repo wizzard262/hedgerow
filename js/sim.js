@@ -1279,6 +1279,8 @@ const Sim = (() => {
     for (const u of st.units) if (u.side === 'de' && u.x !== null && u.shocked && (!u.hit || st.rand() < 0.3)) u.shocked = false;
     for (const u of st.units) { if (u.side === 'de') u.hit = false; u.halfShot = false; }
     st.bag = { us: movable(st, 'us'), de: movable(st, 'de'), timer: ROUND_TIMER };
+    // Tokens drawn so far this round (the timer can't be the first, Steve)
+    st.drawnThisRound = 0;
     st.drawn = null;
     st.activeId = null;
     st.deFired = {};
@@ -1297,9 +1299,12 @@ const Sim = (() => {
   function drawToken(st) {
     if (st.won || st.lost) return null;
     trimBag(st);
-    const timer = st.bag.timer || 0;
-    const total = st.bag.us + st.bag.de + timer;
+    // The timer can't come out first (Steve): it is only in the draw once a piece's token has been drawn this round
+    const pieceTokens = st.bag.us + st.bag.de;
+    const timer = st.drawnThisRound || !pieceTokens ? st.bag.timer || 0 : 0;
+    const total = pieceTokens + timer;
     if (!total) return null;
+    st.drawnThisRound = (st.drawnThisRound || 0) + 1;
     // Which token comes out: one of the Americans', one of the Germans', or the timer
     const pick = st.rand() * total;
     const side = pick < st.bag.us ? 'us' : pick < st.bag.us + st.bag.de ? 'de' : 'timer';

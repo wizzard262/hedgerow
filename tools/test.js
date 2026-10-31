@@ -883,5 +883,13 @@ check('hand to hand: every defender fights, moved or taking cover; the fight is 
   assert(struckBack > 10, `the defender struck back in only ${struckBack} of 30 fights`);
 });
 
+check('the timer is never the first token out of the bag', () => {
+  for (let seed = 1; seed <= 200; seed++) {
+    const st = Sim.newGame(seed);
+    Sim.startRound(st);
+    assert(Sim.drawToken(st) !== 'timer', `seed ${seed}: the timer came out first`);
+  }
+});
+
 console.log(failed ? `\n${failed} failed` : '\nall passed');
 process.exit(failed ? 1 : 0);
