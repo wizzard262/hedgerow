@@ -15,7 +15,7 @@ const UI = (() => {
 
   // ---------- Your mortars and artillery, off the board ----------
   // Clicking one chooses it like a piece (Steve): its targets show at once if it can fire this hour
-  const canFire = which => st.ammo[which] > 0 && !st.fired[which] && !st.won && !st.lost && !st.de && (!st.tokens || st.drawn === 'us');
+  const canFire = which => Sim.canFire(st, which);
   function selectSupport(which) {
     view.sel = null;
     view.support = which;
@@ -198,6 +198,14 @@ const UI = (() => {
   // ---------- The left-hand panel ----------
 
   function actionButtons(u) {
+    const b = actionButtonsFor(u);
+    // Everyone can skip a turn (Steve): it gives up its move this round, using the token
+    const canSkip = Sim.canAct(st, u) || (u.kind === 'captain' && Sim.canRally(st, u));
+    b.push({ mode: 'skip', label: '⏭️ Skip turn', ok: canSkip, title: 'Give up its move this round (the token is used)', run: () => Sim.actSkip(st, u) });
+    return b;
+  }
+
+  function actionButtonsFor(u) {
     const can = Sim.canAct(st, u);
     const b = [];
     const add = (mode, label, ok, title) => b.push({ mode, label, ok: can && ok, title });
@@ -248,6 +256,11 @@ const UI = (() => {
       fire.disabled = !canFire(which);
       fire.onclick = () => { view.mode = view.mode === 'fire:' + which ? null : 'fire:' + which; refresh(); };
       acts.append(fire);
+      // Skip turn (Steve): hold fire this round, using the token
+      const skip = el('button', '', '⏭️ Skip turn');
+      skip.disabled = !canFire(which);
+      skip.onclick = () => { const r = Sim.skipSupport(st, which); if (r.ok) view.log.push(...r.lines); view.mode = null; refresh(); };
+      acts.append(skip);
       box.append(acts);
       return;
     }

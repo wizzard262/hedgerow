@@ -519,7 +519,9 @@ check('the blind bag: a token for each piece, one piece a token, the round ends 
   const st = Sim.newGame(3);
   Sim.startRound(st);
   const us = st.units.filter(u => u.side === 'us' && u.x !== null).length, de = st.units.filter(u => u.side === 'de' && u.x !== null).length;
-  assert(st.bag.us === us && st.bag.de === de, `the bag holds ${st.bag.us}+${st.bag.de}, not ${us}+${de}`);
+  // A token for every piece, and for each side's mortars and artillery while they have rounds
+  const usGuns = ['mortars', 'artillery'].filter(w => st.ammo[w] > 0).length, deGuns = (st.deMortarAmmo > 0) + (st.deArtilleryAmmo > 0);
+  assert(st.bag.us === us + usGuns && st.bag.de === de + deGuns, `the bag holds ${st.bag.us}+${st.bag.de}, not ${us + usGuns}+${de + deGuns}`);
   const turn = st.turn;
   let draws = 0;
   for (let side = Sim.drawToken(st); side; side = Sim.drawToken(st)) {
@@ -540,9 +542,26 @@ check('the blind bag: a token for each piece, one piece a token, the round ends 
     }
     if (draws > 60) break;
   }
-  assert(draws <= us + de, `${draws} tokens drawn from a bag of ${us + de}`);
+  assert(draws <= us + de + usGuns + deGuns, `${draws} tokens drawn from a bag of ${us + de + usGuns + deGuns}`);
   Sim.endRound(st);
   assert(st.won || st.lost || st.turn === turn + 1, 'the round did not end');
+});
+
+check('out of rounds, a gun leaves the bag; any piece can skip its turn', () => {
+  const st = Sim.newGame(3);
+  st.ammo.mortars = 0;
+  Sim.startRound(st);
+  const pieces = st.units.filter(u => u.side === 'us' && u.x !== null).length;
+  assert(st.bag.us === pieces + 1, 'the mortars with no rounds still had a token');
+  // Draw until an American token, then skip with a piece: the token is used and the piece has given up its move
+  for (let side = Sim.drawToken(st); side && side !== 'us'; side = Sim.drawToken(st)) {
+    for (let r = Sim.germanStep(st); !r.done; r = Sim.germanStep(st)) Sim.answer(st, false);
+    Sim.endGermanToken(st);
+  }
+  if (st.drawn === 'us') {
+    const u = st.units.find(o => o.side === 'us' && Sim.canAct(st, o));
+    assert(Sim.actSkip(st, u).ok && u.acted && Sim.activationOver(st), 'skipping a turn did not use the token');
+  }
 });
 
 check('leaving everything alone never wins', () => {

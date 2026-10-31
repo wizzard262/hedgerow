@@ -896,8 +896,9 @@ const Sim = (() => {
 
   function actFire(st, which, x, y) {
     if (st.won || st.lost || st.de || st.fired[which] || st.ammo[which] <= 0 || !canCallFire(st, x, y)) return { ok: false };
-    // With the bag: on an American token, and it doesn't use the token up
-    if (st.tokens && st.drawn !== 'us') return { ok: false };
+    // With the bag: on an American token not yet used by a piece; firing uses the token (Steve: the guns are in the bag)
+    if (st.tokens && (st.drawn !== 'us' || st.activeId)) return { ok: false };
+    if (st.tokens) st.activeId = 'gun:' + which;
     st.fired[which] = true;
     st.ammo[which]--;
     const S = which === 'mortars' ? MORTARS : ARTILLERY;
@@ -1081,8 +1082,35 @@ const Sim = (() => {
   // the Germans. One is drawn at a time and that side moves one piece; then the next is drawn. A piece destroyed, or one
   // that loses its move (taking cover), takes a token out with it. When the bag is empty, the round (the hour) ends
 
-  // Pieces of a side that can still move this round
-  const movable = (st, side) => st.units.filter(u => u.side === side && u.x !== null && !u.acted).length;
+  // Pieces of a side that can still move this round, and its mortars and artillery that still have rounds and haven't
+  // fired (Steve: out of rounds, they come out of the bag)
+  function movable(st, side) {
+    const pieces = st.units.filter(u => u.side === side && u.x !== null && !u.acted).length;
+    const ammo = side === 'us' ? st.ammo : { mortars: st.deMortarAmmo, artillery: st.deArtilleryAmmo };
+    const fired = side === 'us' ? st.fired : (st.deFired || {});
+    const guns = ['mortars', 'artillery'].filter(w => ammo[w] > 0 && !fired[w]).length;
+    return pieces + guns;
+  }
+
+  // Can your mortars or artillery fire now: rounds left, not fired this round, and (with the bag) on an unused token of yours
+  function canFire(st, which) {
+    return st.ammo[which] > 0 && !st.fired[which] && !st.won && !st.lost && !st.de && (!st.tokens || (st.drawn === 'us' && !st.activeId));
+  }
+
+  // Skip a turn (Steve: anyone can): the piece, or the gun, gives up its move this round and the token is used
+  function actSkip(st, u) {
+    const able = canAct(st, u) || (u.kind === 'captain' && canRally(st, u));
+    if (!able) return { ok: false };
+    spend(st, u);
+    if (u.kind === 'captain') u.rallied = CAPTAIN_RALLIES.still;
+    return { ok: true, lines: [`⏭️ ${u.name} holds its ground this round.`] };
+  }
+  function skipSupport(st, which) {
+    if (!canFire(st, which)) return { ok: false };
+    st.fired[which] = true;
+    if (st.tokens) st.activeId = 'gun:' + which;
+    return { ok: true, lines: [`⏭️ The ${which === 'mortars' ? 'mortars' : 'artillery'} hold fire this round.`] };
+  }
 
   function startRound(st) {
     st.tokens = true;
@@ -1092,7 +1120,7 @@ const Sim = (() => {
     st.bag = { us: movable(st, 'us'), de: movable(st, 'de') };
     st.drawn = null;
     st.activeId = null;
-    st.deSupportDone = false;
+    st.deFired = {};
     st.roundRep = [];
   }
 
@@ -1102,8 +1130,8 @@ const Sim = (() => {
     st.bag.de = Math.min(st.bag.de, movable(st, 'de'));
   }
 
-  // Draw a token: 'us', 'de', or null when the bag is empty. On a German token the Germans' move is set up (see germanStep);
-  // their mortar and artillery fire with their first token of the round
+  // Draw a token: 'us', 'de', or null when the bag is empty. On a German token the Germans' move is set up (see germanStep):
+  // one of their pieces, or their mortar or artillery
   function drawToken(st) {
     trimBag(st);
     const total = st.bag.us + st.bag.de;
@@ -1115,19 +1143,24 @@ const Sim = (() => {
     st.fx = [];
     for (const u of st.units) u.halfShot = false;
     if (side === 'de') {
-      const u = pickGerman(st);
-      u.acted = true;
-      st.de = { queue: [u.id], mortar: !st.deSupportDone && st.deMortarAmmo > 0, artillery: !st.deSupportDone && st.deArtilleryAmmo > 0, rep: st.roundRep, ask: null };
-      st.deSupportDone = true;
+      const pick = pickGerman(st);
+      if (pick.gun) {
+        st.deFired[pick.gun] = true;
+        st.de = { queue: [], mortar: pick.gun === 'mortars', artillery: pick.gun === 'artillery', rep: st.roundRep, ask: null };
+      } else {
+        pick.unit.acted = true;
+        st.de = { queue: [pick.unit.id], mortar: false, artillery: false, rep: st.roundRep, ask: null };
+      }
     }
     return side;
   }
 
-  // Which German piece moves on a German token: one that has someone to shoot first, otherwise any still to move
+  // What moves on a German token: their guns if they have a target, then a piece with someone to shoot, then any
   function pickGerman(st) {
-    const ready = st.units.filter(u => u.side === 'de' && u.x !== null && !u.acted);
-    const score = u => (bestTarget(st, u) ? 2 : 0) + st.rand();
-    return ready.sort((a, b) => score(b) - score(a))[0];
+    const options = st.units.filter(u => u.side === 'de' && u.x !== null && !u.acted).map(u => ({ unit: u, score: (bestTarget(st, u) ? 2 : 0) + st.rand() }));
+    if (st.deMortarAmmo > 0 && !st.deFired.mortars) options.push({ gun: 'mortars', score: (germanMortarTarget(st) ? 2.5 : -1) + st.rand() });
+    if (st.deArtilleryAmmo > 0 && !st.deFired.artillery) options.push({ gun: 'artillery', score: (germanArtilleryTarget(st) ? 2.5 : -1) + st.rand() });
+    return options.sort((a, b) => b.score - a.score)[0];
   }
 
   // The German move is over (germanStep said done): back to the bag
@@ -1139,6 +1172,8 @@ const Sim = (() => {
   // Is the American token used up: its piece has moved and has nothing more it can do?
   function activationOver(st) {
     if (!st.tokens || st.drawn !== 'us' || !st.activeId) return false;
+    // A gun has fired (or held fire): done
+    if (st.activeId.startsWith('gun:')) return true;
     const u = unitById(st, st.activeId);
     if (u.x === null) return true;
     const captainCanRally = u.kind === 'captain' && canRally(st, u) && rallyTargets(st, u).length > 0;
@@ -1153,7 +1188,7 @@ const Sim = (() => {
   }
 
   // Can any American piece move on this token?
-  const usCanMove = st => st.units.some(u => u.side === 'us' && u.x !== null && (canAct(st, u) || canSelfRally(st, u) || (u.kind === 'captain' && canRally(st, u) && rallyTargets(st, u).length > 0)));
+  const usCanMove = st => canFire(st, 'mortars') || canFire(st, 'artillery') || st.units.some(u => u.side === 'us' && u.x !== null && (canAct(st, u) || canSelfRally(st, u) || (u.kind === 'captain' && canRally(st, u))));
 
   // The bag is empty: the round (the hour) ends: has the village fallen, are the Germans gone? Then the next round
   function endRound(st) {
@@ -1250,7 +1285,7 @@ const Sim = (() => {
   return {
     newGame, endTurn, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, moves, chargeSpots,
     rallyTargets, canAct, groupOf, groupName, members, canReact, firepower, teamsOf, canCallFire, holdsObjective, hourText, roomFor,
-    startGermanHour, germanStep, answer, finishHour, startRound, drawToken, endGermanToken, activationOver, passToken, usCanMove, endRound,
+    startGermanHour, germanStep, answer, finishHour, startRound, drawToken, endGermanToken, activationOver, passToken, usCanMove, endRound, canFire, actSkip, skipSupport,
     actShoot, actMoveShoot, moveShootSpots, chargeRoutes, DIRS, needWhy, canRally, needFor, canSelfRally, actSelfRally, actHalfShot, actMove, actCharge, actRally, actFire, actBreach, breachSpots, sight, isSmall, cover, wire, lineSides, actLine, atHedge, acrossHedge, SIDE_NAMES, PLACES, placeXY, placeName, lines,
     hasCutters: u => cutter(u),
   };
