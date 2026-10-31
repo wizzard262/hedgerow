@@ -248,7 +248,7 @@ const UI = (() => {
       : view.mode.startsWith('fire:') ? 'Click a red target, or a field with Germans your troops can see.'
       : view.mode === 'halfShot' ? 'Moved. Click a red target to fire on it (one more needed on the move), or Esc to hold fire.'
       : view.mode === 'shoot' ? 'Click a red target to fire on it. Esc cancels.'
-      : view.mode === 'go' ? 'Red hatching: Move & shoot there, then fire. The other marked fields: Charge. Blue hatching: the village to take. Click where in the field to stand: by a hedge to line it, the middle for the open. Or pick from the menu.'
+      : view.mode === 'go' ? 'Red hatching: Move & shoot. Other marked fields: Charge. Blue: the village. Click where in the field to stand (by a hedge to line it). Or use the menu.'
       : view.mode === 'charge' ? 'Blue hatching: the village to take. Click where in a field to go: by a hedge to line it (green: cover), or the middle for the open. Bright red fields are held by the Germans: a hand-to-hand fight. Its own field (green): line another hedge. Esc cancels.'
       : view.mode === 'moveShoot' ? `Click where in a red-hatched field to go (by a hedge to line it, green: cover): ${u ? u.name : 'the piece'} moves there and can fire. Esc cancels.`
       : `Click a highlighted field for ${u ? u.name : 'the piece'}. Esc cancels.`;

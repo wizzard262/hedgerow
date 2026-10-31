@@ -35,33 +35,43 @@ const Board = (() => {
     renderer.setSize(w, h);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
-    const centre = new T.Vector3(COLS / 2, 0, ROWS / 2 + 0.15);
+    const centre = new T.Vector3(COLS / 2, 0, ROWS / 2);
+    const fits = () => corners.every(c => { const p = c.clone().project(camera); return Math.abs(p.x) < 0.99 && Math.abs(p.y) < 0.99; });
+    const place = d => { camera.position.copy(centre).addScaledVector(dir, d); camera.lookAt(centre); camera.updateMatrixWorld(); };
     const dir = new T.Vector3(0, Math.sin(0.92), Math.cos(0.92));   // about 53° above the table, from the near side
-    const corners = [[-0.3, -0.3], [COLS + 0.3, -0.3], [-0.3, ROWS + 0.3], [COLS + 0.3, ROWS + 0.3]].map(([x, z]) => new T.Vector3(x, 0, z));
-    let d = 6;
-    for (let k = 0; k < 60; k++) {
-      camera.position.copy(centre).addScaledVector(dir, d);
-      camera.lookAt(centre); camera.updateMatrixWorld();
-      if (corners.every(c => { const p = c.clone().project(camera); return Math.abs(p.x) < 0.97 && Math.abs(p.y) < 0.95; })) break;
-      d += 0.25;
+    // The board's corners with the thinnest edge of table, and the guns and their names off each side
+    const board = [[-0.06, -0.06], [COLS + 0.06, -0.06], [-0.06, ROWS + 0.06], [COLS + 0.06, ROWS + 0.06]];
+    const guns = [[-1.75, 0.1], [-1.75, 2.7], [COLS + 1.75, 0.1], [COLS + 1.75, 2.7]];
+    const corners = board.concat(guns).map(([x, z]) => new T.Vector3(x, 0, z));
+    // Move the camera in until something would go off the screen; then aim a little further up or down the board so
+    // the edges of table above and below come out even, and move in again
+    let d = 30;
+    for (let round = 0; round < 8; round++) {
+      d = 30;
+      for (let k = 0; k < 600; k++) { place(d - 0.05); if (!fits()) break; d -= 0.05; }
+      place(d);
+      const ys = board.map(([x, z]) => new T.Vector3(x, 0, z).project(camera).y);
+      const above = 1 - Math.max(...ys), below = 1 + Math.min(...ys);
+      if (Math.abs(above - below) < 0.01) break;
+      centre.z = Math.max(0, Math.min(ROWS, centre.z + (above - below) * ROWS * 0.35));
     }
   }
 
   // ---------- The table: built once a game, hedges again when one is cut ----------
 
-  // The mortars and artillery of each side, off the board beyond its top corners (Steve): where they stand on the table,
-  // which way they face (towards the board), and where their pile of rounds goes
+  // The mortars and artillery of each side, off the board behind its own back line, near the top (Steve): the Americans
+  // left of the board, the Germans right. Where each stands, and where its pile of rounds goes (behind it)
   const GUNS = {
-    us: { artillery: { x: 0.35, z: -0.8, pile: 0.8 }, mortars: { x: 1.75, z: -0.8, pile: 2.2 } },
-    de: { mortars: { x: COLS - 1.75, z: -0.8, pile: COLS - 2.75 }, artillery: { x: COLS - 0.35, z: -0.8, pile: COLS - 1.25 } },
+    us: { artillery: { x: -0.7, z: 0.55, pileX: -1.45, pileZ: 0.3 }, mortars: { x: -0.7, z: 2.05, pileX: -1.45, pileZ: 1.85 } },
+    de: { artillery: { x: COLS + 0.7, z: 0.55, pileX: COLS + 1.25, pileZ: 0.3 }, mortars: { x: COLS + 0.7, z: 2.05, pileX: COLS + 1.25, pileZ: 1.85 } },
   };
   const GUN_NAMES = { us: { artillery: 'US artillery', mortars: 'US mortars' }, de: { artillery: 'German artillery', mortars: 'German mortars' } };
   const PILE_MAX = 12;
   let support = null;           // side → which → { model, rounds: [] }
 
-  // Facing: the Americans' guns turn towards the board and a little east, the Germans' a little west
-  const gunFacing = side => Math.atan2(-1, side === 'us' ? 0.45 : -0.45);
-  const gunDir = side => ({ x: side === 'us' ? 0.41 : -0.41, z: 0.91 });
+  // Facing: towards the board, the Americans' east, the Germans' west
+  const gunFacing = side => (side === 'us' ? 0 : Math.PI);
+  const gunDir = side => ({ x: side === 'us' ? 1 : -1, z: 0 });
 
   function buildSupport() {
     support = {};
@@ -78,14 +88,14 @@ const Board = (() => {
           const r = Models.round(which === 'artillery' ? 'shell' : 'bomb');
           r.scale.setScalar(which === 'artillery' ? TANKS * 1.7 : MEN * 1.3);
           const perRow = which === 'artillery' ? 3 : 4, gap = which === 'artillery' ? 0.07 : 0.075;
-          built.add(at(r, spot.pile + (k % perRow) * gap, which === 'artillery' ? 0 : 0.02, spot.z - 0.12 + Math.floor(k / perRow) * gap));
+          built.add(at(r, spot.pileX + (k % perRow) * gap, which === 'artillery' ? 0 : 0.02, spot.pileZ + Math.floor(k / perRow) * gap));
           rounds.push(r);
         }
         // Its name, small, on the table in front
         const name = word(GUN_NAMES[side][which], '#efe6d2', false);
         name.scale.multiplyScalar(1.5);
         name.material.depthTest = true;
-        name.position.set(spot.x + (side === 'us' ? 0.3 : -0.3), 0.05, spot.z + 0.45);
+        name.position.set(spot.x + (side === 'us' ? -0.2 : 0.2), 0.05, spot.z + 0.55);
         built.add(name);
         support[side][which] = { model, rounds };
       }

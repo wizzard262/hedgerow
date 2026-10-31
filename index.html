@@ -11,14 +11,25 @@
           --accent: #d9b45a; --us: #7d9bc4; --de: #c48a7d; --good: #9fcf8a; --bad: #e0705f; --warn: #e6c95a; }
   * { box-sizing: border-box; }
   html, body { height: 100%; margin: 0; }
-  body { background: var(--bg); color: var(--ink); font: 14px/1.4 Georgia, serif; display: flex; overflow: hidden; }
+  body { background: var(--bg); color: var(--ink); font: 14px/1.4 Georgia, serif; display: flex; flex-direction: column; overflow: hidden; }
   button { font: inherit; color: var(--ink); background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 5px 10px; cursor: pointer; }
   button:hover:not(:disabled) { border-color: var(--accent); }
   button:disabled { opacity: .4; cursor: default; }
   button.on { background: var(--accent); color: #2a2214; border-color: var(--accent); }
 
-  /* The controls on the left */
-  #panel { flex: 0 0 360px; height: 100%; overflow-y: auto; background: var(--panel); border-right: 1px solid var(--line); padding: 12px 12px 20px; display: flex; flex-direction: column; gap: 10px; }
+  /* The controls: one bar along the bottom (Steve), the table filling the rest of the screen */
+  #panel { order: 2; flex: 0 0 auto; height: 132px; overflow-x: auto; overflow-y: hidden; background: var(--panel); border-top: 1px solid var(--line); padding: 8px 12px; display: flex; flex-direction: row; align-items: stretch; gap: 10px; }
+  #panel > * { flex: 0 0 auto; }
+  .brand { width: 330px; display: flex; flex-direction: column; gap: 2px; }
+  .brand #goal, .brand #clock { font-size: 12px; }
+  .support { width: 230px; }
+  .support .row { flex-direction: column; align-items: stretch; }
+  #card { flex: 1 1 420px; min-width: 380px; display: grid; grid-template-columns: minmax(220px, 1fr) auto; column-gap: 12px; align-content: start; overflow-y: auto; }
+  #card .stats { font-size: 12px; margin: 2px 0; }
+  #card #actions button { padding: 3px 8px; font-size: 13px; }
+  #card > :not(#actions) { grid-column: 1; }
+  #card #actions { grid-column: 2; grid-row: 1 / span 3; margin-top: 0 !important; }
+  #hint { width: 250px; overflow-y: auto; }
   #panel h1 { font: 26px "Special Elite", monospace; margin: 0; letter-spacing: 2px; color: var(--accent); }
   .top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
   .top .links { display: flex; gap: 6px; }
@@ -37,11 +48,11 @@
   #card .stats { display: flex; gap: 10px; flex-wrap: wrap; margin: 4px 0 6px; font-size: 13px; }
   #card .bad { color: var(--bad); font-weight: 700; }
   #actions { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
-  #hint { min-height: 1.4em; font-size: 13px; color: var(--warn); }
-  #end { width: 100%; padding: 10px; font: 16px "Special Elite", monospace; background: #6b4f2a; border-color: #8a6a3a; }
+  #hint { min-height: 1.4em; font-size: 12px; color: var(--warn); }
+  #end { width: 150px; padding: 10px; font: 16px "Special Elite", monospace; background: #6b4f2a; border-color: #8a6a3a; }
 
-  /* The table on the right */
-  #board { flex: 1 1 auto; position: relative; min-width: 0; height: 100%; }
+  /* The table, filling the screen above the bar */
+  #board { order: 1; flex: 1 1 auto; position: relative; min-width: 0; min-height: 0; }
   #board canvas { display: block; }
   #label { position: absolute; transform: translate(-50%, -100%); font: 15px "Special Elite", monospace; color: #fff3d6; text-shadow: 0 1px 3px #000, 0 0 8px #000; pointer-events: none; white-space: nowrap; }
   /* The menu that opens by a piece on the table */
@@ -67,24 +78,26 @@
   .modal ul { padding-left: 18px; }
   .modal li { margin: 4px 0; }
   .modal .buttons { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
-  #ask { align-items: flex-end; justify-content: flex-end; background: transparent; pointer-events: none; padding: 20px; }
+  #ask { align-items: flex-end; justify-content: flex-end; background: transparent; pointer-events: none; padding: 20px 20px 150px; }
   #ask .card { pointer-events: auto; max-width: 420px; }
 
   @media (max-width: 900px) {
     body { flex-direction: column; overflow: auto; }
-    #panel { flex: none; height: auto; border-right: 0; border-bottom: 1px solid var(--line); }
+    #panel { flex: none; height: auto; flex-direction: column; border-top: 0; border-bottom: 1px solid var(--line); }
     #board { flex: none; height: 70vh; }
   }
 </style>
 </head>
 <body>
 <aside id="panel">
+  <div class="brand">
   <div class="top">
-    <h1>HEDGEROW <span id="ver" style="font-size:11px;color:var(--muted);letter-spacing:0">v42</span></h1>
+    <h1>HEDGEROW <span id="ver" style="font-size:11px;color:var(--muted);letter-spacing:0">v43</span></h1>
     <div class="links"><button id="sound-btn" title="Sound on or off">🔊</button><button id="help-btn">How to play</button><button id="new-btn">New game</button></div>
   </div>
   <div id="clock"></div>
   <div id="goal"></div>
+  </div>
 
   <div class="box support">
     <h2>Fire support</h2>
@@ -126,7 +139,7 @@
       <li>🧍 <b>One unit to a field</b>: only hand-to-hand fighting brings both sides into the same field. MG and bazooka teams and the captain can also stand in a rifle platoon's field (up to three with it); they still move on their own.</li>
       <li>🏘️ <b>Villages and hamlets</b>: houses round a yard. Hard to hit in. Only a rifle platoon takes the village: when one can reach it, the village field shows blue hatching.</li>
       <li>🌊 <b>The river</b> can only be crossed at its two bridges.</li>
-      <li>💣 <b>Fire support</b>: your 81 mm mortars and 105 mm artillery stand off the board beyond its top-left corner, the Germans' mortars and artillery beyond the top-right. Their rounds fly from there, and the pile of rounds beside each shows how many shots it has left. Artillery also falls on the fields round the target, on your own pieces too (the target warns you) (the American mortars get one more every 2 hours, the artillery every 3).</li>
+      <li>💣 <b>Fire support</b>: your 81 mm mortars and 105 mm artillery stand off the board behind your back line (left), the Germans' behind theirs (right), near the top. Their rounds fly from there, and the pile of rounds beside each shows how many shots it has left. Artillery also falls on the fields round the target, on your own pieces too (the target warns you) (the American mortars get one more every 2 hours, the artillery every 3).</li>
       <li>🔊 <b>Sound</b>: rifles, the American .30-cal and the German MG 42, bazookas, tank guns, mortar bombs and shells whistling in, men running, tanks driving, and a battle going on in the distance. The 🔊 button at the top turns it all off.</li>
       <li>✂️ <b>Barbed wire</b> closes some gaps between fields: only tanks get through it, rolling over and flattening it. Men must go round, or wait for a tank to flatten it.</li>
       <li>🌳 <b>Hedges</b>: men climb over a hedge bank as they move (they hop up over it on the table), which uses one more move (the hedge stays); tanks drive straight through, leaving a gap. Charging across a hedge at Germans behind it is allowed, but they fight back hard.</li>
@@ -145,12 +158,12 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="js/data.js?v=42"></script>
-<script src="js/sim.js?v=42"></script>
-<script src="js/sound.js?v=42"></script>
-<script src="js/models.js?v=42"></script>
-<script src="js/board3d.js?v=42"></script>
-<script src="js/ui.js?v=42"></script>
-<script src="js/main.js?v=42"></script>
+<script src="js/data.js?v=43"></script>
+<script src="js/sim.js?v=43"></script>
+<script src="js/sound.js?v=43"></script>
+<script src="js/models.js?v=43"></script>
+<script src="js/board3d.js?v=43"></script>
+<script src="js/ui.js?v=43"></script>
+<script src="js/main.js?v=43"></script>
 </body>
 </html>
