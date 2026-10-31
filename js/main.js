@@ -205,8 +205,7 @@ window.Game = (() => {
     // Your mortars or artillery off the board: choose them like a piece
     const gun = !st.de && Board.gunAt(e.clientX, e.clientY);
     if (gun) {
-      // No pick-up sound as its targets show (Steve)
-      Board.clearDice(); UI.selectSupport(gun); changed();
+      Sound.play('select'); Board.clearDice(); UI.selectSupport(gun); changed();
       // Its menu by the click, with Skip turn (Steve)
       const r = board.getBoundingClientRect();
       UI.openGunMenu(gun, e.clientX - r.left, e.clientY - r.top, r);
@@ -214,13 +213,19 @@ window.Game = (() => {
     }
     const f = Board.fieldAt(e.clientX, e.clientY);
     if (!f) return;
+    // A German piece clicked, when the click isn't the chosen piece's action: ring it and show what it is (Steve).
+    // Its model under the pointer, or the nearest German in a field with none of yours
+    const under = Board.pieceUnder(st, e.clientX, e.clientY);
+    const foeField = !Sim.at(st, f.x, f.y, 'us').length && Sim.at(st, f.x, f.y, 'de').length;
+    const foe = under && under.side === 'de' ? under : !under && foeField ? Board.pieceAt(st, e.clientX, e.clientY, 'de') : null;
+    if (foe && !UI.actsOn(f.x, f.y)) { Sound.play('select'); Board.clearDice(); UI.inspect(foe); changed(); return; }
     // The one piece under the pointer (the nearest in the field if the click misses the models)
     const mine = UI.clickField(f.x, f.y, Board.pieceAt(st, e.clientX, e.clientY), f.side);
     changed();
     // Your pieces there: open their menu by the click
     // Picking the next piece clears the last shots' dice off the table
-    // No pick-up sound as its moves spread out on the table (Steve)
-    if (mine) { Board.clearDice(); const r = board.getBoundingClientRect(); UI.openMenu(mine, e.clientX - r.left, e.clientY - r.top, r); $('#tip').style.display = 'none'; }
+    // The pick-up sound as you choose it (Steve)
+    if (mine) { Sound.play('select'); Board.clearDice(); const r = board.getBoundingClientRect(); UI.openMenu(mine, e.clientX - r.left, e.clientY - r.top, r); $('#tip').style.display = 'none'; }
     else offerRally();
     if (st.won || st.lost) showResult();
   });

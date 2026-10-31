@@ -602,9 +602,40 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - The drawn token lands on the table without the pick-up sound
 - Balance: the test player now wins 87% in about 6 rounds (was 99% in 4)
 
+## 103. Look at a German piece; pictures in the panel (v67)
+
+- Steve: let me highlight a German piece and see its info in the bottom panel. For a highlighted piece, ours or German, show the piece's picture on the left of the panel
+- Clicking a German piece (when the click isn't your chosen piece's charge or shot) rings it and shows its card in the bottom panel: name, kind, strength, dice, where it stands and whether it has moved; no actions
+- Every piece's card, and your mortars' and artillery's, now has a picture of its model at the left, made from the same 3D models as the table
+
+## 104. Shaken: half moves, never stopped (v67)
+
+- Steve: does shaken prevent a move? It should be −1 to shoot and half move or charge, always
+- A shaken piece can always move and charge now, but only half as far (rounded down, at least one field: Charge 1, Move & shoot 1); it still needs one more to hit. It can charge into hand to hand too
+
+## 105. Sounds: picking a piece, and moves for both sides (v67)
+
+- Steve: the select-piece sound should still play for selecting a piece, and move sounds (tank, walk) for both Germans and Americans
+- The pick-up sound is back when you choose a piece, your guns, or a German piece to look at (still none as the drawn token lands). Men running and tanks driving already sound for both sides' moves
+
+## 106. The timer token lands in the middle of the board (v67)
+
+- Steve: the timer token stops not in the centre of the board but a couple of squares above it
+- The drawn timer token now lands in the middle of the board
+
+## 107. Word bubbles near the top of the screen hang below (v67)
+
+- Steve: a word bubble for a piece in the top row can disappear off the top of the screen; it should appear below it
+- The German move bubble and the dice tag hang below the piece (tail pointing up) when above it they would reach the top of the screen; they also slide in from the left and right edges
+
+## 108. Bombers in the distant battle (v67)
+
+- Steve: put some bombers flying past in the ambient battlefield sound
+- Every minute or two a flight of heavy bombers drones over, far off: sixteen engines beating against each other with a rumble of air, swelling and fading as they cross from one side to the other, the pitch dropping a little as they pass (made in the browser, no file)
+
 ## Sessions
 
 | # | Date | Length | What we did |
 |---|------|--------|-------------|
 | 1 | 2026-10-30 | about 10.5 hours | Prompts 1–84: rules, command points, reacting, tanks and hedge cutters, the look (pixel art to 3D tabletop), scales, river, villages, wire, six-move aim; one captain, piece menus, hedges stop moves, MG team model; bazooka teams, two-field charges; red targets; who has acted; company level; lining hedges, longer sight, the captain's guidon; one unit a field, no time limit; tracers and shells, greyed out, no activation tokens, Move & shoot hatching; tanks through hedges, charges for all; no plain move; teams and captain with a platoon, no attaching; one piece at a time; charging through friends; range, cover and moving +1 each; words off the target, tanks turn and recoil; rallying; MGs can't move and fire; easier targets; Move & shoot one action; tanks impervious to small arms; more gaps; no charging through houses; MGs fire five; hand to hand shown; sounds; select and move sounds; running and tank sounds; twisty wire, tank boom, a cleaner panel, better running; bigger dice with a tag; louder, more real sounds; distant battle; shells arcing in and explosions; Sherman and Firefly named; dice cleared on the next pick; fire support targets; real recordings; tank HE hits the whole field; 3+ to hit, pinned not stopped, 50/50 wounds; further moves, climbing hedges; click where in the field, cover shown, more orchards; routes shown, why a shot needs what it needs; flush roofs, lines of sight; pieces stay till hit, the captain shoots; mortars and artillery off the board; take cover; captain rallies twice, two pins kill; bazookas and tanks kill, longer reach, tanks as cover, no Break through, wire for tanks only, hopping hedges; who is aiming at whom; blue hatching on the village; moves shown on picking a piece; win by wiping out the Germans, artillery friendly fire; full-screen table, bottom bar; score in a word bubble; no shooting at 7+; longer ranges, a sniper; fire support by clicking the guns; German artillery; rules in two columns, not at the start; nine places in a field, guns lower; the blind bag; guns in the bag, Skip turn; pointed bubble arrows; the token as a coin, three times bigger |
-| 2 | 2026-10-31 | about 3.5 hours | Prompts 85–102: small targets, houses +2, small houses round the square, stop at a wipe-out; shaken token on the base, shaken not pinned; captain's blue rally targets; no river; taking cover halves the dice; no pick-up sound; the timer token; brown German bases, Germans greyed out; no glare, rounds not hours; tokens fly back into the bag; one round per base, the rocket, tanks turn then fire in turn; tanks face the nearest enemy, side by side; no Pass button; hand to hand to the finish; take cover in a word bubble; rally offered after the captain moves; villages and orchards seen only at their edge; a clearer timer token, a matt coin; no crowding in a field, no token sound |
+| 2 | 2026-10-31 | about 4 hours | Prompts 85–108: small targets, houses +2, small houses round the square, stop at a wipe-out; shaken token on the base, shaken not pinned; captain's blue rally targets; no river; taking cover halves the dice; no pick-up sound; the timer token; brown German bases, Germans greyed out; no glare, rounds not hours; tokens fly back into the bag; one round per base, the rocket, tanks turn then fire in turn; tanks face the nearest enemy, side by side; no Pass button; hand to hand to the finish; take cover in a word bubble; rally offered after the captain moves; villages and orchards seen only at their edge; a clearer timer token, a matt coin; no crowding in a field, no token sound; German cards and pictures, shaken half moves, sounds back, timer in the middle, bubbles below at the top, bombers |

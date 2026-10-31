@@ -225,8 +225,8 @@ const UI = (() => {
         menu.append(b);
       }
       if (!acts.some(a => a.ok)) menu.append(el('div', 'mnote', u.shocked ? 'Shaken: it has moved this round; it can rest, or the captain can rally it' : 'It has moved this round'));
-      else if (u.shocked) menu.append(el('div', 'mnote', 'Shaken: it needs one more to hit and can\'t charge until it rallies'));
-      else if (!u.acted && !u.shocked && u.kind !== 'pak' && !Sim.chargeSpots(st, u).length) {
+      else if (u.shocked) menu.append(el('div', 'mnote', 'Shaken: it needs one more to hit and moves or charges half as far until it rallies'));
+      if (acts.some(a => a.ok) && !u.acted && u.kind !== 'pak' && !Sim.chargeSpots(st, u).length) {
         // Boxed in: say why it can't charge, and how to get out
         menu.append(el('div', 'mnote', 'Nowhere to charge to: every way is blocked'));
       }
@@ -366,7 +366,7 @@ const UI = (() => {
     const can = Sim.canAct(st, u);
     const b = [];
     const add = (mode, label, ok, title) => b.push({ mode, label, ok: can && ok, title });
-    // A shaken piece can still act (but not charge), or use its move to try to rally itself
+    // A shaken piece can still act (moving and charging half as far), or use its move to try to rally itself
     if (Sim.canSelfRally(st, u)) {
       b.push({ mode: 'selfRally', label: '📣 Rally itself', ok: true, title: `Its move: a ${Math.round(SELF_RALLY[u.quality || 'standard'] * 100)}% chance to shake it off (the captain does better)`, run: () => Sim.actSelfRally(st, u) });
     }
@@ -399,12 +399,34 @@ const UI = (() => {
     return b;
   }
 
+  // The piece's picture at the left of the panel (Steve)
+  function picture(box, side, kind) {
+    box.className = 'with-pic';
+    const img = el('img', 'pic');
+    img.src = Board.portrait(side, kind);
+    img.alt = '';
+    box.append(img);
+  }
+
+  // Show a German piece in the panel (Steve): it is ringed on the table and its card shows what it is
+  function inspect(u) {
+    view.sel = u.id;
+    view.mode = null;
+    view.support = null;
+  }
+
+  // Does a click in this field carry out the chosen piece's action (a lit field for it)?
+  function actsOn(x, y) {
+    return !!view.mode && spots().some(p => p.x === x && p.y === y);
+  }
+
   function card() {
     const u = selected(), box = $('#card');
     box.innerHTML = '';
     // A gun chosen: what it is, rounds left, whether it can fire this hour, and its Fire button
     if (!u && view.support) {
       const which = view.support, S = which === 'mortars' ? MORTARS : ARTILLERY;
+      picture(box, 'us', which);
       const status = canFire(which) ? '<span class="pill ready">Ready</span>' : st.ammo[which] <= 0 ? '<span class="pill bad">No rounds</span>' : '<span class="pill done">✓ Fired this round</span>';
       box.append(el('div', 'name', which === 'mortars' ? '💥 US mortars' : '💣 US artillery'));
       box.append(el('div', 'sub', `${S.name}, off the board`));
@@ -426,17 +448,22 @@ const UI = (() => {
       return;
     }
     if (!u || u.x === null) {
-      box.innerHTML = '<div class="sub">Click one of your pieces on the table.</div>';
+      box.className = '';
+      box.innerHTML = '<div class="sub">Click one of your pieces on the table (or a German one to see what it is).</div>';
       return;
     }
+    // Its picture on the left (Steve), for your pieces and the Germans'
+    picture(box, u.side, u.kind);
     const strength = u.kind === 'company' ? `${u.platoons} section${u.platoons > 1 ? 's' : ''} (${u.platoons * 4} men)` : Sim.isTank(u) ? `${u.platoons} tank${u.platoons > 1 ? 's' : ''}` : PIECES[u.kind].men ? `${PIECES[u.kind].men} men` : '';
     const f = Sim.firepower(st, u);
     const dice = `🎲 ${Math.round(f.soft * 10) / 10} dice vs men${f.hard ? `, ${Math.round(f.hard * 10) / 10} vs tanks` : ''}`;
-    const status = u.down && u.acted ? '<span class="pill bad">Taking cover: the captain can get it up</span>' : u.shocked ? '<span class="pill bad">Shaken: −1 to hit, no charging</span>' : u.acted ? '<span class="pill done">✓ Moved this round</span>' : '<span class="pill ready">Ready</span>';
+    const status = u.down && u.acted ? '<span class="pill bad">Taking cover: the captain can get it up</span>' : u.shocked ? '<span class="pill bad">Shaken: −1 to hit, half moves</span>' : u.acted ? '<span class="pill done">✓ Moved this round</span>' : '<span class="pill ready">Ready</span>';
     box.append(el('div', 'name', `${u.name}${u.quality === 'elite' ? ' ★' : ''}`));
-    box.append(el('div', 'sub', `${KIND[u.kind]}${Sim.hasCutters(u) ? ' · hedge cutters' : ''}`));
+    box.append(el('div', 'sub', `${u.side === 'de' ? 'German · ' : ''}${KIND[u.kind]}${Sim.hasCutters(u) ? ' · hedge cutters' : ''}`));
     const where = u.kind === 'pak' ? '' : `📍 At ${Sim.placeName(u.at)}`;
     box.append(el('div', 'stats', [strength, dice, where, status].filter(Boolean).map(s => `<span>${s}</span>`).join('')));
+    // A German piece: just what it is (Steve), no actions
+    if (u.side !== 'us') return;
     const acts = el('div'); acts.id = 'actions'; acts.style.marginTop = '6px';
     for (const a of actionButtons(u)) {
       const btn = el('button', view.mode === a.mode ? 'on' : '', a.label);
@@ -509,5 +536,5 @@ const UI = (() => {
     refresh = onChange;
   }
 
-  return { init, setState, update, clickField, openMenu, openGunMenu, openAsk, closeMenu, spots, targets, shootTarget, rallies, rallyTarget, view, selected, selectSupport, supportState, flyToken, returnTokens, KIND };
+  return { init, setState, update, clickField, openMenu, openGunMenu, openAsk, closeMenu, inspect, actsOn, spots, targets, shootTarget, rallies, rallyTarget, view, selected, selectSupport, supportState, flyToken, returnTokens, KIND };
 })();

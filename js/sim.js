@@ -720,7 +720,7 @@ const Sim = (() => {
   function moveShootRoutes(st, u) {
     if (u.kind === 'mg' || u.kind === 'mg42' || PIECES[u.kind].fixed) return [];
     const home = { x: u.x, y: u.y, at: u.at }, out = [];
-    for (const route of routesFor(st, u, MOVE_SHOOT_MOVES, false)) {
+    for (const route of routesFor(st, u, reach(u, MOVE_SHOOT_MOVES), false)) {
       // Try it: stand at the goal by each hedge in turn, or in the open; any place with a shot will do
       const goal = route[route.length - 1];
       u.x = goal.x; u.y = goal.y;
@@ -833,12 +833,18 @@ const Sim = (() => {
   }
 
   // A charge: up to CHARGE_MOVES moves, without shooting, ending in a hand-to-hand fight if it reaches the enemy.
-  // Every piece but a dug-in gun can charge; captains and teams only into empty fields. A shaken piece can't
-  // charge until it rallies (Steve)
+  // Every piece but a dug-in gun can charge; captains and teams only into empty fields. A shaken piece charges half as
+  // far (Steve)
   function chargeRoutes(st, u) {
-    if (PIECES[u.kind].fixed || u.shocked) return [];
+    if (PIECES[u.kind].fixed) return [];
     const canFight = fightsHandToHand(u);
-    return routesFor(st, u, CHARGE_MOVES, canFight);
+    return routesFor(st, u, reach(u, CHARGE_MOVES), canFight);
+  }
+
+  // How far a piece can go (Steve): a shaken piece can always move or charge, but only half as far (at least one field)
+  function reach(u, full) {
+    if (!u.shocked) return full;
+    return Math.max(1, Math.floor(full * SHAKEN_MOVE));
   }
 
   // Go along a route's fields up to (not into) its goal, cutting, flattening or climbing on the way. Returns the lines to report

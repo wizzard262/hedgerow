@@ -835,5 +835,29 @@ check('villages and orchards: seen into and out of only at their edge, never thr
   assert(Sim.sight(st, de, B), 'a piece at the orchard edge could not see out');
 });
 
+check('a shaken piece still moves and charges, half as far; it needs one more to hit', () => {
+  const st = Sim.newGame(3);
+  st.hedges = {}; st.wire = {};
+  const A = Sim.unitById(st, 'A');
+  for (const u of st.units) if (u !== A) u.x = u.y = null;
+  A.x = 0; A.y = 6; A.at = null; A.acted = false;
+  const far = p => Math.abs(p.x - A.x) + Math.abs(p.y - A.y);
+  const fresh = Math.max(...Sim.chargeSpots(st, A).map(far));
+  A.shocked = true;
+  const spots = Sim.chargeSpots(st, A);
+  assert(spots.length > 0, 'a shaken piece could not charge');
+  assert(Math.max(...spots.map(far)) === Math.max(1, Math.floor(fresh * SHAKEN_MOVE)), `a shaken piece charged ${Math.max(...spots.map(far))} fields, not half of ${fresh}`);
+});
+
+check('the shaken platoon in hand to hand: shaken does not stop it charging in', () => {
+  const st = Sim.newGame(3);
+  st.hedges = {}; st.wire = {};
+  const A = Sim.unitById(st, 'A'), de = st.units.find(u => u.side === 'de' && u.kind === 'company');
+  for (const u of st.units) if (u !== A && u !== de) u.x = u.y = null;
+  A.x = 2; A.y = 6; A.at = null; A.acted = false; A.shocked = true;
+  de.x = 3; de.y = 6; de.at = null;
+  assert(Sim.chargeSpots(st, A).some(p => p.x === 3 && p.y === 6), 'a shaken platoon could not charge the Germans next to it');
+});
+
 console.log(failed ? `\n${failed} failed` : '\nall passed');
 process.exit(failed ? 1 : 0);

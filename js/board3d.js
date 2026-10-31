@@ -145,9 +145,9 @@ const Board = (() => {
     ray.setFromCamera(new T.Vector2((clientX - r.left) / r.width * 2 - 1, -(clientY - r.top) / r.height * 2 + 1), camera);
     const from = new T.Vector3();
     if (!ray.ray.intersectPlane(table, from)) from.set(COLS / 2, 0, ROWS + 2);
-    // It lands above that side's artillery; the timer between the two sides' (Steve)
-    const gun = side === 'timer' ? { x: (GUNS.us.artillery.x + GUNS.de.artillery.x) / 2, z: GUNS.us.artillery.z } : GUNS[side].artillery;
-    const to = new T.Vector3(gun.x + (side === 'us' ? -0.1 : side === 'de' ? 0.1 : 0), 0.04, gun.z - 1.15);
+    // It lands above that side's artillery; the timer in the middle of the board (Steve)
+    const gun = GUNS[side === 'timer' ? 'us' : side].artillery;
+    const to = side === 'timer' ? new T.Vector3(COLS / 2, 0.04, ROWS / 2) : new T.Vector3(gun.x + (side === 'us' ? -0.1 : 0.1), 0.04, gun.z - 1.15);
     mesh.position.copy(from);
     scene.add(mesh);
     coinFlight = { mesh, from, to, t0: performance.now(), done, leaving: 0 };
@@ -398,21 +398,28 @@ const Board = (() => {
   // ---------- Pieces ----------
 
   // The model for a piece, made the first time it is needed
+  // The models that make up a piece, each a base on the table, scaled: a rifle platoon's three section bases, a tank
+  // pair's two tanks, or a team's (or the captain's) one base. Used for the table and for the panel's picture
+  function buildBases(side, kind) {
+    if (kind === 'company') {
+      // One base a section; the bases are shown or hidden as sections are lost
+      return [0, 1, 2].map(() => { const s = Models.squad(side); markerSpots(s); s.scale.setScalar(MEN); return s; });
+    }
+    if (PIECES[kind].tank) {
+      const make = { sherman: () => Models.sherman(Models.M.olive), firefly: () => Models.sherman(Models.M.olive, true), pz4: Models.panzer4, panther: Models.panther }[kind];
+      return [0, 1].map(() => { const m = make(); markerSpots(m); m.scale.setScalar(TANKS); m.userData.slowTurn = true; return m; });
+    }
+    const m = kind === 'captain' ? Models.captain(side) : kind === 'pak' ? Models.pak() : Models.team(side, kind);
+    markerSpots(m);
+    m.scale.setScalar(kind === 'pak' ? TANKS * 1.3 : MEN);
+    return [m];
+  }
+
   function model(u) {
     if (pieces[u.id]) return pieces[u.id];
     const g = new T.Group();
-    if (u.kind === 'company') {
-      // One base a platoon; the bases are shown or hidden as platoons are lost
-      g.userData.bases = [0, 1, 2].map(() => { const s = Models.squad(u.side); markerSpots(s); s.scale.setScalar(MEN); g.add(s); return s; });
-    } else if (Sim.isTank(u)) {
-      const make = { sherman: () => Models.sherman(Models.M.olive), firefly: () => Models.sherman(Models.M.olive, true), pz4: Models.panzer4, panther: Models.panther }[u.kind];
-      g.userData.bases = [0, 1].map(() => { const m = make(); markerSpots(m); m.scale.setScalar(TANKS); m.userData.slowTurn = true; g.add(m); return m; });
-    } else {
-      const m = u.kind === 'captain' ? Models.captain(u.side) : u.kind === 'pak' ? Models.pak() : Models.team(u.side, u.kind);
-      markerSpots(m);
-      m.scale.setScalar(u.kind === 'pak' ? TANKS * 1.3 : MEN);
-      g.add(m); g.userData.bases = [m];
-    }
+    g.userData.bases = buildBases(u.side, u.kind);
+    for (const b of g.userData.bases) g.add(b);
     // The Germans face west
     g.userData.face = u.side === 'us' ? 0 : Math.PI;
     scene.add(g);
@@ -1220,14 +1227,18 @@ const Board = (() => {
       // The tag: a long word bubble a little up the board, with a pointed arrow to the middle of the dice (Steve)
       const rows = Math.ceil(f.faces.length / 6);
       const diceMid = new T.Vector3(f.x + 0.15 + (Math.min(6, f.faces.length) - 1) * DIE_GAP / 2, 0.03, z - (rows - 1) * DIE_GAP / 2);
-      const tagZ = z - (rows - 1) * DIE_GAP - 0.55;
-      const anchor = new T.Vector3(diceMid.x, 0.22, tagZ);
-      const tag = diceTag(shotTagText(st, f), f.side);
+      let tagZ = z - (rows - 1) * DIE_GAP - 0.55;
+      let anchor = new T.Vector3(diceMid.x, 0.22, tagZ);
+      // Near the top of the screen: the tag hangs below the dice instead, so it isn't cut off (Steve)
+      const below = offTop(anchor);
+      if (below) { tagZ = z + DIE_GAP + 0.35; anchor = new T.Vector3(diceMid.x, 0.05, tagZ); }
+      const tag = diceTag(shotTagText(st, f), f.side, below);
       tag.position.copy(anchor); tag.renderOrder = 6;
       scene.add(tag); dice.push(tag);
       const arrow = wedge(anchor, diceMid, 0.16, f.side === 'de' ? 0x46484a : 0x1e3e6e);
       scene.add(arrow); dice.push(arrow);
-      cursor[key] = tagZ - 0.3;
+      // The next shot's dice in this field go on beyond this tag (down the board when it hangs below)
+      cursor[key] = below ? tagZ + 0.3 : tagZ - 0.3;
     }
   }
 
@@ -1252,8 +1263,9 @@ const Board = (() => {
   const tagTex = {};
   // A long word bubble on one line: who fired in white, the score and hits in gold; a pointed tail at the bottom middle,
   // where the sprite is anchored (the arrow carries on from it to the dice)
-  function diceTag(lines, side) {
-    const key = side + lines.join('/');
+  // tailUp: the bubble hangs below its point, tail at the top (for something near the top of the screen, Steve)
+  function diceTag(lines, side, tailUp = false) {
+    const key = side + lines.join('/') + (tailUp ? '/up' : '');
     if (!tagTex[key]) {
       const c = document.createElement('canvas'), g = c.getContext('2d');
       const font = 'bold 40px Georgia, serif', sep = '  ·  ';
@@ -1262,21 +1274,44 @@ const Board = (() => {
       const tail = 18, boxH = 64;
       c.width = Math.ceil(w0 + w1) + 48; c.height = boxH + tail + 6;
       const mid = c.width / 2;
+      // Where the box starts: under the tail when it points up, at the top otherwise
+      const top = tailUp ? tail + 2 : 4;
       g.beginPath();
-      g.roundRect(4, 4, c.width - 8, boxH, 20);
-      g.moveTo(mid - 14, boxH + 3); g.lineTo(mid, c.height - 2); g.lineTo(mid + 14, boxH + 3);
+      g.roundRect(4, top, c.width - 8, boxH, 20);
+      if (tailUp) { g.moveTo(mid - 14, top + 1); g.lineTo(mid, 2); g.lineTo(mid + 14, top + 1); }
+      else { g.moveTo(mid - 14, boxH + 3); g.lineTo(mid, c.height - 2); g.lineTo(mid + 14, boxH + 3); }
       g.fillStyle = side === 'de' ? 'rgba(70,72,74,.94)' : 'rgba(30,62,110,.94)'; g.fill();
       g.lineWidth = 3; g.strokeStyle = 'rgba(230,236,245,.8)'; g.stroke();
       g.font = font; g.textBaseline = 'middle';
-      g.fillStyle = '#f4efe4'; g.fillText(lines[0] + sep, 24, 4 + boxH / 2);
-      g.fillStyle = '#ffd98a'; g.fillText(lines[1], 24 + w0, 4 + boxH / 2);
+      g.fillStyle = '#f4efe4'; g.fillText(lines[0] + sep, 24, top + boxH / 2);
+      g.fillStyle = '#ffd98a'; g.fillText(lines[1], 24 + w0, top + boxH / 2);
       tagTex[key] = { map: new T.CanvasTexture(c), aspect: c.width / c.height };
     }
     const t = tagTex[key];
     const s = new T.Sprite(new T.SpriteMaterial({ map: t.map, transparent: true, depthTest: false }));
     s.scale.set(0.24 * t.aspect, 0.24, 1);
-    s.center.set(0.5, 0);
+    // The tip of the tail is the sprite's anchor
+    s.center.set(0.5, tailUp ? 1 : 0);
     return s;
+  }
+
+  // Would a word bubble standing on this point (tail at the bottom, `height` tall) go off the top of the screen?
+  function offTop(point, height = 0.24) {
+    const up = new T.Vector3(0, 1, 0).applyQuaternion(camera.quaternion).multiplyScalar(height);
+    const top = point.clone().add(up).project(camera);
+    return top.y > 0.9;
+  }
+
+  // Slide a word bubble sideways so it stays on the screen (its width from the sprite's scale)
+  function keepInSide(sprite) {
+    const right = new T.Vector3(1, 0, 0).applyQuaternion(camera.quaternion).multiplyScalar(sprite.scale.x / 2);
+    for (let k = 0; k < 20; k++) {
+      const l = sprite.position.clone().sub(right).project(camera), r = sprite.position.clone().add(right).project(camera);
+      // Past the left or right edge: a step back in, along the screen's across
+      if (l.x < -0.98) sprite.position.addScaledVector(right, 0.1);
+      else if (r.x > 0.98) sprite.position.addScaledVector(right, -0.1);
+      else break;
+    }
   }
 
   // The German move on show: an orange ring under the piece (or their gun off the board) and a grey word bubble over it
@@ -1297,9 +1332,14 @@ const Board = (() => {
     }
     const ring = new T.Mesh(new T.RingGeometry(big ? 0.36 : 0.22, big ? 0.42 : 0.27, 56), new T.MeshBasicMaterial({ color: 0xff8a2a, transparent: true, opacity: 0.95, depthWrite: false }));
     at(ring, spot.x, 0.01, spot.z, -Math.PI / 2, 0, 0); marks.add(ring);
-    const bubble = diceTag([name, m.what], 'de');
+    // Over the piece, or below it when over it would go off the top of the screen (Steve)
+    const over = new T.Vector3(m.gun ? spot.x - 1.1 : spot.x, 0.32, spot.z);
+    const below = offTop(over);
+    const bubble = diceTag([name, m.what], 'de', below);
     // A gun's bubble sits a little in from the table's edge, so it stays on the screen
-    bubble.position.set(m.gun ? spot.x - 1.1 : spot.x, 0.32, spot.z); bubble.renderOrder = 7; marks.add(bubble);
+    if (below) bubble.position.set(over.x, 0.05, spot.z + 0.3); else bubble.position.copy(over);
+    keepInSide(bubble);
+    bubble.renderOrder = 7; marks.add(bubble);
   }
 
   // view: { spots: [{ x, y, kind }], selected: piece, hover: { x, y }, blast: [{ x, y, main }], deMove: { id | gun, what } }. dt: seconds since the last frame.
@@ -1385,6 +1425,57 @@ const Board = (() => {
     return here.sort((a, b) => pieceCentre(a).distanceTo(p) - pieceCentre(b).distanceTo(p))[0] || null;
   }
 
+  // A picture of a piece for the bottom panel (Steve): its models on their own, lit like the table, seen from the front
+  // and a little above. which: 'mortars' or 'artillery' for the guns off the board. Made once for each side and kind
+  const portraits = {};
+  let studio = null;
+  function portrait(side, kind) {
+    const key = side + ':' + kind;
+    if (portraits[key]) return portraits[key];
+    // One small renderer, scene and camera for every picture
+    if (!studio) {
+      const r = new T.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+      r.setSize(200, 160);
+      r.outputEncoding = T.sRGBEncoding; r.toneMapping = T.ACESFilmicToneMapping; r.toneMappingExposure = 0.95;
+      const sc = new T.Scene();
+      sc.add(new T.HemisphereLight(0xfff4e0, 0x3a2a18, 0.75));
+      const lamp = new T.DirectionalLight(0xffe8c8, 1.3); lamp.position.set(2, 4, 3); sc.add(lamp);
+      studio = { r, sc, cam: new T.PerspectiveCamera(30, 200 / 160, 0.01, 50) };
+    }
+    const { r, sc, cam } = studio;
+    // The models, laid out as on the table: a platoon's bases in a loose triangle, tanks side by side
+    const g = new T.Group();
+    let bases;
+    if (kind === 'mortars' || kind === 'artillery') {
+      const m = kind === 'artillery' ? Models.howitzer(side) : Models.mortar(side);
+      m.scale.setScalar(kind === 'artillery' ? TANKS * 1.7 : MEN * 1.3);
+      bases = [m];
+    } else bases = buildBases(side, kind);
+    const spots = kind === 'company' ? [[-0.11, -0.09], [0.11, -0.07], [0, 0.11]] : PIECES[kind] && PIECES[kind].tank ? [[0, -0.19], [0, 0.19]] : [[0, 0]];
+    bases.forEach((b, i) => { b.position.set(spots[i][0], 0, spots[i][1]); g.add(b); });
+    sc.add(g);
+    // Framed: the camera off the front corner, a little above, backed off to fit it all
+    const box = new T.Box3().setFromObject(g), mid = box.getCenter(new T.Vector3()), size = box.getSize(new T.Vector3()).length();
+    cam.position.set(mid.x + size * 0.95, mid.y + size * 0.6, mid.z + size * 0.75);
+    cam.lookAt(mid);
+    r.render(sc, cam);
+    portraits[key] = r.domElement.toDataURL();
+    sc.remove(g);
+    return portraits[key];
+  }
+
+  // The piece whose model is under a point on the page, either side, or null when the pointer is on no model
+  function pieceUnder(st, clientX, clientY) {
+    const r = renderer.domElement.getBoundingClientRect();
+    ray.setFromCamera(new T.Vector2((clientX - r.left) / r.width * 2 - 1, -(clientY - r.top) / r.height * 2 + 1), camera);
+    const shown = st.units.filter(u => u.x !== null && pieces[u.id] && pieces[u.id].visible);
+    const hits = ray.intersectObjects(shown.map(u => pieces[u.id]), true);
+    if (!hits.length) return null;
+    // Climb from the mesh hit to the piece's own group
+    for (let o = hits[0].object; o; o = o.parent) { const u = shown.find(m => pieces[m.id] === o); if (u) return u; }
+    return null;
+  }
+
   // Where a field's top edge is on the page, for labels
   // Where a piece is on the screen: the middle of its bases, a little above the table
   function pieceScreen(u) {
@@ -1397,5 +1488,5 @@ const Board = (() => {
     return { x: r.left + (p.x + 1) / 2 * r.width, y: r.top + (1 - p.y) / 2 * r.height };
   }
 
-  return { init, resize, render, fieldAt, pieceAt, gunAt, targetAt, screenPoint, pieceScreen, labelBox, clearDice, flyToken, clearToken, returnTokens, canvas: () => renderer.domElement };
+  return { init, resize, render, fieldAt, pieceAt, pieceUnder, portrait, gunAt, targetAt, screenPoint, pieceScreen, labelBox, clearDice, flyToken, clearToken, returnTokens, canvas: () => renderer.domElement };
 })();

@@ -48,6 +48,7 @@ const MOVE_SHOOT_MOVES = 2;      // fields a Move & shoot can cover (Steve: one 
 const CHARGE_MOVES = 3;          // fields a charge can cover
 const CLIMB = 1;                 // extra moves it costs men to climb a hedge bank (tanks drive through; wire stops men)
 const SHAKEN_SHOOT = 1;          // a shaken piece needs one more to hit
+const SHAKEN_MOVE = 0.5;         // a shaken piece still moves and charges, but only half as far (rounded down, at least one field)
 const MAX_NEED = 6;              // a shot that would need more than this can't be taken (Steve: no shooting at 7+)
 const WOUND_CHANCE = 0.5;        // each hit is a coin toss: heads it wounds (a section, a team or a tank lost); every hit shakes
 const QUALITY = { elite: { name: 'Elite', shoot: 1, assault: 1.3, rally: 0.9 }, standard: { name: 'Standard', shoot: 0, assault: 1, rally: 0.7 } };

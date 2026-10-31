@@ -127,8 +127,48 @@ const Sound = (() => {
     for (let k = 0; k < 8; k++) noise(t + 0.25 + Math.random() * 0.9, 0.08, 1800 + Math.random() * 2000, 1, 0.05 * size, 'bandpass');
   }
 
+  // Bombers going over (Steve): a flight of heavy four-engined aircraft droning past high up, from one side of the sky
+  // to the other. Each engine a low buzzing note, all beating against each other, with a rumble of air under them;
+  // swelling as they come over and fading away, the pitch dropping a little as they pass
+  function bombers(t) {
+    const dur = 16 + Math.random() * 6;
+    // Everything goes through one filter (far off: only the low drone carries) and one swell
+    const out = ctx.createGain();
+    out.gain.setValueAtTime(0.0001, t);
+    out.gain.exponentialRampToValueAtTime(1, t + dur * 0.45);
+    out.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    const far = ctx.createBiquadFilter(); far.type = 'lowpass'; far.frequency.value = 420;
+    far.connect(out);
+    // Across the sky, left to right or right to left
+    const pan = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
+    if (pan) {
+      const way = Math.random() < 0.5 ? -1 : 1;
+      pan.pan.setValueAtTime(-0.9 * way, t);
+      pan.pan.linearRampToValueAtTime(0.9 * way, t + dur);
+      out.connect(pan); pan.connect(bus);
+    } else out.connect(bus);
+    // The engines: four planes, four engines each, every one a little off the others' note
+    for (let e = 0; e < 16; e++) {
+      const o = ctx.createOscillator(); o.type = 'sawtooth';
+      const note = 56 + Math.random() * 16;
+      o.frequency.setValueAtTime(note * 1.03, t);
+      o.frequency.linearRampToValueAtTime(note * 0.97, t + dur);
+      const g = ctx.createGain(); g.gain.value = BOMBER_LOUDNESS / 16;
+      o.connect(g); g.connect(far);
+      o.start(t); o.stop(t + dur + 0.1);
+    }
+    // The rumble of the air under them
+    const air = ctx.createBufferSource(); air.buffer = noiseBuf; air.loop = true;
+    const low = ctx.createBiquadFilter(); low.type = 'lowpass'; low.frequency.value = 160;
+    const ag = ctx.createGain(); ag.gain.value = BOMBER_LOUDNESS * 0.8;
+    air.connect(low); low.connect(ag); ag.connect(far);
+    air.start(t); air.stop(t + dur + 0.1);
+  }
+  const BOMBER_LOUDNESS = 0.5;
+
   // Each sound, starting at time t
   const SOUNDS = {
+    bombers,
     // Riflemen: single shots, a few men firing at their own pace
     rifle(t) {
       for (let k = 0; k < 5; k++) {
@@ -231,7 +271,7 @@ const Sound = (() => {
   };
 
   // The far-off battle: now and then guns rumbling, a machine gun, a few rifle shots, far away and muffled
-  let battleTimer = null;
+  let battleTimer = null, bomberTimer = null;
   function startBattle() {
     if (battleTimer) return;
     const next = () => {
@@ -246,6 +286,15 @@ const Sound = (() => {
       bus = master;
     };
     next();
+    // Now and then a flight of bombers goes over (Steve): the first after a little while, then every minute or two
+    const flights = () => {
+      bomberTimer = setTimeout(flights, 50000 + Math.random() * 70000);
+      if (!on || !ctx || ctx.state !== 'running') return;
+      bus = distant.input;
+      bombers(ctx.currentTime + 0.05);
+      bus = master;
+    };
+    bomberTimer = setTimeout(flights, 15000 + Math.random() * 20000);
   }
 
   function play(name, delay = 0, big = false) {
