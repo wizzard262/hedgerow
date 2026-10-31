@@ -69,6 +69,9 @@
   /* The menu that opens by a piece on the table */
   #menu { position: absolute; z-index: 6; min-width: 210px; background: rgba(36,30,23,.97); border: 1px solid var(--accent); border-radius: 8px; padding: 6px; box-shadow: 0 6px 24px rgba(0,0,0,.55); display: flex; flex-direction: column; gap: 4px; }
   #menu[hidden] { display: none; }
+  /* The menu's word-bubble tail, pointing back to the piece */
+  #menu-tail { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 5; pointer-events: none; display: none; overflow: visible; }
+  #menu-tail polygon { fill: rgba(36,30,23,.97); stroke: var(--accent); stroke-width: 1; stroke-linejoin: round; }
   #menu .mhead { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; padding: 2px 4px; border-bottom: 1px dotted var(--line); margin-top: 2px; }
   #menu .mhead span { color: var(--muted); }
   /* State badges: ready to act, done this hour, shaken */
@@ -109,7 +112,7 @@
 <aside id="panel">
   <div class="brand">
   <div class="top">
-    <h1>HEDGEROW <span id="ver" style="font-size:11px;color:var(--muted);letter-spacing:0">v55</span></h1>
+    <h1>HEDGEROW <span id="ver" style="font-size:11px;color:var(--muted);letter-spacing:0">v56</span></h1>
     <div class="links"><button id="sound-btn" title="Sound on or off">🔊</button><button id="help-btn">How to play</button><button id="new-btn">New game</button></div>
   </div>
   <div id="clock"></div>
@@ -125,7 +128,7 @@
 
 </aside>
 
-<main id="board"><div id="label"></div><div id="tip"></div><div id="menu" hidden></div></main>
+<main id="board"><div id="label"></div><div id="tip"></div><svg id="menu-tail"><polygon points="0,0 0,0 0,0"/></svg><div id="menu" hidden></div></main>
 
 <div class="modal" id="ask" hidden>
   <div class="card">
@@ -161,7 +164,7 @@
       <li>🎲 <b>Dice</b>: every shot rolls six-sided dice by the target: 3 or more hits. One more is needed for each of: a target in cover (lining a hedge, in a village or hamlet), long range (beyond the next field), firing on the move, and the shooter being shaken. A shot that would need 7 or more can't be taken: that target gets no red cross-hair. Elite troops need one less; the Panther's armour one more. Bazookas, Panzerschrecks and tank guns kill men with every hit. Every hit pins the target, and a coin toss says whether it wounds as well (a section, a team or a tank lost). A hit on a piece already pinned kills: two pins kill. The last three rolls stay in the target's field, with a tag saying who fired, the score needed and the hits: bright dice hit, dark ones missed.</li>
       <li>🟢 <b>Who can move</b>: a green ring under a piece means it can still move this hour; a piece that has moved is greyed out.</li>
       <li>😵 <b>Shaken</b> (pinned, red ! marker): a piece that is hit is shaken. It can still act, but it needs one more to hit and it can't charge. It recovers if it rests an hour without being hit; it can use its move to try to rally itself (half the time, elite troops more often); or the captain can rally it, up to three fields away. A second pin on a piece already pinned kills: a section, a team or a tank lost.</li>
-      <li>🛡️ <b>In the German hour</b>: when one of your pieces is fired on you can <b>take cover</b>: its men get down where they are (they crouch on the table), and one more is needed to hit it for the rest of that hour. It misses its move next hour, unless the captain gets it up (Rally, up to three fields away).</li>
+      <li>🛡️ <b>In the German hour</b>: when one of your pieces is fired on you can <b>take cover</b>: its men get down where they are (they crouch on the table), and one more is needed to hit it for the rest of that hour. It uses up its move this hour, unless the captain gets it up (Rally, up to three fields away). A piece that has already moved this hour can't take cover.</li>
       <li>🚚 <b>Reinforcements</b> arrive on your west edge: more bazookas, 4th Platoon, a machine gun and replacements. The Germans have a pair of Panzer IVs and a pair of Panthers on the way.</li>
       <li>🧩 <b>The table</b>: 28 mm-style models: four men to a section base, three sections to a platoon; tanks in pairs. The men are bigger models (1:54) than the tanks (1:76), and the houses smaller (1:144), as on many wargame tables.</li>
     </ul>
@@ -171,12 +174,12 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="js/data.js?v=55"></script>
-<script src="js/sim.js?v=55"></script>
-<script src="js/sound.js?v=55"></script>
-<script src="js/models.js?v=55"></script>
-<script src="js/board3d.js?v=55"></script>
-<script src="js/ui.js?v=55"></script>
-<script src="js/main.js?v=55"></script>
+<script src="js/data.js?v=56"></script>
+<script src="js/sim.js?v=56"></script>
+<script src="js/sound.js?v=56"></script>
+<script src="js/models.js?v=56"></script>
+<script src="js/board3d.js?v=56"></script>
+<script src="js/ui.js?v=56"></script>
+<script src="js/main.js?v=56"></script>
 </body>
 </html>

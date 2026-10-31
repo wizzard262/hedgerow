@@ -175,12 +175,16 @@ const Board = (() => {
   function updateSupport(st) {
     if (!support) return;
     const left = { us: { artillery: st.ammo.artillery, mortars: st.ammo.mortars }, de: { artillery: st.deArtilleryAmmo || 0, mortars: st.deMortarAmmo || 0 } };
+    // Which guns have fired this hour, each side
+    const fired = { us: st.fired || {}, de: st.deFired || {} };
     for (const side of ['us', 'de']) for (const which of ['artillery', 'mortars']) {
       const gun = support[side][which], n = left[side][which];
       gun.rounds.forEach((r, k) => { r.visible = k < n; });
       // Out of rounds: the gun isn't on the table this hour (Steve); it comes back when more arrive
       gun.model.visible = n > 0;
       gun.name.visible = n > 0;
+      // Fired this hour: greyed out like a piece that has moved (Steve)
+      greyOut(gun.model, !!fired[side][which]);
     }
   }
 
@@ -467,7 +471,7 @@ const Board = (() => {
     }
     return hatchTex[colour];
   }
-  const MARK = { hatch: '#e8352a', goal: '#3c96ff', assault: '#ff2a1a', cover: '#7dff5a', line: '#7dff5a', move: '#7fc6e0', charge: '#e0705f', shoot: '#e6c95a', rally: '#8fd47a', fire: '#e8a05a', breach: '#c9a46a', attach: '#b9a0e0', select: '#fff6dc', hover: '#ffffff' };
+  const MARK = { hatch: '#e8352a', goal: '#3c96ff', assault: '#ff2a1a', cover: '#7dff5a', line: '#7dff5a', move: '#7fc6e0', charge: '#e0705f', shoot: '#e6c95a', rally: '#8fd47a', fire: '#e8a05a', breach: '#c9a46a', attach: '#b9a0e0', select: '#fff6dc', hover: '#ffffff', blast: '#ff5a1e', splash: '#ff9a3c', reach: '#8fd47a' };
 
   // A coloured square of light on a field, with a brighter rim
   function mark(x, y, kind, inset = 0.05) {
@@ -475,9 +479,10 @@ const Board = (() => {
     const striped = kind === 'hatch' || kind === 'goal';
     const plane = new T.Mesh(new T.PlaneGeometry(1 - inset * 2, 1 - inset * 2), striped
       ? new T.MeshBasicMaterial({ map: hatch(kind === 'goal' ? 'rgba(60,150,255,.9)' : undefined), transparent: true, opacity: 0.8, depthWrite: false })
-      : new T.MeshBasicMaterial({ color: c, transparent: true, opacity: kind === 'hover' ? 0.06 : kind === 'assault' ? 0.32 : 0.16, depthWrite: false }));
+      : new T.MeshBasicMaterial({ color: c, transparent: true, opacity: kind === 'hover' ? 0.06 : kind === 'reach' ? 0.22 : kind === 'blast' ? 0.4 : kind === 'assault' || kind === 'splash' || kind === 'rally' ? 0.32 : 0.16, depthWrite: false }));
     at(plane, x + 0.5, 0.004, y + 0.5, -Math.PI / 2, 0, 0); marks.add(plane);
-    if (kind === 'hover') return;
+    // The pointer's field and the captain's reach are a plain wash, no rim
+    if (kind === 'hover' || kind === 'reach') return;
     const s = 0.5 - inset, pts = [[-s, -s], [s, -s], [s, s], [-s, s], [-s, -s]].map(([a, b]) => new T.Vector3(x + 0.5 + a, 0.006, y + 0.5 + b));
     marks.add(new T.Line(new T.BufferGeometry().setFromPoints(pts), new T.LineBasicMaterial({ color: c, transparent: true, opacity: 0.95 })));
   }
@@ -638,13 +643,33 @@ const Board = (() => {
       // The score and why in a word bubble about three fields away (Steve), so it hides nothing near the target: up the
       // board for a target in the near half, down it for one in the far half, with a line from the tail to the cross-hair
       if (u.needNow) {
-        const farHalf = u.y < ROWS / 2;
-        const anchor = new T.Vector3(p.x, 0.3, Math.max(0.4, Math.min(ROWS - 0.4, p.z + (farHalf ? 2.6 : -2.6))));
+        const { farHalf, anchor } = labelAnchor(u);
         const l = needLabel(u.needNow, u.needWhy || [], !farHalf);
         l.position.copy(anchor); l.renderOrder = 6; marks.add(l);
         marks.add(wedge(anchor, reticleSpot(u), 0.2, lit ? 0xc0261c : 0x961914));
       }
     }
+  }
+
+  // Where a target's score bubble sits: about three fields up the board from a target in the near half, down it in the far half
+  function labelAnchor(u) {
+    const p = pieceCentre(u), farHalf = u.y < ROWS / 2;
+    return { farHalf, anchor: new T.Vector3(p.x, 0.3, Math.max(0.4, Math.min(ROWS - 0.4, p.z + (farHalf ? 2.6 : -2.6)))) };
+  }
+
+  // The box a target's score bubble covers on the page, so the piece menu can keep clear of it
+  function labelBox(u) {
+    const { farHalf, anchor } = labelAnchor(u);
+    const l = needLabel(u.needNow, u.needWhy || [], !farHalf);
+    // The bubble faces the camera: it spreads along the camera's right, and up from its tail (or down, in the far half)
+    camera.updateMatrixWorld();
+    const right = new T.Vector3().setFromMatrixColumn(camera.matrixWorld, 0), up = new T.Vector3().setFromMatrixColumn(camera.matrixWorld, 1);
+    const tall = l.scale.y * (farHalf ? -1 : 1);
+    const corners = [[-0.5, 0], [0.5, 0], [-0.5, 1], [0.5, 1]].map(([a, b]) => anchor.clone().addScaledVector(right, a * l.scale.x).addScaledVector(up, b * tall));
+    const pts = corners.map(v => screenPoint(v.x, v.z, v.y));
+    const xs = pts.map(q => q.x), ys = pts.map(q => q.y);
+    l.material.dispose();
+    return { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) };
   }
 
   // ---------- Shooting on the table ----------
@@ -972,7 +997,7 @@ const Board = (() => {
     return s;
   }
 
-  // view: { spots: [{ x, y, kind }], selected: piece, hover: { x, y } }. dt: seconds since the last frame.
+  // view: { spots: [{ x, y, kind }], selected: piece, hover: { x, y }, blast: [{ x, y, main }] }. dt: seconds since the last frame.
   // Returns true while pieces are still gliding, so the page keeps drawing
   let lastT = 0;
   function render(st, view = {}) {
@@ -986,6 +1011,8 @@ const Board = (() => {
     while (marks.children.length) marks.remove(marks.children[0]);
     if (view.hover) mark(view.hover.x, view.hover.y, 'hover', 0.02);
     for (const s of view.spots || []) mark(s.x, s.y, s.kind);
+    // Where a shot that hits several pieces would land (Steve): the target's field bright, the fields its blast reaches paler
+    for (const b of view.blast || []) mark(b.x, b.y, b.main ? 'blast' : 'splash', 0.03);
     showStand(st, view);
     gunRings(view.guns);
     if (view.selected && view.selected.x !== null && pieces[view.selected.id]) {
@@ -1056,5 +1083,5 @@ const Board = (() => {
     return { x: r.left + (p.x + 1) / 2 * r.width, y: r.top + (1 - p.y) / 2 * r.height };
   }
 
-  return { init, resize, render, fieldAt, pieceAt, gunAt, targetAt, screenPoint, clearDice, flyToken, clearToken, canvas: () => renderer.domElement };
+  return { init, resize, render, fieldAt, pieceAt, gunAt, targetAt, screenPoint, labelBox, clearDice, flyToken, clearToken, canvas: () => renderer.domElement };
 })();

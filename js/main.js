@@ -32,13 +32,31 @@ window.Game = (() => {
     }
   }
 
+  // The fields your shot at the target under the pointer would land on, when it can hit more than one piece:
+  // mortars the whole field, artillery the field and the four next to it, a tank's high explosive at men the whole field
+  function blastFor(shooter, target) {
+    // Nothing under the pointer, or it has left the table
+    if (!target || target.x === null) return [];
+    const mode = UI.view.mode || '';
+    // Mortars or artillery chosen
+    if (mode.startsWith('fire:')) return Sim.shellFields(mode.slice(5), target.x, target.y);
+    // A tank shooting at men: its burst catches every other German piece on foot in that field
+    if (shooter && Sim.isTank(shooter) && !Sim.isTank(target)) return [{ x: target.x, y: target.y, main: true }];
+    // Every other weapon hits only the one piece
+    return [];
+  }
+
   // Draw the table whenever something changed or pieces are still gliding; place the hamlet's name over it
   function frame() {
     if (dirty) {
       const spots = UI.spots();
       let targets = UI.targets();
       // The shooter, for the lines of sight to its targets
-      let shooter = ['shoot', 'halfShot'].includes(UI.view.mode) ? UI.selected() : null, mortarAim = null, aimWhich = null;
+      // (just picked, a piece that can shoot from where it stands shows its targets too)
+      const aiming = ['shoot', 'halfShot'].includes(UI.view.mode) || (UI.view.mode === 'go' && targets.length > 0);
+      let shooter = aiming ? UI.selected() : null, mortarAim = null, aimWhich = null;
+      // The fields a shot that hits more than one piece would land on, shown round its target (Steve)
+      let blast = blastFor(shooter, hotTarget);
       // During the German hour, show who is aiming at whom (Steve): the shooter's field, a line of fire to the target,
       // its red cross-hair with the score needed. German mortars: the line comes from their mortar off the board
       if (st.de && st.de.ask) {
@@ -49,18 +67,22 @@ window.Game = (() => {
           t.needNow = Math.min(6, Sim.needFor(st, s, t) + (Sim.isTank(t) ? PIECES[t.kind].armour : 0));
           t.needWhy = Sim.needWhy(st, s, t);
           shooter = s;
+          // A German tank's high explosive: the whole field
+          blast = Sim.isTank(s) && !Sim.isTank(t) ? [{ x: t.x, y: t.y, main: true }] : [];
         } else {
-          t.needNow = TO_HIT + (Sim.tileType(t.x, t.y) === 'village' ? COVER.village : 0);
-          t.needWhy = [];
+          t.needNow = Sim.shellNeed(st, t);
+          t.needWhy = Sim.shellWhy(st, t);
           mortarAim = t;
           aimWhich = shot.artillery ? 'artillery' : 'mortars';
+          // German guns: the field and the four round it. Their mortar drops on the one piece only
+          blast = shot.artillery ? Sim.shellFields('artillery', t.x, t.y, 'de') : [];
         }
         targets = [t];
       }
       // Green rings under pieces that can still act this hour, grey under those that have
       const ready = st.de || st.won || st.lost ? null : u => Sim.canAct(st, u) || (Sim.canRally(st, u) && Sim.rallyTargets(st, u).length > 0);
       const guns = st.de || st.won || st.lost ? null : UI.supportState();
-      dirty = Board.render(st, { spots, selected: UI.selected(), hover, targets, hotTarget, ready, shooter, mortarAim, aimWhich, guns, fireFrom: (UI.view.mode || '').startsWith('fire:') ? UI.view.mode.slice(5) : null });
+      dirty = Board.render(st, { spots, selected: UI.selected(), hover, targets, hotTarget, ready, shooter, mortarAim, aimWhich, guns, blast, fireFrom: (UI.view.mode || '').startsWith('fire:') ? UI.view.mode.slice(5) : null });
       const p = Board.screenPoint(st.objective.x + 0.5, st.objective.y, 0.35), r = board.getBoundingClientRect();
       Object.assign($('#label').style, { left: p.x - r.left + 'px', top: p.y - r.top + 'px' });
       $('#label').textContent = `🎯 ${st.objective.name}`;
@@ -123,7 +145,7 @@ window.Game = (() => {
   function ask(shot) {
     const t = Sim.unitById(st, shot.target);
     const who = shot.artillery ? 'German artillery ranges on' : shot.mortar ? 'German mortars range on' : `${Sim.unitById(st, shot.shooter).name} opens fire on`;
-    $('#ask-text').innerHTML = `${who} <b>${t.name}</b>. Take cover? Its men get down where they are: one more is needed to hit it for the rest of this round, but it loses its move (this round's if it still has one, otherwise next round's) unless the captain gets it up.`;
+    $('#ask-text').innerHTML = `${who} <b>${t.name}</b>. Take cover? Its men get down where they are: one more is needed to hit it for the rest of this round, but it loses its move this round unless the captain gets it up. (Only a piece that hasn't moved yet can take cover.)`;
     $('#ask').hidden = false;
     changed();
   }
@@ -152,7 +174,13 @@ window.Game = (() => {
     if (aimed && UI.shootTarget(aimed)) { hotTarget = null; changed(); if (st.won || st.lost) showResult(); return; }
     // Your mortars or artillery off the board: choose them like a piece
     const gun = !st.de && Board.gunAt(e.clientX, e.clientY);
-    if (gun) { Sound.play('select'); Board.clearDice(); UI.selectSupport(gun); changed(); return; }
+    if (gun) {
+      Sound.play('select'); Board.clearDice(); UI.selectSupport(gun); changed();
+      // Its menu by the click, with Skip turn (Steve)
+      const r = board.getBoundingClientRect();
+      UI.openGunMenu(gun, e.clientX - r.left, e.clientY - r.top, r);
+      return;
+    }
     const f = Board.fieldAt(e.clientX, e.clientY);
     if (!f) return;
     // The one piece under the pointer (the nearest in the field if the click misses the models)

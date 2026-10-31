@@ -63,6 +63,8 @@ const UI = (() => {
     const marked = uniq(list).map(p => Object.assign(p, { kind: view.mode === 'charge' && Sim.at(st, p.x, p.y, 'de').length ? 'assault' : kind }));
     // Charging: its own field is marked too, to go and line another of its hedges (the old Line a hedge, Steve: implicit)
     if (view.mode === 'charge' && Sim.canAct(st, u) && Sim.lineSides(st, u).length) marked.push({ x: u.x, y: u.y, kind: 'line' });
+    // Rallying: every field the captain's voice reaches, faintly, round the pieces he can rally (Steve)
+    if (view.mode === 'rally') marked.push(...rallyReach(u, marked));
     // A rifle platoon that can reach the village to take: that field in blue hatching (Steve), so it's clear
     if (u.kind === 'company' && ['charge', 'moveShoot'].includes(view.mode)) {
       for (const p of marked) if (p.x === st.objective.x && p.y === st.objective.y && p.kind !== 'line') p.kind = 'goal';
@@ -77,9 +79,8 @@ const UI = (() => {
     if (view.mode && view.mode.startsWith('fire:')) {
       const inReach = st.units.filter(t => t.side === 'de' && t.x !== null && Sim.canCallFire(st, t.x, t.y));
       return inReach.map(t => {
-        const inVillage = Sim.tileType(t.x, t.y) === 'village';
-        t.needNow = TO_HIT + (inVillage ? COVER.village : 0);
-        t.needWhy = inVillage ? [`−${COVER.village} cover`] : [];
+        t.needNow = Sim.shellNeed(st, t);
+        t.needWhy = Sim.shellWhy(st, t);
         // Artillery: your own pieces in a field next to it would be in the blast
         const friendsNear = view.mode === 'fire:artillery' && st.units.some(f => f.side === 'us' && f.x !== null && Math.abs(f.x - t.x) + Math.abs(f.y - t.y) === 1);
         if (friendsNear) t.needWhy = t.needWhy.concat(['⚠ your men in the blast']);
@@ -87,13 +88,31 @@ const UI = (() => {
       });
     }
     const u = selected();
-    if (!u || !['shoot', 'halfShot'].includes(view.mode)) return [];
+    if (!u) return [];
+    // Just picked and it can shoot from where it stands (Steve): its targets show straight away, a click fires
+    const shootFromHere = view.mode === 'go' && Sim.canAct(st, u) && actionButtonsFor(u).some(a => a.mode === 'shoot' && a.ok);
+    if (!['shoot', 'halfShot'].includes(view.mode) && !shootFromHere) return [];
     const moving = view.mode === 'halfShot';
     return Sim.targets(st, u, moving).map(t => {
       t.needNow = Math.min(6, Sim.needFor(st, u, t, moving) + (Sim.isTank(t) ? PIECES[t.kind].armour : 0));
       t.needWhy = Sim.needWhy(st, u, t, moving);
       return t;
     });
+  }
+
+  // The fields within RALLY_RANGE of the captain (counted along the fields, as the rule does), less those already marked
+  function rallyReach(cap, marked) {
+    const reach = [];
+    for (let y = cap.y - RALLY_RANGE; y <= cap.y + RALLY_RANGE; y++) {
+      for (let x = cap.x - RALLY_RANGE; x <= cap.x + RALLY_RANGE; x++) {
+        // Off the table, or further than he reaches
+        if (!Sim.inside(x, y) || Math.abs(x - cap.x) + Math.abs(y - cap.y) > RALLY_RANGE) continue;
+        // A piece he can rally there is marked already
+        if (marked.some(p => p.x === x && p.y === y)) continue;
+        reach.push({ x, y, kind: 'reach' });
+      }
+    }
+    return reach;
   }
 
   // Fire on a target chosen by its red cross-hair
@@ -127,8 +146,10 @@ const UI = (() => {
     if (st.won || st.lost || st.de) return null;
     const u = selected();
     let spot = spots().find(p => p.x === x && p.y === y);
-    // Both ways shown: a click on a field where more of your pieces stand picks one of them instead
-    if (view.mode === 'go' && spot && spot.kind !== 'assault' && Sim.at(st, x, y, 'us').some(o => o !== u)) spot = null;
+    // Both ways shown: a click on a field where another of your pieces can still act picks it instead.
+    // Pieces there that have already moved are only in the way of the eye: the click moves in beside them (Steve)
+    const readyThere = Sim.at(st, x, y, 'us').some(o => o !== u && Sim.canAct(st, o));
+    if (view.mode === 'go' && spot && spot.kind !== 'assault' && readyThere) spot = null;
     // Which action the click means
     const how = view.mode === 'go' && spot ? spot.act : view.mode;
     let r = null;
@@ -167,7 +188,8 @@ const UI = (() => {
     for (const u of pieces) {
       const state = u.down && u.acted ? '<span class="pill bad">Taking cover</span>' : u.shocked ? '<span class="pill bad">Shaken</span>' : u.acted ? '<span class="pill done">✓ Moved this hour</span>' : '<span class="pill ready">Ready</span>';
       menu.append(el('div', 'mhead', `<b>${u.name}${u.quality === 'elite' ? ' ★' : ''}</b><span>${state}</span>`));
-      const acts = actionButtons(u);
+      // Charge, Move & shoot and Shoot are done by clicking the lit fields and red targets, so the menu leaves them out (Steve)
+      const acts = actionButtons(u).filter(a => !['charge', 'moveShoot', 'shoot'].includes(a.mode));
       for (const a of acts) {
         const b = el('button', '', a.label);
         b.disabled = !a.ok; b.title = a.title || '';
@@ -188,12 +210,103 @@ const UI = (() => {
       }
     }
     menu.hidden = false;
-    // Keep the menu inside the table's box
-    const w = menu.offsetWidth, h = menu.offsetHeight;
-    menu.style.left = Math.max(6, Math.min(box.width - w - 6, left + 12)) + 'px';
-    menu.style.top = Math.max(6, Math.min(box.height - h - 6, top + 12)) + 'px';
+    placeMenu(menu, left, top, box);
   }
-  function closeMenu() { const m = document.querySelector('#menu'); if (m) m.hidden = true; }
+  // The menu by one of your guns on the table (Steve): its name and state, and Skip turn. Firing is a click on a red target
+  function openGunMenu(which, left, top, box) {
+    const menu = document.querySelector('#menu');
+    menu.innerHTML = '';
+    // Its state: ready, out of rounds, or already fired this hour
+    const state = canFire(which) ? '<span class="pill ready">Ready</span>' : st.ammo[which] <= 0 ? '<span class="pill bad">No rounds</span>' : '<span class="pill done">✓ Fired this hour</span>';
+    menu.append(el('div', 'mhead', `<b>${which === 'mortars' ? '💥 US mortars' : '💣 US artillery'}</b><span>${state}</span>`));
+    // Skip turn: hold fire this round, using the token
+    const skip = el('button', '', '⏭️ Skip turn');
+    skip.disabled = !canFire(which);
+    skip.onclick = ev => { ev.stopPropagation(); skipGun(which); closeMenu(); };
+    menu.append(skip);
+    // Ready: say how to fire
+    if (canFire(which)) menu.append(el('div', 'mnote', 'Click a red target to fire'));
+    menu.hidden = false;
+    placeMenu(menu, left, top, box);
+  }
+
+  // A gun holds fire this round, using the token (from its menu or the panel)
+  function skipGun(which) {
+    const r = Sim.skipSupport(st, which);
+    if (r.ok) view.log.push(...r.lines);
+    view.mode = null;
+    refresh();
+  }
+
+  function closeMenu() {
+    const m = document.querySelector('#menu'); if (m) m.hidden = true;
+    const tail = document.querySelector('#menu-tail'); if (tail) tail.style.display = 'none';
+  }
+
+  // Put the menu where it covers none of the fields you can move to or shoot at (Steve), trying spots round the
+  // piece nearest first, and point a word-bubble tail from it back to the piece
+  function placeMenu(menu, left, top, box) {
+    const w = menu.offsetWidth, h = menu.offsetHeight;
+    // What it must not cover: each lit field, and the piece itself
+    const blocked = litFieldRects(box);
+    blocked.push({ x: left - 20, y: top - 20, w: 40, h: 40 });
+    // Spots round the piece: right, left, below, above, then the corners, each a little further out if they're all taken
+    let best = null;
+    for (const gap of [24, 90, 180, 300]) {
+      const tries = [[left + gap, top - h / 2], [left - gap - w, top - h / 2], [left - w / 2, top + gap], [left - w / 2, top - gap - h],
+        [left + gap, top + gap], [left - gap - w, top + gap], [left + gap, top - gap - h], [left - gap - w, top - gap - h]];
+      for (const [x, y] of tries) {
+        // Kept inside the table's box
+        const spot = { x: Math.max(6, Math.min(box.width - w - 6, x)), y: Math.max(6, Math.min(box.height - h - 6, y)), w, h };
+        const covered = blocked.reduce((sum, b) => sum + overlap(spot, b), 0);
+        if (!best || covered < best.covered) best = { ...spot, covered };
+        if (!covered) break;
+      }
+      if (!best.covered) break;
+    }
+    menu.style.left = best.x + 'px';
+    menu.style.top = best.y + 'px';
+    drawTail(best, left, top);
+  }
+
+  // The fields lit up for the chosen piece (moves, charges, targets) and the targets' score bubbles, as boxes on the
+  // screen inside the table's box
+  function litFieldRects(box) {
+    const aims = targets();
+    const fields = spots().concat(aims).map(f => {
+      // The field's four corners on the table, seen through the camera
+      const corners = [[0, 0], [1, 0], [1, 1], [0, 1]].map(([dx, dy]) => Board.screenPoint(f.x + dx, f.y + dy));
+      const xs = corners.map(p => p.x - box.left), ys = corners.map(p => p.y - box.top);
+      return { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) };
+    });
+    // Each target's score bubble, moved into the table's box
+    const bubbles = aims.filter(t => t.needNow).map(t => Board.labelBox(t)).map(b => ({ ...b, x: b.x - box.left, y: b.y - box.top }));
+    return fields.concat(bubbles);
+  }
+
+  // How much of two boxes overlap (an area in pixels)
+  function overlap(a, b) {
+    const across = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
+    const down = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
+    return across > 0 && down > 0 ? across * down : 0;
+  }
+
+  // The bubble's tail: a triangle from the menu's nearest edge to the piece, drawn under the menu so they join up
+  function drawTail(m, px, py) {
+    const tail = document.querySelector('#menu-tail');
+    // The point on the menu's edge nearest the piece
+    const ex = Math.max(m.x, Math.min(m.x + m.w, px)), ey = Math.max(m.y, Math.min(m.y + m.h, py));
+    // Clicked on the menu's own spot: no tail needed
+    if (Math.hypot(px - ex, py - ey) < 8) { tail.style.display = 'none'; return; }
+    // The tail's base runs along that edge, a little inside the menu so no seam shows
+    const sideways = ex === m.x || ex === m.x + m.w;
+    const half = 14, inset = 3;
+    const baseX = sideways ? ex + (ex === m.x ? inset : -inset) : Math.max(m.x + half + 8, Math.min(m.x + m.w - half - 8, ex));
+    const baseY = sideways ? Math.max(m.y + half + 8, Math.min(m.y + m.h - half - 8, ey)) : ey + (ey === m.y ? inset : -inset);
+    const a = sideways ? [baseX, baseY - half] : [baseX - half, baseY], b = sideways ? [baseX, baseY + half] : [baseX + half, baseY];
+    tail.querySelector('polygon').setAttribute('points', `${a.join(',')} ${px},${py} ${b.join(',')}`);
+    tail.style.display = 'block';
+  }
 
   // ---------- The left-hand panel ----------
 
@@ -250,7 +363,10 @@ const UI = (() => {
       const status = canFire(which) ? '<span class="pill ready">Ready</span>' : st.ammo[which] <= 0 ? '<span class="pill bad">No rounds</span>' : '<span class="pill done">✓ Fired this hour</span>';
       box.append(el('div', 'name', which === 'mortars' ? '💥 US mortars' : '💣 US artillery'));
       box.append(el('div', 'sub', `${S.name}, off the board`));
-      box.append(el('div', 'stats', [`${st.ammo[which]} rounds left`, `🎲 ${S.dice} dice on a field your troops can see${S.splash ? `, ${S.splash} on each field round it (yours too)` : ''}`, status].map(s => `<span>${s}</span>`).join('')));
+      // What a mission does, one fact a line (Steve): where it can fire, the dice on the field, and the blast round it
+      const does = [`${st.ammo[which]} rounds left`, '🎯 Fires on a field your troops can see', `🎲 ${S.dice} dice on each German piece there`];
+      if (S.splash) does.push(`💥 ${S.splash} die on every piece in the 4 fields next to it, including your own`);
+      box.append(el('div', 'stats', [...does, status].map(s => `<span>${s}</span>`).join('')));
       const acts = el('div'); acts.id = 'actions';
       const fire = el('button', view.mode === 'fire:' + which ? 'on' : '', '🎯 Fire');
       fire.disabled = !canFire(which);
@@ -259,7 +375,7 @@ const UI = (() => {
       // Skip turn (Steve): hold fire this round, using the token
       const skip = el('button', '', '⏭️ Skip turn');
       skip.disabled = !canFire(which);
-      skip.onclick = () => { const r = Sim.skipSupport(st, which); if (r.ok) view.log.push(...r.lines); view.mode = null; refresh(); };
+      skip.onclick = () => skipGun(which);
       acts.append(skip);
       box.append(acts);
       return;
@@ -268,7 +384,7 @@ const UI = (() => {
       box.innerHTML = '<div class="sub">Click one of your pieces on the table.</div>';
       return;
     }
-    const strength = u.kind === 'company' ? `${u.platoons} section${u.platoons > 1 ? 's' : ''} (${u.platoons * 4} men)` : Sim.isTank(u) ? `${u.platoons} tank${u.platoons > 1 ? 's' : ''}` : '';
+    const strength = u.kind === 'company' ? `${u.platoons} section${u.platoons > 1 ? 's' : ''} (${u.platoons * 4} men)` : Sim.isTank(u) ? `${u.platoons} tank${u.platoons > 1 ? 's' : ''}` : PIECES[u.kind].men ? `${PIECES[u.kind].men} men` : '';
     const f = Sim.firepower(st, u);
     const dice = `🎲 ${Math.round(f.soft * 10) / 10} dice vs men${f.hard ? `, ${Math.round(f.hard * 10) / 10} vs tanks` : ''}`;
     const status = u.down && u.acted ? '<span class="pill bad">Taking cover: the captain can get it up</span>' : u.shocked ? '<span class="pill bad">Shaken: −1 to hit, no charging</span>' : u.acted ? '<span class="pill done">✓ Moved this hour</span>' : '<span class="pill ready">Ready</span>';
@@ -292,7 +408,8 @@ const UI = (() => {
       : view.mode.startsWith('fire:') ? 'Click a red target, or a field with Germans your troops can see.'
       : view.mode === 'halfShot' ? 'Moved. Click a red target to fire on it (one more needed on the move), or Esc to hold fire.'
       : view.mode === 'shoot' ? 'Click a red target to fire on it. Esc cancels.'
-      : view.mode === 'go' ? 'Red hatching: Move & shoot. Other marked fields: Charge. Blue: the village. Click where in the field to stand: a corner, an edge (lining its hedge) or the middle. Or use the menu.'
+      : view.mode === 'rally' ? `Bright green: pieces he can rally; click one. Pale green: how far he reaches (${RALLY_RANGE} fields). Esc cancels.`
+      : view.mode === 'go' ? `${targets().length ? 'Red targets: shoot from here. ' : ''}Red hatching: Move & shoot. Other marked fields: Charge. Blue: the village. Click where in the field to stand: a corner, an edge (lining its hedge) or the middle. Or use the menu.`
       : view.mode === 'charge' ? 'Blue hatching: the village to take. Click where in a field to go: by a hedge to line it (green: cover), or the middle for the open. Bright red fields are held by the Germans: a hand-to-hand fight. Its own field (green): line another hedge. Esc cancels.'
       : view.mode === 'moveShoot' ? `Click where in a red-hatched field to go (by a hedge to line it, green: cover): ${u ? u.name : 'the piece'} moves there and can fire. Esc cancels.`
       : `Click a highlighted field for ${u ? u.name : 'the piece'}. Esc cancels.`;
@@ -333,5 +450,5 @@ const UI = (() => {
     refresh = onChange;
   }
 
-  return { init, setState, update, clickField, openMenu, closeMenu, spots, targets, shootTarget, view, selected, selectSupport, supportState, flyToken, KIND };
+  return { init, setState, update, clickField, openMenu, openGunMenu, closeMenu, spots, targets, shootTarget, view, selected, selectSupport, supportState, flyToken, KIND };
 })();

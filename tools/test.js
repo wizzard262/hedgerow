@@ -443,6 +443,8 @@ check('artillery can hit your own pieces round the target', () => {
   const r = Sim.actFire(st, 'artillery', 3, 6);
   assert(r.ok, 'the artillery could not fire');
   assert(st.fx.some(f => f.to && f.to.id === 'B'), 'the shells round the target missed your own platoon');
+  // Every shell, even on an empty field, flies from our own guns
+  assert(st.fx.filter(f => f.kind === 'shell').every(f => f.side === 'us'), 'a shell from our artillery came from the German guns');
 });
 
 check('a shot that would need 7 or more cannot be taken', () => {
@@ -492,6 +494,17 @@ check('the German artillery shells Americans it can see, clear of its own men, a
   for (let r = Sim.germanStep(st); !r.done; r = Sim.germanStep(st)) Sim.answer(st, false);
   assert(st.deArtilleryAmmo === before - 1, 'the German artillery did not fire');
   assert(st.fx.some(f => f.support === 'artillery' && f.side === 'de'), 'no German shells landed');
+  // Every German shell, even on an empty field round the target, flies from the German guns (Steve)
+  assert(st.fx.filter(f => f.kind === 'shell').every(f => f.side === 'de'), 'a German shell came from the American guns');
+});
+
+check('only a piece that has not moved this round can take cover', () => {
+  const st = Sim.newGame(3);
+  const B = Sim.unitById(st, 'B');
+  B.acted = false; B.down = false; B.spentNext = false;
+  assert(Sim.canReact(st, B), 'a piece that had not moved could not take cover');
+  B.acted = true;
+  assert(!Sim.canReact(st, B), 'a piece that had moved could still take cover');
 });
 
 check('nine places in a field: corners line both hedges; two pieces never share a place', () => {
@@ -562,6 +575,46 @@ check('out of rounds, a gun leaves the bag; any piece can skip its turn', () => 
     const u = st.units.find(o => o.side === 'us' && Sim.canAct(st, o));
     assert(Sim.actSkip(st, u).ok && u.acted && Sim.activationOver(st), 'skipping a turn did not use the token');
   }
+});
+
+check('a shot label adds up: the 3+ start, then each cover named on its own, to the score the dice need', () => {
+  // The score a label's reasons add up to: the start, plus each − reason, less each + reason
+  const labelSum = why => why.reduce((n, w) => {
+    const m = /^([−+])(\d+) /.exec(w);
+    if (!m) return n;
+    return m[1] === '−' ? n + Number(m[2]) : n - Number(m[2]);
+  }, TO_HIT);
+  let checked = 0;
+  for (let seed = 1; seed <= 15; seed++) {
+    const st = Sim.newGame(seed);
+    // Some German pieces down in cover, so that reason shows up too
+    st.units.filter(u => u.side === 'de').forEach((u, i) => { u.down = i % 3 === 0; });
+    for (const u of st.units.filter(o => o.side === 'us' && o.x !== null)) {
+      for (const t of Sim.targets(st, u)) {
+        const why = Sim.needWhy(st, u, t);
+        const need = Sim.needFor(st, u, t) + (Sim.isTank(t) ? PIECES[t.kind].armour : 0);
+        assert(!why.some(w => /^−\d+ cover$/.test(w)), `seed ${seed}: a lumped "cover" reason: ${why.join(', ')}`);
+        if (!why.length) { assert(need === TO_HIT, `seed ${seed}: ${u.name} → ${t.name} needs ${need}+ with no reasons`); continue; }
+        assert(why[0] === `${TO_HIT}+ start`, `seed ${seed}: the label does not start from ${TO_HIT}+: ${why.join(', ')}`);
+        if (!PIECES[u.kind].sniper) assert(labelSum(why) === need, `seed ${seed}: ${u.name} → ${t.name} needs ${need}+ but the label says ${why.join(', ')}`);
+        checked++;
+      }
+    }
+  }
+  assert(checked > 20, `only ${checked} labelled shots were checked`);
+});
+
+check('mortars land on the one field, artillery on it and the four next to it; men down in cover need one more', () => {
+  const st = Sim.newGame(3);
+  assert(Sim.shellFields('mortars', 4, 4).length === 1, 'mortars reached past the target field');
+  const guns = Sim.shellFields('artillery', 4, 4);
+  assert(guns.length === 5 && guns.filter(f => f.main).length === 1 && guns[0].x === 4 && guns[0].y === 4, 'artillery did not cover the field and the four next to it');
+  assert(Sim.shellFields('artillery', 0, 0).length === 3, 'artillery in a corner reached off the board');
+  const t = st.units.find(u => u.side === 'de' && u.x !== null && Sim.tileType(u.x, u.y) !== 'village');
+  t.down = false;
+  assert(Sim.shellNeed(st, t) === TO_HIT && !Sim.shellWhy(st, t).length, 'shells on men in the open needed more than the start');
+  t.down = true;
+  assert(Sim.shellNeed(st, t) === TO_HIT + TAKE_COVER && Sim.shellWhy(st, t).includes(`−${TAKE_COVER} taking cover`), 'shells ignored men down in cover');
 });
 
 check('leaving everything alone never wins', () => {

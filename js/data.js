@@ -69,11 +69,11 @@ const PIECES = {
   firefly:  { name: 'Firefly section', soft: 1, hard: 2, tank: true, armour: 0, cutter: true },
   pz4:      { name: 'Panzer IV section', soft: 1.5, hard: 1.5, tank: true, armour: 0, cutter: true },
   panther:  { name: 'Panther section', soft: 1.5, hard: 3, tank: true, armour: 1, cutter: true },
-  mg:       { name: 'MG team', soft: 5, hard: 0, team: true },          // machine guns fire 5 dice (Steve)
-  bazooka:  { name: 'Bazooka team', soft: 0, hard: 2, team: true },
-  sniper:   { name: 'Sniper team', soft: 1, hard: 0, team: true, sniper: true },   // sees the whole board, ignores cover and range (Steve)
-  mg42:     { name: 'MG 42 team', soft: 5, hard: 0, team: true },
-  schreck:  { name: 'Panzerschreck team', soft: 0, hard: 2.5, team: true },
+  mg:       { name: 'MG team', soft: 5, hard: 0, team: true, men: 3 },        // machine guns fire 5 dice (Steve)
+  bazooka:  { name: 'Bazooka team', soft: 0, hard: 2, team: true, men: 2 },
+  sniper:   { name: 'Sniper team', soft: 1, hard: 0, team: true, sniper: true, men: 2 },   // the sniper and his spotter (Steve: a two-man team); sees the whole board, ignores cover and range (Steve)
+  mg42:     { name: 'MG 42 team', soft: 5, hard: 0, team: true, men: 3 },
+  schreck:  { name: 'Panzerschreck team', soft: 0, hard: 2.5, team: true, men: 2 },
   pak:      { name: 'PaK 40 gun', soft: 0.5, hard: 3, team: true, fixed: true },
   captain:  { name: 'Captain', soft: 1, hard: 0 },   // his HQ's carbines and submachine guns (Steve: he can shoot)
 };
@@ -99,7 +99,7 @@ const US_START = [
   { id: 'T2', kind: 'firefly', name: 'Firefly pair', x: 0, y: 3 },
   { id: 'mg1', kind: 'mg', name: 'MG Team 1', x: 1, y: 4 },
   { id: 'bz1', kind: 'bazooka', name: 'Bazooka Team 1', x: 0, y: 5 },
-  { id: 'sn1', kind: 'sniper', name: 'Sniper', x: 0, y: 1 },
+  { id: 'sn1', kind: 'sniper', name: 'Sniper Team', x: 0, y: 1 },
 ];
 // The Germans: a garrison already dug in round the objective, the rest marching up from the east to their posts.
 // Posts are given from the objective (dx, dy); garrison pieces start at theirs
