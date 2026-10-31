@@ -70,22 +70,22 @@ const Board = (() => {
       for (const which of ['artillery', 'mortars']) {
         const spot = GUNS[side][which];
         const model = which === 'artillery' ? Models.howitzer(side) : Models.mortar(side);
-        model.scale.setScalar(which === 'artillery' ? TANKS * 1.3 : MEN);
+        model.scale.setScalar(which === 'artillery' ? TANKS * 1.7 : MEN * 1.3);
         built.add(at(model, spot.x, 0, spot.z, 0, gunFacing(side), 0));
         // The pile of rounds beside it: shells standing in rows of three, mortar bombs lying in rows of four
         const rounds = [];
         for (let k = 0; k < PILE_MAX; k++) {
           const r = Models.round(which === 'artillery' ? 'shell' : 'bomb');
-          r.scale.setScalar(which === 'artillery' ? TANKS * 1.3 : MEN);
-          const perRow = which === 'artillery' ? 3 : 4, gap = which === 'artillery' ? 0.055 : 0.06;
+          r.scale.setScalar(which === 'artillery' ? TANKS * 1.7 : MEN * 1.3);
+          const perRow = which === 'artillery' ? 3 : 4, gap = which === 'artillery' ? 0.07 : 0.075;
           built.add(at(r, spot.pile + (k % perRow) * gap, which === 'artillery' ? 0 : 0.02, spot.z - 0.12 + Math.floor(k / perRow) * gap));
           rounds.push(r);
         }
         // Its name, small, on the table in front
         const name = word(GUN_NAMES[side][which], '#efe6d2', false);
-        name.scale.multiplyScalar(0.5);
+        name.scale.multiplyScalar(0.85);
         name.material.depthTest = true;
-        name.position.set(spot.x + (side === 'us' ? 0.25 : -0.25), 0.05, spot.z + 0.42);
+        name.position.set(spot.x + (side === 'us' ? 0.3 : -0.3), 0.05, spot.z + 0.45);
         built.add(name);
         support[side][which] = { model, rounds };
       }
@@ -334,6 +334,8 @@ const Board = (() => {
       const g = u.x === null ? pieces[u.id] : model(u);
       const h = holding(u.id);
       if (g) { g.visible = h ? h.visible : u.x !== null; greyOut(g, u.side === 'us' && u.acted); }
+      // Taking cover: every figure crouches (tanks stay as they are)
+      if (g && !Sim.isTank(u)) for (const b of g.userData.bases) b.scale.y = b.scale.x * (u.down ? 0.6 : 1);
       // A piece that has changed field: men run, tanks rumble (each sound once a frame, however many moved)
       const where = u.x === null ? null : u.x + ',' + u.y;
       if (g && g.userData.field !== undefined && g.userData.field !== where && where) { if (Sim.isTank(u)) drove = true; else ran = true; g.userData.newTrail = u.trail || []; }
@@ -597,7 +599,7 @@ const Board = (() => {
   // high and drop steeply, artillery shells on a long arc
   function shellAt(f, to, p) {
     const from = muzzle(f), far = Math.hypot(to.x - from.x, to.z - from.z);
-    const high = f.support === 'artillery' ? 1.6 + far * 0.12 : 2.6 + far * 0.1;
+    const high = f.support === 'artillery' ? 1.2 + far * 0.1 : 1.8 + far * 0.08;
     return new T.Vector3(T.MathUtils.lerp(from.x, to.x, p), T.MathUtils.lerp(from.y, 0.05, p) + high * 4 * p * (1 - p), T.MathUtils.lerp(from.z, to.z, p));
   }
 
@@ -684,7 +686,7 @@ const Board = (() => {
         });
         const rt = lt - n * 0.14 - 0.1;
         if (f.result && rt > 0 && rt < 1.6) {
-          const w = add(word((f.pulled ? 'Pulled back · ' : '') + f.result, RESULT_COLOUR[f.result] || '#ffffff', true));
+          const w = add(word((f.tookCover ? 'Took cover · ' : '') + f.result, RESULT_COLOUR[f.result] || '#ffffff', true));
           w.material.opacity = Math.min(1, 2 * (1.6 - rt));
           w.position.set(to.x, 0.75 + rt * 0.15, to.z);
         }

@@ -322,7 +322,7 @@ const Sim = (() => {
   // withdraw: the target spends a point to try to pull back: if it works it takes half the hits and falls back a field
   // The score each die needs: TO_HIT, plus cover and range, plus one on the move, less one for elite troops
   function needFor(st, shooter, target, moving = false) {
-    return TO_HIT + cover(st, shooter, target) + (moving ? ON_THE_MOVE : 0) + (shooter.shocked ? SHAKEN_SHOOT : 0) - QUALITY[shooter.quality || 'standard'].shoot;
+    return TO_HIT + cover(st, shooter, target) + (moving ? ON_THE_MOVE : 0) + (shooter.shocked ? SHAKEN_SHOOT : 0) + (target.down ? TAKE_COVER : 0) - QUALITY[shooter.quality || 'standard'].shoot;
   }
 
   // Why a shot needs what it needs, for the label on the target (Steve): each thing that makes it harder (−) or easier (+)
@@ -333,6 +333,7 @@ const Sim = (() => {
     const t = tileType(target.x, target.y);
     const covers = (s ? s.cover - (far ? LONG_RANGE : 0) : 0) + (COVER[t] || 0);
     if (covers > 0) why.push(`−${covers} cover`);
+    if (target.down) why.push(`−${TAKE_COVER} taking cover`);
     if (far) why.push(`−${LONG_RANGE} long range`);
     if (moving) why.push(`−${ON_THE_MOVE} moving`);
     if (shooter.shocked) why.push(`−${SHAKEN_SHOOT} shaken`);
@@ -344,6 +345,8 @@ const Sim = (() => {
   // `blast` is set for the other pieces caught in a tank's high-explosive burst (they don't spread it again)
   function fireAt(st, shooter, target, power, withdraw = false, moving = false, blast = false) {
     const f = firepower(st, shooter);
+    // Taking cover happens before the dice roll: its men are already down
+    const pre = withdraw ? takeCover(st, target) : null;
     const need = needFor(st, shooter, target, moving);
     const faces = [];
     let softHits, hardHits;
@@ -357,8 +360,6 @@ const Sim = (() => {
     }
     // Where the target stood, so its dice still land there if it is wiped out
     const stood = { x: target.x, y: target.y };
-    const pre = withdraw ? pullBack(st, target, shooter) : null;
-    if (pre && pre.ok) { softHits = Math.floor(softHits * WITHDRAW.keep); hardHits = Math.floor(hardHits * WITHDRAW.keep); }
     const before = { strength: target.platoons, shocked: target.shocked };
     const out = (pre ? [pre.line] : []).concat(damage(st, target, softHits, hardHits));
     // In a word, what the shot did, for the words that float up off the target
@@ -368,7 +369,7 @@ const Sim = (() => {
       : target.shocked && !before.shocked ? 'Pinned' : softHits + hardHits ? 'No effect' : 'Missed';
     // What the table shows: the weapon's muzzle flash and tracers from the shooter, and what lands on the target
     const weapon = isTank(shooter) || shooter.kind === 'pak' ? 'gun' : shooter.kind === 'mg' || shooter.kind === 'mg42' ? 'mg' : shooter.kind === 'bazooka' || shooter.kind === 'schreck' ? 'rocket' : 'rifle';
-    st.fx.push({ from: { id: shooter.id, x: shooter.x, y: shooter.y }, to: { id: target.id }, weapon, armour: isTank(target), x: target.x === null ? stood.x : target.x, y: target.x === null ? stood.y : target.y, kind: softHits + hardHits ? 'hit' : 'miss', faces, need: Math.min(6, need + (isTank(target) ? PIECES[target.kind].armour : 0)), side: shooter.side, result, pulled: !!(pre && pre.ok) });
+    st.fx.push({ from: { id: shooter.id, x: shooter.x, y: shooter.y }, to: { id: target.id }, weapon, armour: isTank(target), x: target.x === null ? stood.x : target.x, y: target.x === null ? stood.y : target.y, kind: softHits + hardHits ? 'hit' : 'miss', faces, need: Math.min(6, need + (isTank(target) ? PIECES[target.kind].armour : 0)), side: shooter.side, result, tookCover: !!pre });
     // A tank firing high explosive at men hits the whole field, like a mortar: every other piece on foot in it rolls too
     if (isTank(shooter) && !isTank(target) && !blast) {
       for (const other of at(st, stood.x, stood.y, target.side)) {
@@ -379,19 +380,17 @@ const Sim = (() => {
     return out.length ? out : [`${target.name}: no hits`];
   }
 
-  // A piece fired on tries to pull back: it gives up its move for the next hour, it works on a chance by its quality,
-  // and it falls back a field away from the fire
-  function pullBack(st, u, from) {
+  // A piece fired on takes cover (Steve): no moving back, its men get down where they are. One more is needed to hit it
+  // for the rest of the German hour, and it misses its move next hour unless the captain gets it up
+  function takeCover(st, u) {
     u.spentNext = true;
-    if (st.rand() >= WITHDRAW[u.quality || 'standard']) return { ok: false, line: `${u.name} tries to pull back but is pinned` };
-    const spot = retreatSpot(st, u, from);
-    if (spot) step(st, u, spot.x, spot.y);
-    return { ok: true, line: `${u.name} pulls back${spot ? '' : ' into cover'}` };
+    u.down = true;
+    return { line: `${u.name} takes cover` };
   }
 
-  // Can this piece react now: an American piece that hasn't already given up its next move
+  // Can this piece react now: an American piece not already down in cover
   function canReact(st, u) {
-    return u.side === 'us' && u.x !== null && u.kind !== 'captain' && !PIECES[u.kind].fixed && !u.spentNext;
+    return u.side === 'us' && u.x !== null && u.kind !== 'captain' && !PIECES[u.kind].fixed && !u.spentNext && !u.down;
   }
 
   // Pieces a shooter could fire at: enemies next to it (across any hedge) or two fields away along a clear line, that its side can see
@@ -751,7 +750,9 @@ const Sim = (() => {
 
   // Shocked friendly pieces a captain can reach
   function rallyTargets(st, cap) {
-    return st.units.filter(t => t.side === cap.side && t.x !== null && t.shocked && Math.abs(t.x - cap.x) + Math.abs(t.y - cap.y) <= RALLY_RANGE);
+    // Shaken pieces, and pieces down in cover missing this hour, up to RALLY_RANGE fields away
+    const needsHim = t => t.shocked || (t.down && t.acted);
+    return st.units.filter(t => t.side === cap.side && t.x !== null && t !== cap && needsHim(t) && Math.abs(t.x - cap.x) + Math.abs(t.y - cap.y) <= RALLY_RANGE);
   }
 
   // A shaken piece uses its move to try to pull itself together (Steve: pieces can rally themselves)
@@ -769,9 +770,19 @@ const Sim = (() => {
   function actRally(st, cap, target) {
     if (!canAct(st, cap) || cap.kind !== 'captain' || !rallyTargets(st, cap).includes(target)) return { ok: false };
     spend(st, cap);
-    const ok = st.rand() < QUALITY[target.quality || 'standard'].rally;
-    if (ok) target.shocked = false;
-    return { ok: true, lines: [ok ? `📣 ${cap.name} rallies ${target.name}.` : `📣 ${cap.name} can't get ${target.name} moving yet.`] };
+    const lines = [];
+    // Down in cover: he gets them up and moving, so they can act this hour after all (Steve)
+    if (target.down && target.acted) {
+      target.down = false;
+      target.acted = false;
+      lines.push(`📣 ${cap.name} gets ${target.name} up and moving.`);
+    }
+    if (target.shocked) {
+      const ok = st.rand() < QUALITY[target.quality || 'standard'].rally;
+      if (ok) target.shocked = false;
+      lines.push(ok ? `📣 ${cap.name} rallies ${target.name}.` : `📣 ${cap.name} can't steady ${target.name} yet.`);
+    }
+    return { ok: true, lines };
   }
 
   // Fields the battalion can call fire on: seen, with no Americans in them
@@ -907,13 +918,12 @@ const Sim = (() => {
     if (shot.mortar) {
       st.deMortarAmmo--;
       const fx = { x: t.x, y: t.y, kind: 'shell', support: 'mortars' };
-      // Pulling back from a mortar: away from the Germans' side of the board
-      const pre = withdraw ? pullBack(st, t, { x: t.x + 1, y: t.y }) : null;
-      const need = TO_HIT + (t.x !== null && tileType(t.x, t.y) === 'village' ? COVER.village : 0);
+      // Taking cover from the mortar: its men get down before the bombs land
+      const pre = withdraw ? takeCover(st, t) : null;
+      const need = TO_HIT + (tileType(t.x, t.y) === 'village' ? COVER.village : 0) + (t.down ? TAKE_COVER : 0);
       const faces = [];
-      let hits = roll(st, DE_MORTAR.dice, need, faces);
-      fx.faces = faces; fx.need = need; fx.side = 'de';
-      if (pre && pre.ok) hits = Math.floor(hits * WITHDRAW.keep);
+      const hits = roll(st, DE_MORTAR.dice, need, faces);
+      fx.faces = faces; fx.need = need; fx.side = 'de'; fx.tookCover = !!pre;
       const lines = (pre ? [pre.line] : []).concat(damage(st, t, hits, 0));
       st.fx.push(fx);
       st.de.rep.push(`🔺 German mortars on ${t.name}: ${lines.length ? lines.join(', ') : 'no hits'}.`);
@@ -1017,13 +1027,16 @@ const Sim = (() => {
     st.report = rep.length ? rep : ['A quiet hour.'];
   }
 
-  // A new hour: rest the shaken, a fresh move for every piece (except those that pulled back), fire support, ammo and reinforcements
+  // A new hour: rest the shaken, a fresh move for every piece (except those that took cover), fire support, ammo and reinforcements
   function newTurn(st, rep) {
     st.turn++;
     for (const u of st.units) {
       if (u.side !== 'us' || u.x === null) continue;
       if (u.shocked && !u.hit) { u.shocked = false; rep.push(`😮‍💨 ${u.name} has rested and recovered.`); }
-      u.hit = false; u.acted = !!u.spentNext; u.spentNext = false;
+      const missed = !!u.spentNext;
+      u.hit = false; u.acted = missed; u.spentNext = false;
+      // Down in cover: it stays down through the hour it misses, then gets up
+      if (!missed) u.down = false;
     }
     if ((st.turn - 1) % MORTARS.resupplyEvery === 0) st.ammo.mortars++;
     if ((st.turn - 1) % ARTILLERY.resupplyEvery === 0) st.ammo.artillery++;

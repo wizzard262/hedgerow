@@ -1,4 +1,4 @@
-// Hedgerow: start-up, input, drawing the table, and playing the German hour with its "pull back?" questions
+// Hedgerow: start-up, input, drawing the table, and playing the German hour with its "take cover?" questions
 
 window.Game = (() => {
   const G = {};
@@ -58,7 +58,7 @@ window.Game = (() => {
     runGermans();
   }
 
-  // Play the Germans until one of them fires on a piece that could pull back, then ask
+  // Play the Germans until one of them fires on a piece that could take cover, then ask
   function runGermans() {
     const r = Sim.germanStep(st);
     if (r.ask) return ask(r.ask);
@@ -72,7 +72,7 @@ window.Game = (() => {
   function ask(shot) {
     const t = Sim.unitById(st, shot.target);
     const who = shot.mortar ? 'German mortars range on' : `${Sim.unitById(st, shot.shooter).name} opens fire on`;
-    $('#ask-text').innerHTML = `${who} <b>${t.name}</b>. Try to pull back a field and take half the hits? It would give up its move next hour.`;
+    $('#ask-text').innerHTML = `${who} <b>${t.name}</b>. Take cover? Its men get down where they are: one more is needed to hit it for the rest of this hour, but it misses its move next hour unless the captain gets it up.`;
     $('#ask').hidden = false;
     changed();
   }

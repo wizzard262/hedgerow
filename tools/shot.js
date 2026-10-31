@@ -11,7 +11,7 @@ const { chromium } = require(path.join(__dirname, '..', '..', 'harrier-carrier-p
   await page.goto('http://localhost:8768/');
   await page.waitForTimeout(2500);
   await page.click('#help [data-close]');
-  // Each hour: end it, answering every "pull back?" with Stand fast
+  // Each hour: end it, answering every "take cover?" with Stand fast
   for (let h = 0; h < +hours; h++) {
     await page.click('#end');
     for (let k = 0; k < 40; k++) {

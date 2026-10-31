@@ -54,7 +54,7 @@ check('nothing goes negative, out of range or into the river in 100 games', () =
   }
 });
 
-check('every piece can move each hour; a piece that pulled back loses its next move', () => {
+check('every piece can move each hour', () => {
   const st = Sim.newGame(3);
   assert(st.units.filter(u => u.side === 'us' && u.x !== null).every(u => !u.acted), 'a piece starts the game having moved');
 });
@@ -182,15 +182,31 @@ check('dice: every face is 1 to 6 and hits are the ones at or over the score nee
   }
 });
 
-check('pulling back gives up the next move, whether it works or not', () => {
+check('taking cover: no moving, harder to hit, misses the next move unless the captain gets it up', () => {
   const st = Sim.newGame(9);
+  let checked = 0;
   for (let h = 0; h < 8 && !st.won && !st.lost; h++) {
     Sim.startGermanHour(st);
-    const pulled = [];
-    for (let r = Sim.germanStep(st); !r.done; r = Sim.germanStep(st)) { pulled.push(Sim.unitById(st, r.ask.target)); Sim.answer(st, true); }
+    const down = [];
+    for (let r = Sim.germanStep(st); !r.done; r = Sim.germanStep(st)) {
+      const t = Sim.unitById(st, r.ask.target), where = [t.x, t.y];
+      Sim.answer(st, true);
+      if (t.x !== null) { assert(t.x === where[0] && t.y === where[1], `${t.name} moved when taking cover`); assert(t.down, `${t.name} is not down in cover`); down.push(t); }
+    }
     Sim.finishHour(st);
-    for (const t of pulled) if (t.x !== null && !st.won && !st.lost) assert(t.acted, `${t.name} pulled back but can still move`);
+    for (const t of down) if (t.x !== null && !st.won && !st.lost) { assert(t.acted && t.down, `${t.name} took cover but can still move`); checked++; }
   }
+  assert(checked > 0, 'nobody took cover in 8 hours');
+  // The captain gets one up
+  const st2 = Sim.newGame(3);
+  const cap = Sim.unitById(st2, 'cap'), A = Sim.unitById(st2, 'A');
+  A.down = true; A.acted = true; cap.x = A.x; cap.y = A.y === 0 ? 1 : A.y - 1;
+  assert(Sim.rallyTargets(st2, cap).includes(A), 'the captain could not reach a piece down in cover');
+  assert(Sim.actRally(st2, cap, A).ok && !A.acted && !A.down, 'the captain did not get it up and moving');
+  // Down in cover, it is harder to hit
+  const de = st2.units.find(u => u.side === 'de' && u.kind === 'company');
+  const before = Sim.needFor(st2, de, A); A.down = true;
+  assert(Sim.needFor(st2, de, A) === before + TAKE_COVER, 'taking cover did not make it harder to hit');
 });
 
 check('the mortars and the guns fire once an hour each', () => {

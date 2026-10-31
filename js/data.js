@@ -30,8 +30,9 @@ const START_HOUR = 6;
 const START_DATE = 'Tue 11 July 1944';
 
 // Every piece moves (acts) once an hour (Steve: no tokens to activate)
-// Reacting in the Germans' hour: a piece fired on can try to pull back, which uses up its move for the next hour
-const WITHDRAW = { standard: 0.6, elite: 0.75, keep: 0.5 };   // chance it works, and the share of hits it then takes
+// Reacting in the Germans' hour (Steve): a piece fired on can take cover. Its men get down where they are: one more is
+// needed to hit it for the rest of the German hour, but it misses its move next hour unless the captain gets it up
+const TAKE_COVER = 1;
 
 // Shooting: each point of firepower rolls one six-sided die, which hits on TO_HIT or more.
 // Cover adds to the score needed, elite troops take one off; a 6 always hits
