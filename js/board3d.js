@@ -634,6 +634,8 @@ const Board = (() => {
 
   function markTargets(list, hot) {
     const pulse = 1 + 0.08 * Math.sin(performance.now() / 180);
+    // Where each score bubble goes, all together, so none covers another target or another bubble (Steve)
+    placeLabels(list.filter(u => u.needNow));
     for (const u of list) {
       const p = pieceCentre(u), big = u.kind === 'company' || Sim.isTank(u), lit = hot && hot.id === u.id;
       const ring = new T.Mesh(new T.RingGeometry(big ? 0.26 : 0.17, big ? 0.32 : 0.22, 48), new T.MeshBasicMaterial({ color: 0xe8352a, transparent: true, opacity: 0.9, depthWrite: false }));
@@ -651,15 +653,17 @@ const Board = (() => {
     }
   }
 
-  // Where a target's score bubble sits: about three fields up the board from a target in the near half, down it in the far half
+  // Where a target's score bubble sits: wherever placeLabels put it this frame, otherwise about three fields up the board
+  // from a target in the near half, down it in the far half
+  let labelPlaces = new Map();       // target id → { anchor, farHalf }
   function labelAnchor(u) {
+    if (labelPlaces.has(u.id)) return labelPlaces.get(u.id);
     const p = pieceCentre(u), farHalf = u.y < ROWS / 2;
     return { farHalf, anchor: new T.Vector3(p.x, 0.3, Math.max(0.4, Math.min(ROWS - 0.4, p.z + (farHalf ? 2.6 : -2.6)))) };
   }
 
-  // The box a target's score bubble covers on the page, so the piece menu can keep clear of it
-  function labelBox(u) {
-    const { farHalf, anchor } = labelAnchor(u);
+  // The box a bubble covers on the page, from its tail's spot (farHalf: the bubble hangs below its tail)
+  function bubbleBox(u, anchor, farHalf) {
     const l = needLabel(u.needNow, u.needWhy || [], !farHalf);
     // The bubble faces the camera: it spreads along the camera's right, and up from its tail (or down, in the far half)
     camera.updateMatrixWorld();
@@ -670,6 +674,48 @@ const Board = (() => {
     const xs = pts.map(q => q.x), ys = pts.map(q => q.y);
     l.material.dispose();
     return { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) };
+  }
+
+  // The box a target's score bubble covers on the page, so the piece menu can keep clear of it
+  function labelBox(u) {
+    const { farHalf, anchor } = labelAnchor(u);
+    return bubbleBox(u, anchor, farHalf);
+  }
+
+  // Place every target's bubble so it covers no target's cross-hair and no other bubble, and stays on the screen (Steve).
+  // Each target tries spots round it, about two or three fields off (up the board first, or down it in the far half);
+  // the first clear one wins, otherwise the one with the least in the way
+  function placeLabels(list) {
+    labelPlaces = new Map();
+    if (!list.length) return;
+    const r = renderer.domElement.getBoundingClientRect();
+    const aims = list.map(u => { const s = reticleSpot(u); return screenPoint(s.x, s.z, s.y); });
+    const placed = [];
+    const overlap = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+    // Left to right across the screen, so neighbours share the space sensibly
+    const order = list.map((u, i) => i).sort((i, j) => aims[i].x - aims[j].x);
+    for (const i of order) {
+      const u = list[i], p = pieceCentre(u), farHalf0 = u.y < ROWS / 2, way = farHalf0 ? 1 : -1;
+      const tries = [[0, 2.6], [0, 1.9], [1.6, 2.3], [-1.6, 2.3], [0, 3.3], [2.4, 1.4], [-2.4, 1.4], [0, -2.4], [1.6, -2.2], [-1.6, -2.2]];
+      let best = null;
+      for (const [dx, dz] of tries) {
+        const z = p.z + dz * way;
+        if (z < 0.3 || z > ROWS - 0.3) continue;
+        const anchor = new T.Vector3(Math.max(0.3, Math.min(COLS - 0.3, p.x + dx)), 0.3, z);
+        const farHalf = z > p.z;     // the bubble below its target on the screen hangs down from its tail
+        const box = bubbleBox(u, anchor, farHalf);
+        const pad = { x: box.x - 14, y: box.y - 14, w: box.w + 28, h: box.h + 28 };
+        let bad = 0;
+        if (box.x < r.left || box.x + box.w > r.right || box.y < r.top || box.y + box.h > r.bottom) bad += 5;
+        for (const a of aims) if (a.x > pad.x && a.x < pad.x + pad.w && a.y > pad.y && a.y < pad.y + pad.h) bad += 3;
+        for (const b of placed) if (overlap(pad, b)) bad += 2;
+        if (!best || bad < best.bad) best = { bad, anchor, farHalf, box };
+        if (bad === 0) break;
+      }
+      if (!best) { const z = Math.max(0.4, Math.min(ROWS - 0.4, p.z + 2.6 * way)); best = { anchor: new T.Vector3(p.x, 0.3, z), farHalf: z > p.z, box: { x: 0, y: 0, w: 0, h: 0 } }; }
+      labelPlaces.set(u.id, { anchor: best.anchor, farHalf: best.farHalf });
+      placed.push(best.box);
+    }
   }
 
   // ---------- Shooting on the table ----------
@@ -696,15 +742,19 @@ const Board = (() => {
   function word(text, colour, big) {
     const key = text + colour + big;
     if (!wordTex[key]) {
-      const c = document.createElement('canvas'); c.width = 512; c.height = 128;
-      const g = c.getContext('2d');
-      g.font = `bold ${big ? 74 : 60}px Georgia, serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
-      g.lineWidth = 12; g.strokeStyle = 'rgba(20,14,8,.85)'; g.strokeText(text, 256, 66);
-      g.fillStyle = colour; g.fillText(text, 256, 66);
-      wordTex[key] = new T.CanvasTexture(c);
+      // The canvas as wide as the words need (long ones like "Tank knocked out" were clipped), never narrower than 512
+      const font = `bold ${big ? 74 : 60}px Georgia, serif`;
+      const c = document.createElement('canvas'), g = c.getContext('2d');
+      g.font = font;
+      c.width = Math.max(512, Math.ceil(g.measureText(text).width) + 40); c.height = 128;
+      g.font = font; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.lineWidth = 12; g.strokeStyle = 'rgba(20,14,8,.85)'; g.strokeText(text, c.width / 2, 66);
+      g.fillStyle = colour; g.fillText(text, c.width / 2, 66);
+      wordTex[key] = { map: new T.CanvasTexture(c), wide: c.width / 512 };
     }
-    const s = new T.Sprite(new T.SpriteMaterial({ map: wordTex[key], transparent: true, depthTest: false }));
-    s.scale.set(big ? 1.05 : 0.78, (big ? 1.05 : 0.78) / 4, 1);
+    const t = wordTex[key], size = big ? 1.05 : 0.78;
+    const s = new T.Sprite(new T.SpriteMaterial({ map: t.map, transparent: true, depthTest: false }));
+    s.scale.set(size * t.wide, size / 4, 1);
     return s;
   }
   const RESULT_COLOUR = { 'Missed': '#d8d2c4', 'No effect': '#e6d29a', 'Pinned': '#ffb04a', 'Section lost': '#ff6a50', 'Tank knocked out': '#ff6a50', 'Wiped out': '#ff3b2e', 'Destroyed': '#ff3b2e' };
@@ -997,7 +1047,30 @@ const Board = (() => {
     return s;
   }
 
-  // view: { spots: [{ x, y, kind }], selected: piece, hover: { x, y }, blast: [{ x, y, main }] }. dt: seconds since the last frame.
+  // The German move on show: an orange ring under the piece (or their gun off the board) and a grey word bubble over it
+  // with its name and what it does, e.g. "1. Fallschirmjäger-Zug · Fires on 2nd Platoon"
+  function germanMoveMark(st, m) {
+    // Nothing to say until it has chosen
+    if (!m.what) return;
+    let spot, name, big;
+    if (m.gun) {
+      // Their mortars or artillery, off the board
+      const g = GUNS.de[m.gun];
+      spot = new T.Vector3(g.x, 0, g.z); name = GUN_NAMES.de[m.gun]; big = true;
+    } else {
+      // A piece: gone from the table (wiped out in a fight) means nothing to ring
+      const u = Sim.unitById(st, m.id);
+      if (!u || u.x === null || !pieces[u.id]) return;
+      spot = pieceCentre(u); name = u.name; big = u.kind === 'company' || Sim.isTank(u);
+    }
+    const ring = new T.Mesh(new T.RingGeometry(big ? 0.36 : 0.22, big ? 0.42 : 0.27, 56), new T.MeshBasicMaterial({ color: 0xff8a2a, transparent: true, opacity: 0.95, depthWrite: false }));
+    at(ring, spot.x, 0.01, spot.z, -Math.PI / 2, 0, 0); marks.add(ring);
+    const bubble = diceTag([name, m.what], 'de');
+    // A gun's bubble sits a little in from the table's edge, so it stays on the screen
+    bubble.position.set(m.gun ? spot.x - 1.1 : spot.x, 0.32, spot.z); bubble.renderOrder = 7; marks.add(bubble);
+  }
+
+  // view: { spots: [{ x, y, kind }], selected: piece, hover: { x, y }, blast: [{ x, y, main }], deMove: { id | gun, what } }. dt: seconds since the last frame.
   // Returns true while pieces are still gliding, so the page keeps drawing
   let lastT = 0;
   function render(st, view = {}) {
@@ -1021,6 +1094,8 @@ const Board = (() => {
       at(ring, p.x, 0.009, p.z, -Math.PI / 2, 0, 0); marks.add(ring);
     }
     if (view.targets && view.targets.length) markTargets(view.targets, view.hotTarget);
+    // The German piece or gun moving now: a ring round it and a word bubble saying what it does (Steve)
+    if (view.deMove) germanMoveMark(st, view.deMove);
     // Shooting: a line of sight from the shooter to each target it can see
     if (view.shooter && view.shooter.x !== null && pieces[view.shooter.id]) sightLines(view.shooter, view.targets || [], view.hotTarget);
     // German mortars ranging on a piece: a line from their mortar off the board

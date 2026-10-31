@@ -86,19 +86,19 @@ const Sim = (() => {
   const adjacent = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y) === 1;
   const teamsOf = (st, company) => st.units.filter(t => t.attachedTo === company.id && t.x !== null);
 
-  // Is there room for a unit in a field? One unit to a field, except (Steve) that MG and bazooka teams and the captain
-  // can come into a rifle platoon's field: a platoon with up to three of them (they may stay together when it moves on).
-  // Tanks always need a field to themselves
+  // Is there room for a unit in a field?
   function roomFor(st, unit, x, y, leaving = []) {
+    // Your own pieces can share a field (Steve): at most one rifle platoon and one tank pair in it, and four pieces in
+    // all (a field has nine places). Never with the enemy, except in a hand-to-hand fight. A dug-in gun stands alone
     const here = at(st, x, y).filter(u => !leaving.includes(u) && u !== unit && u.attachedTo !== unit.id);
     if (!here.length) return true;
     if (here.some(u => u.side !== unit.side)) return false;
-    const platoon = here.some(u => u.kind === 'company');
-    const others = here.filter(u => u.kind !== 'company');
-    if (isSmall(unit) && !PIECES[unit.kind].fixed) return platoon && others.every(isSmall) && others.length < 3;
-    if (unit.kind === 'company') return !platoon && others.every(u => isSmall(u) && !PIECES[u.kind].fixed);
-    return false;
+    if (PIECES[unit.kind].fixed || here.some(u => PIECES[u.kind].fixed)) return false;
+    const platoons = here.filter(u => u.kind === 'company').length + (unit.kind === 'company' ? 1 : 0);
+    const tanks = here.filter(u => isTank(u)).length + (isTank(unit) ? 1 : 0);
+    return platoons <= 1 && tanks <= 1 && here.length + 1 <= 4;
   }
+
 
   function newGame(seed) {
     seed = seed || (Date.now() % 1e9);
@@ -994,21 +994,26 @@ const Sim = (() => {
   // Returns a planned shot { shooter, target } instead of firing, so the target can be offered a chance to pull back
   function germanAct(st, u) {
     const rep = st.de.rep;
+    // Until it does something else, it holds its ground (what the table's word bubble says, Steve)
+    deSays(st, 'Holds its ground');
     const inHamlet = at(st, st.objective.x, st.objective.y, 'us').length > 0;
     if (inHamlet && !u.shocked && (u.kind === 'company' || isTank(u)) && adjacent(u, st.objective) && !(isTank(u) && hedge(st, u.x, u.y, st.objective.x, st.objective.y))) {
+      deSays(st, `Charges into ${st.objective.name}`);
       rep.push('🔺 ' + charge(st, u, st.objective.x, st.objective.y).join(', ') + '.');
       return null;
     }
     const weak = st.units.find(t => t.side === 'us' && t.x !== null && t.kind === 'company' && adjacent(u, t) && t.shocked);
     if (u.kind === 'company' && !u.shocked && u.platoons >= 2 && weak && st.rand() < 0.5) {
+      deSays(st, `Charges ${weak.name}`);
       rep.push('🔺 ' + charge(st, u, weak.x, weak.y).join(', ') + '.');
       return null;
     }
     const t = bestTarget(st, u);
-    if (t) return { shooter: u.id, target: t.id };
+    if (t) { deSays(st, `Fires on ${t.name}`); return { shooter: u.id, target: t.id }; }
     // Americans just across a hedge it isn't lining: go to that hedge
     const across = st.units.find(o => o.side === 'us' && o.x !== null && acrossHedge(st, u, o) && !atHedge(u, o));
     if (across && !PIECES[u.kind].fixed && !(isTeam(u) && u.attachedTo)) {
+      deSays(st, `Lines the hedge facing ${across.name}`);
       u.at = dirTo(u, across);
       for (const tm of u.kind === 'company' ? teamsOf(st, u) : []) tm.at = u.at;
       return null;
@@ -1016,20 +1021,25 @@ const Sim = (() => {
     // On the way to its post: march there and dig in
     if (u.post && !u.reserve && (u.x !== u.post.x || u.y !== u.post.y) && !(isTeam(u) && u.attachedTo)) {
       const next = stepToward(st, u, u.post);
-      if (next) germanMove(st, u, next);
+      if (next) { deSays(st, 'Marches to its post'); germanMove(st, u, next); }
       return null;
     }
     // Reserves: a company goes to hold the hamlet if nobody does; the rest move up towards the nearest Americans
     if (u.reserve) {
-      if (u.x === st.objective.x && u.y === st.objective.y && u.kind === 'company') return null;
+      if (u.x === st.objective.x && u.y === st.objective.y && u.kind === 'company') { deSays(st, `Holds ${st.objective.name}`); return null; }
       const garrison = at(st, st.objective.x, st.objective.y, 'de').some(g => g.kind === 'company');
       const us = st.units.filter(o => o.side === 'us' && o.x !== null);
       const near = us.sort((a, b) => (Math.abs(a.x - u.x) + Math.abs(a.y - u.y)) - (Math.abs(b.x - u.x) + Math.abs(b.y - u.y)))[0];
       const goal = (!garrison && u.kind === 'company') || !near ? st.objective : near;
       const next = stepToward(st, u, goal);
-      if (next) germanMove(st, u, next);
+      if (next) { deSays(st, goal === st.objective ? `Moves up to hold ${st.objective.name}` : `Moves up towards ${near.name}`); germanMove(st, u, next); }
     }
     return null;
+  }
+
+  // What the German piece or gun on this token is doing, in a few words, for its word bubble on the table (Steve)
+  function deSays(st, what) {
+    if (st.de && st.de.move) st.de.move.what = what;
   }
 
   // A German piece moves a field, breaking through a hedge or wire on the way if it has to
@@ -1101,6 +1111,7 @@ const Sim = (() => {
     if (st.de.artillery) {
       st.de.artillery = false;
       const t = germanArtilleryTarget(st);
+      deSays(st, t ? `Shells ${t.name}` : 'Holds fire: no target');
       if (t) {
         const shot = { artillery: true, target: t.id };
         if (canReact(st, t)) { st.de.ask = shot; return { ask: shot }; }
@@ -1110,6 +1121,7 @@ const Sim = (() => {
     if (st.de.mortar) {
       st.de.mortar = false;
       const t = germanMortarTarget(st);
+      deSays(st, t ? `Mortars ${t.name}` : 'Holds fire: no target');
       if (t) {
         const shot = { mortar: true, target: t.id };
         if (canReact(st, t)) { st.de.ask = shot; return { ask: shot }; }
@@ -1196,10 +1208,10 @@ const Sim = (() => {
       const pick = pickGerman(st);
       if (pick.gun) {
         st.deFired[pick.gun] = true;
-        st.de = { queue: [], mortar: pick.gun === 'mortars', artillery: pick.gun === 'artillery', rep: st.roundRep, ask: null };
+        st.de = { queue: [], mortar: pick.gun === 'mortars', artillery: pick.gun === 'artillery', rep: st.roundRep, ask: null, move: { gun: pick.gun, what: '' } };
       } else {
         pick.unit.acted = true;
-        st.de = { queue: [pick.unit.id], mortar: false, artillery: false, rep: st.roundRep, ask: null };
+        st.de = { queue: [pick.unit.id], mortar: false, artillery: false, rep: st.roundRep, ask: null, move: { id: pick.unit.id, what: '' } };
       }
     }
     return side;

@@ -4,6 +4,9 @@
 window.Game = (() => {
   const G = {};
   let st, hover = null, hotTarget = null, dirty = true;
+  // The German move just made ({ id or gun, what }), kept on the table for GERMAN_MOVE_SHOWN ms after its token ends
+  let shownMove = null;
+  const GERMAN_MOVE_SHOWN = 2200;
   const $ = s => document.querySelector(s);
   const board = $('#board');
 
@@ -82,7 +85,7 @@ window.Game = (() => {
       // Green rings under pieces that can still act this hour, grey under those that have
       const ready = st.de || st.won || st.lost ? null : u => Sim.canAct(st, u) || (Sim.canRally(st, u) && Sim.rallyTargets(st, u).length > 0);
       const guns = st.de || st.won || st.lost ? null : UI.supportState();
-      dirty = Board.render(st, { spots, selected: UI.selected(), hover, targets, hotTarget, ready, shooter, mortarAim, aimWhich, guns, blast, fireFrom: (UI.view.mode || '').startsWith('fire:') ? UI.view.mode.slice(5) : null });
+      dirty = Board.render(st, { spots, selected: UI.selected(), hover, targets, hotTarget, ready, shooter, mortarAim, aimWhich, guns, blast, deMove: (st.de && st.de.move) || shownMove, fireFrom: (UI.view.mode || '').startsWith('fire:') ? UI.view.mode.slice(5) : null });
       const p = Board.screenPoint(st.objective.x + 0.5, st.objective.y, 0.35), r = board.getBoundingClientRect();
       Object.assign($('#label').style, { left: p.x - r.left + 'px', top: p.y - r.top + 'px' });
       $('#label').textContent = `🎯 ${st.objective.name}`;
@@ -136,10 +139,12 @@ window.Game = (() => {
   function runGermans() {
     const r = Sim.germanStep(st);
     if (r.ask) return ask(r.ask);
+    // Keep what it did on the table a moment after the token ends, so you can see it (Steve)
+    shownMove = st.de && st.de.move;
     Sim.endGermanToken(st);
     $('#ask').hidden = true;
     changed();
-    setTimeout(() => { Board.clearToken(); setTimeout(drawNext, 400); }, 700);
+    setTimeout(() => { shownMove = null; dirty = true; Board.clearToken(); setTimeout(drawNext, 400); }, GERMAN_MOVE_SHOWN);
   }
 
   function ask(shot) {

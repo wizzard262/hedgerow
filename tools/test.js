@@ -11,14 +11,13 @@ function check(name, fn) {
 }
 function assert(ok, message) { if (!ok) throw new Error(message); }
 const live = st => st.units.filter(u => u.x !== null);
-// A field's units are allowed: either one unit, or a rifle platoon with up to three teams or the captain.
-// (Teams and the captain can only come into a platoon's field, but may be left together there when the platoon moves on)
+// A field's units are allowed: at most one rifle platoon and one tank pair of a side, four pieces in all, a dug-in gun alone
 function fieldOk(st, x, y) {
   for (const side of ['us', 'de']) {
     const here = live(st).filter(u => u.x === x && u.y === y && u.side === side);
     if (here.length <= 1) continue;
-    const platoons = here.filter(u => u.kind === 'company').length, rest = here.filter(u => u.kind !== 'company');
-    if (platoons > 1 || !rest.every(u => Sim.isSmall(u)) || rest.length > 3) return false;
+    const platoons = here.filter(u => u.kind === 'company').length, tanks = here.filter(u => Sim.isTank(u)).length;
+    if (platoons > 1 || tanks > 1 || here.length > 4 || here.some(u => u.kind === 'pak')) return false;
   }
   return true;
 }
@@ -72,13 +71,14 @@ check('a piece acts once an hour', () => {
 check('a charge can pass through a field of friends but not stop in it', () => {
   const st = Sim.newGame(3);
   st.hedges = {}; st.wire = {};
-  const tank = Sim.unitById(st, 'T1'), able = Sim.unitById(st, 'A');
+  // (A field holds one tank pair: the other pair's field can be passed through, not stopped in)
+  const tank = Sim.unitById(st, 'T1'), able = Sim.unitById(st, 'T2');
   for (const u of st.units) if (u !== tank && u !== able) u.x = u.y = null;
   tank.x = 0; tank.y = 6; able.x = 1; able.y = 6;
   const spots = Sim.chargeSpots(st, tank);
-  assert(spots.some(p => p.x === 2 && p.y === 6), 'the tank could not charge through the platoon');
-  assert(!spots.some(p => p.x === 1 && p.y === 6), "the tank could stop in the platoon's field");
-  assert(Sim.actCharge(st, tank, 2, 6).ok && tank.x === 2, 'the charge through the platoon did not arrive');
+  assert(spots.some(p => p.x === 2 && p.y === 6), 'the tank could not charge through the other pair');
+  assert(!spots.some(p => p.x === 1 && p.y === 6), "the tank could stop in the other pair's field");
+  assert(Sim.actCharge(st, tank, 2, 6).ok && tank.x === 2, 'the charge through the other pair did not arrive');
 });
 
 check('no charging through a house', () => {
@@ -155,18 +155,19 @@ check('every tank drives through hedges; only tanks get through wire; men climb 
   assert(Sim.actCharge(st, co, 2, 5).ok && co.x === 2 && st.hedges[k4], 'the climb did not arrive, or the men knocked the hedge down');
 });
 
-check('one unit to a field', () => {
+check('your pieces share a field: one platoon, one tank pair, four pieces at most', () => {
   const st = Sim.newGame(2);
   for (let seed = 1; seed <= 20; seed++) {
     const s2 = Sim.newGame(seed);
     for (const u of live(s2)) assert(fieldOk(s2, u.x, u.y), `seed ${seed}: ${u.name} starts sharing a field it shouldn't`);
   }
   const co = Sim.unitById(st, 'B');
-  assert(!Sim.roomFor(st, Sim.unitById(st, 'T1'), co.x, co.y), 'a tank section fitted in beside a rifle platoon');
+  assert(Sim.roomFor(st, Sim.unitById(st, 'T1'), co.x, co.y), 'a tank pair could not join a rifle platoon');
+  assert(!Sim.roomFor(st, Sim.unitById(st, 'A'), co.x, co.y), 'a second rifle platoon fitted in');
   assert(Sim.roomFor(st, Sim.unitById(st, 'mg1'), co.x, co.y) && Sim.roomFor(st, Sim.unitById(st, 'cap'), co.x, co.y), "a team or the captain could not join a rifle platoon's field");
   const empty = [...Array(COLS).keys()].map(x => ({ x, y: 7 })).find(p => !Sim.at(st, p.x, p.y).length && Sim.tileType(p.x, p.y) !== 'river');
   const mg = Sim.unitById(st, 'mg1'); mg.x = empty.x; mg.y = empty.y;
-  assert(!Sim.roomFor(st, Sim.unitById(st, 'bz1'), empty.x, empty.y), 'two teams shared a field with no platoon');
+  assert(Sim.roomFor(st, Sim.unitById(st, 'bz1'), empty.x, empty.y), 'two teams could not share a field');
 });
 
 check('dice: every face is 1 to 6 and hits are the ones at or over the score needed', () => {
@@ -496,6 +497,25 @@ check('the German artillery shells Americans it can see, clear of its own men, a
   assert(st.fx.some(f => f.support === 'artillery' && f.side === 'de'), 'no German shells landed');
   // Every German shell, even on an empty field round the target, flies from the German guns (Steve)
   assert(st.fx.filter(f => f.kind === 'shell').every(f => f.side === 'de'), 'a German shell came from the American guns');
+});
+
+check('every German move says which piece or gun it is and what it does', () => {
+  let moves = 0;
+  for (let seed = 1; seed <= 6; seed++) {
+    const st = Sim.newGame(seed);
+    Sim.startRound(st);
+    // Draw tokens through the round; on each German one, let it move (standing fast) and read what it says
+    for (let side = Sim.drawToken(st); side; side = Sim.drawToken(st)) {
+      if (side === 'us') { Sim.passToken(st); continue; }
+      for (let r = Sim.germanStep(st); !r.done; r = Sim.germanStep(st)) Sim.answer(st, false);
+      const m = st.de.move;
+      assert(m && (m.id || m.gun), `seed ${seed}: a German move named no piece or gun`);
+      assert(m.what, `seed ${seed}: ${m.id || m.gun} moved without saying what it did`);
+      moves++;
+      Sim.endGermanToken(st);
+    }
+  }
+  assert(moves > 10, `only ${moves} German moves were checked`);
 });
 
 check('only a piece that has not moved this round can take cover', () => {
