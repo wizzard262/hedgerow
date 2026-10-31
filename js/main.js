@@ -45,7 +45,8 @@ window.Game = (() => {
       }
       // Green rings under pieces that can still act this hour, grey under those that have
       const ready = st.de || st.won || st.lost ? null : u => Sim.canAct(st, u) || (Sim.canRally(st, u) && Sim.rallyTargets(st, u).length > 0);
-      dirty = Board.render(st, { spots, selected: UI.selected(), hover, targets, hotTarget, ready, shooter, mortarAim });
+      const guns = st.de || st.won || st.lost ? null : UI.supportState();
+      dirty = Board.render(st, { spots, selected: UI.selected(), hover, targets, hotTarget, ready, shooter, mortarAim, guns });
       const p = Board.screenPoint(st.objective.x + 0.5, st.objective.y, 0.35), r = board.getBoundingClientRect();
       Object.assign($('#label').style, { left: p.x - r.left + 'px', top: p.y - r.top + 'px' });
       $('#label').textContent = `🎯 ${st.objective.name}`;
@@ -111,6 +112,9 @@ window.Game = (() => {
     // Shooting: the red cross-hair nearest the click, even one over a house
     const aimed = Board.targetAt(UI.targets(), e.clientX, e.clientY);
     if (aimed && UI.shootTarget(aimed)) { hotTarget = null; changed(); if (st.won || st.lost) showResult(); return; }
+    // Your mortars or artillery off the board: choose them like a piece
+    const gun = !st.de && Board.gunAt(e.clientX, e.clientY);
+    if (gun) { Sound.play('select'); Board.clearDice(); UI.selectSupport(gun); changed(); return; }
     const f = Board.fieldAt(e.clientX, e.clientY);
     if (!f) return;
     // The one piece under the pointer (the nearest in the field if the click misses the models)

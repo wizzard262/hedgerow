@@ -102,6 +102,32 @@ const Board = (() => {
     }
   }
 
+  // Which of your mortars or artillery is under a point on the page: the model, or the table close round it
+  function gunAt(clientX, clientY) {
+    if (!support) return null;
+    const r = renderer.domElement.getBoundingClientRect();
+    ray.setFromCamera(new T.Vector2((clientX - r.left) / r.width * 2 - 1, -(clientY - r.top) / r.height * 2 + 1), camera);
+    for (const which of ['artillery', 'mortars']) if (ray.intersectObject(support.us[which].model, true).length) return which;
+    const p = new T.Vector3();
+    if (!ray.ray.intersectPlane(table, p)) return null;
+    for (const which of ['artillery', 'mortars']) {
+      const spot = GUNS.us[which];
+      if (Math.hypot(p.x - spot.x, p.z - spot.z) < 0.45) return which;
+    }
+    return null;
+  }
+
+  // A ring under each of your guns, like the pieces: green if it can still fire this hour, grey if not, white if chosen
+  function gunRings(state) {
+    if (!state) return;
+    for (const which of ['artillery', 'mortars']) {
+      const spot = GUNS.us[which], s = state[which];
+      const colour = s.chosen ? 0xfff6dc : s.ready ? 0x7fd06a : 0x77776f;
+      const ring = new T.Mesh(new T.RingGeometry(0.3, s.chosen ? 0.36 : 0.335, 48), new T.MeshBasicMaterial({ color: colour, transparent: true, opacity: 0.85, depthWrite: false }));
+      at(ring, spot.x, 0.006, spot.z, -Math.PI / 2, 0, 0); marks.add(ring);
+    }
+  }
+
   // Show as many rounds beside each gun as it has shots left
   function updateSupport(st) {
     if (!support) return;
@@ -876,6 +902,7 @@ const Board = (() => {
     if (view.hover) mark(view.hover.x, view.hover.y, 'hover', 0.02);
     for (const s of view.spots || []) mark(s.x, s.y, s.kind);
     showStand(st, view);
+    gunRings(view.guns);
     if (view.selected && view.selected.x !== null && pieces[view.selected.id]) {
       const p = pieceCentre(view.selected), big = view.selected.kind === 'company' || Sim.isTank(view.selected);
       const ring = new T.Mesh(new T.RingGeometry(big ? 0.34 : 0.21, big ? 0.39 : 0.25, 56), new T.MeshBasicMaterial({ color: 0xfff6dc, transparent: true, opacity: 0.95, depthWrite: false }));
@@ -946,5 +973,5 @@ const Board = (() => {
     return { x: r.left + (p.x + 1) / 2 * r.width, y: r.top + (1 - p.y) / 2 * r.height };
   }
 
-  return { init, resize, render, fieldAt, pieceAt, targetAt, screenPoint, clearDice, canvas: () => renderer.domElement };
+  return { init, resize, render, fieldAt, pieceAt, gunAt, targetAt, screenPoint, clearDice, canvas: () => renderer.domElement };
 })();

@@ -22,8 +22,6 @@
   #panel > * { flex: 0 0 auto; }
   .brand { width: 330px; display: flex; flex-direction: column; gap: 2px; }
   .brand #goal, .brand #clock { font-size: 12px; }
-  .support { width: 230px; }
-  .support .row { flex-direction: column; align-items: stretch; }
   #card { flex: 1 1 420px; min-width: 380px; display: grid; grid-template-columns: minmax(220px, 1fr) auto; column-gap: 12px; align-content: start; overflow-y: auto; }
   #card .stats { font-size: 12px; margin: 2px 0; }
   #card #actions button { padding: 3px 8px; font-size: 13px; }
@@ -92,17 +90,13 @@
 <aside id="panel">
   <div class="brand">
   <div class="top">
-    <h1>HEDGEROW <span id="ver" style="font-size:11px;color:var(--muted);letter-spacing:0">v45</span></h1>
+    <h1>HEDGEROW <span id="ver" style="font-size:11px;color:var(--muted);letter-spacing:0">v47</span></h1>
     <div class="links"><button id="sound-btn" title="Sound on or off">🔊</button><button id="help-btn">How to play</button><button id="new-btn">New game</button></div>
   </div>
   <div id="clock"></div>
   <div id="goal"></div>
   </div>
 
-  <div class="box support">
-    <h2>Fire support</h2>
-    <div class="row"><button id="fire-mortars"></button><button id="fire-artillery"></button></div>
-  </div>
 
   <div class="box" id="card"></div>
   <div id="hint"></div>
@@ -139,7 +133,7 @@
       <li>🧍 <b>One unit to a field</b>: only hand-to-hand fighting brings both sides into the same field. MG and bazooka teams and the captain can also stand in a rifle platoon's field (up to three with it); they still move on their own.</li>
       <li>🏘️ <b>Villages and hamlets</b>: houses round a yard. Hard to hit in. Only a rifle platoon takes the village: when one can reach it, the village field shows blue hatching.</li>
       <li>🌊 <b>The river</b> can only be crossed at its two bridges.</li>
-      <li>💣 <b>Fire support</b>: your 81 mm mortars and 105 mm artillery stand off the board behind your back line (left), the Germans' behind theirs (right), near the top. Their rounds fly from there, and the pile of rounds beside each shows how many shots it has left. Artillery also falls on the fields round the target, on your own pieces too (the target warns you) (the American mortars get one more every 2 hours, the artillery every 3).</li>
+      <li>💣 <b>Fire support</b>: your 81 mm mortars and 105 mm artillery stand off the board behind your back line (left), the Germans' behind theirs (right), near the top. Click your mortars or artillery on the table to use them, like any other piece. Their rounds fly from there, and the pile of rounds beside each shows how many shots it has left. Artillery also falls on the fields round the target, on your own pieces too (the target warns you) (the American mortars get one more every 2 hours, the artillery every 3).</li>
       <li>🔊 <b>Sound</b>: rifles, the American .30-cal and the German MG 42, bazookas, tank guns, mortar bombs and shells whistling in, men running, tanks driving, and a battle going on in the distance. The 🔊 button at the top turns it all off.</li>
       <li>✂️ <b>Barbed wire</b> closes some gaps between fields: only tanks get through it, rolling over and flattening it. Men must go round, or wait for a tank to flatten it.</li>
       <li>🌳 <b>Hedges</b>: men climb over a hedge bank as they move (they hop up over it on the table), which uses one more move (the hedge stays); tanks drive straight through, leaving a gap. Charging across a hedge at Germans behind it is allowed, but they fight back hard.</li>
@@ -158,12 +152,12 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="js/data.js?v=45"></script>
-<script src="js/sim.js?v=45"></script>
-<script src="js/sound.js?v=45"></script>
-<script src="js/models.js?v=45"></script>
-<script src="js/board3d.js?v=45"></script>
-<script src="js/ui.js?v=45"></script>
-<script src="js/main.js?v=45"></script>
+<script src="js/data.js?v=47"></script>
+<script src="js/sim.js?v=47"></script>
+<script src="js/sound.js?v=47"></script>
+<script src="js/models.js?v=47"></script>
+<script src="js/board3d.js?v=47"></script>
+<script src="js/ui.js?v=47"></script>
+<script src="js/main.js?v=47"></script>
 </body>
 </html>

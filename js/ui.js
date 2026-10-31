@@ -11,7 +11,22 @@ const UI = (() => {
   const KIND = { company: 'Rifle platoon', captain: 'Captain', sherman: 'Sherman section', firefly: 'Firefly section', mg: 'Machine-gun team', bazooka: 'Bazooka team', sniper: 'Sniper team',
                  pz4: 'Panzer IV section', panther: 'Panther section', mg42: 'MG 42 team', schreck: 'Panzerschreck team', pak: 'PaK 40 anti-tank gun' };
 
-  function setState(s) { st = s; view.sel = null; view.mode = null; view.log = []; }
+  function setState(s) { st = s; view.sel = null; view.mode = null; view.log = []; view.support = null; }
+
+  // ---------- Your mortars and artillery, off the board ----------
+  // Clicking one chooses it like a piece (Steve): its targets show at once if it can fire this hour
+  const canFire = which => st.ammo[which] > 0 && !st.fired[which] && !st.won && !st.lost && !st.de;
+  function selectSupport(which) {
+    view.sel = null;
+    view.support = which;
+    view.mode = canFire(which) ? 'fire:' + which : null;
+  }
+  // For the rings under the guns
+  function supportState() {
+    const out = {};
+    for (const which of ['mortars', 'artillery']) out[which] = { ready: canFire(which), chosen: view.support === which };
+    return out;
+  }
   const selected = () => (view.sel ? Sim.unitById(st, view.sel) : null);
 
   // ---------- Which fields an action can use ----------
@@ -138,6 +153,7 @@ const UI = (() => {
     }
     // Otherwise the one piece clicked: if it can move, show where (both ways) straight away
     view.mode = null;
+    view.support = null;
     if (!picked) { view.sel = null; return null; }
     view.sel = picked.id;
     if (picked.side === 'us' && Sim.canAct(st, picked)) view.mode = 'go';
@@ -220,6 +236,21 @@ const UI = (() => {
   function card() {
     const u = selected(), box = $('#card');
     box.innerHTML = '';
+    // A gun chosen: what it is, rounds left, whether it can fire this hour, and its Fire button
+    if (!u && view.support) {
+      const which = view.support, S = which === 'mortars' ? MORTARS : ARTILLERY;
+      const status = canFire(which) ? '<span class="pill ready">Ready</span>' : st.ammo[which] <= 0 ? '<span class="pill bad">No rounds</span>' : '<span class="pill done">✓ Fired this hour</span>';
+      box.append(el('div', 'name', which === 'mortars' ? '💥 US mortars' : '💣 US artillery'));
+      box.append(el('div', 'sub', `${S.name}, off the board`));
+      box.append(el('div', 'stats', [`${st.ammo[which]} rounds left`, `🎲 ${S.dice} dice on a field your troops can see${S.splash ? `, ${S.splash} on each field round it (yours too)` : ''}`, status].map(s => `<span>${s}</span>`).join('')));
+      const acts = el('div'); acts.id = 'actions';
+      const fire = el('button', view.mode === 'fire:' + which ? 'on' : '', '🎯 Fire');
+      fire.disabled = !canFire(which);
+      fire.onclick = () => { view.mode = view.mode === 'fire:' + which ? null : 'fire:' + which; refresh(); };
+      acts.append(fire);
+      box.append(acts);
+      return;
+    }
     if (!u || u.x === null) {
       box.innerHTML = '<div class="sub">Click one of your pieces on the table.</div>';
       return;
@@ -258,13 +289,6 @@ const UI = (() => {
   function update() {
     $('#clock').innerHTML = `<b>${Sim.hourText(st.turn)}</b> · hour ${st.turn}${TURNS ? ` of ${TURNS}` : ''} · ${START_DATE}`;
     $('#goal').textContent = `🎯 Take ${st.objective.name} and hold it at the end of an hour, or destroy every German${TURNS ? `, by ${Sim.hourText(TURNS + 1)}` : ' (no time limit for now)'}.`;
-    for (const which of ['mortars', 'artillery']) {
-      const S = which === 'mortars' ? MORTARS : ARTILLERY, btn = $(`#fire-${which}`);
-      btn.innerHTML = `${which === 'mortars' ? '💥 Mortars' : '💣 Artillery'} · ${st.ammo[which]} left`;
-      btn.title = `${S.name}: ${S.dice} dice on a field your troops can see${S.splash ? `, ${S.splash} on each field round it` : ''}. Once an hour, one load of ammunition`;
-      btn.disabled = st.ammo[which] <= 0 || !!st.fired[which] || st.won || st.lost || !!st.de;
-      btn.classList.toggle('on', view.mode === 'fire:' + which);
-    }
     card(); hint();
     $('#end').disabled = st.won || st.lost || !!st.de;
   }
@@ -272,8 +296,7 @@ const UI = (() => {
   let refresh = () => {};
   function init(onChange) {
     refresh = onChange;
-    for (const which of ['mortars', 'artillery']) $(`#fire-${which}`).onclick = () => { view.mode = view.mode === 'fire:' + which ? null : 'fire:' + which; refresh(); };
   }
 
-  return { init, setState, update, clickField, openMenu, closeMenu, spots, targets, shootTarget, view, selected, KIND };
+  return { init, setState, update, clickField, openMenu, closeMenu, spots, targets, shootTarget, view, selected, selectSupport, supportState, KIND };
 })();
