@@ -825,14 +825,17 @@ const Sim = (() => {
   function fireMission(st, which, x, y, side = 'us') {
     const S = which === 'mortars' ? MORTARS : ARTILLERY;
     const lines = [];
-    const hitField = (fx, fy, n) => {
-      for (const t of at(st, fx, fy, enemyOf(side))) {
+    // Round the target the shells fall on friend and foe alike (Steve): artillery can hit your own pieces there
+    const hitField = (fx, fy, n, splash = false) => {
+      const caught = splash ? at(st, fx, fy) : at(st, fx, fy, enemyOf(side));
+      for (const t of caught) {
         if (t.x === null || t.kind === 'captain') continue;
         const need = TO_HIT + (tileType(fx, fy) === 'village' ? COVER.village : 0);
         const faces = [];
         const soft = roll(st, n, need, faces), hard = isTank(t) ? roll(st, S.hard || 0, need + PIECES[t.kind].armour, faces) : 0;
         const before = t.platoons, wasShocked = t.shocked;
-        lines.push(...damage(st, t, soft, hard));
+        const hurt = damage(st, t, soft, hard);
+        lines.push(...(t.side === side ? hurt.map(l => `⚠️ friendly fire: ${l}`) : hurt));
         const lost = before - (t.x === null ? 0 : t.platoons);
         const result = t.x === null ? 'Wiped out' : lost ? (isTank(t) ? 'Tank knocked out' : 'Section lost') : t.shocked && !wasShocked ? 'Pinned' : soft + hard ? 'No effect' : 'Missed';
         st.fx.push({ x: fx, y: fy, kind: 'shell', faces, need, side, to: { id: t.id }, result, support: which });
@@ -840,7 +843,7 @@ const Sim = (() => {
       if (!at(st, fx, fy, enemyOf(side)).length) st.fx.push({ x: fx, y: fy, kind: 'shell', support: which });
     };
     hitField(x, y, S.dice);
-    if (S.splash) for (const [dx, dy] of NEIGHBOURS) if (inside(x + dx, y + dy)) hitField(x + dx, y + dy, S.splash);
+    if (S.splash) for (const [dx, dy] of NEIGHBOURS) if (inside(x + dx, y + dy)) hitField(x + dx, y + dy, S.splash, true);
     return lines;
   }
 
@@ -1043,13 +1046,18 @@ const Sim = (() => {
   function finishHour(st) {
     const rep = st.de ? st.de.rep : [];
     st.de = null;
+    const germansLeft = st.units.some(u => u.side === 'de' && u.x !== null);
     if (holdsObjective(st)) {
       st.won = true;
       // Taken and held at the end of an hour wins at once
       rep.unshift(`🏆 ${st.objective.name} is taken and held at ${hourText(st.turn + 1)}!`);
-    } else if (!st.units.some(u => u.side === 'us' && u.kind === 'company' && u.x !== null)) {
+    } else if (!germansLeft) {
+      // Every German on the table destroyed wins too (Steve), even with no rifle platoons left to take the village
+      st.won = true;
+      rep.unshift(`🏆 Every German on the field is destroyed by ${hourText(st.turn + 1)}!`);
+    } else if (!st.units.some(u => u.side === 'us' && u.x !== null)) {
       st.lost = true;
-      rep.unshift('💀 The company has no rifle platoons left. The attack has failed.');
+      rep.unshift('💀 Nothing is left of the company. The attack has failed.');
     } else if (TURNS && st.turn >= TURNS) {
       st.lost = true;
       rep.unshift(`⌛ ${hourText(TURNS + 1)}: the attack has run out of time short of ${st.objective.name}.`);

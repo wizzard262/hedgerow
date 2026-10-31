@@ -412,6 +412,33 @@ check('the captain rallies twice if he stays put, once if he moves or shoots', (
   assert(!Sim.canRally(st2, c2), 'a second rally after moving');
 });
 
+check('destroying every German wins, even with no rifle platoons; losing everything loses', () => {
+  const st = Sim.newGame(6);
+  for (const u of st.units) if (u.side === 'de' || u.kind === 'company') { u.x = null; u.y = null; }
+  Sim.startGermanHour(st);
+  for (let r = Sim.germanStep(st); !r.done; r = Sim.germanStep(st)) Sim.answer(st, false);
+  Sim.finishHour(st);
+  assert(st.won, 'wiping out the Germans did not win');
+  const st2 = Sim.newGame(6);
+  for (const u of st2.units) if (u.kind === 'company' && u.side === 'us') { u.x = null; u.y = null; }
+  Sim.startGermanHour(st2);
+  for (let r = Sim.germanStep(st2); !r.done; r = Sim.germanStep(st2)) Sim.answer(st2, false);
+  Sim.finishHour(st2);
+  assert(!st2.lost || !st2.units.some(u => u.side === 'us' && u.x !== null), 'the game was lost with pieces still on the table');
+});
+
+check('artillery can hit your own pieces round the target', () => {
+  const st = Sim.newGame(3);
+  st.hedges = {}; st.wire = {};
+  const A = Sim.unitById(st, 'A'), B = Sim.unitById(st, 'B'), de = st.units.find(u => u.side === 'de' && u.kind === 'company');
+  for (const u of st.units) if (![A, B, de].includes(u)) u.x = u.y = null;
+  A.x = 2; A.y = 6; de.x = 3; de.y = 6; B.x = 4; B.y = 6;
+  st.rand = () => 0.99;
+  const r = Sim.actFire(st, 'artillery', 3, 6);
+  assert(r.ok, 'the artillery could not fire');
+  assert(st.fx.some(f => f.to && f.to.id === 'B'), 'the shells round the target missed your own platoon');
+});
+
 check('leaving everything alone never wins', () => {
   for (let seed = 1; seed <= 30; seed++) assert(!play(seed, false).won, `seed ${seed} won by doing nothing`);
 });

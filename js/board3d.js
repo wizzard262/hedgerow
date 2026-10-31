@@ -83,7 +83,7 @@ const Board = (() => {
         }
         // Its name, small, on the table in front
         const name = word(GUN_NAMES[side][which], '#efe6d2', false);
-        name.scale.multiplyScalar(0.85);
+        name.scale.multiplyScalar(1.5);
         name.material.depthTest = true;
         name.position.set(spot.x + (side === 'us' ? 0.3 : -0.3), 0.05, spot.z + 0.45);
         built.add(name);

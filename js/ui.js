@@ -24,6 +24,17 @@ const UI = (() => {
       return out;
     }
     if (!u || !view.mode) return [];
+    // Just picked (Steve): where it can go, both ways at once. Red hatching is Move & shoot; the other marked fields are
+    // a Charge. The field clicked decides which
+    if (view.mode === 'go') {
+      if (!Sim.canAct(st, u)) return [];
+      view.mode = 'moveShoot';
+      const shootAfter = spots().map(p => Object.assign(p, { act: 'moveShoot' }));
+      view.mode = 'charge';
+      const charges = spots().filter(p => p.kind !== 'line' && !shootAfter.some(q => q.x === p.x && q.y === p.y)).map(p => Object.assign(p, { act: 'charge' }));
+      view.mode = 'go';
+      return shootAfter.concat(charges);
+    }
     const fields = list => list.map(p => ({ x: p.x, y: p.y }));
     const uniq = list => list.filter((p, i) => list.findIndex(q => q.x === p.x && q.y === p.y) === i);
     const kind = { charge: 'charge', moveShoot: 'hatch', shoot: 'shoot', halfShot: 'shoot', rally: 'rally', breach: 'breach' }[view.mode];
@@ -54,6 +65,9 @@ const UI = (() => {
         const inVillage = Sim.tileType(t.x, t.y) === 'village';
         t.needNow = TO_HIT + (inVillage ? COVER.village : 0);
         t.needWhy = inVillage ? [`−${COVER.village} cover`] : [];
+        // Artillery: your own pieces in a field next to it would be in the blast
+        const friendsNear = view.mode === 'fire:artillery' && st.units.some(f => f.side === 'us' && f.x !== null && Math.abs(f.x - t.x) + Math.abs(f.y - t.y) === 1);
+        if (friendsNear) t.needWhy = t.needWhy.concat(['⚠ your men in the blast']);
         return t;
       });
     }
@@ -97,13 +111,17 @@ const UI = (() => {
   function clickField(x, y, picked, side) {
     if (st.won || st.lost || st.de) return null;
     const u = selected();
-    const spot = spots().find(p => p.x === x && p.y === y);
+    let spot = spots().find(p => p.x === x && p.y === y);
+    // Both ways shown: a click on a field where more of your pieces stand picks one of them instead
+    if (view.mode === 'go' && spot && spot.kind !== 'assault' && Sim.at(st, x, y, 'us').some(o => o !== u)) spot = null;
+    // Which action the click means
+    const how = view.mode === 'go' && spot ? spot.act : view.mode;
     let r = null;
     if (view.mode && spot) {
       if (view.mode.startsWith('fire:')) r = Sim.actFire(st, view.mode.slice(5), x, y);
-      else if (view.mode === 'charge' && spot.kind === 'line') r = Sim.lineSides(st, u).includes(side) ? Sim.actLine(st, u, side) : null;
-      else if (view.mode === 'charge') r = Sim.actCharge(st, u, x, y, side);
-      else if (view.mode === 'moveShoot') r = Sim.actMoveShoot(st, u, x, y, side);
+      else if (how === 'charge' && spot.kind === 'line') r = Sim.lineSides(st, u).includes(side) ? Sim.actLine(st, u, side) : null;
+      else if (how === 'charge') r = Sim.actCharge(st, u, x, y, side);
+      else if (how === 'moveShoot') r = Sim.actMoveShoot(st, u, x, y, side);
       else if (view.mode === 'breach') r = Sim.actBreach(st, u, x, y);
       else if (view.mode === 'shoot') r = Sim.actShoot(st, u, pickTarget(u, x, y));
       else if (view.mode === 'halfShot') r = Sim.actHalfShot(st, u, pickTarget(u, x, y));
@@ -111,17 +129,18 @@ const UI = (() => {
       if (r && r.ok) {
         view.log.push(...r.lines);
         // After moving with Move & shoot, offer the half-dice shot straight away, with red targets on who can be hit
-        if (view.mode === 'moveShoot') {
+        if (how === 'moveShoot') {
           if (u.halfShot) view.mode = 'halfShot';
           else { view.mode = null; view.log.push(`No Germans in reach for ${u.name} to shoot from here.`); }
         } else view.mode = null;
       }
       return null;
     }
-    // Otherwise the one piece clicked
+    // Otherwise the one piece clicked: if it can move, show where (both ways) straight away
     view.mode = null;
     if (!picked) { view.sel = null; return null; }
     view.sel = picked.id;
+    if (picked.side === 'us' && Sim.canAct(st, picked)) view.mode = 'go';
     return [picked];
   }
 
@@ -229,6 +248,7 @@ const UI = (() => {
       : view.mode.startsWith('fire:') ? 'Click a red target, or a field with Germans your troops can see.'
       : view.mode === 'halfShot' ? 'Moved. Click a red target to fire on it (one more needed on the move), or Esc to hold fire.'
       : view.mode === 'shoot' ? 'Click a red target to fire on it. Esc cancels.'
+      : view.mode === 'go' ? 'Red hatching: Move & shoot there, then fire. The other marked fields: Charge. Blue hatching: the village to take. Click where in the field to stand: by a hedge to line it, the middle for the open. Or pick from the menu.'
       : view.mode === 'charge' ? 'Blue hatching: the village to take. Click where in a field to go: by a hedge to line it (green: cover), or the middle for the open. Bright red fields are held by the Germans: a hand-to-hand fight. Its own field (green): line another hedge. Esc cancels.'
       : view.mode === 'moveShoot' ? `Click where in a red-hatched field to go (by a hedge to line it, green: cover): ${u ? u.name : 'the piece'} moves there and can fire. Esc cancels.`
       : `Click a highlighted field for ${u ? u.name : 'the piece'}. Esc cancels.`;
@@ -237,7 +257,7 @@ const UI = (() => {
 
   function update() {
     $('#clock').innerHTML = `<b>${Sim.hourText(st.turn)}</b> · hour ${st.turn}${TURNS ? ` of ${TURNS}` : ''} · ${START_DATE}`;
-    $('#goal').textContent = `🎯 Take ${st.objective.name} and hold it at the end of an hour${TURNS ? `, by ${Sim.hourText(TURNS + 1)}` : ' (no time limit for now)'}.`;
+    $('#goal').textContent = `🎯 Take ${st.objective.name} and hold it at the end of an hour, or destroy every German${TURNS ? `, by ${Sim.hourText(TURNS + 1)}` : ' (no time limit for now)'}.`;
     for (const which of ['mortars', 'artillery']) {
       const S = which === 'mortars' ? MORTARS : ARTILLERY, btn = $(`#fire-${which}`);
       btn.innerHTML = `${which === 'mortars' ? '💥 Mortars' : '💣 Artillery'} · ${st.ammo[which]} left`;
