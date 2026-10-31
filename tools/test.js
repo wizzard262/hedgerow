@@ -890,5 +890,22 @@ check('the timer is never the first token out of the bag', () => {
   }
 });
 
+check('the Germans have a captain who rallies their shaken pieces', () => {
+  const st = Sim.newGame(3);
+  const cap = st.units.find(u => u.side === 'de' && u.kind === 'captain');
+  assert(cap && cap.x !== null, 'no German captain on the table');
+  let rallied = 0;
+  for (let k = 0; k < 20; k++) {
+    const d = st.units.find(u => u.side === 'de' && u.kind === 'company' && u.x === cap.x && u.y === cap.y);
+    d.shocked = true;
+    st.de = { queue: [cap.id], mortar: false, artillery: false, rep: [], ask: null, move: { id: cap.id, what: '' } };
+    Sim.germanStep(st);
+    assert(/rall/i.test(st.de.move.what), `the captain did not try to rally (${st.de.move.what})`);
+    if (!d.shocked) rallied++;
+    st.de = null;
+  }
+  assert(rallied > 5, `the German captain rallied only ${rallied} of 20 times`);
+});
+
 console.log(failed ? `\n${failed} failed` : '\nall passed');
 process.exit(failed ? 1 : 0);

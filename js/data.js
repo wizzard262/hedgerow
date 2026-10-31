@@ -117,6 +117,8 @@ const US_START = [
 const DE_START = [
   { id: 'd1', kind: 'company', name: '1. Fallschirmjäger-Zug', quality: 'elite', post: [0, 0], garrison: true },
   { id: 'dmg1', kind: 'mg42', name: 'MG 42 Team', post: [0, 0], garrison: true },
+  // Their company commander (Steve), with a red flag, in the objective with the garrison: he rallies shaken Germans
+  { id: 'dcap', kind: 'captain', name: 'Hauptmann (company HQ)', post: [0, 0], garrison: true },
   { id: 'pak1', kind: 'pak', name: 'PaK 40', post: [1, 0], garrison: true },
   { id: 'dmg3', kind: 'mg42', name: 'MG 42 Team', post: [-1, 0], garrison: true },
   { id: 'd2', kind: 'company', name: '2. Zug', quality: 'standard', post: [0, 1] },

@@ -1085,6 +1085,19 @@ const Sim = (() => {
     const rep = st.de.rep;
     // Until it does something else, it holds its ground (what the table's word bubble says, Steve)
     deSays(st, 'Holds its ground');
+    // Their captain (Steve): first he rallies the nearest shaken German in reach, himself too
+    if (u.kind === 'captain') {
+      const far = t => Math.abs(t.x - u.x) + Math.abs(t.y - u.y);
+      const shaken = st.units.filter(t => t.side === 'de' && t.x !== null && t.shocked && far(t) <= RALLY_RANGE).sort((a, b) => far(a) - far(b));
+      if (shaken.length) {
+        const t = shaken[0];
+        const ok = st.rand() < QUALITY[t.quality || 'standard'].rally;
+        if (ok) t.shocked = false;
+        deSays(st, `${ok ? 'Rallies' : 'Tries to rally'} ${t === u ? 'himself' : t.name}`);
+        rep.push(ok ? `📣 ${u.name} rallies ${t.name}.` : `📣 ${u.name} can't steady ${t.name} yet.`);
+        return null;
+      }
+    }
     const inHamlet = at(st, st.objective.x, st.objective.y, 'us').length > 0;
     if (inHamlet && !u.shocked && (u.kind === 'company' || isTank(u)) && adjacent(u, st.objective) && !(isTank(u) && hedge(st, u.x, u.y, st.objective.x, st.objective.y))) {
       deSays(st, `Charges into ${st.objective.name}`);

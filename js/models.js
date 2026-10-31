@@ -221,8 +221,9 @@ const Models = (() => {
     g.add(at(cyl(0.0016, 0.0016, 0.24, M.wood, 6), -0.022, 0.128, -0.018));
     g.add(at(sphere(0.003, mat('#c9a53a', 0.4, 0.6), 8, 6), -0.022, 0.25, -0.018));
     const flag = new T.Group();
-    flag.add(at(box(0.07, 0.045, 0.002, mat(side === 'us' ? '#2f4f86' : '#8a3a32', 0.8)), 0.035, 0, 0));
-    for (const r of [0.6, -0.6]) flag.add(at(box(0.05, 0.004, 0.0025, mat('#f2efe6', 0.8)), 0.035, 0, 0, 0, 0, r));
+    // Blue with crossed rifles in white for the Americans; plain red for the Germans (Steve)
+    flag.add(at(box(0.07, 0.045, 0.002, mat(side === 'us' ? '#2f4f86' : '#c0261c', 0.8)), 0.035, 0, 0));
+    if (side === 'us') for (const r of [0.6, -0.6]) flag.add(at(box(0.05, 0.004, 0.0025, mat('#f2efe6', 0.8)), 0.035, 0, 0, 0, 0, r));
     at(flag, -0.022, 0.222, -0.018, 0, 0.35, 0);
     g.add(flag);
     return castAll(g);
