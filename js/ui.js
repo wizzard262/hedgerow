@@ -8,7 +8,7 @@ const UI = (() => {
   // What the player has chosen: a piece, and an action waiting for a field to be clicked
   const view = { sel: null, mode: null, log: [] };
 
-  const KIND = { company: 'Rifle platoon', captain: 'Captain', sherman: 'Sherman section', firefly: 'Firefly section', mg: 'Machine-gun team', bazooka: 'Bazooka team',
+  const KIND = { company: 'Rifle platoon', captain: 'Captain', sherman: 'Sherman section', firefly: 'Firefly section', mg: 'Machine-gun team', bazooka: 'Bazooka team', sniper: 'Sniper team',
                  pz4: 'Panzer IV section', panther: 'Panther section', mg42: 'MG 42 team', schreck: 'Panzerschreck team', pak: 'PaK 40 anti-tank gun' };
 
   function setState(s) { st = s; view.sel = null; view.mode = null; view.log = []; }

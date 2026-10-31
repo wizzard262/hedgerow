@@ -178,6 +178,13 @@ const Models = (() => {
       const loader = soldier(side, 1, false); loader.scale.y = 0.75; g.add(at(loader, 0.0, 0.008, 0.035, 0, -0.4, 0));
       g.add(at(soldier(side, -1, false), -0.04, 0.008, -0.035, 0, 0.3, 0));
       for (const z of [-0.012, 0.006]) g.add(at(box(0.012, 0.01, 0.016, side === 'us' ? M.usHelmet : M.deHelmet), -0.045, 0.013, z));
+    } else if (kind === 'sniper') {
+      // The sniper kneeling with his long scoped rifle, his spotter beside him with binoculars
+      const shot = soldier(side, 0, false); shot.scale.y = 0.72; g.add(at(shot, 0.0, 0.008, -0.012, 0, 0, 0));
+      g.add(at(cyl(0.0022, 0.0022, 0.1, M.wood, 6), 0.04, 0.06, -0.012, 0, 0, Math.PI / 2 - 0.06));
+      g.add(at(cyl(0.0035, 0.0035, 0.024, M.black, 8), 0.03, 0.068, -0.012, 0, 0, Math.PI / 2));
+      const spotter = soldier(side, 1, false); spotter.scale.y = 0.74; g.add(at(spotter, -0.022, 0.008, 0.026, 0, 0.3, 0));
+      for (const z of [0.022, 0.03]) g.add(at(cyl(0.003, 0.003, 0.01, M.black, 8), -0.008, 0.07, z, 0, 0, Math.PI / 2));
     } else {
       // Two men: the gunner with a big anti-tank tube on his shoulder, and his loader carrying the rockets in a big bag
       const tubeMat = kind === 'schreck' ? mat('#4f5a3c', 0.6, 0.2) : mat('#56603a', 0.6, 0.2);

@@ -44,9 +44,16 @@ const SHAKEN_SHOOT = 1;          // a shaken (pinned) piece needs one more to hi
 const MAX_NEED = 6;              // a shot that would need more than this can't be taken (Steve: no shooting at 7+)
 const WOUND_CHANCE = 0.5;        // each hit is a coin toss: heads it wounds (a section, a team or a tank lost); every hit pins
 const QUALITY = { elite: { name: 'Elite', shoot: 1, assault: 1.3, rally: 0.9 }, standard: { name: 'Standard', shoot: 0, assault: 1, rally: 0.7 } };
-const SIGHT_RANGE = 3;           // fields a piece can shoot across open ground (hedges, villages and orchards block the view)
+const SIGHT_RANGE = 3;           // fields a piece without a weapon of its own sees (the rest: RANGES; hedges, villages and orchards block the view)
 const LONG_RANGE = 1;             // added to the score needed at long range (the penalties stack)
-const LONG_FROM = { normal: 1, far: 2 };   // fields away before long range starts: one for most, two for MGs, tanks and guns (Steve)
+// How far each kind of weapon sees and shoots, and how many fields away before long range starts (Steve: rifles one
+// further, machine guns and tanks two beyond the rifles, the sniper the whole board with no long range)
+const RANGES = {
+  short: { sight: 3, long: 1 },     // bazookas and Panzerschrecks
+  rifle: { sight: 4, long: 2 },     // rifle platoons and the captain's HQ
+  heavy: { sight: 6, long: 4 },     // machine guns, tanks and the PaK
+  sniper: { sight: 99, long: 99 },  // the sniper: anywhere he can see, no long range, and cover doesn't help the target
+};
 const ON_THE_MOVE = 1;           // added to the score needed when firing after a move (Steve: like range and cover, +1 each)
 const COVER = { hedge: 1, village: 1, hamlet: 1, orchard: 1, tank: 1 };   // tank: infantry sheltering behind or beside a tank (Steve)   // added to the score needed against a target behind a hedge, in the village, a hamlet or an orchard
 const CAPTAIN_RALLIES = { still: 2, moved: 1 };   // rallies an hour: two if he neither moves nor shoots, one if he does (before or after)
@@ -64,6 +71,7 @@ const PIECES = {
   panther:  { name: 'Panther section', soft: 1.5, hard: 3, tank: true, armour: 1, cutter: true },
   mg:       { name: 'MG team', soft: 5, hard: 0, team: true },          // machine guns fire 5 dice (Steve)
   bazooka:  { name: 'Bazooka team', soft: 0, hard: 2, team: true },
+  sniper:   { name: 'Sniper team', soft: 1, hard: 0, team: true, sniper: true },   // sees the whole board, ignores cover and range (Steve)
   mg42:     { name: 'MG 42 team', soft: 5, hard: 0, team: true },
   schreck:  { name: 'Panzerschreck team', soft: 0, hard: 2.5, team: true },
   pak:      { name: 'PaK 40 gun', soft: 0.5, hard: 3, team: true, fixed: true },
@@ -90,6 +98,7 @@ const US_START = [
   { id: 'T2', kind: 'firefly', name: 'Firefly pair', x: 0, y: 3 },
   { id: 'mg1', kind: 'mg', name: 'MG Team 1', x: 1, y: 4 },
   { id: 'bz1', kind: 'bazooka', name: 'Bazooka Team 1', x: 0, y: 5 },
+  { id: 'sn1', kind: 'sniper', name: 'Sniper', x: 0, y: 1 },
 ];
 // The Germans: a garrison already dug in round the objective, the rest marching up from the east to their posts.
 // Posts are given from the objective (dx, dy); garrison pieces start at theirs

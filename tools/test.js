@@ -235,17 +235,22 @@ check('across a hedge: lining it you fire through; in the open you need them lin
   assert(need(us, de) > 0, 'score needed');
 });
 
-check('line of sight: three fields over open ground, blocked by a hedge in between or a village, one more at range', () => {
+check('line of sight: rifles see four fields over open ground, blocked by a hedge in between, one more beyond two', () => {
   const st = Sim.newGame(4);
   const us = Sim.unitById(st, 'A'), de = Sim.unitById(st, 'd2');
   for (const u of st.units) if (u !== us && u !== de) u.x = u.y = null;
   st.hedges = {}; st.wire = {};
-  us.x = 0; us.y = 7; de.x = 3; de.y = 7; us.at = null; de.at = null;
+  // Along the lane in row 2
+  us.x = 0; us.y = 2; de.x = 3; de.y = 2; us.at = null; de.at = null;
   const s3 = Sim.sight(st, us, de);
   assert(s3 && s3.cover === LONG_RANGE, 'three open fields away should be seen, one more to hit');
+  de.x = 2;
+  assert(Sim.sight(st, us, de).cover === 0, 'two fields away was long range for rifles');
   de.x = 4;
-  assert(!Sim.sight(st, us, de), 'four fields away was seen');
-  de.x = 3; st.hedges['1,7|2,7'] = true;
+  assert(Sim.sight(st, us, de), 'four fields away was not seen');
+  de.x = 5;
+  assert(!Sim.sight(st, us, de), 'five fields away was seen');
+  de.x = 3; st.hedges['1,2|2,2'] = true;
   assert(!Sim.sight(st, us, de), 'a hedge in between did not block the view');
 });
 
@@ -375,13 +380,14 @@ check('two pins kill; bazookas and tanks kill men outright; MGs and tanks reach 
   g.bz.at = null; g.bz.x = 1; g.bz.y = 7;
   Sim.actShoot(g.st, g.bz, g.de);
   assert(g.de.platoons < 3 || g.de.x === null, 'a bazooka hit on men did not kill');
-  // Range: two fields away is long range for riflemen, not for a machine gun
+  // Range: three fields away is long range for riflemen, not for a machine gun (four is)
   const r = setUp();
-  const far = { x: 2, y: 6, kind: 'company', side: 'de', at: null };
-  assert(Sim.needWhy(r.st, r.A, far).some(w => w.includes('long range')), 'two fields away was not long range for a rifle platoon');
+  const near = { x: 2, y: 6, kind: 'company', side: 'de', at: null }, far = { x: 3, y: 6, kind: 'company', side: 'de', at: null };
+  assert(!Sim.needWhy(r.st, r.A, near).some(w => w.includes('long range')), 'two fields away was long range for a rifle platoon');
+  assert(Sim.needWhy(r.st, r.A, far).some(w => w.includes('long range')), 'three fields away was not long range for a rifle platoon');
   r.mg.x = 0; r.mg.y = 5; r.mg.at = null;
-  const far2 = { x: 2, y: 5, kind: 'company', side: 'de', at: null };
-  assert(!Sim.needWhy(r.st, r.mg, far2).some(w => w.includes('long range')), 'two fields away was long range for a machine gun');
+  const far2 = { x: 4, y: 5, kind: 'company', side: 'de', at: null };
+  assert(!Sim.needWhy(r.st, r.mg, far2).some(w => w.includes('long range')), 'four fields away was long range for a machine gun');
   // Cover: men beside their own tank
   const c = setUp();
   c.T1.x = 1; c.T1.y = 5;
@@ -444,14 +450,34 @@ check('a shot that would need 7 or more cannot be taken', () => {
   st.hedges = {}; st.wire = {};
   const B = Sim.unitById(st, 'B'), de = st.units.find(u => u.side === 'de' && u.kind === 'company');
   for (const u of st.units) if (u !== B && u !== de) u.x = u.y = null;
-  // A German in the orchard two fields off (cover and long range), the shooter shaken: 3 + 1 + 1 + 1 = 6
-  B.x = 3; B.y = 0; B.at = null; B.quality = 'standard'; B.shocked = true;
-  de.x = 5; de.y = 0; de.at = null;
-  assert(Sim.tileType(5, 0) === 'orchard', 'the test needs an orchard at 5,0');
+  // A German in the orchard three fields off (cover and long range), the shooter shaken: 3 + 1 + 1 + 1 = 6
+  B.x = 6; B.y = 0; B.at = null; B.quality = 'standard'; B.shocked = true;
+  de.x = 9; de.y = 0; de.at = null;
+  assert(Sim.tileType(9, 0) === 'orchard', 'the test needs an orchard at 9,0');
   assert(Sim.targets(st, B).includes(de), 'a 6+ shot was refused');
   // Taking cover makes it 7: no shot
   de.down = true;
   assert(!Sim.targets(st, B).includes(de), 'a 7+ shot was allowed');
+});
+
+check('ranges: rifles 4, machine guns and tanks 6; the sniper the whole board, ignoring cover and range', () => {
+  const st = Sim.newGame(3);
+  st.hedges = {}; st.wire = {};
+  const A = Sim.unitById(st, 'A'), mg = Sim.unitById(st, 'mg1'), sn = Sim.unitById(st, 'sn1');
+  const open = (x, y) => ({ x, y, kind: 'company', side: 'de', at: null });
+  // Along the lane row (no houses or trees in the way)
+  const row = [...Array(ROWS).keys()].find(y => [...Array(COLS).keys()].every(x => ['laneEW', 'crossroads', 'field', 'bridge'].includes(Sim.tileType(x, y)) || x === 7));
+  for (const u of [A, mg, sn]) { u.x = 0; u.y = row; u.at = null; }
+  const clear = x => [...Array(x).keys()].every(k => !['village', 'hamlet', 'orchard'].includes(Sim.tileType(k, row)));
+  if (clear(7)) {
+    assert(Sim.sight(st, A, open(4, row)) && !Sim.sight(st, A, open(5, row)), 'rifles do not reach exactly 4 fields');
+    assert(Sim.sight(st, mg, open(6, row)), 'a machine gun does not reach 6 fields');
+    assert(Sim.sight(st, sn, open(6, row)), 'the sniper cannot see across the board');
+  }
+  // The sniper ignores cover and range: a far target in a village needs just 3+
+  const tgt = { x: 4, y: 4, kind: 'company', side: 'de', at: 'w', down: true };
+  sn.quality = 'standard'; sn.shocked = false;
+  assert(Sim.needFor(st, sn, tgt) === TO_HIT, 'the sniper was slowed by cover or range');
 });
 
 check('leaving everything alone never wins', () => {

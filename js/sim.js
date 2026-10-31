@@ -206,20 +206,28 @@ const Sim = (() => {
   }
 
   // Can one piece see another to shoot it, and how hard is the target to hit?
-  // Up to SIGHT_RANGE fields over open fields and lanes; villages, hamlets and orchards in between block the view.
+  // As far as its weapon reaches (RANGES) over open fields and lanes; villages, hamlets and orchards in between block the view.
   // Hedges (Steve): the hedge next to the shooter is seen through only if the shooter lines it; the hedge next to the target
   // only if the target lines it (it is then in cover, one more to hit); with one hedge between them either lining it will do,
   // and the target has cover if it lines it. Any other hedge in between blocks the view. Beyond the next field: one more to hit.
   // Returns null (can't see) or { cover } added to the score needed
   // Is a target at long range for this shooter? Machine guns, tanks and guns reach a field further first (Steve)
+  // Which range a piece shoots at: its weapon's (see RANGES)
+  function rangeOf(u) {
+    if (!u.kind) return { sight: SIGHT_RANGE, long: 1 };
+    if (PIECES[u.kind].sniper) return RANGES.sniper;
+    if (isTank(u) || ['mg', 'mg42', 'pak'].includes(u.kind)) return RANGES.heavy;
+    if (u.kind === 'company' || u.kind === 'captain') return RANGES.rifle;
+    return RANGES.short;
+  }
+
   function isFar(from, target) {
-    const reach = from.kind && (isTank(from) || from.kind === 'mg' || from.kind === 'mg42' || from.kind === 'pak') ? LONG_FROM.far : LONG_FROM.normal;
-    return Math.hypot(target.x - from.x, target.y - from.y) > reach + 0.5;
+    return Math.hypot(target.x - from.x, target.y - from.y) > rangeOf(from).long + 0.5;
   }
 
   function sight(st, from, target) {
     const dist = Math.hypot(target.x - from.x, target.y - from.y);
-    if (dist === 0 || dist > SIGHT_RANGE + 0.01) return null;
+    if (dist === 0 || dist > rangeOf(from).sight + 0.01) return null;
     const path = fieldsAlong(from, target);
     let c = isFar(from, target) ? LONG_RANGE : 0;
     let behindTank = false;
@@ -339,12 +347,20 @@ const Sim = (() => {
   // withdraw: the target spends a point to try to pull back: if it works it takes half the hits and falls back a field
   // The score each die needs: TO_HIT, plus cover and range, plus one on the move, less one for elite troops
   function needFor(st, shooter, target, moving = false) {
+    // The sniper: no cover, no long range (Steve)
+    if (PIECES[shooter.kind].sniper) return TO_HIT + (moving ? ON_THE_MOVE : 0) + (shooter.shocked ? SHAKEN_SHOOT : 0) - QUALITY[shooter.quality || 'standard'].shoot;
     return TO_HIT + cover(st, shooter, target) + (moving ? ON_THE_MOVE : 0) + (shooter.shocked ? SHAKEN_SHOOT : 0) + (target.down ? TAKE_COVER : 0) - QUALITY[shooter.quality || 'standard'].shoot;
   }
 
   // Why a shot needs what it needs, for the label on the target (Steve): each thing that makes it harder (−) or easier (+)
   function needWhy(st, shooter, target, moving = false) {
     const why = [];
+    if (PIECES[shooter.kind].sniper) {
+      why.push('sniper: no cover or range');
+      if (moving) why.push(`−${ON_THE_MOVE} moving`);
+      if (shooter.shocked) why.push(`−${SHAKEN_SHOOT} shaken`);
+      return why;
+    }
     const s = sight(st, shooter, target);
     const far = isFar(shooter, target);
     const t = tileType(target.x, target.y);
