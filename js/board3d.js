@@ -42,7 +42,7 @@ const Board = (() => {
     // The board's corners with the thinnest edge of table, and the guns and their names off each side
     const board = [[-0.06, -0.06], [COLS + 0.06, -0.06], [-0.06, ROWS + 0.06], [COLS + 0.06, ROWS + 0.06]];
     // (and where the drawn token lands, above each side's artillery)
-    const guns = [[-1.75, 2.1], [-1.75, 4.7], [COLS + 1.75, 2.1], [COLS + 1.75, 4.7], [-1.1, 1.3], [COLS + 1.1, 1.3]];
+    const guns = [[-1.75, 2.1], [-1.75, 4.7], [COLS + 1.75, 2.1], [COLS + 1.75, 4.7], [-1.35, 0.9], [-1.35, 1.9], [COLS + 1.35, 0.9], [COLS + 1.35, 1.9]];
     const corners = board.concat(guns).map(([x, z]) => new T.Vector3(x, 0, z));
     // Move the camera in until something would go off the screen; then aim a little further up or down the board so
     // the edges of table above and below come out even, and move in again
@@ -133,8 +133,8 @@ const Board = (() => {
   // ---------- The drawn token ----------
   // It flies from its place in the bar up onto the table, just above that side's artillery (Steve), in an arc: rising
   // (and growing) then dropping (and shrinking), turning over as it goes, and lands flat as a thick coin about twice the
-  // size of a one-man base. It sits there until that move is over, then shrinks away
-  const COIN_SIZE = 0.16;            // radius on the table
+  // size of a one-man base, then three times the radius (Steve). It sits there until that move is over, then shrinks away
+  const COIN_SIZE = 0.48;            // radius on the table (Steve: three times the first size)
   let coinFlight = null;             // { mesh, from, to, t0, done, leaving }
   function flyToken(side, clientX, clientY, done) {
     clearTokenNow();
@@ -146,7 +146,7 @@ const Board = (() => {
     const from = new T.Vector3();
     if (!ray.ray.intersectPlane(table, from)) from.set(COLS / 2, 0, ROWS + 2);
     const gun = GUNS[side].artillery;
-    const to = new T.Vector3(gun.x + (side === 'us' ? -0.05 : 0.05), 0.015, gun.z - 0.95);
+    const to = new T.Vector3(gun.x + (side === 'us' ? -0.1 : 0.1), 0.04, gun.z - 1.15);
     mesh.position.copy(from);
     scene.add(mesh);
     coinFlight = { mesh, from, to, t0: performance.now(), done, leaving: 0 };
@@ -165,7 +165,7 @@ const Board = (() => {
     }
     const p = Math.min(1, (now - c.t0) / 1150), e = p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
     m.position.set(T.MathUtils.lerp(c.from.x, c.to.x, e), c.to.y + 1.8 * Math.sin(Math.PI * e), T.MathUtils.lerp(c.from.z, c.to.z, e));
-    m.scale.setScalar(COIN_SIZE * (1 + 1.4 * Math.sin(Math.PI * e)));
+    m.scale.setScalar(COIN_SIZE * (1 + 0.9 * Math.sin(Math.PI * e)));
     m.rotation.set(Math.PI * 2 * (1 - e), 0, 0.3 * Math.sin(Math.PI * e));
     if (p >= 1 && c.done) { const d = c.done; c.done = null; Sound.play('select'); d(); }
     return p < 1;
