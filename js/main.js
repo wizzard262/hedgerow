@@ -59,7 +59,7 @@ window.Game = (() => {
       // Green rings under pieces that can still act this hour, grey under those that have
       const ready = st.de || st.won || st.lost ? null : u => Sim.canAct(st, u) || (Sim.canRally(st, u) && Sim.rallyTargets(st, u).length > 0);
       const guns = st.de || st.won || st.lost ? null : UI.supportState();
-      dirty = Board.render(st, { spots, selected: UI.selected(), hover, targets, hotTarget, ready, shooter, mortarAim, aimWhich, guns });
+      dirty = Board.render(st, { spots, selected: UI.selected(), hover, targets, hotTarget, ready, shooter, mortarAim, aimWhich, guns, fireFrom: (UI.view.mode || '').startsWith('fire:') ? UI.view.mode.slice(5) : null });
       const p = Board.screenPoint(st.objective.x + 0.5, st.objective.y, 0.35), r = board.getBoundingClientRect();
       Object.assign($('#label').style, { left: p.x - r.left + 'px', top: p.y - r.top + 'px' });
       $('#label').textContent = `🎯 ${st.objective.name}`;

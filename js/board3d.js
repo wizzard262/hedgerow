@@ -540,6 +540,36 @@ const Board = (() => {
     return s;
   }
 
+  // A mortar or artillery line of fire (Steve: an arc): a dashed curve from the gun off the board, the way its rounds fly
+  function fireArc(f, target, lit) {
+    const to = pieceCentre(target);
+    const pts = [];
+    for (let k = 0; k <= 30; k++) pts.push(shellAt(f, to, k / 30));
+    const arc = new T.Group();
+    const line = new T.Line(new T.BufferGeometry().setFromPoints(pts), new T.LineDashedMaterial({ color: lit ? 0xff5a40 : 0xe8352a, dashSize: 0.08, gapSize: 0.05, transparent: true, opacity: lit ? 1 : 0.75, depthTest: false }));
+    line.computeLineDistances();
+    arc.add(line);
+    // Beads of light along it, so the curve shows clearly against the table
+    for (let k = 1; k < 30; k += 2) {
+      const bead = glow(lit ? 'rgba(255,110,80,1)' : 'rgba(232,60,40,.9)');
+      bead.material.depthTest = false;
+      bead.scale.setScalar(lit ? 0.07 : 0.05);
+      bead.position.copy(pts[k]);
+      arc.add(bead);
+    }
+    return arc;
+  }
+
+  // A word bubble's arrow (Steve: pointy, a triangle, not a line): wide where it leaves the bubble, a point at the target
+  function wedge(from, to, width, colour) {
+    const dx = to.x - from.x, dz = to.z - from.z, len = Math.hypot(dx, dz) || 1;
+    const px = -dz / len * width / 2, pz = dx / len * width / 2;
+    const g = new T.BufferGeometry().setFromPoints([new T.Vector3(from.x + px, from.y, from.z + pz), new T.Vector3(from.x - px, from.y, from.z - pz), to]);
+    const m = new T.Mesh(g, new T.MeshBasicMaterial({ color: colour, side: T.DoubleSide, transparent: true, opacity: 0.94, depthTest: false }));
+    m.renderOrder = 5;
+    return m;
+  }
+
   // Where a target's red cross-hair floats
   const reticleSpot = u => { const p = pieceCentre(u), big = u.kind === 'company' || Sim.isTank(u); return new T.Vector3(p.x, big ? 0.62 : 0.5, p.z); };
 
@@ -569,10 +599,8 @@ const Board = (() => {
         const farHalf = u.y < ROWS / 2;
         const anchor = new T.Vector3(p.x, 0.3, Math.max(0.4, Math.min(ROWS - 0.4, p.z + (farHalf ? 2.6 : -2.6))));
         const l = needLabel(u.needNow, u.needWhy || [], !farHalf);
-        l.position.copy(anchor); marks.add(l);
-        const aim = reticleSpot(u);
-        const line = new T.Line(new T.BufferGeometry().setFromPoints([anchor, aim]), new T.LineBasicMaterial({ color: 0xffe2c8, transparent: true, opacity: lit ? 1 : 0.8, depthTest: false }));
-        marks.add(line);
+        l.position.copy(anchor); l.renderOrder = 6; marks.add(l);
+        marks.add(wedge(anchor, reticleSpot(u), 0.2, lit ? 0xc0261c : 0x961914));
       }
     }
   }
@@ -840,13 +868,17 @@ const Board = (() => {
         if (!r.hit) d.traverse(c => { if (c.isMesh && c.material === Models.M.die) { c.material = c.material.clone(); c.material.color.multiplyScalar(0.4); } });
         scene.add(d); dice.push(d);
       });
-      // The tag just behind them
+      // The tag: a long word bubble a little up the board, with a pointed arrow to the middle of the dice (Steve)
       const rows = Math.ceil(f.faces.length / 6);
-      const tagZ = z - (rows - 1) * DIE_GAP - 0.2;
+      const diceMid = new T.Vector3(f.x + 0.15 + (Math.min(6, f.faces.length) - 1) * DIE_GAP / 2, 0.03, z - (rows - 1) * DIE_GAP / 2);
+      const tagZ = z - (rows - 1) * DIE_GAP - 0.55;
+      const anchor = new T.Vector3(diceMid.x, 0.22, tagZ);
       const tag = diceTag(shotTagText(st, f), f.side);
-      tag.position.set(f.x + 0.5, 0.1, tagZ);
+      tag.position.copy(anchor); tag.renderOrder = 6;
       scene.add(tag); dice.push(tag);
-      cursor[key] = tagZ - 0.45;
+      const arrow = wedge(anchor, diceMid, 0.16, f.side === 'de' ? 0x46484a : 0x1e3e6e);
+      scene.add(arrow); dice.push(arrow);
+      cursor[key] = tagZ - 0.3;
     }
   }
 
@@ -869,26 +901,32 @@ const Board = (() => {
 
   // The tag: a small rounded label, blue for our shots and grey for the Germans', drawn once for each text
   const tagTex = {};
+  // A long word bubble on one line: who fired in white, the score and hits in gold; a pointed tail at the bottom middle,
+  // where the sprite is anchored (the arrow carries on from it to the dice)
   function diceTag(lines, side) {
     const key = side + lines.join('/');
     if (!tagTex[key]) {
       const c = document.createElement('canvas'), g = c.getContext('2d');
-      const font = 'bold 44px Georgia, serif';
+      const font = 'bold 40px Georgia, serif', sep = '  ·  ';
       g.font = font;
-      const wide = Math.max(...lines.map(l => g.measureText(l).width));
-      c.width = Math.ceil(wide) + 56; c.height = 128;
-      g.font = font;
-      g.fillStyle = side === 'de' ? 'rgba(70,72,74,.94)' : 'rgba(30,62,110,.94)';
-      g.beginPath(); g.roundRect(4, 4, c.width - 8, 120, 18); g.fill();
-      g.fillStyle = '#f4efe4'; g.textAlign = 'center'; g.textBaseline = 'middle';
-      g.fillText(lines[0], c.width / 2, 40);
-      g.fillStyle = '#ffd98a';
-      g.fillText(lines[1], c.width / 2, 92);
+      const w0 = g.measureText(lines[0] + sep).width, w1 = g.measureText(lines[1]).width;
+      const tail = 18, boxH = 64;
+      c.width = Math.ceil(w0 + w1) + 48; c.height = boxH + tail + 6;
+      const mid = c.width / 2;
+      g.beginPath();
+      g.roundRect(4, 4, c.width - 8, boxH, 20);
+      g.moveTo(mid - 14, boxH + 3); g.lineTo(mid, c.height - 2); g.lineTo(mid + 14, boxH + 3);
+      g.fillStyle = side === 'de' ? 'rgba(70,72,74,.94)' : 'rgba(30,62,110,.94)'; g.fill();
+      g.lineWidth = 3; g.strokeStyle = 'rgba(230,236,245,.8)'; g.stroke();
+      g.font = font; g.textBaseline = 'middle';
+      g.fillStyle = '#f4efe4'; g.fillText(lines[0] + sep, 24, 4 + boxH / 2);
+      g.fillStyle = '#ffd98a'; g.fillText(lines[1], 24 + w0, 4 + boxH / 2);
       tagTex[key] = { map: new T.CanvasTexture(c), aspect: c.width / c.height };
     }
     const t = tagTex[key];
     const s = new T.Sprite(new T.SpriteMaterial({ map: t.map, transparent: true, depthTest: false }));
-    s.scale.set(0.34 * t.aspect, 0.34, 1);
+    s.scale.set(0.24 * t.aspect, 0.24, 1);
+    s.center.set(0.5, 0);
     return s;
   }
 
@@ -917,12 +955,9 @@ const Board = (() => {
     // Shooting: a line of sight from the shooter to each target it can see
     if (view.shooter && view.shooter.x !== null && pieces[view.shooter.id]) sightLines(view.shooter, view.targets || [], view.hotTarget);
     // German mortars ranging on a piece: a line from their mortar off the board
-    if (view.mortarAim && pieces[view.mortarAim.id]) {
-      const from = muzzle({ side: 'de', support: view.aimWhich || 'mortars' }), to = pieceCentre(view.mortarAim);
-      const line = new T.Line(new T.BufferGeometry().setFromPoints([from, new T.Vector3(to.x, 0.16, to.z)]), new T.LineDashedMaterial({ color: 0xff5a40, dashSize: 0.06, gapSize: 0.04, depthTest: false }));
-      line.computeLineDistances();
-      marks.add(line);
-    }
+    if (view.mortarAim && pieces[view.mortarAim.id]) marks.add(fireArc({ side: 'de', support: view.aimWhich || 'mortars' }, view.mortarAim, true));
+    // Your mortars or artillery choosing a target: an arc from the gun to each one, the one under the pointer brighter
+    if (view.fireFrom) for (const t of view.targets || []) if (pieces[t.id]) marks.add(fireArc({ side: 'us', support: view.fireFrom }, t, view.hotTarget && view.hotTarget.id === t.id));
     if (view.ready) for (const u of st.units) {
       if (u.side !== 'us' || u.x === null || !pieces[u.id]) continue;
       const can = view.ready(u);

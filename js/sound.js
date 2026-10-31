@@ -249,8 +249,9 @@ const Sound = (() => {
 
   function play(name, delay = 0, big = false) {
     if (!on || !ctx || ctx.state !== 'running') return;
-    if (name === 'select') return playFile('select', ctx.currentTime + delay, 0.8, 1, ctx.destination);
-    if (SOUNDS[name]) SOUNDS[name](ctx.currentTime + delay, big);
+    const when = ctx.currentTime + Math.max(0, delay);
+    if (name === 'select') return playFile('select', when, 0.8, 1, ctx.destination);
+    if (SOUNDS[name]) SOUNDS[name](when, big);
   }
 
   function toggle() {
