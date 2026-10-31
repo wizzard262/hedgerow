@@ -137,7 +137,8 @@ const Sound = (() => {
     out.gain.setValueAtTime(0.0001, t);
     out.gain.exponentialRampToValueAtTime(1, t + dur * 0.45);
     out.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    const far = ctx.createBiquadFilter(); far.type = 'lowpass'; far.frequency.value = 420;
+    // (high enough that the engines' growl carries on small speakers, not just the deep hum)
+    const far = ctx.createBiquadFilter(); far.type = 'lowpass'; far.frequency.value = 750;
     far.connect(out);
     // Across the sky, left to right or right to left
     const pan = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
@@ -163,8 +164,14 @@ const Sound = (() => {
     const ag = ctx.createGain(); ag.gain.value = BOMBER_LOUDNESS * 0.8;
     air.connect(low); low.connect(ag); ag.connect(far);
     air.start(t); air.stop(t + dur + 0.1);
+    // The engines' growl: a band of rough noise in the middle of the drone
+    const growl = ctx.createBufferSource(); growl.buffer = noiseBuf; growl.loop = true;
+    const band = ctx.createBiquadFilter(); band.type = 'bandpass'; band.frequency.value = 240; band.Q.value = 1.2;
+    const gg = ctx.createGain(); gg.gain.value = BOMBER_LOUDNESS * 0.6;
+    growl.connect(band); band.connect(gg); gg.connect(far);
+    growl.start(t); growl.stop(t + dur + 0.1);
   }
-  const BOMBER_LOUDNESS = 0.5;
+  const BOMBER_LOUDNESS = 0.35;
 
   // Each sound, starting at time t
   const SOUNDS = {
@@ -286,15 +293,15 @@ const Sound = (() => {
       bus = master;
     };
     next();
-    // Now and then a flight of bombers goes over (Steve): the first after a little while, then every minute or two
+    // Now and then a flight of bombers goes over (Steve): the first soon after the start, then every half a minute to a
+    // minute. They are overhead, not far off, so they go straight to the speakers rather than through the muffled battle
     const flights = () => {
-      bomberTimer = setTimeout(flights, 50000 + Math.random() * 70000);
+      bomberTimer = setTimeout(flights, 35000 + Math.random() * 35000);
       if (!on || !ctx || ctx.state !== 'running') return;
-      bus = distant.input;
-      bombers(ctx.currentTime + 0.05);
       bus = master;
+      bombers(ctx.currentTime + 0.05);
     };
-    bomberTimer = setTimeout(flights, 15000 + Math.random() * 20000);
+    bomberTimer = setTimeout(flights, 6000 + Math.random() * 6000);
   }
 
   function play(name, delay = 0, big = false) {

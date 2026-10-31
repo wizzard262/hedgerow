@@ -134,7 +134,8 @@ const Board = (() => {
   // It flies from its place in the bar up onto the table, just above that side's artillery (Steve), in an arc: rising
   // (and growing) then dropping (and shrinking), turning over as it goes, and lands flat as a thick coin about twice the
   // size of a one-man base, then three times the radius (Steve). It sits there until that move is over, then shrinks away
-  const COIN_SIZE = 0.48;            // radius on the table (Steve: three times the first size)
+  const COIN_SIZE = 0.48;
+  const TIMER_HOVER = 1.2;           // how high over the board the timer token stops            // radius on the table (Steve: three times the first size)
   let coinFlight = null;             // { mesh, from, to, t0, done, leaving }
   function flyToken(side, clientX, clientY, done) {
     clearTokenNow();
@@ -147,7 +148,8 @@ const Board = (() => {
     if (!ray.ray.intersectPlane(table, from)) from.set(COLS / 2, 0, ROWS + 2);
     // It lands above that side's artillery; the timer in the middle of the board (Steve)
     const gun = GUNS[side === 'timer' ? 'us' : side].artillery;
-    const to = side === 'timer' ? new T.Vector3(COLS / 2, 0.04, ROWS / 2) : new T.Vector3(gun.x + (side === 'us' ? -0.1 : 0.1), 0.04, gun.z - 1.15);
+    // (the timer stops in the air over the middle of the board, Steve, so it hides nothing on the table)
+    const to = side === 'timer' ? new T.Vector3(COLS / 2, TIMER_HOVER, ROWS / 2) : new T.Vector3(gun.x + (side === 'us' ? -0.1 : 0.1), 0.04, gun.z - 1.15);
     mesh.position.copy(from);
     scene.add(mesh);
     coinFlight = { mesh, from, to, t0: performance.now(), done, leaving: 0 };
@@ -471,6 +473,23 @@ const Board = (() => {
       }
       aim(g, x, y, 0);
     }
+  }
+
+  // A piece picked hops up a little and drops back down (Steve), yours or the Germans'
+  const HOP = { height: 0.09, time: 340 };
+  let hop = null;                    // { id, t0 } of the piece hopping now
+  function bounce(u) {
+    if (u) hop = { id: u.id, t0: performance.now() };
+  }
+  // Lift the hopping piece for this frame (after the glide); returns true while it is still in the air
+  function moveHop(now) {
+    if (!hop) return false;
+    const g = pieces[hop.id];
+    const p = (now - hop.t0) / HOP.time;
+    // Landed (or gone): back on the table
+    if (!g || p >= 1) { if (g) g.position.y = 0; hop = null; return false; }
+    g.position.y = HOP.height * Math.sin(Math.PI * p);
+    return true;
   }
 
   // Set where an object should be; it glides there over a moment (snap: put it there at once)
@@ -1317,8 +1336,6 @@ const Board = (() => {
   // The German move on show: an orange ring under the piece (or their gun off the board) and a grey word bubble over it
   // with its name and what it does, e.g. "1. Fallschirmjäger-Zug · Fires on 2nd Platoon"
   function germanMoveMark(st, m) {
-    // Nothing to say until it has chosen
-    if (!m.what) return;
     let spot, name, big;
     if (m.gun) {
       // Their mortars or artillery, off the board
@@ -1332,6 +1349,8 @@ const Board = (() => {
     }
     const ring = new T.Mesh(new T.RingGeometry(big ? 0.36 : 0.22, big ? 0.42 : 0.27, 56), new T.MeshBasicMaterial({ color: 0xff8a2a, transparent: true, opacity: 0.95, depthWrite: false }));
     at(ring, spot.x, 0.01, spot.z, -Math.PI / 2, 0, 0); marks.add(ring);
+    // The ring shows as soon as it is picked; the word bubble once it has chosen what to do
+    if (!m.what) return;
     // Over the piece, or below it when over it would go off the top of the screen (Steve)
     const over = new T.Vector3(m.gun ? spot.x - 1.1 : spot.x, 0.32, spot.z);
     const below = offTop(over);
@@ -1384,12 +1403,13 @@ const Board = (() => {
       at(ring, p.x, 0.006, p.z, -Math.PI / 2, 0, 0); marks.add(ring);
     }
     const moving = glide(dt);
+    const hopping = moveHop(now);
     const firing = playShots(now);
     const flying = moveCoin(now) | moveHoming(now);
     renderer.render(scene, camera);
     if (firing || flying) return true;
     // Targets pulse, so keep drawing while they show
-    return moving || !!(view.targets && view.targets.length);
+    return moving || hopping || !!(view.targets && view.targets.length);
   }
 
   // Which field is under a point on the page (by casting a ray onto the table)
@@ -1488,5 +1508,5 @@ const Board = (() => {
     return { x: r.left + (p.x + 1) / 2 * r.width, y: r.top + (1 - p.y) / 2 * r.height };
   }
 
-  return { init, resize, render, fieldAt, pieceAt, pieceUnder, portrait, gunAt, targetAt, screenPoint, pieceScreen, labelBox, clearDice, flyToken, clearToken, returnTokens, canvas: () => renderer.domElement };
+  return { init, resize, render, fieldAt, pieceAt, pieceUnder, portrait, bounce, gunAt, targetAt, screenPoint, pieceScreen, labelBox, clearDice, flyToken, clearToken, returnTokens, canvas: () => renderer.domElement };
 })();

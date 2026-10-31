@@ -316,13 +316,16 @@ const Models = (() => {
       g.lineWidth = 14; g.strokeStyle = side === 'us' ? '#2a5e24' : side === 'timer' ? '#3a3a3a' : '#5d5d57';
       g.beginPath(); g.arc(128, 128, 112, 0, Math.PI * 2); g.stroke();
       if (side === 'timer') {
-        // A white sand-glass: the top and bottom bars, the two bulbs, a little sand run down
+        // A white sand-glass: the top and bottom bars, the two bulbs, a little sand run down. Turned a quarter, so it
+        // stands upright as the coin lies on the table seen from the front
+        g.save(); g.translate(128, 128); g.rotate(-Math.PI / 2); g.translate(-128, -128);
         g.strokeStyle = '#fff'; g.lineWidth = 12; g.lineCap = 'round';
         g.beginPath(); g.moveTo(78, 52); g.lineTo(178, 52); g.moveTo(78, 204); g.lineTo(178, 204); g.stroke();
         g.lineWidth = 10;
         g.beginPath(); g.moveTo(90, 52); g.bezierCurveTo(90, 110, 166, 110, 166, 128); g.bezierCurveTo(166, 146, 90, 146, 90, 204); g.stroke();
         g.beginPath(); g.moveTo(166, 52); g.bezierCurveTo(166, 110, 90, 110, 90, 128); g.bezierCurveTo(90, 146, 166, 146, 166, 204); g.stroke();
         g.fillStyle = '#fff'; g.beginPath(); g.moveTo(104, 194); g.lineTo(152, 194); g.lineTo(128, 162); g.closePath(); g.fill();
+        g.restore();
       } else if (side === 'us') {
         // A five-pointed gold star
         g.fillStyle = '#f2c94c';

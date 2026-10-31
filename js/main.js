@@ -119,7 +119,7 @@ window.Game = (() => {
       return;
     }
     UI.flyToken(side, () => {
-      if (side === 'de') return runGermans();
+      if (side === 'de') return chooseGerman();
       // No American piece able to move on it: the token is used up
       if (!Sim.usCanMove(st)) { Sim.passToken(st); Board.clearToken(); changed(); setTimeout(drawNext, 600); return; }
       changed();
@@ -147,6 +147,15 @@ window.Game = (() => {
     Board.clearToken();
     changed();
     setTimeout(drawNext, 400);
+  }
+
+  // The computer picks its German piece as you would (Steve): the pick-up sound and the ring round it, then a moment
+  // later it moves (its moving sounds are the same as yours: men running, tanks driving)
+  const GERMAN_PICK_PAUSE = 650;
+  function chooseGerman() {
+    if (st.de && st.de.move && st.de.move.id) { Sound.play('select'); Board.bounce(Sim.unitById(st, st.de.move.id)); }
+    changed();
+    setTimeout(runGermans, GERMAN_PICK_PAUSE);
   }
 
   // The German piece moves; if it fires on a piece that could take cover, ask first
@@ -218,14 +227,14 @@ window.Game = (() => {
     const under = Board.pieceUnder(st, e.clientX, e.clientY);
     const foeField = !Sim.at(st, f.x, f.y, 'us').length && Sim.at(st, f.x, f.y, 'de').length;
     const foe = under && under.side === 'de' ? under : !under && foeField ? Board.pieceAt(st, e.clientX, e.clientY, 'de') : null;
-    if (foe && !UI.actsOn(f.x, f.y)) { Sound.play('select'); Board.clearDice(); UI.inspect(foe); changed(); return; }
+    if (foe && !UI.actsOn(f.x, f.y)) { Sound.play('select'); Board.bounce(foe); Board.clearDice(); UI.inspect(foe); changed(); return; }
     // The one piece under the pointer (the nearest in the field if the click misses the models)
     const mine = UI.clickField(f.x, f.y, Board.pieceAt(st, e.clientX, e.clientY), f.side);
     changed();
     // Your pieces there: open their menu by the click
     // Picking the next piece clears the last shots' dice off the table
     // The pick-up sound as you choose it (Steve)
-    if (mine) { Sound.play('select'); Board.clearDice(); const r = board.getBoundingClientRect(); UI.openMenu(mine, e.clientX - r.left, e.clientY - r.top, r); $('#tip').style.display = 'none'; }
+    if (mine) { Sound.play('select'); Board.bounce(mine[0]); Board.clearDice(); const r = board.getBoundingClientRect(); UI.openMenu(mine, e.clientX - r.left, e.clientY - r.top, r); $('#tip').style.display = 'none'; }
     else offerRally();
     if (st.won || st.lost) showResult();
   });
