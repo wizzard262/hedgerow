@@ -115,6 +115,28 @@ const UI = (() => {
     return reach;
   }
 
+  // The pieces the chosen captain can rally now, himself included, for blue targets on the table (Steve)
+  function rallies() {
+    const u = selected();
+    // Only the captain, in your move, not while he is aiming a shot
+    if (!u || u.kind !== 'captain' || st.de) return [];
+    if (view.mode && !['go', 'rally'].includes(view.mode)) return [];
+    // Nobody in reach, or no rallies left: no targets
+    if (!Sim.captainCanRally(st, u)) return [];
+    return Sim.rallyTargets(st, u);
+  }
+
+  // Rally the piece under a blue target
+  function rallyTarget(t) {
+    const u = selected();
+    const r = Sim.actRally(st, u, t);
+    if (!r.ok) return false;
+    view.log.push(...r.lines);
+    // If he hasn't moved yet, his moves show again
+    view.mode = Sim.canAct(st, u) ? 'go' : null;
+    return true;
+  }
+
   // Fire on a target chosen by its red cross-hair
   function shootTarget(t) {
     // Mortars or guns: the fire mission lands on the target's field
@@ -186,7 +208,7 @@ const UI = (() => {
     const menu = document.querySelector('#menu');
     menu.innerHTML = '';
     for (const u of pieces) {
-      const state = u.down && u.acted ? '<span class="pill bad">Taking cover</span>' : u.shocked ? '<span class="pill bad">Shaken</span>' : u.acted ? '<span class="pill done">✓ Moved this hour</span>' : '<span class="pill ready">Ready</span>';
+      const state = u.down && u.acted ? '<span class="pill bad">Taking cover</span>' : u.shocked ? '<span class="pill bad">Shaken</span>' : u.acted ? '<span class="pill done">✓ Moved this round</span>' : '<span class="pill ready">Ready</span>';
       menu.append(el('div', 'mhead', `<b>${u.name}${u.quality === 'elite' ? ' ★' : ''}</b><span>${state}</span>`));
       // Charge, Move & shoot and Shoot are done by clicking the lit fields and red targets, so the menu leaves them out (Steve)
       const acts = actionButtons(u).filter(a => !['charge', 'moveShoot', 'shoot'].includes(a.mode));
@@ -202,8 +224,8 @@ const UI = (() => {
         };
         menu.append(b);
       }
-      if (!acts.some(a => a.ok)) menu.append(el('div', 'mnote', u.shocked ? 'Shaken: it has moved this hour; it can rest, or the captain can rally it' : 'It has moved this hour'));
-      else if (u.shocked) menu.append(el('div', 'mnote', 'Shaken (pinned): it needs one more to hit and can\'t charge until it rallies'));
+      if (!acts.some(a => a.ok)) menu.append(el('div', 'mnote', u.shocked ? 'Shaken: it has moved this round; it can rest, or the captain can rally it' : 'It has moved this round'));
+      else if (u.shocked) menu.append(el('div', 'mnote', 'Shaken: it needs one more to hit and can\'t charge until it rallies'));
       else if (!u.acted && !u.shocked && u.kind !== 'pak' && !Sim.chargeSpots(st, u).length) {
         // Boxed in: say why it can't charge, and how to get out
         menu.append(el('div', 'mnote', 'Nowhere to charge to: every way is blocked'));
@@ -217,7 +239,7 @@ const UI = (() => {
     const menu = document.querySelector('#menu');
     menu.innerHTML = '';
     // Its state: ready, out of rounds, or already fired this hour
-    const state = canFire(which) ? '<span class="pill ready">Ready</span>' : st.ammo[which] <= 0 ? '<span class="pill bad">No rounds</span>' : '<span class="pill done">✓ Fired this hour</span>';
+    const state = canFire(which) ? '<span class="pill ready">Ready</span>' : st.ammo[which] <= 0 ? '<span class="pill bad">No rounds</span>' : '<span class="pill done">✓ Fired this round</span>';
     menu.append(el('div', 'mhead', `<b>${which === 'mortars' ? '💥 US mortars' : '💣 US artillery'}</b><span>${state}</span>`));
     // Skip turn: hold fire this round, using the token
     const skip = el('button', '', '⏭️ Skip turn');
@@ -315,6 +337,8 @@ const UI = (() => {
     // Everyone can skip a turn (Steve): it gives up its move this round, using the token
     const canSkip = Sim.canAct(st, u) || (u.kind === 'captain' && Sim.canRally(st, u));
     b.push({ mode: 'skip', label: '⏭️ Skip turn', ok: canSkip, title: 'Give up its move this round (the token is used)', run: () => Sim.actSkip(st, u) });
+    // Moved with Move & shoot and not wanting to fire (Steve: no Pass button): skip the shot, and the token is done
+    if (u.halfShot) b.push({ mode: 'skipShot', label: '⏭️ Skip the shot', ok: true, title: 'Don\'t fire after moving; the token is used', run: () => Sim.actSkipShot(st, u) });
     return b;
   }
 
@@ -337,7 +361,8 @@ const UI = (() => {
       add('moveShoot', '➡️ Move & shoot', Sim.moveShootSpots(st, u).length > 0, 'Up to two fields to where he can fire (the red-hatched fields), then fire needing one more on the dice');
       add('shoot', '🎯 Shoot', Sim.targets(st, u).length > 0, 'His HQ fires: one die');
       // Rallying isn't his move: two rallies if he stays put, one if he moves or shoots (before or after)
-      b.push({ mode: 'rally', label: '📣 Rally', ok: Sim.canRally(st, u) && Sim.rallyTargets(st, u).length > 0, title: 'Get a piece that took cover up and moving, or steady a shaken one (himself too), up to three fields away. Two rallies an hour if he stays put, one if he moves or shoots' });
+      // Only when there is someone in reach to rally, himself included (Steve: no Rally button otherwise)
+      if (Sim.captainCanRally(st, u)) b.push({ mode: 'rally', label: '📣 Rally', ok: true, title: 'Get a piece that took cover up and moving, or steady a shaken one (himself too), up to three fields away. Two rallies a round if he stays put, one if he moves or shoots' });
     } else {
       add('charge', '⚔️ Charge', Sim.chargeSpots(st, u).length > 0, 'Up to three fields, no shooting (climbing a hedge uses one more)');
       // Machine guns can't move and fire: they Charge to a new spot, then Shoot next hour
@@ -360,7 +385,7 @@ const UI = (() => {
     // A gun chosen: what it is, rounds left, whether it can fire this hour, and its Fire button
     if (!u && view.support) {
       const which = view.support, S = which === 'mortars' ? MORTARS : ARTILLERY;
-      const status = canFire(which) ? '<span class="pill ready">Ready</span>' : st.ammo[which] <= 0 ? '<span class="pill bad">No rounds</span>' : '<span class="pill done">✓ Fired this hour</span>';
+      const status = canFire(which) ? '<span class="pill ready">Ready</span>' : st.ammo[which] <= 0 ? '<span class="pill bad">No rounds</span>' : '<span class="pill done">✓ Fired this round</span>';
       box.append(el('div', 'name', which === 'mortars' ? '💥 US mortars' : '💣 US artillery'));
       box.append(el('div', 'sub', `${S.name}, off the board`));
       // What a mission does, one fact a line (Steve): where it can fire, the dice on the field, and the blast round it
@@ -387,7 +412,7 @@ const UI = (() => {
     const strength = u.kind === 'company' ? `${u.platoons} section${u.platoons > 1 ? 's' : ''} (${u.platoons * 4} men)` : Sim.isTank(u) ? `${u.platoons} tank${u.platoons > 1 ? 's' : ''}` : PIECES[u.kind].men ? `${PIECES[u.kind].men} men` : '';
     const f = Sim.firepower(st, u);
     const dice = `🎲 ${Math.round(f.soft * 10) / 10} dice vs men${f.hard ? `, ${Math.round(f.hard * 10) / 10} vs tanks` : ''}`;
-    const status = u.down && u.acted ? '<span class="pill bad">Taking cover: the captain can get it up</span>' : u.shocked ? '<span class="pill bad">Shaken: −1 to hit, no charging</span>' : u.acted ? '<span class="pill done">✓ Moved this hour</span>' : '<span class="pill ready">Ready</span>';
+    const status = u.down && u.acted ? '<span class="pill bad">Taking cover: the captain can get it up</span>' : u.shocked ? '<span class="pill bad">Shaken: −1 to hit, no charging</span>' : u.acted ? '<span class="pill done">✓ Moved this round</span>' : '<span class="pill ready">Ready</span>';
     box.append(el('div', 'name', `${u.name}${u.quality === 'elite' ? ' ★' : ''}`));
     box.append(el('div', 'sub', `${KIND[u.kind]}${Sim.hasCutters(u) ? ' · hedge cutters' : ''}`));
     const where = u.kind === 'pak' ? '' : `📍 At ${Sim.placeName(u.at)}`;
@@ -404,7 +429,7 @@ const UI = (() => {
 
   function hint() {
     const u = selected();
-    const text = !view.mode ? (st.drawn === 'de' ? 'German token: a German piece moves…' : st.drawn === 'us' ? (st.activeId ? 'Finish its move, or Done.' : 'Your token: pick one piece and give it its move (or Pass).') : 'Drawing a token…')
+    const text = !view.mode ? (st.drawn === 'de' ? 'German token: a German piece moves…' : st.drawn === 'us' ? (st.activeId ? 'Finish its move (or Skip in its menu).' : 'Your token: pick one piece and give it its move (or Skip turn in its menu).') : 'Drawing a token…')
       : view.mode.startsWith('fire:') ? 'Click a red target, or a field with Germans your troops can see.'
       : view.mode === 'halfShot' ? 'Moved. Click a red target to fire on it (one more needed on the move), or Esc to hold fire.'
       : view.mode === 'shoot' ? 'Click a red target to fire on it. Esc cancels.'
@@ -417,12 +442,9 @@ const UI = (() => {
   }
 
   function update() {
-    $('#clock').innerHTML = `<b>${Sim.hourText(st.turn)}</b> · hour ${st.turn}${TURNS ? ` of ${TURNS}` : ''} · ${START_DATE}`;
-    $('#goal').textContent = `🎯 Take ${st.objective.name} and hold it at the end of an hour, or destroy every German${TURNS ? `, by ${Sim.hourText(TURNS + 1)}` : ' (no time limit for now)'}.`;
+    $('#clock').innerHTML = `<b>Round ${st.turn}</b>${TURNS ? ` of ${TURNS}` : ''} · ${START_DATE}`;
+    $('#goal').textContent = `🎯 Take ${st.objective.name} and hold it at the end of a round, or destroy every German${TURNS ? `, within ${TURNS} rounds` : ' (no time limit for now)'}.`;
     card(); hint(); bag();
-    // The bar's button: Pass on an American token (Done once its piece has moved)
-    $('#end').disabled = st.won || st.lost || st.drawn !== 'us';
-    $('#end').textContent = st.activeId ? 'Done ▶' : 'Pass ▶';
   }
 
   // ---------- The bag of tokens, right of the button ----------
@@ -430,18 +452,35 @@ const UI = (() => {
   // (right); the round beside them in big letters
   const TOKEN = {
     us: '<span class="tok us">★</span>',
+    timer: '<span class="tok timer" title="Timer: drawn, it ends the round"><svg viewBox="0 0 20 20"><path d="M5 2h10M5 18h10M6 2c0 5 8 5 8 8s-8 3-8 8M14 2c0 5-8 5-8 8s8 3 8 8" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/><path d="M8 16.5h4l-2-2.5z" fill="#fff"/></svg></span>',
     de: '<span class="tok de"><svg viewBox="0 0 20 20"><path d="M7 2h6v5h5v6h-5v5H7v-5H2V7h5z" fill="#111" stroke="#eee" stroke-width="1.4"/></svg></span>',
   };
   function bag() {
-    const b = st.bag || { us: 0, de: 0 };
+    // While the round's tokens fly back in, only those home so far
+    const b = view.bagShown || st.bag || { us: 0, de: 0 };
     $('#bag-us').innerHTML = TOKEN.us.repeat(b.us);
     $('#bag-de').innerHTML = TOKEN.de.repeat(b.de);
+    // The timer token, between the two sides' tokens (Steve)
+    $('#bag-timer').innerHTML = TOKEN.timer.repeat(b.timer || 0);
     $('#round').textContent = `ROUND ${st.turn}`;
+  }
+
+  // A new round (Steve): a small token flies back from each piece into the bag in the bar; the bar counts them in as they
+  // land. done once the last is home
+  function returnTokens(done) {
+    view.bagShown = { us: 0, de: 0, timer: 0 };
+    bag();
+    // The middle of each side's place in the bar
+    const spot = id => { const r = $(id).getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; };
+    const ends = { us: spot('#bag-us'), de: spot('#bag-de'), timer: spot('#bag-timer') };
+    // Each one home: one more in the bar
+    const landed = side => { view.bagShown[side]++; bag(); };
+    Board.returnTokens(st, ends, landed, () => { view.bagShown = null; bag(); done(); });
   }
 
   // The token drawn: a thick coin flies from its place in the bar to the table above that side's artillery (see Board)
   function flyToken(side, done) {
-    const grid = $(side === 'us' ? '#bag-us' : '#bag-de').getBoundingClientRect();
+    const grid = $(side === 'us' ? '#bag-us' : side === 'timer' ? '#bag-timer' : '#bag-de').getBoundingClientRect();
     Board.flyToken(side, grid.left + grid.width / 2, grid.top + grid.height / 2, done);
   }
 
@@ -450,5 +489,5 @@ const UI = (() => {
     refresh = onChange;
   }
 
-  return { init, setState, update, clickField, openMenu, openGunMenu, closeMenu, spots, targets, shootTarget, view, selected, selectSupport, supportState, flyToken, KIND };
+  return { init, setState, update, clickField, openMenu, openGunMenu, closeMenu, spots, targets, shootTarget, rallies, rallyTarget, view, selected, selectSupport, supportState, flyToken, returnTokens, KIND };
 })();

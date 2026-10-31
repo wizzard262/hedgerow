@@ -28,6 +28,15 @@ const Models = (() => {
     }
   }, [2, 2]);
 
+  // The top of a figure's base (Steve): green flock for the Americans, brown earth for the Germans, so the sides tell apart
+  const BASE_EARTH = ['#6b5236', '#7a5f3e', '#5a4430', '#8a6d48', '#4f3c2a', '#76603f'];
+  function baseTop(side) {
+    // Made once for each side
+    const key = side === 'de' ? 'flockTopDe' : 'flockTop';
+    if (!M[key]) M[key] = new T.MeshStandardMaterial({ map: side === 'de' ? flockTex('#6a5034', BASE_EARTH, 37) : flockTex('#5f6d3c', GRASS, 31), roughness: 1 });
+    return M[key];
+  }
+
   // Flock: a static-grass mat speckled with many greens, browns and straws
   function flockTex(base, flecks, seed) {
     return canvasTexture(512, 512, (g, w, h) => {
@@ -138,11 +147,10 @@ const Models = (() => {
   function squad(side) {
     const g = new T.Group();
     // A small oval base, its top flocked like the table, its edge painted dark
-    if (!M.flockTop) M.flockTop = new T.MeshStandardMaterial({ map: flockTex('#5f6d3c', GRASS, 31), roughness: 1 });
-    const b = new T.Mesh(new T.CylinderGeometry(0.05, 0.052, 0.008, 32), [mat('#3b3326', 0.8), M.flockTop, M.base]);
+    const b = new T.Mesh(new T.CylinderGeometry(0.05, 0.052, 0.008, 32), [mat('#3b3326', 0.8), baseTop(side), M.base]);
     b.scale.set(1.15, 1, 1.5); g.add(at(b, 0, 0.004, 0));
     // A little flock on the base, as on a finished model
-    const tuft = mat('#5d6b3c', 1);
+    const tuft = mat(side === 'de' ? '#6e5a3a' : '#5d6b3c', 1);
     for (const [x, z] of [[-0.03, 0.05], [0.035, -0.045], [0.02, 0.06]]) g.add(at(sphere(0.007, tuft, 6, 4), x, 0.009, z));
     [[-0.02, -0.05, 0], [0.022, -0.018, 1], [-0.016, 0.018, -1], [0.02, 0.052, 0]].forEach(([x, z, p], i) => {
       const s = soldier(side, p, false); at(s, x, 0.008, z, 0, (i - 1.5) * 0.18, 0); g.add(s);
@@ -155,8 +163,7 @@ const Models = (() => {
   // the gunner with a big tube, the loader with a big bag of rockets
   function team(side, kind) {
     const g = new T.Group();
-    if (!M.flockTop) M.flockTop = new T.MeshStandardMaterial({ map: flockTex('#5f6d3c', GRASS, 31), roughness: 1 });
-    const base = new T.Mesh(new T.CylinderGeometry(0.062, 0.064, 0.008, 32), [mat('#3b3326', 0.8), M.flockTop, M.base]);
+    const base = new T.Mesh(new T.CylinderGeometry(0.062, 0.064, 0.008, 32), [mat('#3b3326', 0.8), baseTop(side), M.base]);
     g.add(at(base, 0, 0.004, 0));
     if (kind === 'mg' || kind === 'mg42') {
       // The gun at the front of the base: a tripod, the receiver, a long barrel in its perforated jacket, the ammunition belt
@@ -208,8 +215,7 @@ const Models = (() => {
   // so he is easy to find on the table. There is one for the whole company
   function captain(side) {
     const g = new T.Group();
-    if (!M.flockTop) M.flockTop = new T.MeshStandardMaterial({ map: flockTex('#5f6d3c', GRASS, 31), roughness: 1 });
-    g.add(at(new T.Mesh(new T.CylinderGeometry(0.045, 0.047, 0.008, 28), [mat('#3b3326', 0.8), M.flockTop, M.base]), 0, 0.004, 0));
+    g.add(at(new T.Mesh(new T.CylinderGeometry(0.045, 0.047, 0.008, 28), [mat('#3b3326', 0.8), baseTop(side), M.base]), 0, 0.004, 0));
     g.add(at(soldier(side, 0, false), 0.01, 0.008, 0.008));
     // The guidon on its pole
     g.add(at(cyl(0.0016, 0.0016, 0.24, M.wood, 6), -0.022, 0.128, -0.018));
@@ -239,8 +245,7 @@ const Models = (() => {
   // The American 81 mm M1 in olive drab, the German 8 cm GrW 34 in field grey. Its front is +x
   function mortar(side) {
     const g = new T.Group(), us = side === 'us';
-    if (!M.flockTop) M.flockTop = new T.MeshStandardMaterial({ map: flockTex('#5f6d3c', GRASS, 31), roughness: 1 });
-    g.add(at(new T.Mesh(new T.CylinderGeometry(0.07, 0.072, 0.008, 32), [mat('#3b3326', 0.8), M.flockTop, M.base]), 0, 0.004, 0));
+    g.add(at(new T.Mesh(new T.CylinderGeometry(0.07, 0.072, 0.008, 32), [mat('#3b3326', 0.8), baseTop(side), M.base]), 0, 0.004, 0));
     const paint = us ? M.olive : mat('#4a524f', 0.6, 0.2);
     // Baseplate and tube
     g.add(at(box(0.034, 0.005, 0.034, M.steel), -0.012, 0.011, 0));
@@ -306,11 +311,19 @@ const Models = (() => {
     if (!coinTex[side]) {
       const c = document.createElement('canvas'); c.width = c.height = 256;
       const g = c.getContext('2d');
-      g.fillStyle = side === 'us' ? '#3f8a36' : '#8c8c86';
+      g.fillStyle = side === 'us' ? '#3f8a36' : side === 'timer' ? '#141414' : '#8c8c86';
       g.beginPath(); g.arc(128, 128, 128, 0, Math.PI * 2); g.fill();
-      g.lineWidth = 14; g.strokeStyle = side === 'us' ? '#2a5e24' : '#5d5d57';
+      g.lineWidth = 14; g.strokeStyle = side === 'us' ? '#2a5e24' : side === 'timer' ? '#3a3a3a' : '#5d5d57';
       g.beginPath(); g.arc(128, 128, 112, 0, Math.PI * 2); g.stroke();
-      if (side === 'us') {
+      if (side === 'timer') {
+        // A white sand-glass: the top and bottom bars, the two bulbs, a little sand run down
+        g.strokeStyle = '#fff'; g.lineWidth = 12; g.lineCap = 'round';
+        g.beginPath(); g.moveTo(78, 52); g.lineTo(178, 52); g.moveTo(78, 204); g.lineTo(178, 204); g.stroke();
+        g.lineWidth = 10;
+        g.beginPath(); g.moveTo(90, 52); g.bezierCurveTo(90, 110, 166, 110, 166, 128); g.bezierCurveTo(166, 146, 90, 146, 90, 204); g.stroke();
+        g.beginPath(); g.moveTo(166, 52); g.bezierCurveTo(166, 110, 90, 110, 90, 128); g.bezierCurveTo(90, 146, 166, 146, 166, 204); g.stroke();
+        g.fillStyle = '#fff'; g.beginPath(); g.moveTo(104, 194); g.lineTo(152, 194); g.lineTo(128, 162); g.closePath(); g.fill();
+      } else if (side === 'us') {
         // A five-pointed gold star
         g.fillStyle = '#f2c94c';
         g.beginPath();
@@ -329,7 +342,7 @@ const Models = (() => {
       coinTex[side] = tex;
     }
     const face = new T.MeshStandardMaterial({ map: coinTex[side], roughness: 0.5, metalness: 0.1 });
-    const rim = mat(side === 'us' ? '#2f6a29' : '#6c6c66', 0.45, 0.3);
+    const rim = mat(side === 'us' ? '#2f6a29' : side === 'timer' ? '#222' : '#6c6c66', 0.45, 0.3);
     const m = new T.Mesh(new T.CylinderGeometry(1, 1, 0.3, 40), [rim, face, face]);
     m.castShadow = true;
     return m;
@@ -592,7 +605,7 @@ const Models = (() => {
   // ---------- The table and the mat ----------
   function table(cols, rows) {
     const g = new T.Group();
-    const top = new T.Mesh(new T.PlaneGeometry(cols + 14, rows + 12), new T.MeshStandardMaterial({ map: woodTex(), roughness: 0.55 }));
+    const top = new T.Mesh(new T.PlaneGeometry(cols + 14, rows + 12), new T.MeshStandardMaterial({ map: woodTex(), roughness: 1, metalness: 0 }));
     top.rotation.x = -Math.PI / 2; top.position.set(cols / 2, -0.004, rows / 2); top.receiveShadow = true;
     g.add(top);
     return g;

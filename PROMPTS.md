@@ -491,8 +491,89 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - Steve: no reinforcements should appear; keep it as it is at the start of the game
 - Nobody arrives during the game any more, on either side: no 4th Platoon, extra teams or replacements for you, no Panzer IVs, Panthers or 4. Zug for the Germans. (The list is still in data.js, empty, if they're wanted back.) The rules no longer mention them
 
+## 85. Small targets, hard cover, houses round the square, stop at a wipe-out (v63)
+
+- Steve: small target +1 (2 or fewer men): sniper, captain and bazooka, not the MG (3 men). Stop the game if all the opponents or all the friendlies are destroyed; don't finish the round. Houses are hard cover, +2. Make the buildings smaller, about figure height, several on each side of the square with gaps between; don't let pieces stand under a building. Strange tokens, little yellow stars: misplaced shaken markers?
+- A piece of two men or fewer (sniper, bazooka and Panzerschreck teams, the captain) needs one more to hit, sniper shots included; the label says "−1 small target". (Assumed: shells, which hit the whole field, ignore it. The captain still can't be fired on, as before.)
+- Villages and hamlets give +2 (shells on the village too)
+- The game ends the moment one side has no pieces left, mid-round: no more tokens, the result shows at once
+- Houses: two small houses (about as tall as a figure) along each side of a village or hamlet field, gaps between, fronts facing in; pieces in those fields keep to the yard in the middle, so none stands under a house (they stand closer together there). The hamlet's yard wall went
+- The yellow stars were the elite marker of 1st Platoon, drawn nearly a field away from it (and the shaken marker at the field's corner). Both now ride on the piece's base (see 86)
+
+## 86. The shaken token on the base; shaken, not pinned (v63)
+
+- Steve: put the red shaken token on the base edge, or on the back of a tank; it was at the edge of the square. Always call it shaken, not pinned
+- The red ! token sits on the back edge of the piece's first base, or on a tank's back deck, and moves with it; it keeps its colour when the piece is greyed out. The elite ★ sits on the side edge of the platoon's base
+- Every "pinned" on screen and in the rules now says shaken
+
+## 87. The captain's rally targets (v63)
+
+- Steve: don't show or wait for a captain's rally if nobody (himself included) in reach can be rallied. When the captain is chosen, mark the pieces he can rally, himself too, with a blue target circle
+- No Rally button with nobody to rally, and his token no longer waits for a rally nobody needs (nor is an American token held for it)
+- Picking the captain puts a blue ring and blue cross-hair on each piece he can rally; clicking one rallies it
+
+## 88. No river (v63)
+
+- Steve: remove the river for now; it ruins the Germans' strategy
+- The river and its bridges are off the map (open fields and lanes instead); the code for them stays for later
+
+## 89. Taking cover halves the dice (v63)
+
+- Steve: taking cover halves damage: half the attacking dice, an odd one left over a 50/50 chance
+- A piece taking cover no longer needs one more to hit: every shot at it (and mortar or artillery fire) rolls half the dice, and an odd die left over rolls on a coin toss. The label says "½ dice: taking cover"
+
+## 90. No pick-up sound for the moves (v63)
+
+- Steve: remove the piece-sliding sound when the move indicators spin out
+- Picking a piece (or your guns) no longer plays the pick-up sound. (The drawn token still makes it as it lands)
+
+## 91. The timer token (v63)
+
+- Steve: add one black token with a white sand-timer in the blind bag (between the green and grey tokens); drawn, it resets the round
+- One black timer token goes in the bag each round, shown between the two sides' tokens in the bar. When it is drawn it flies to the table between the two sides' artillery and the round ends there and then; the rest of the tokens go back unused and a new round starts
+
+## 92. Brown German bases; Germans greyed out too (v63)
+
+- Steve: Germans have brown bases, Americans green. Grey out the Germans as each piece completes its turn, like the Americans
+- German figure bases (platoons, teams, mortars) are brown earth, American ones green flock
+- A German piece greys out once its token's move is done, until the next round
+
+## 93. No bright glare; rounds, not hours (v63)
+
+- Steve: don't add the bright light fade on the table on the left side (keep all shadows). There are no hours, just rounds
+- The wooden table is matt now, so the lamp's shine no longer shows as a bright patch; the lamp and its shadows are unchanged
+- Everything on screen says round, not hour: the bar shows "Round n", results say which round, the rules talk of rounds
+
+## 94. Tokens fly back into the bag (v63)
+
+- Steve: when a new round starts, a token flies from each piece, with a short overlapping delay between tokens on each side, back into the token display, like the token coming out but a third of the size
+- At the start of every round (the first too) a small coin rises off each piece and each gun with rounds and arcs into its side's tokens in the bar, one after another with an overlap, both sides at once, then the timer; the bar counts them in as they land, and the first token is drawn once all are home
+
+## 95. One round from each base; the bazooka's rocket; tanks turn then fire one at a time (v63)
+
+- Steve: each base shoots one bullet (sniper, captain; a bazooka a rocket with a roar and flames that explodes on impact), but the MG fires 5. Tanks turn at medium speed to aim before shooting, then one shell from each tank, like the bazooka's, one at a time
+- A rifle platoon sends one tracer from each of its sections' bases, the sniper, captain and bazooka one, an MG team five
+- The bazooka's rocket flies with flames at its tail, smoke behind it and a back-blast at the tube, a louder roar, and explodes where it lands
+- Tanks turn more slowly onto the target, wait until they face it, then each tank fires one shell (trailing smoke) in turn, each with its own flash, sound and burst
+
+## 96. Tanks face the nearest enemy and stand side by side; no Pass button (v63)
+
+- Steve: a tank's move always ends facing the nearest visible enemy (or the enemy's side of the board if none; at random if two are as near). Tanks side by side don't overlap. The Pass button in the bottom panel isn't needed: each piece shows Skip
+- After every move a tank turns to the nearest enemy it can see (east for the Americans, west for the Germans with nobody in sight; a tie picked at random)
+- A tank pair stands side by side across the way it faces, far enough apart not to overlap (one left: in the middle)
+- The Pass button and the Enter key are gone: each piece's menu has Skip turn, and after a Move & shoot a "Skip the shot" button ends the token without firing
+- Balance (the test player still plays whole rounds, not tokens): it now wins 99% in about 4 rounds (was 78%); doing nothing never wins
+
+## 97. Hand to hand to the finish (v63)
+
+- Steve: hand-to-hand combat should be both sides pushing at each other in turn, attacker first, inflicting damage, and the surviving bases fight on until one side remains. Shaken doesn't count, and doesn't remain at the end of the fight
+- A charge into the enemy's field is now a fight to the finish: the attacker strikes, then the defenders, and so on. Every base still standing rolls a die (3+; the attacker needs one more against men behind the hedge it crossed or in houses; elite one less), each hit takes off a base (rifle platoons and tanks first, teams and the captain last; only tanks and anti-tank weapons can hurt tanks). The winner is the side with anyone left; a winning attacker takes the field. Nobody falls back any more
+- Being shaken makes no difference in the fight, and every survivor comes out of it no longer shaken
+- (Assumed: only the charging piece fights for the attacker, tanks next door no longer help; if neither side can hurt the other the attacker stays back.) Balance: the test player wins 99% in about 3.7 rounds
+
 ## Sessions
 
 | # | Date | Length | What we did |
 |---|------|--------|-------------|
 | 1 | 2026-10-30 | about 10.5 hours | Prompts 1–84: rules, command points, reacting, tanks and hedge cutters, the look (pixel art to 3D tabletop), scales, river, villages, wire, six-move aim; one captain, piece menus, hedges stop moves, MG team model; bazooka teams, two-field charges; red targets; who has acted; company level; lining hedges, longer sight, the captain's guidon; one unit a field, no time limit; tracers and shells, greyed out, no activation tokens, Move & shoot hatching; tanks through hedges, charges for all; no plain move; teams and captain with a platoon, no attaching; one piece at a time; charging through friends; range, cover and moving +1 each; words off the target, tanks turn and recoil; rallying; MGs can't move and fire; easier targets; Move & shoot one action; tanks impervious to small arms; more gaps; no charging through houses; MGs fire five; hand to hand shown; sounds; select and move sounds; running and tank sounds; twisty wire, tank boom, a cleaner panel, better running; bigger dice with a tag; louder, more real sounds; distant battle; shells arcing in and explosions; Sherman and Firefly named; dice cleared on the next pick; fire support targets; real recordings; tank HE hits the whole field; 3+ to hit, pinned not stopped, 50/50 wounds; further moves, climbing hedges; click where in the field, cover shown, more orchards; routes shown, why a shot needs what it needs; flush roofs, lines of sight; pieces stay till hit, the captain shoots; mortars and artillery off the board; take cover; captain rallies twice, two pins kill; bazookas and tanks kill, longer reach, tanks as cover, no Break through, wire for tanks only, hopping hedges; who is aiming at whom; blue hatching on the village; moves shown on picking a piece; win by wiping out the Germans, artillery friendly fire; full-screen table, bottom bar; score in a word bubble; no shooting at 7+; longer ranges, a sniper; fire support by clicking the guns; German artillery; rules in two columns, not at the start; nine places in a field, guns lower; the blind bag; guns in the bag, Skip turn; pointed bubble arrows; the token as a coin, three times bigger |
+| 2 | 2026-10-31 | about 2.5 hours | Prompts 85–97: small targets, houses +2, small houses round the square, stop at a wipe-out; shaken token on the base, shaken not pinned; captain's blue rally targets; no river; taking cover halves the dice; no pick-up sound; the timer token; brown German bases, Germans greyed out; no glare, rounds not hours; tokens fly back into the bag; one round per base, the rocket, tanks turn then fire in turn; tanks face the nearest enemy, side by side; no Pass button; hand to hand to the finish |

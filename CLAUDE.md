@@ -1,6 +1,6 @@
 # Hedgerow
 
-Local repo `C:\DEV\Repositories\GitHub\hedgerow` (not on GitHub yet: ask Steve before creating the repo or pushing). A browser game: July 1944, an American rifle company fights through the Normandy bocage to take a village (no time limit for now; TURNS in data.js sets one). Shown as a wargame table in 3D (three.js): flocked mat, foam hedges, a river with bridges, villages, painted miniatures and model tanks, dice for every shot.
+Local repo `C:\DEV\Repositories\GitHub\hedgerow`, on GitHub as wizzard262/hedgerow with Pages at wizzard262.github.io/hedgerow (ask Steve before every push). A browser game: July 1944, an American rifle company fights through the Normandy bocage to take a village (played in rounds, no hours; no limit for now; TURNS in data.js sets one). Shown as a wargame table in 3D (three.js): flocked mat, foam hedges, villages (the river is off the map for now, Steve 2026-10-31; its code stays), painted miniatures and model tanks, dice for every shot.
 
 - After every prompt about the game, add a short summary of it to [PROMPTS.md](PROMPTS.md), with any assumptions made
 - At the end of each session, record its length in the **Sessions** table at the bottom of PROMPTS.md (keep that table last)

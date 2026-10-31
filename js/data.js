@@ -7,14 +7,14 @@
 // MG and bazooka teams and the captain can also stand in a rifle platoon's field (Steve). Teams are never attached: each moves on its own
 //   =  lane east-west    |  lane north-south    +  crossroads (lanes have no hedges along their length)
 const MAP = [
-  '..|o.o.r.o',
-  '..|.vv.r.h',
-  '..+====#==',
-  '.o|.v..ro.',
-  '.h|.vv.r.o',
-  '==+====#==',
-  '..|.oo.r.h',
-  'o.|.o.hr..',
+  '..|o.o...o',
+  '..|.vv...h',
+  '..+=======',
+  '.o|.v...o.',
+  '.h|.vv...o',
+  '==+=======',
+  '..|.oo...h',
+  'o.|.o.h...',
 ];
 const COLS = MAP[0].length, ROWS = MAP.length;
 // The villages; each game one of them is the objective: the field to take and hold, its church in the middle
@@ -25,14 +25,18 @@ const VILLAGES = [
 const HEDGE_GAP = 0.45;          // chance an edge between two fields has a gap (a gate or a broken bank)
 const WIRE = 0.5;                // chance a gap between two fields is closed by a barbed-wire fence: men must cut it, tanks flatten it
 
+// The blind bag: as well as a token for each piece, black timer tokens (a white sand-glass); drawing one ends the round
+// there and then, whoever has still to move (Steve)
+const ROUND_TIMER = 1;
 const TURNS = 0;                 // hours allowed (0: no limit for now, Steve); one turn is an hour from 06:00
 const START_HOUR = 6;
 const START_DATE = 'Tue 11 July 1944';
 
 // Every piece moves (acts) once an hour (Steve: no tokens to activate)
-// Reacting in the Germans' hour (Steve): a piece fired on can take cover. Its men get down where they are: one more is
-// needed to hit it for the rest of the German hour, but it misses its move next hour unless the captain gets it up
-const TAKE_COVER = 1;
+// Reacting in the Germans' hour (Steve): a piece fired on can take cover. Its men get down where they are: every shot at
+// it rolls half the dice for the rest of the round (an odd die left over is a coin toss), but it misses its move unless
+// the captain gets it up
+const TAKE_COVER = 0.5;          // the share of the dice that still roll against a piece taking cover
 
 // Shooting: each point of firepower rolls one six-sided die, which hits on TO_HIT or more.
 // Cover adds to the score needed, elite troops take one off; a shot needing more than MAX_NEED can't be taken
@@ -40,9 +44,9 @@ const TO_HIT = 3;                // a die needs this or more to hit, before cove
 const MOVE_SHOOT_MOVES = 2;      // fields a Move & shoot can cover (Steve: one more than before)
 const CHARGE_MOVES = 3;          // fields a charge can cover
 const CLIMB = 1;                 // extra moves it costs men to climb a hedge bank (tanks drive through; wire stops men)
-const SHAKEN_SHOOT = 1;          // a shaken (pinned) piece needs one more to hit
+const SHAKEN_SHOOT = 1;          // a shaken piece needs one more to hit
 const MAX_NEED = 6;              // a shot that would need more than this can't be taken (Steve: no shooting at 7+)
-const WOUND_CHANCE = 0.5;        // each hit is a coin toss: heads it wounds (a section, a team or a tank lost); every hit pins
+const WOUND_CHANCE = 0.5;        // each hit is a coin toss: heads it wounds (a section, a team or a tank lost); every hit shakes
 const QUALITY = { elite: { name: 'Elite', shoot: 1, assault: 1.3, rally: 0.9 }, standard: { name: 'Standard', shoot: 0, assault: 1, rally: 0.7 } };
 const SIGHT_RANGE = 3;           // fields a piece without a weapon of its own sees (the rest: RANGES; hedges, villages and orchards block the view)
 const LONG_RANGE = 1;             // added to the score needed at long range (the penalties stack)
@@ -55,7 +59,8 @@ const RANGES = {
   sniper: { sight: 99, long: 99 },  // the sniper: anywhere he can see, no long range, and cover doesn't help the target
 };
 const ON_THE_MOVE = 1;           // added to the score needed when firing after a move (Steve: like range and cover, +1 each)
-const COVER = { hedge: 1, village: 1, hamlet: 1, orchard: 1, tank: 1 };   // tank: infantry sheltering behind or beside a tank (Steve)   // added to the score needed against a target behind a hedge, in the village, a hamlet or an orchard
+const COVER = { hedge: 1, village: 2, hamlet: 2, orchard: 1, tank: 1 };   // tank: infantry sheltering behind or beside a tank (Steve)   // added to the score needed against a target behind a hedge, in the village, a hamlet or an orchard (Steve: houses are hard cover, +2)
+const SMALL_TARGET = 1;          // added to the score needed against a small target: a piece of two men or fewer (Steve: sniper, bazooka, captain; not the MG, three men)
 const CAPTAIN_RALLIES = { still: 2, moved: 1 };   // rallies an hour: two if he neither moves nor shoots, one if he does (before or after)
 const RALLY_RANGE = 3;           // the captain rallies a shaken friendly piece up to this many fields away (Steve)
 const SELF_RALLY = { standard: 0.5, elite: 0.65 };   // a shaken piece can use its move to try to rally itself: its chance
@@ -75,11 +80,13 @@ const PIECES = {
   mg42:     { name: 'MG 42 team', soft: 5, hard: 0, team: true, men: 3 },
   schreck:  { name: 'Panzerschreck team', soft: 0, hard: 2.5, team: true, men: 2 },
   pak:      { name: 'PaK 40 gun', soft: 0.5, hard: 3, team: true, fixed: true },
-  captain:  { name: 'Captain', soft: 1, hard: 0 },   // his HQ's carbines and submachine guns (Steve: he can shoot)
+  captain:  { name: 'Captain', soft: 1, hard: 0, men: 1 },   // his HQ's carbines and submachine guns (Steve: he can shoot)
 };
 
-// Close assault (a charge): strength of each side before cover and luck
-const ASSAULT = { platoon: 1, mgTeam: 1.5, otherTeam: 0.5, tankSupport: 2, tank: 1.5, hedgeDefence: 1.5, villageDefence: 1.4, shocked: 0.5 };
+// Hand to hand (a charge into the enemy, Steve): the two sides strike in turn, the attacker first, a die for each base
+// standing, each hit a base lost, until one side is gone. Being shaken doesn't count. A stop after this many exchanges
+// (only reached when neither side can hurt the other)
+const HAND_TO_HAND_LIMIT = 40;
 
 // Fire support: dice on the target field (and a few on the fields around it for artillery), ammo and how it comes back
 const MORTARS = { name: '81 mm mortars', dice: 4, splash: 0, ammo: 6, resupplyEvery: 2 };

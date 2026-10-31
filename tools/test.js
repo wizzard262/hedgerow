@@ -183,7 +183,7 @@ check('dice: every face is 1 to 6 and hits are the ones at or over the score nee
   }
 });
 
-check('taking cover: no moving, harder to hit, misses the next move unless the captain gets it up', () => {
+check('taking cover: no moving, half the dice, misses the next move unless the captain gets it up', () => {
   const st = Sim.newGame(9);
   let checked = 0;
   for (let h = 0; h < 8 && !st.won && !st.lost; h++) {
@@ -204,10 +204,11 @@ check('taking cover: no moving, harder to hit, misses the next move unless the c
   A.down = true; A.acted = true; cap.x = A.x; cap.y = A.y === 0 ? 1 : A.y - 1;
   assert(Sim.rallyTargets(st2, cap).includes(A), 'the captain could not reach a piece down in cover');
   assert(Sim.actRally(st2, cap, A).ok && !A.acted && !A.down, 'the captain did not get it up and moving');
-  // Down in cover, it is harder to hit
+  // Down in cover, the score needed is the same but its label says half the dice (Steve)
   const de = st2.units.find(u => u.side === 'de' && u.kind === 'company');
   const before = Sim.needFor(st2, de, A); A.down = true;
-  assert(Sim.needFor(st2, de, A) === before + TAKE_COVER, 'taking cover did not make it harder to hit');
+  assert(Sim.needFor(st2, de, A) === before, 'taking cover changed the score needed');
+  assert(Sim.needWhy(st2, de, A).includes('½ dice: taking cover'), 'the label did not say half the dice');
 });
 
 check('the mortars and the guns fire once an hour each', () => {
@@ -312,7 +313,7 @@ check("a tank's high explosive hits every piece on foot in the field, like a mor
   assert(hitIds.includes(platoon.id) && hitIds.includes(team.id), 'only the target rolled: ' + hitIds.join(','));
   // Rifles stay one target at a time
   // (the tank's shot may have killed it: set it up again)
-  st.fx = []; A.acted = false; platoon.x = 1; platoon.y = 6; platoon.platoons = 3; platoon.shocked = false;
+  st.fx = []; A.acted = false; platoon.x = 1; platoon.y = 6; platoon.platoons = 3; platoon.shocked = false; st.won = false;
   assert(Sim.actShoot(st, A, platoon).ok, 'the rifle platoon could not shoot');
   assert(st.fx.filter(f => f.faces).length === 1, 'a rifle platoon hit more than one piece');
 });
@@ -458,8 +459,8 @@ check('a shot that would need 7 or more cannot be taken', () => {
   de.x = 9; de.y = 0; de.at = null;
   assert(Sim.tileType(9, 0) === 'orchard', 'the test needs an orchard at 9,0');
   assert(Sim.targets(st, B).includes(de), 'a 6+ shot was refused');
-  // Taking cover makes it 7: no shot
-  de.down = true;
+  // A small target (two men or fewer) makes it 7: no shot
+  de.kind = 'schreck';
   assert(!Sim.targets(st, B).includes(de), 'a 7+ shot was allowed');
 });
 
@@ -507,6 +508,7 @@ check('every German move says which piece or gun it is and what it does', () => 
     // Draw tokens through the round; on each German one, let it move (standing fast) and read what it says
     for (let side = Sim.drawToken(st); side; side = Sim.drawToken(st)) {
       if (side === 'us') { Sim.passToken(st); continue; }
+      if (side === 'timer') continue;
       for (let r = Sim.germanStep(st); !r.done; r = Sim.germanStep(st)) Sim.answer(st, false);
       const m = st.de.move;
       assert(m && (m.id || m.gun), `seed ${seed}: a German move named no piece or gun`);
@@ -624,7 +626,7 @@ check('a shot label adds up: the 3+ start, then each cover named on its own, to 
   assert(checked > 20, `only ${checked} labelled shots were checked`);
 });
 
-check('mortars land on the one field, artillery on it and the four next to it; men down in cover need one more', () => {
+check('mortars land on the one field, artillery on it and the four next to it; men down in cover face half the dice', () => {
   const st = Sim.newGame(3);
   assert(Sim.shellFields('mortars', 4, 4).length === 1, 'mortars reached past the target field');
   const guns = Sim.shellFields('artillery', 4, 4);
@@ -634,7 +636,7 @@ check('mortars land on the one field, artillery on it and the four next to it; m
   t.down = false;
   assert(Sim.shellNeed(st, t) === TO_HIT && !Sim.shellWhy(st, t).length, 'shells on men in the open needed more than the start');
   t.down = true;
-  assert(Sim.shellNeed(st, t) === TO_HIT + TAKE_COVER && Sim.shellWhy(st, t).includes(`−${TAKE_COVER} taking cover`), 'shells ignored men down in cover');
+  assert(Sim.shellNeed(st, t) === TO_HIT && Sim.shellWhy(st, t).includes('½ dice: taking cover'), 'shells ignored men down in cover');
 });
 
 check('tanks cannot take cover', () => {
@@ -645,6 +647,154 @@ check('tanks cannot take cover', () => {
 
 check('leaving everything alone never wins', () => {
   for (let seed = 1; seed <= 30; seed++) assert(!play(seed, false).won, `seed ${seed} won by doing nothing`);
+});
+
+
+check('a small target (two men or fewer) needs one more; an MG team (three men) does not', () => {
+  const st = Sim.newGame(3);
+  st.hedges = {}; st.wire = {};
+  const A = Sim.unitById(st, 'A'), de = st.units.find(u => u.side === 'de' && u.kind === 'company');
+  for (const u of st.units) if (u !== A && u !== de) u.x = u.y = null;
+  A.x = 2; A.y = 6; A.at = null; A.quality = 'standard'; A.shocked = false;
+  de.x = 3; de.y = 6; de.at = null; de.down = false;
+  const open = Sim.needFor(st, A, de);
+  // The Panzerschreck team: two men
+  de.kind = 'schreck';
+  assert(Sim.needFor(st, A, de) === open + SMALL_TARGET, 'a two-man team was no harder to hit');
+  assert(Sim.needWhy(st, A, de).includes(`−${SMALL_TARGET} small target`), 'the label did not say small target');
+  // An MG 42 team: three men, not small
+  de.kind = 'mg42';
+  assert(Sim.needFor(st, A, de) === open, 'a three-man MG team counted as a small target');
+  assert(Sim.smallTarget({ kind: 'sniper' }) && Sim.smallTarget({ kind: 'bazooka' }) && Sim.smallTarget({ kind: 'captain' }), 'the sniper, bazooka or captain is not a small target');
+});
+
+check('houses are hard cover: two more to hit anyone in a village or hamlet', () => {
+  assert(COVER.village === 2 && COVER.hamlet === 2, 'houses are not +2');
+  const st = Sim.newGame(3);
+  const t = { x: 4, y: 4, side: 'de', kind: 'company' };
+  assert(Sim.tileType(4, 4) === 'village' && Sim.cover(st, null, t) === 2, 'a piece in the village did not get +2');
+});
+
+check('taking cover halves the dice: an odd one left over is a coin toss', () => {
+  let rolled = 0, shots = 0;
+  for (let seed = 1; seed <= 40; seed++) {
+    const st = Sim.newGame(seed);
+    st.hedges = {}; st.wire = {};
+    const mg = st.units.find(u => u.side === 'de' && u.kind === 'mg42'), A = Sim.unitById(st, 'A');
+    for (const u of st.units) if (u !== mg && u !== A) u.x = u.y = null;
+    mg.x = 3; mg.y = 6; mg.at = null; A.x = 2; A.y = 6; A.at = null; A.down = true;
+    st.fx = [];
+    Sim.fireAt(st, mg, A, 1);
+    rolled += st.fx[0].faces.length; shots++;
+  }
+  // Five dice, halved: two or three each time, about two and a half on average
+  const mean = rolled / shots;
+  assert(mean > 2.1 && mean < 2.9, `an MG at men taking cover rolled ${mean.toFixed(2)} dice on average, not about 2.5`);
+});
+
+check('the game stops at once when one side has no pieces left, without finishing the round', () => {
+  const st = Sim.newGame(3);
+  st.hedges = {}; st.wire = {};
+  Sim.startRound(st);
+  const A = Sim.unitById(st, 'A');
+  const last = st.units.find(u => u.side === 'de' && u.kind === 'company');
+  for (const u of st.units) if (u.side === 'de' && u !== last) u.x = u.y = null;
+  // One German left, with one section, already shaken: the next hit kills it
+  last.x = 3; last.y = 6; last.at = null; last.platoons = 1; last.shocked = true;
+  A.x = 2; A.y = 6; A.at = null;
+  for (let k = 0; k < 20 && last.x !== null; k++) Sim.fireAt(st, A, last, 1);
+  assert(last.x === null, 'the last German was never hit');
+  assert(st.won, 'wiping out the Germans did not end the game at once');
+  assert(Sim.drawToken(st) === null, 'tokens were still drawn after the game was over');
+  const turn = st.turn;
+  Sim.endRound(st);
+  assert(st.turn === turn, 'a new round started after the game was over');
+});
+
+check('the timer token: one in the bag; drawn, it ends the round there and then', () => {
+  let timers = 0;
+  for (let seed = 1; seed <= 20; seed++) {
+    const st = Sim.newGame(seed);
+    Sim.startRound(st);
+    assert(st.bag.timer === ROUND_TIMER, 'the bag has no timer token');
+    for (let side = Sim.drawToken(st); side; side = Sim.drawToken(st)) {
+      if (side === 'timer') {
+        timers++;
+        assert(st.bag.us === 0 && st.bag.de === 0 && Sim.drawToken(st) === null, 'the timer did not empty the bag');
+        break;
+      }
+      if (side === 'us') { Sim.passToken(st); continue; }
+      for (let r = Sim.germanStep(st); !r.done; r = Sim.germanStep(st)) Sim.answer(st, false);
+      Sim.endGermanToken(st);
+    }
+  }
+  assert(timers > 5, `the timer came out only ${timers} times in 20 rounds`);
+});
+
+check('the captain has no Rally and does not hold the token with nobody to rally', () => {
+  const st = Sim.newGame(3);
+  Sim.startRound(st);
+  const cap = Sim.unitById(st, 'cap');
+  for (const u of st.units) { u.shocked = false; u.down = false; }
+  assert(!Sim.captainCanRally(st, cap), 'the captain could rally with nobody shaken');
+  // His token: once he has moved, with nobody to rally, it is over
+  st.drawn = 'us'; st.activeId = null;
+  Sim.actSkip(st, cap);
+  assert(Sim.activationOver(st), 'the token waited for a rally nobody needed');
+  // Himself shaken: he can rally himself
+  const st2 = Sim.newGame(3);
+  const cap2 = Sim.unitById(st2, 'cap');
+  for (const u of st2.units) { u.shocked = false; u.down = false; }
+  cap2.shocked = true;
+  assert(Sim.captainCanRally(st2, cap2) && Sim.rallyTargets(st2, cap2).includes(cap2), 'the captain could not rally himself');
+});
+
+check('a tank stops facing the nearest enemy it can see, or the enemy side with none in sight', () => {
+  const st = Sim.newGame(3);
+  st.hedges = {}; st.wire = {};
+  const T1 = Sim.unitById(st, 'T1');
+  const de = st.units.filter(u => u.side === 'de');
+  for (const u of st.units) if (u !== T1) u.x = u.y = null;
+  T1.x = 0; T1.y = 6; T1.at = null; T1.acted = false;
+  // Nobody in sight: it faces east, towards the Germans' side
+  const spot = Sim.chargeSpots(st, T1).find(p => p.x === 1 && p.y === 6);
+  assert(Sim.actCharge(st, T1, spot.x, spot.y).ok && T1.aim === 0, 'with nobody in sight the tank did not face east');
+  // A German straight south of it, two fields away in the open: it turns to face him
+  const g = de.find(u => u.kind === 'company');
+  g.x = 2; g.y = 7; g.at = null;
+  T1.acted = false; st.drawn = null;
+  const back = Sim.chargeSpots(st, T1).find(p => p.x === 1 && p.y === 7);
+  assert(back && Sim.actCharge(st, T1, 1, 7).ok, 'the tank could not move');
+  assert(Math.abs(T1.aim - 0) < 0.01, `the tank did not face the German beside it (aim ${T1.aim})`);
+});
+
+check('skip the shot after Move & shoot ends the token', () => {
+  const st = Sim.newGame(3);
+  const A = Sim.unitById(st, 'A');
+  A.halfShot = true;
+  assert(Sim.actSkipShot(st, A).ok && !A.halfShot, 'the shot could not be skipped');
+});
+
+check('hand to hand: blows in turn, attacker first, until one side is gone; nobody stays shaken', () => {
+  let won = 0, lost = 0;
+  for (let seed = 1; seed <= 40; seed++) {
+    const st = Sim.newGame(seed);
+    st.hedges = {}; st.wire = {};
+    const A = Sim.unitById(st, 'A'), de = st.units.find(u => u.side === 'de' && u.kind === 'company');
+    for (const u of st.units) if (u !== A && u !== de) u.x = u.y = null;
+    A.x = 2; A.y = 6; A.at = null; A.acted = false; A.shocked = true;
+    de.x = 3; de.y = 6; de.at = null; de.shocked = true;
+    // (being shaken doesn't stop a charge in this check)
+    A.shocked = false;
+    const r = Sim.actCharge(st, A, 3, 6);
+    assert(r.ok, `seed ${seed}: the charge was refused`);
+    const aLeft = A.x !== null, dLeft = de.x !== null;
+    assert(aLeft !== dLeft, `seed ${seed}: both sides (or neither) came out of the fight`);
+    if (aLeft) { won++; assert(A.x === 3 && A.y === 6, `seed ${seed}: the winner did not take the field`); assert(!A.shocked, 'the winner is still shaken'); }
+    else { lost++; assert(!de.shocked, 'the defender is still shaken'); }
+    assert(/hit/.test(r.lines[0]), `seed ${seed}: no blows reported`);
+  }
+  assert(won > 0 && lost > 0, `the attacker won ${won} and lost ${lost} of 40: one side always wins`);
 });
 
 console.log(failed ? `\n${failed} failed` : '\nall passed');

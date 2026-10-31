@@ -82,6 +82,8 @@ const Sim = (() => {
   const isTank = u => !!PIECES[u.kind].tank;
   const isTeam = u => !!PIECES[u.kind].team;
   const isSmall = u => isTeam(u) || u.kind === 'captain';
+  // A small target (Steve): a piece of two men or fewer (the sniper, a bazooka team, the captain), one more to hit
+  const smallTarget = u => !!u.kind && (PIECES[u.kind].men || 99) <= 2;
   const enemyOf = side => (side === 'us' ? 'de' : 'us');
   const adjacent = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y) === 1;
   const teamsOf = (st, company) => st.units.filter(t => t.attachedTo === company.id && t.x !== null);
@@ -125,7 +127,7 @@ const Sim = (() => {
     // German teams that start with a company
     st.rand = R;
     deploy(st, 'us'); deploy(st, 'de');
-    st.report = [`${START_DATE}, 06:00. The company attacks into the bocage. Take ${st.objective.name} and hold it at the end of an hour${TURNS ? ` by ${hourText(TURNS + 1)}` : ''}.`];
+    st.report = [`${START_DATE}. The company attacks into the bocage. Take ${st.objective.name} and hold it at the end of a round${TURNS ? ` within ${TURNS} rounds` : ''}.`];
     return st;
   }
 
@@ -179,7 +181,8 @@ const Sim = (() => {
     return best || want;
   }
 
-  const hourText = turn => { const h = START_HOUR + turn - 1; return `${h >= 24 ? `day ${Math.floor(h / 24) + 1}, ` : ''}${String(h % 24).padStart(2, '0')}:00`; };
+  // There are no hours, only rounds (Steve)
+  const roundText = turn => `round ${turn}`;
 
   // ---------- Who commands whom ----------
 
@@ -317,14 +320,14 @@ const Sim = (() => {
     return c;
   }
 
-  // What hits do to a piece (Steve): every hit pins it (shaken), and each hit is a coin toss whether it wounds: a section
+  // What hits do to a piece (Steve): every hit shakes it, and each hit is a coin toss whether it wounds: a section
   // of a platoon, a whole team, or a tank lost. Only anti-tank (hard) hits count against tanks
   function damage(st, u, softHits, hardHits, deadly = false) {
     const name = u.name, out = [];
     u.hit = u.hit || softHits + hardHits > 0;
     const hits = isTank(u) ? hardHits : softHits + hardHits;
     if (hits <= 0) return out;
-    // Each hit: on a piece already pinned it kills (Steve: two pins kill); otherwise it pins it, and a coin toss says
+    // Each hit: on a piece already shaken it kills (Steve: shaken twice kills); otherwise it shakes it, and a coin toss says
     // whether it wounds as well
     let wounds = 0;
     const wasShocked = u.shocked;
@@ -347,7 +350,7 @@ const Sim = (() => {
       u.platoons -= lost;
       if (lost) out.push(`${name} loses ${lost} section${lost > 1 ? 's' : ''}`);
     }
-    if (!out.length && u.platoons > 0) out.push(wasShocked ? `${name} still pinned` : `${name} pinned`);
+    if (!out.length && u.platoons > 0) out.push(wasShocked ? `${name} still shaken` : `${name} shaken`);
     if (u.platoons <= 0) out.push(...remove(st, u));
     return out;
   }
@@ -355,6 +358,8 @@ const Sim = (() => {
   // A piece leaves the board. A company's attached teams carry on alone
   function remove(st, u) {
     u.x = null; u.y = null; u.shocked = false;
+    // The last piece of a side gone: the game stops there and then, without finishing the round (Steve)
+    wipedOut(st);
     if (u.kind === 'company') {
       for (const t of st.units) {
         if (t.attachedTo === u.id) t.attachedTo = null;
@@ -369,8 +374,10 @@ const Sim = (() => {
   // The score each die needs: TO_HIT, plus cover and range, plus one on the move, less one for elite troops
   function needFor(st, shooter, target, moving = false) {
     // The sniper: no cover, no long range (Steve)
-    if (PIECES[shooter.kind].sniper) return TO_HIT + (moving ? ON_THE_MOVE : 0) + (shooter.shocked ? SHAKEN_SHOOT : 0) - QUALITY[shooter.quality || 'standard'].shoot;
-    return TO_HIT + cover(st, shooter, target) + (moving ? ON_THE_MOVE : 0) + (shooter.shocked ? SHAKEN_SHOOT : 0) + (target.down ? TAKE_COVER : 0) - QUALITY[shooter.quality || 'standard'].shoot;
+    // A small target needs one more, whoever shoots (Steve)
+    const small = smallTarget(target) ? SMALL_TARGET : 0;
+    if (PIECES[shooter.kind].sniper) return TO_HIT + small + (moving ? ON_THE_MOVE : 0) + (shooter.shocked ? SHAKEN_SHOOT : 0) - QUALITY[shooter.quality || 'standard'].shoot;
+    return TO_HIT + cover(st, shooter, target) + small + (moving ? ON_THE_MOVE : 0) + (shooter.shocked ? SHAKEN_SHOOT : 0) - QUALITY[shooter.quality || 'standard'].shoot;
   }
 
   // Why a shot needs what it needs, for the label on the target (Steve): each thing that makes it harder (−) or easier (+),
@@ -379,6 +386,7 @@ const Sim = (() => {
     const why = [];
     if (PIECES[shooter.kind].sniper) {
       why.push('sniper: no cover or range');
+      if (smallTarget(target)) why.push(`−${SMALL_TARGET} small target`);
       if (moving) why.push(`−${ON_THE_MOVE} moving`);
       if (shooter.shocked) why.push(`−${SHAKEN_SHOOT} shaken`);
       return withStart(why);
@@ -390,7 +398,9 @@ const Sim = (() => {
     if (s && s.behindTank) why.push(`−${COVER.tank} behind a tank`);
     why.push(...placeWhy(target));
     if (!isTank(target) && at(st, target.x, target.y, target.side).some(isTank)) why.push(`−${COVER.tank} beside a tank`);
-    if (target.down) why.push(`−${TAKE_COVER} taking cover`);
+    if (target.down) why.push('½ dice: taking cover');
+    // Two men or fewer (Steve)
+    if (smallTarget(target)) why.push(`−${SMALL_TARGET} small target`);
     if (far) why.push(`−${LONG_RANGE} long range`);
     if (moving) why.push(`−${ON_THE_MOVE} moving`);
     if (shooter.shocked) why.push(`−${SHAKEN_SHOOT} shaken`);
@@ -414,13 +424,23 @@ const Sim = (() => {
     return [`${TO_HIT}+ start`, ...why];
   }
 
-  // The score mortar and artillery dice need against a piece: only a village gives cover from shells, and men down in cover
+  // The score mortar and artillery dice need against a piece: only a village gives cover from shells (men down in cover
+  // roll against half the dice instead, see underCover)
   function shellNeed(st, t) {
     // Cover from shells: the village's houses
     const village = tileType(t.x, t.y) === 'village' ? COVER.village : 0;
-    // Men already down are harder to hit
-    const down = t.down ? TAKE_COVER : 0;
-    return TO_HIT + village + down;
+    return TO_HIT + village;
+  }
+
+  // Dice against a piece taking cover (Steve): half of them, and an odd one left over is a coin toss
+  function underCover(st, t, n) {
+    // Not down: every die rolls
+    if (!t.down) return n;
+    const half = Math.floor(n * TAKE_COVER);
+    const odd = n - half * 2 > 0;
+    // The odd die: heads it rolls too
+    const extra = odd && st.rand() < 0.5 ? 1 : 0;
+    return half + extra;
   }
 
   // Why mortar and artillery dice need what they need, for the label on the target
@@ -428,8 +448,8 @@ const Sim = (() => {
     const why = [];
     // Only the village counts against shells
     if (tileType(t.x, t.y) === 'village') why.push(`−${COVER.village} village`);
-    // Men already down in cover
-    if (t.down) why.push(`−${TAKE_COVER} taking cover`);
+    // Men already down in cover: half the dice
+    if (t.down) why.push('½ dice: taking cover');
     return withStart(why);
   }
 
@@ -445,8 +465,8 @@ const Sim = (() => {
       hardHits = roll(st, dice(st, f.hard * power), need + PIECES[target.kind].armour, faces);
       softHits = roll(st, dice(st, f.soft * power), need, []);
     } else {
-      // Anti-tank weapons are poor against men in a hedge: half value
-      softHits = roll(st, dice(st, (f.soft + f.hard * 0.5) * power), need, faces);
+      // Anti-tank weapons are poor against men in a hedge: half value. Men taking cover face half the dice (Steve)
+      softHits = roll(st, underCover(st, target, dice(st, (f.soft + f.hard * 0.5) * power)), need, faces);
       hardHits = 0;
     }
     // Where the target stood, so its dice still land there if it is wiped out
@@ -458,7 +478,7 @@ const Sim = (() => {
     const lost = before.strength - (target.x === null ? 0 : target.platoons);
     const result = target.x === null ? (isTank(target) ? 'Destroyed' : 'Wiped out')
       : lost ? (isTank(target) ? `Tank knocked out` : lost > 1 ? `${lost} sections lost` : 'Section lost')
-      : target.shocked && !before.shocked ? 'Pinned' : softHits + hardHits ? 'No effect' : 'Missed';
+      : target.shocked && !before.shocked ? 'Shaken' : softHits + hardHits ? 'No effect' : 'Missed';
     // What the table shows: the weapon's muzzle flash and tracers from the shooter, and what lands on the target
     const weapon = isTank(shooter) || shooter.kind === 'pak' ? 'gun' : shooter.kind === 'mg' || shooter.kind === 'mg42' ? 'mg' : shooter.kind === 'bazooka' || shooter.kind === 'schreck' ? 'rocket' : 'rifle';
     st.fx.push({ from: { id: shooter.id, x: shooter.x, y: shooter.y }, to: { id: target.id }, weapon, armour: isTank(target), x: target.x === null ? stood.x : target.x, y: target.x === null ? stood.y : target.y, kind: softHits + hardHits ? 'hit' : 'miss', faces, need: Math.min(6, need + (isTank(target) ? PIECES[target.kind].armour : 0)), side: shooter.side, result, tookCover: !!pre });
@@ -535,7 +555,26 @@ const Sim = (() => {
     // The way it is facing, for the table (tanks turn to fire, and turn again when they move)
     u.aim = { e: 0, n: Math.PI / 2, w: Math.PI, s: -Math.PI / 2 }[heading];
     for (const t of teams) { t.x = x; t.y = y; t.at = freePlace(st, t, x, y, heading); }
+    // A tank stops facing the nearest enemy it can see (Steve)
+    if (isTank(u)) faceEnemy(st, u);
     return how;
+  }
+
+  // Which way a tank faces after it moves (Steve): towards the nearest enemy it can see; with none, towards the enemy's
+  // side of the board; with two as near as each other, either one at random
+  function faceEnemy(st, u) {
+    const seen = st.units.filter(e => e.side !== u.side && e.x !== null && sight(st, u, e));
+    if (!seen.length) {
+      // Nobody in sight: towards the enemy's side (the Americans east, the Germans west)
+      u.aim = u.side === 'us' ? 0 : Math.PI;
+      return;
+    }
+    // The nearest; ties broken at random
+    const far = e => Math.hypot(e.x - u.x, e.y - u.y);
+    const nearest = Math.min(...seen.map(far));
+    const closest = seen.filter(e => Math.abs(far(e) - nearest) < 0.01);
+    const e = closest[Math.floor(st.rand() * closest.length)];
+    u.aim = Math.atan2(-(e.y - u.y), e.x - u.x);
   }
 
   // Fields a piece could move into (plain move or move and shoot)
@@ -550,85 +589,94 @@ const Sim = (() => {
 
   // ---------- Close assault ----------
 
-  // A side's strength in a fight for a field
-  function assaultStrength(st, pieces, defending, x, y, from) {
-    let s = 0;
-    for (const u of pieces) {
-      if (u.kind === 'company') s += u.platoons * ASSAULT.platoon * QUALITY[u.quality].assault * (u.shocked ? ASSAULT.shocked : 1);
-      else if (isTank(u)) s += u.platoons * ASSAULT.tank * (u.shocked ? ASSAULT.shocked : 1);
-      else if (u.kind === 'mg' || u.kind === 'mg42') s += ASSAULT.mgTeam * (u.shocked ? ASSAULT.shocked : 1);
-      else if (isTeam(u)) s += ASSAULT.otherTeam;
-    }
-    if (defending) {
-      if (hedge(st, from.x, from.y, x, y)) s *= ASSAULT.hedgeDefence;
-      if (tileType(x, y) === 'village' || tileType(x, y) === 'hamlet') s *= ASSAULT.villageDefence;
-    }
-    return s;
-  }
-
-  // Where a beaten piece can fall back to: a field next to it, away from the attacker, with room
-  function retreatSpot(st, u, from) {
-    let best = null, far = -1;
-    for (const [dx, dy] of NEIGHBOURS) {
-      const x = u.x + dx, y = u.y + dy;
-      if (!canStep(st, u, x, y)) continue;
-      const d = Math.abs(x - from.x) + Math.abs(y - from.y);
-      if (d > far) { far = d; best = { x, y }; }
-    }
-    return best;
-  }
-
   // Charge: step into the next field without shooting. If enemies hold it, fight for it hand to hand
   function charge(st, u, x, y) {
     const defenders = at(st, x, y, enemyOf(u.side));
-    const out = [];
     if (!defenders.length) {
       const how = step(st, u, x, y, true);
       return [how === 'cut' ? `${u.name} charges through the hedge, leaving a gap` : how === 'flattened' ? `${u.name} charges over the wire, flattening it` : `${u.name} charges forward`];
     }
-    // Attackers: the charging piece with its teams, plus tanks with it or next to the field
-    const supporters = st.units.filter(t => t.side === u.side && t.x !== null && isTank(t) && !t.shocked && t !== u && (Math.abs(t.x - x) + Math.abs(t.y - y) <= 1));
-    const attack = assaultStrength(st, [u, ...teamsOf(st, u)], false) + (supporters.length ? ASSAULT.tankSupport : 0);
-    const defence = assaultStrength(st, defenders, true, x, y, u);
-    const a = attack * (0.7 + st.rand() * 0.6), d = defence * (0.7 + st.rand() * 0.6);
     st.fx.push({ x, y, kind: 'assault' });
-    if (a > d) {
-      // The defenders lose a platoon each and fall back; anything that can't get away is lost.
-      // Companies and tanks first: their attached teams go with them
-      const order = defenders.filter(d => d.kind !== 'captain').sort((a, b) => (isSmall(a) ? 1 : 0) - (isSmall(b) ? 1 : 0));
-      for (const def of order) {
-        if (def.x === null || def.x !== x || def.y !== y) continue;
-        if (def.attachedTo && defenders.some(d => d.id === def.attachedTo && d.x !== null)) continue;
-        if (def.kind === 'company' || isTank(def)) out.push(...lose(st, def, 1));
-        if (def.x === null) continue;
-        const spot = retreatSpot(st, def, u);
-        if (spot && !PIECES[def.kind].fixed) { step(st, def, spot.x, spot.y); def.shocked = true; def.hit = true; out.push(`${def.name} falls back`); }
-        else { remove(st, def); out.push(`${def.name} is overrun`); }
-      }
-      // Captains caught in the field go back with their companies, or are lost
-      for (const c of defenders.filter(d => d.kind === 'captain' && d.x !== null)) {
-        const spot = retreatSpot(st, c, u);
-        if (spot) { step(st, c, spot.x, spot.y); out.push(`${c.name} gets away`); } else { remove(st, c); out.push(`${c.name} is captured`); }
-      }
+    return handToHand(st, u, defenders, x, y);
+  }
+
+  // Hand to hand (Steve): the two sides strike at each other in turn, the attacker first. Every base still standing rolls
+  // a die and each hit takes a base off the other side; the survivors go on until only one side has anyone left.
+  // Being shaken doesn't count in the fight, and nobody who comes out of it is still shaken
+  function handToHand(st, u, defenders, x, y) {
+    const out = [`⚔️ ${u.name} charges ${defenders.map(d => d.name).join(' and ')}`];
+    // The attacker's dice: 3+, one more against men behind the hedge it went over or in houses; elite one less
+    const sheltered = hedge(st, u.x, u.y, x, y) || ['village', 'hamlet'].includes(tileType(x, y));
+    const attackNeed = TO_HIT + (sheltered ? 1 : 0) - QUALITY[u.quality || 'standard'].shoot;
+    const attackers = [u];
+    const standing = list => list.filter(p => p.x !== null);
+    for (let exchange = 1; exchange <= HAND_TO_HAND_LIMIT; exchange++) {
+      // The attacker strikes first, then whoever is left of the defenders strikes back
+      const a = strike(st, attackers, standing(defenders), () => attackNeed);
+      out.push(...a.lines);
+      if (!standing(defenders).length) break;
+      const d = strike(st, standing(defenders), standing(attackers), s => TO_HIT - QUALITY[s.quality || 'standard'].shoot);
+      out.push(...d.lines);
+      if (!standing(attackers).length) break;
+      // Neither side can hurt the other (men against tanks alone): the attacker gives up and stays where it was
+      if (!a.able && !d.able) break;
+    }
+    // Shaken doesn't last past the fight
+    for (const p of [...attackers, ...defenders]) if (p.x !== null) { p.shocked = false; p.hit = true; }
+    if (!standing(defenders).length && u.x !== null) {
+      // The field is the attacker's
       if (wire(st, u.x, u.y, x, y)) delete st.wire[edgeKey(u.x, u.y, x, y)];
       step(st, u, x, y);
-      // Winning a hedge fight still costs: a chance of losing a platoon
-      if (st.rand() < 0.3) out.push(...lose(st, u, 1));
-      out.unshift(`⚔️ ${u.name} storms the field!`);
-    } else {
-      out.push(`⚔️ ${u.name}'s charge is beaten back.`, ...lose(st, u, 1));
-      if (u.x !== null) { u.shocked = true; u.hit = true; }
-    }
+      out.push(`⚔️ ${u.name} takes the field!`);
+    } else if (u.x === null) out.push(`⚔️ The charge is wiped out.`);
+    else out.push(`⚔️ ${u.name} can't get at them and stays back.`);
     return out;
   }
 
-  // Lose platoons (or tanks) outright
-  function lose(st, u, n) {
-    if (u.x === null) return [];
-    u.platoons = Math.max(0, u.platoons - n);
-    const out = [`${u.name} loses ${n} ${isTank(u) ? 'tank' : 'section'}${n > 1 ? 's' : ''}`];
-    if (u.platoons <= 0) out.push(...remove(st, u));
-    return out;
+  // One side's blow in a hand-to-hand fight: each base of each striker rolls a die needing need(striker); every hit
+  // takes a base off one of the victims it can hurt (rifle platoons and tanks first, the teams and the captain last).
+  // Returns the lines to report and whether any striker could hurt anyone at all
+  function strike(st, strikers, victims, need) {
+    const lines = [];
+    let able = false;
+    const canHurt = (s, v) => !isTank(v) || isTank(s) || PIECES[s.kind].hard > 0;
+    for (const s of strikers) {
+      if (s.x === null) continue;
+      let hits = 0;
+      for (let k = 0; k < s.platoons; k++) {
+        // Who this base can hurt, still standing: the big pieces first
+        const open = victims.filter(v => v.x !== null && canHurt(s, v)).sort((a, b) => (isSmall(a) ? 1 : 0) - (isSmall(b) ? 1 : 0));
+        if (!open.length) break;
+        able = true;
+        const face = 1 + Math.floor(st.rand() * 6);
+        if (face < Math.min(6, need(s))) continue;
+        hits++;
+        lines.push(...loseBase(st, open[0]));
+      }
+      if (able) lines.splice(lines.length - hits, 0, `${s.name}: ${hits} hit${hits === 1 ? '' : 's'}`);
+    }
+    return { lines, able };
+  }
+
+  // One base lost in hand to hand: a section, a tank, or the whole of a team or the captain's HQ
+  function loseBase(st, v) {
+    v.platoons = Math.max(0, v.platoons - 1);
+    if (v.platoons > 0) return [`${v.name} loses ${isTank(v) ? 'a tank' : 'a section'}`];
+    remove(st, v);
+    return [isTank(v) ? `${v.name} destroyed` : `${v.name} wiped out`];
+  }
+
+  // Has one side lost every piece? Then the game is over at once (Steve: don't finish the round)
+  function wipedOut(st) {
+    if (st.won || st.lost) return;
+    const left = side => st.units.some(u => u.side === side && u.x !== null);
+    if (!left('de')) {
+      st.won = true;
+      st.report = [`🏆 Every German on the field is destroyed in ${roundText(st.turn)}!`];
+    } else if (!left('us')) {
+      st.lost = true;
+      st.report = ['💀 Nothing is left of the company. The attack has failed.'];
+    }
   }
 
   // ---------- The player's actions ----------
@@ -771,7 +819,7 @@ const Sim = (() => {
   }
 
   // A charge: up to CHARGE_MOVES moves, without shooting, ending in a hand-to-hand fight if it reaches the enemy.
-  // Every piece but a dug-in gun can charge; captains and teams only into empty fields. A shaken (pinned) piece can't
+  // Every piece but a dug-in gun can charge; captains and teams only into empty fields. A shaken piece can't
   // charge until it rallies (Steve)
   function chargeRoutes(st, u) {
     if (PIECES[u.kind].fixed || u.shocked) return [];
@@ -806,6 +854,8 @@ const Sim = (() => {
     if (side === undefined) return;
     u.at = freePlace(st, u, u.x, u.y, side);
     for (const t of u.kind === 'company' ? teamsOf(st, u) : []) t.at = freePlace(st, t, t.x, t.y, u.at);
+    // Where it stands decides what it can see past the hedges: a tank faces the nearest enemy from there (Steve)
+    if (isTank(u)) faceEnemy(st, u);
   }
 
   function actCharge(st, u, x, y, side) {
@@ -873,12 +923,17 @@ const Sim = (() => {
   function canSelfRally(st, u) {
     return !!u && u.side === 'us' && u.x !== null && u.shocked && !u.acted && !st.won && !st.lost && !st.de && u.kind !== 'captain' && tokenAllows(st, u);
   }
+  // Can the captain rally now and is there anyone in reach to rally, himself included (Steve: otherwise no Rally, no waiting)
+  function captainCanRally(st, cap) {
+    return canRally(st, cap) && rallyTargets(st, cap).length > 0;
+  }
+
   function actSelfRally(st, u) {
     if (!canSelfRally(st, u)) return { ok: false };
     spend(st, u);
     const ok = st.rand() < SELF_RALLY[u.quality || 'standard'];
     if (ok) u.shocked = false;
-    return { ok: true, lines: [ok ? `📣 ${u.name} pulls itself together.` : `📣 ${u.name} stays pinned down.`] };
+    return { ok: true, lines: [ok ? `📣 ${u.name} pulls itself together.` : `📣 ${u.name} stays shaken.`] };
   }
 
   function actRally(st, cap, target) {
@@ -929,12 +984,12 @@ const Sim = (() => {
         if (t.x === null || t.kind === 'captain') continue;
         const need = shellNeed(st, t);
         const faces = [];
-        const soft = roll(st, n, need, faces), hard = isTank(t) ? roll(st, S.hard || 0, need + PIECES[t.kind].armour, faces) : 0;
+        const soft = roll(st, underCover(st, t, n), need, faces), hard = isTank(t) ? roll(st, S.hard || 0, need + PIECES[t.kind].armour, faces) : 0;
         const before = t.platoons, wasShocked = t.shocked;
         const hurt = damage(st, t, soft, hard);
         lines.push(...(t.side === side ? hurt.map(l => `⚠️ friendly fire: ${l}`) : hurt));
         const lost = before - (t.x === null ? 0 : t.platoons);
-        const result = t.x === null ? 'Wiped out' : lost ? (isTank(t) ? 'Tank knocked out' : 'Section lost') : t.shocked && !wasShocked ? 'Pinned' : soft + hard ? 'No effect' : 'Missed';
+        const result = t.x === null ? 'Wiped out' : lost ? (isTank(t) ? 'Tank knocked out' : 'Section lost') : t.shocked && !wasShocked ? 'Shaken' : soft + hard ? 'No effect' : 'Missed';
         st.fx.push({ x: fx, y: fy, kind: 'shell', faces, need, side, to: { id: t.id }, result, support: which });
       }
       // An empty field still gets its shell, flying from the side that fired (Steve: never from both sides' guns)
@@ -1085,7 +1140,7 @@ const Sim = (() => {
       const pre = withdraw ? takeCover(st, t) : null;
       const need = shellNeed(st, t);
       const faces = [];
-      const hits = roll(st, DE_MORTAR.dice, need, faces);
+      const hits = roll(st, underCover(st, t, DE_MORTAR.dice), need, faces);
       fx.faces = faces; fx.need = need; fx.side = 'de'; fx.tookCover = !!pre;
       const lines = (pre ? [pre.line] : []).concat(damage(st, t, hits, 0));
       st.fx.push(fx);
@@ -1099,16 +1154,19 @@ const Sim = (() => {
 
   // Run the German hour until it ends or a question needs the player. Returns { ask } or { done: true }
   function germanStep(st) {
-    if (!st.de) return { done: true };
+    if (!st.de || st.won || st.lost) return { done: true };
     if (st.de.ask) return { ask: st.de.ask };
     while (st.de.queue.length) {
       const u = unitById(st, st.de.queue.shift());
       if (u.x === null) continue;
+      if (st.won || st.lost) break;
       const shot = germanAct(st, u);
       if (!shot) continue;
       if (canReact(st, unitById(st, shot.target))) { st.de.ask = shot; return { ask: shot }; }
       resolveShot(st, shot, false);
     }
+    // A side wiped out: nothing more happens
+    if (st.won || st.lost) return { done: true };
     if (st.de.artillery) {
       st.de.artillery = false;
       const t = germanArtilleryTarget(st);
@@ -1168,6 +1226,13 @@ const Sim = (() => {
     if (u.kind === 'captain') u.rallied = CAPTAIN_RALLIES.still;
     return { ok: true, lines: [`⏭️ ${u.name} holds its ground this round.`] };
   }
+  // Moved with Move & shoot but not firing after all (Steve: no Pass button): the shot is given up and the token is done
+  function actSkipShot(st, u) {
+    if (!u || !u.halfShot) return { ok: false };
+    u.halfShot = false;
+    return { ok: true, lines: [`⏭️ ${u.name} holds its fire.`] };
+  }
+
   function skipSupport(st, which) {
     if (!canFire(st, which)) return { ok: false };
     st.fired[which] = true;
@@ -1180,7 +1245,7 @@ const Sim = (() => {
     // Shocked Germans who weren't hit last round come round; some rally anyway
     for (const u of st.units) if (u.side === 'de' && u.x !== null && u.shocked && (!u.hit || st.rand() < 0.3)) u.shocked = false;
     for (const u of st.units) { if (u.side === 'de') u.hit = false; u.halfShot = false; }
-    st.bag = { us: movable(st, 'us'), de: movable(st, 'de') };
+    st.bag = { us: movable(st, 'us'), de: movable(st, 'de'), timer: ROUND_TIMER };
     st.drawn = null;
     st.activeId = null;
     st.deFired = {};
@@ -1193,13 +1258,26 @@ const Sim = (() => {
     st.bag.de = Math.min(st.bag.de, movable(st, 'de'));
   }
 
-  // Draw a token: 'us', 'de', or null when the bag is empty. On a German token the Germans' move is set up (see germanStep):
+  // Draw a token: 'us', 'de', 'timer' or null when the bag is empty. The timer (Steve) empties the bag: the round ends
+  // there and then, so the next draw is null. On a German token the Germans' move is set up (see germanStep):
   // one of their pieces, or their mortar or artillery
   function drawToken(st) {
+    if (st.won || st.lost) return null;
     trimBag(st);
-    const total = st.bag.us + st.bag.de;
+    const timer = st.bag.timer || 0;
+    const total = st.bag.us + st.bag.de + timer;
     if (!total) return null;
-    const side = st.rand() * total < st.bag.us ? 'us' : 'de';
+    // Which token comes out: one of the Americans', one of the Germans', or the timer
+    const pick = st.rand() * total;
+    const side = pick < st.bag.us ? 'us' : pick < st.bag.us + st.bag.de ? 'de' : 'timer';
+    if (side === 'timer') {
+      // Time's up: every token left in the bag goes back out, unused
+      st.bag = { us: 0, de: 0, timer: 0 };
+      st.drawn = null;
+      st.activeId = null;
+      st.fx = [];
+      return side;
+    }
     st.bag[side]--;
     st.drawn = side;
     st.activeId = null;
@@ -1239,8 +1317,8 @@ const Sim = (() => {
     if (st.activeId.startsWith('gun:')) return true;
     const u = unitById(st, st.activeId);
     if (u.x === null) return true;
-    const captainCanRally = u.kind === 'captain' && canRally(st, u) && rallyTargets(st, u).length > 0;
-    return !canAct(st, u) && !u.halfShot && !captainCanRally;
+    const rallyLeft = u.kind === 'captain' && captainCanRally(st, u);
+    return !canAct(st, u) && !u.halfShot && !rallyLeft;
   }
 
   // Pass on an American token, or finish with it
@@ -1251,7 +1329,7 @@ const Sim = (() => {
   }
 
   // Can any American piece move on this token?
-  const usCanMove = st => canFire(st, 'mortars') || canFire(st, 'artillery') || st.units.some(u => u.side === 'us' && u.x !== null && (canAct(st, u) || canSelfRally(st, u) || (u.kind === 'captain' && canRally(st, u))));
+  const usCanMove = st => canFire(st, 'mortars') || canFire(st, 'artillery') || st.units.some(u => u.side === 'us' && u.x !== null && (canAct(st, u) || canSelfRally(st, u) || (u.kind === 'captain' && captainCanRally(st, u))));
 
   // The bag is empty: the round (the hour) ends: has the village fallen, are the Germans gone? Then the next round
   function endRound(st) {
@@ -1306,24 +1384,26 @@ const Sim = (() => {
   function finishHour(st) {
     const rep = st.de ? st.de.rep : (st.roundRep || []);
     st.de = null;
+    // Already over: one side was wiped out during the round
+    if (st.won || st.lost) return;
     const germansLeft = st.units.some(u => u.side === 'de' && u.x !== null);
     if (holdsObjective(st)) {
       st.won = true;
       // Taken and held at the end of an hour wins at once
-      rep.unshift(`🏆 ${st.objective.name} is taken and held at ${hourText(st.turn + 1)}!`);
+      rep.unshift(`🏆 ${st.objective.name} is taken and held at the end of ${roundText(st.turn)}!`);
     } else if (!germansLeft) {
       // Every German on the table destroyed wins too (Steve), even with no rifle platoons left to take the village
       st.won = true;
-      rep.unshift(`🏆 Every German on the field is destroyed by ${hourText(st.turn + 1)}!`);
+      rep.unshift(`🏆 Every German on the field is destroyed in ${roundText(st.turn)}!`);
     } else if (!st.units.some(u => u.side === 'us' && u.x !== null)) {
       st.lost = true;
       rep.unshift('💀 Nothing is left of the company. The attack has failed.');
     } else if (TURNS && st.turn >= TURNS) {
       st.lost = true;
-      rep.unshift(`⌛ ${hourText(TURNS + 1)}: the attack has run out of time short of ${st.objective.name}.`);
+      rep.unshift(`⌛ After ${TURNS} rounds the attack has run out of time short of ${st.objective.name}.`);
     }
     if (!st.won && !st.lost) newTurn(st, rep);
-    st.report = rep.length ? rep : ['A quiet hour.'];
+    st.report = rep.length ? rep : ['A quiet round.'];
   }
 
   // A new hour: rest the shaken, a fresh move for every piece (except those that took cover), fire support, ammo and reinforcements
@@ -1347,9 +1427,9 @@ const Sim = (() => {
 
   return {
     newGame, endTurn, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, moves, chargeSpots,
-    rallyTargets, canAct, groupOf, groupName, members, canReact, firepower, teamsOf, canCallFire, holdsObjective, hourText, roomFor,
-    startGermanHour, germanStep, answer, finishHour, startRound, drawToken, endGermanToken, activationOver, passToken, usCanMove, endRound, canFire, actSkip, skipSupport,
-    actShoot, actMoveShoot, moveShootSpots, chargeRoutes, DIRS, needWhy, shellNeed, shellWhy, shellFields, canRally, needFor, canSelfRally, actSelfRally, actHalfShot, actMove, actCharge, actRally, actFire, actBreach, breachSpots, sight, isSmall, cover, wire, lineSides, actLine, atHedge, acrossHedge, SIDE_NAMES, PLACES, placeXY, placeName, lines,
+    rallyTargets, canAct, groupOf, groupName, members, canReact, firepower, teamsOf, canCallFire, holdsObjective, roundText, roomFor,
+    startGermanHour, germanStep, answer, finishHour, startRound, drawToken, endGermanToken, activationOver, passToken, usCanMove, endRound, canFire, actSkip, actSkipShot, skipSupport,
+    smallTarget, captainCanRally, fireAt, actShoot, actMoveShoot, moveShootSpots, chargeRoutes, DIRS, needWhy, shellNeed, shellWhy, shellFields, canRally, needFor, canSelfRally, actSelfRally, actHalfShot, actMove, actCharge, actRally, actFire, actBreach, breachSpots, sight, isSmall, cover, wire, lineSides, actLine, atHedge, acrossHedge, SIDE_NAMES, PLACES, placeXY, placeName, lines,
     hasCutters: u => cutter(u),
   };
 })();

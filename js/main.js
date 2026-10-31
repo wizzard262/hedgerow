@@ -16,7 +16,8 @@ window.Game = (() => {
     UI.setState(st);
     Sim.startRound(st);
     changed();
-    setTimeout(drawNext, 900);
+    // The first round's tokens fly into the bag once the pieces are on the table
+    setTimeout(() => UI.returnTokens(() => setTimeout(drawNext, 400)), 700);
   }
 
   // Something changed: the panel now, the table on the next frame. If that was the American token's piece finishing its
@@ -83,9 +84,9 @@ window.Game = (() => {
         targets = [t];
       }
       // Green rings under pieces that can still act this hour, grey under those that have
-      const ready = st.de || st.won || st.lost ? null : u => Sim.canAct(st, u) || (Sim.canRally(st, u) && Sim.rallyTargets(st, u).length > 0);
+      const ready = st.de || st.won || st.lost ? null : u => Sim.canAct(st, u) || Sim.captainCanRally(st, u);
       const guns = st.de || st.won || st.lost ? null : UI.supportState();
-      dirty = Board.render(st, { spots, selected: UI.selected(), hover, targets, hotTarget, ready, shooter, mortarAim, aimWhich, guns, blast, deMove: (st.de && st.de.move) || shownMove, fireFrom: (UI.view.mode || '').startsWith('fire:') ? UI.view.mode.slice(5) : null });
+      dirty = Board.render(st, { spots, selected: UI.selected(), hover, targets, hotTarget, ready, shooter, mortarAim, aimWhich, guns, blast, rallies: UI.rallies(), deMove: (st.de && st.de.move) || shownMove, fireFrom: (UI.view.mode || '').startsWith('fire:') ? UI.view.mode.slice(5) : null });
       const p = Board.screenPoint(st.objective.x + 0.5, st.objective.y, 0.35), r = board.getBoundingClientRect();
       Object.assign($('#label').style, { left: p.x - r.left + 'px', top: p.y - r.top + 'px' });
       $('#label').textContent = `🎯 ${st.objective.name}`;
@@ -103,19 +104,16 @@ window.Game = (() => {
 
   // Draw the next token: it grows and floats to the middle of the table, then that side moves. An empty bag ends the round
   function drawNext() {
-    if (st.won || st.lost) return;
+    // One side wiped out: the game stops at once (Steve: the round isn't finished)
+    if (st.won || st.lost) return showResult();
     const side = Sim.drawToken(st);
-    if (!side) {
-      Sim.endRound(st);
-      UI.view.log = [];
-      changed();
-      if (st.won || st.lost) return showResult();
-      Sim.startRound(st);
-      changed();
-      setTimeout(drawNext, 1200);
+    if (!side) return nextRound();
+    changed();
+    // The timer token (Steve): it lands on the table, and the round ends at once
+    if (side === 'timer') {
+      UI.flyToken(side, () => setTimeout(() => { Board.clearToken(); nextRound(); }, 900));
       return;
     }
-    changed();
     UI.flyToken(side, () => {
       if (side === 'de') return runGermans();
       // No American piece able to move on it: the token is used up
@@ -124,7 +122,19 @@ window.Game = (() => {
     });
   }
 
-  // Pass on an American token (the bar's button, or Enter)
+  // The bag is empty (or the timer came out): the round ends, then a new one starts with a full bag
+  function nextRound() {
+    Sim.endRound(st);
+    UI.view.log = [];
+    changed();
+    if (st.won || st.lost) return showResult();
+    Sim.startRound(st);
+    changed();
+    // Every piece's token flies back into the bag (Steve), then the first is drawn
+    UI.returnTokens(() => setTimeout(drawNext, 400));
+  }
+
+  // Pass on an American token (no button for it now, Steve: each piece has Skip turn; the screenshot tool still uses it)
   function pass() {
     if (st.won || st.lost || st.drawn !== 'us') return;
     UI.closeMenu();
@@ -144,13 +154,15 @@ window.Game = (() => {
     Sim.endGermanToken(st);
     $('#ask').hidden = true;
     changed();
+    // The Germans' move wiped one side out: the game is over
+    if (st.won || st.lost) return showResult();
     setTimeout(() => { shownMove = null; dirty = true; Board.clearToken(); setTimeout(drawNext, 400); }, GERMAN_MOVE_SHOWN);
   }
 
   function ask(shot) {
     const t = Sim.unitById(st, shot.target);
     const who = shot.artillery ? 'German artillery ranges on' : shot.mortar ? 'German mortars range on' : `${Sim.unitById(st, shot.shooter).name} opens fire on`;
-    $('#ask-text').innerHTML = `${who} <b>${t.name}</b>. Take cover? Its men get down where they are: one more is needed to hit it for the rest of this round, but it loses its move this round unless the captain gets it up. (Only a piece that hasn't moved yet can take cover.)`;
+    $('#ask-text').innerHTML = `${who} <b>${t.name}</b>. Take cover? Its men get down where they are: every shot at it rolls half the dice for the rest of this round, but it loses its move this round unless the captain gets it up. (Only a piece that hasn't moved yet can take cover.)`;
     $('#ask').hidden = false;
     changed();
   }
@@ -164,7 +176,12 @@ window.Game = (() => {
   }
 
   function showResult() {
-    $('#result-title').textContent = st.won ? '🏆 Saint-Jean is ours' : '⌛ The attack has failed';
+    // How it ended: a side wiped out, the village taken, or time run out
+    const germansLeft = st.units.some(u => u.side === 'de' && u.x !== null);
+    const usLeft = st.units.some(u => u.side === 'us' && u.x !== null);
+    const winTitle = germansLeft ? `🏆 ${st.objective.name} is ours` : '🏆 The Germans are wiped out';
+    const loseTitle = usLeft ? '⌛ The attack has failed' : '💀 The company is wiped out';
+    $('#result-title').textContent = st.won ? winTitle : loseTitle;
     $('#result-text').textContent = st.report[0];
     $('#result').hidden = false;
   }
@@ -174,13 +191,17 @@ window.Game = (() => {
   board.addEventListener('click', e => {
     if (e.target.closest('#menu')) return;
     UI.closeMenu();
+    // The captain rallying: the blue target nearest the click (Steve)
+    const rallied = Board.targetAt(UI.rallies(), e.clientX, e.clientY);
+    if (rallied && UI.rallyTarget(rallied)) { changed(); return; }
     // Shooting: the red cross-hair nearest the click, even one over a house
     const aimed = Board.targetAt(UI.targets(), e.clientX, e.clientY);
     if (aimed && UI.shootTarget(aimed)) { hotTarget = null; changed(); if (st.won || st.lost) showResult(); return; }
     // Your mortars or artillery off the board: choose them like a piece
     const gun = !st.de && Board.gunAt(e.clientX, e.clientY);
     if (gun) {
-      Sound.play('select'); Board.clearDice(); UI.selectSupport(gun); changed();
+      // No pick-up sound as its targets show (Steve)
+      Board.clearDice(); UI.selectSupport(gun); changed();
       // Its menu by the click, with Skip turn (Steve)
       const r = board.getBoundingClientRect();
       UI.openGunMenu(gun, e.clientX - r.left, e.clientY - r.top, r);
@@ -193,7 +214,8 @@ window.Game = (() => {
     changed();
     // Your pieces there: open their menu by the click
     // Picking the next piece clears the last shots' dice off the table
-    if (mine) { Sound.play('select'); Board.clearDice(); const r = board.getBoundingClientRect(); UI.openMenu(mine, e.clientX - r.left, e.clientY - r.top, r); $('#tip').style.display = 'none'; }
+    // No pick-up sound as its moves spread out on the table (Steve)
+    if (mine) { Board.clearDice(); const r = board.getBoundingClientRect(); UI.openMenu(mine, e.clientX - r.left, e.clientY - r.top, r); $('#tip').style.display = 'none'; }
     if (st.won || st.lost) showResult();
   });
   board.addEventListener('mousemove', e => {
@@ -216,7 +238,7 @@ window.Game = (() => {
     const here = Sim.at(st, f.x, f.y);
     const lines = here.map(u => `${u.side === 'us' ? 'US' : 'German'} · ${u.name}${u.kind === 'company' ? ` · ${u.platoons} sections` : Sim.isTank(u) ? ` · ${u.platoons} tanks` : ''}${u.shocked ? ' · shaken' : ''}`);
     const t = Sim.tileType(f.x, f.y);
-    const cover = t === 'village' || t === 'hamlet' ? 'Houses: one more needed on the dice to hit anyone here' : t === 'river' ? 'Nothing can cross except at a bridge' : t === 'orchard' ? 'Trees: they block the view across' : '';
+    const cover = t === 'village' || t === 'hamlet' ? `Houses: hard cover, ${COVER.village} more needed on the dice to hit anyone here` : t === 'river' ? 'Nothing can cross except at a bridge' : t === 'orchard' ? 'Trees: they block the view across' : '';
     // A village field takes the name of the nearest village
     const village = t === 'village' ? VILLAGES.slice().sort((a, b) => (Math.abs(a.x - f.x) + Math.abs(a.y - f.y)) - (Math.abs(b.x - f.x) + Math.abs(b.y - f.y)))[0].name : null;
     tip.innerHTML = `<b>${village || NAMES[t]}</b>${cover ? `<br><span style="color:var(--muted)">${cover}</span>` : ''}${lines.length ? '<br>' + lines.join('<br>') : ''}`;
@@ -226,9 +248,7 @@ window.Game = (() => {
 
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') { UI.view.mode = null; UI.closeMenu(); changed(); }
-    if (e.key === 'Enter' && $('#ask').hidden && $('#help').hidden && $('#result').hidden) pass();
   });
-  $('#end').onclick = pass;
   $('#ask-pull').onclick = () => answer(true);
   $('#ask-stay').onclick = () => answer(false);
   $('#help-btn').onclick = openHelp;

@@ -34,6 +34,9 @@
   .tok.us { background: #3f8a36; border: 2px solid #2a5e24; color: #f2c94c; font-size: 14px; line-height: 1; }
   .tok.de { background: #8c8c86; border: 2px solid #55554f; }
   .tok.de svg { width: 70%; height: 70%; }
+  .tok.timer { background: #111; border: 2px solid #444; }
+  .tok.timer svg { width: 72%; height: 72%; }
+  #bag-timer { display: flex; align-items: center; }
   #round { font: 30px "Special Elite", monospace; color: var(--accent); white-space: nowrap; letter-spacing: 2px; }
   #card { flex: 1 1 380px; min-width: 320px; display: grid; grid-template-columns: minmax(220px, 1fr) auto; column-gap: 12px; align-content: start; overflow-y: auto; }
   #card .stats { font-size: 12px; margin: 2px 0; }
@@ -60,7 +63,6 @@
   #card .bad { color: var(--bad); font-weight: 700; }
   #actions { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
   #hint { min-height: 1.4em; font-size: 12px; color: var(--warn); }
-  #end { width: 110px; padding: 10px; font: 16px "Special Elite", monospace; background: #6b4f2a; border-color: #8a6a3a; }
 
   /* The table, filling the screen above the bar */
   #board { order: 1; flex: 1 1 auto; position: relative; min-width: 0; min-height: 0; }
@@ -112,7 +114,7 @@
 <aside id="panel">
   <div class="brand">
   <div class="top">
-    <h1>HEDGEROW <span id="ver" style="font-size:11px;color:var(--muted);letter-spacing:0">v62</span></h1>
+    <h1>HEDGEROW <span id="ver" style="font-size:11px;color:var(--muted);letter-spacing:0">v63</span></h1>
     <div class="links"><button id="sound-btn" title="Sound on or off">🔊</button><button id="help-btn">How to play</button><button id="new-btn">New game</button></div>
   </div>
   <div id="clock"></div>
@@ -123,8 +125,7 @@
   <div class="box" id="card"></div>
   <div id="hint"></div>
 
-  <button id="end">Pass ▶</button>
-  <div id="bagbox"><div class="bagside" id="bag-us"></div><div class="bagside" id="bag-de"></div><div id="round"></div></div>
+  <div id="bagbox"><div class="bagside" id="bag-us"></div><div id="bag-timer"></div><div class="bagside" id="bag-de"></div><div id="round"></div></div>
 
 </aside>
 
@@ -145,40 +146,40 @@
 <div class="modal" id="help" hidden>
   <div class="card">
     <h2>Hedgerow</h2>
-    <p>Tuesday 11 July 1944, Normandy. Your American rifle company must fight through the bocage, field by field, and take a village (Saint-Jean or La Haye: it changes each game), then hold it at the end of an hour, or destroy every German on the field. Each move is an hour; there is no time limit for now. A German garrison holds it; more Germans march up from beyond the river.</p>
+    <p>Tuesday 11 July 1944, Normandy. Your American rifle company must fight through the bocage, field by field, and take a village (Saint-Jean or La Haye: it changes each game), then hold it at the end of a round, or destroy every German on the field. The game is played in rounds; there is no limit for now. The moment one side has no pieces left, the game is over (the round isn't finished). A German garrison holds the village; more Germans march up from the east.</p>
     <ul>
-      <li>🪖 <b>Pieces</b>: your company: three rifle platoons (three sections of four men each, moving together; a fourth platoon comes later), the captain, machine-gun and bazooka teams, a sniper, and two tank sections: Shermans and Fireflies. 1st Platoon is elite.</li>
-      <li>📋 <b>The bag</b>: each round (an hour) a token goes in a blind bag for every piece on the table: green with a gold star for yours, grey with a black cross for the Germans'. Tokens are drawn one at a time; on yours, pick one piece and give it its move (or Pass); on theirs, a German piece moves. A piece destroyed, or one that loses its move, takes a token out. When the bag is empty the next round starts. The tokens left are shown right of the Pass button; the one drawn flies onto the table above that side's artillery and stays there until its move is over. Your mortars and artillery each have a token too, while they have rounds (out of rounds, they come out of the bag): on one of your tokens, firing them uses it. Any piece or gun can <b>Skip turn</b> (in its menu): it gives up its move this round and the token is used.</li>
-      <li>🖱️ <b>Picking a piece</b> shows where it can go straight away: red-hatched fields are a Move &amp; shoot (it moves there, then fires), the other marked fields a Charge. Click the field (where in it you want to stand) and that's the action. The menu by the piece has the rest.</li>
-      <li>🎲 <b>Actions</b> (click a piece for its menu): <b>Charge</b>: up to three fields, without shooting, and through a field of your own pieces on the way, but not through a village or hamlet (rifle platoons and tanks fight hand to hand if Germans hold the field it ends in), <b>Move &amp; shoot</b> (up to two fields, to a red-hatched field from where it will have someone to fire at, then fire needing one more; machine guns can't fire on the move: they Charge to a new spot, then fire), <b>Shoot</b> (full dice), and the captain's <b>Rally</b>: not his move, he rallies twice an hour if he doesn't move or shoot, once if he does (before or after), himself included. He can Charge, Move &amp; shoot and Shoot too (one die). There is no plain move: to move without shooting, Charge.</li>
+      <li>🪖 <b>Pieces</b>: your company: three rifle platoons (three sections of four men each, moving together), the captain, machine-gun and bazooka teams, a sniper, and two tank sections: Shermans and Fireflies. 1st Platoon is elite (a gold ★ on the side of its base). Your bases are green, the Germans' brown.</li>
+      <li>📋 <b>The bag</b>: each round a token goes in a blind bag for every piece on the table: green with a gold star for yours, grey with a black cross for the Germans', and one black timer token (a white sand-glass): when the timer is drawn the round ends there and then, whoever has still to move. Tokens are drawn one at a time; on yours, pick one piece and give it its move (or Skip turn in its menu); on theirs, a German piece moves. A piece destroyed, or one that loses its move, takes a token out. When the bag is empty the next round starts. The tokens left are shown in the bar at the bottom (the timer between the two sides'); the one drawn flies onto the table above that side's artillery and stays there until its move is over. Your mortars and artillery each have a token too, while they have rounds (out of rounds, they come out of the bag): on one of your tokens, firing them uses it. Any piece or gun can <b>Skip turn</b> (in its menu): it gives up its move this round and the token is used.</li>
+      <li>🖱️ <b>Picking a piece</b> shows where it can go straight away (picking the captain also puts a blue target on every piece he can rally, himself too: click one to rally it; with nobody to rally there is no Rally): red-hatched fields are a Move &amp; shoot (it moves there, then fires), the other marked fields a Charge. Click the field (where in it you want to stand) and that's the action. The menu by the piece has the rest.</li>
+      <li>🎲 <b>Actions</b> (click a piece for its menu): <b>Charge</b>: up to three fields, without shooting, and through a field of your own pieces on the way, but not through a village or hamlet (rifle platoons and tanks fight hand to hand if Germans hold the field it ends in), <b>Move &amp; shoot</b> (up to two fields, to a red-hatched field from where it will have someone to fire at, then fire needing one more; machine guns can't fire on the move: they Charge to a new spot, then fire), <b>Shoot</b> (full dice), and the captain's <b>Rally</b>: not his move, he rallies twice a round if he doesn't move or shoot, once if he does (before or after), himself included. He can Charge, Move &amp; shoot and Shoot too (one die). There is no plain move: to move without shooting, Charge.</li>
       <li>👁️ <b>Who can shoot whom</b>: along a line of sight (how far depends on the weapon, below) over open fields and lanes; villages, hamlets and orchards in between block it (and orchards, like houses, are cover), and so does any hedge except the ones the shooter or the target lines (below). How far: rifles 4 fields (long range beyond 2), machine guns, tanks and the PaK 6 (long range beyond 4), bazookas 3 (long range beyond 1); one more is needed on the dice at long range. The sniper sees as far as the board goes, and neither cover nor range helps his target. Men behind or beside a tank are in cover. Red targets show who a piece can hit, with the score its dice need.</li>
-      <li>🌳 <b>Lining a hedge</b>: a piece stands at one of nine places in its field: a corner, the middle of an edge, or the centre. Where you click in a field is where it goes, if no other piece is there (the nearest free place otherwise). Against an edge it lines that hedge; in a corner it lines both; in the centre it is in the open. While you choose, a green bar shows the hedge it would line (cover). Across a hedge: a piece lining it can fire through; a piece in the open can only fire at an enemy who lines it, needing one more on the dice; two pieces in the open can't see each other; two both lining it fire at each other needing one more. To move to another place in its own field, Charge and click there in its own field (green): its move for the hour.</li>
+      <li>🌳 <b>Lining a hedge</b>: a piece stands at one of nine places in its field: a corner, the middle of an edge, or the centre. Where you click in a field is where it goes, if no other piece is there (the nearest free place otherwise). Against an edge it lines that hedge; in a corner it lines both; in the centre it is in the open. While you choose, a green bar shows the hedge it would line (cover). Across a hedge: a piece lining it can fire through; a piece in the open can only fire at an enemy who lines it, needing one more on the dice; two pieces in the open can't see each other; two both lining it fire at each other needing one more. To move to another place in its own field, Charge and click there in its own field (green): its move for the round.</li>
       <li>🧍 <b>Sharing a field</b>: your pieces can share a field: at most one rifle platoon and one tank pair, and four pieces in all (each at its own place). Only hand-to-hand fighting brings both sides into the same field.</li>
-      <li>🏘️ <b>Villages and hamlets</b>: houses round a yard. Hard to hit in. Only a rifle platoon takes the village: when one can reach it, the village field shows blue hatching.</li>
-      <li>🌊 <b>The river</b> can only be crossed at its two bridges.</li>
-      <li>💣 <b>Fire support</b>: your 81 mm mortars and 105 mm artillery stand off the board behind your back line (left), the Germans' behind theirs (right). Click your mortars or artillery on the table to use them, like any other piece: on one of your tokens, Fire (or Skip turn). Their rounds fly from there, and the pile of rounds beside each shows how many shots it has left. Artillery also falls on the fields round the target, on your own pieces too (the target warns you). The Germans have mortars and artillery too, and their rounds are piled the same way. A gun with no rounds left isn't on the table until more arrive (the American mortars get one more every 2 hours, the artillery every 3).</li>
+      <li>🏘️ <b>Villages and hamlets</b>: small houses along every side of the field, pieces in the yard between them. Houses are hard cover: two more needed to hit anyone there. Only a rifle platoon takes the village: when one can reach it, the village field shows blue hatching.</li>
+      <li>💣 <b>Fire support</b>: your 81 mm mortars and 105 mm artillery stand off the board behind your back line (left), the Germans' behind theirs (right). Click your mortars or artillery on the table to use them, like any other piece: on one of your tokens, Fire (or Skip turn). Their rounds fly from there, and the pile of rounds beside each shows how many shots it has left. Artillery also falls on the fields round the target, on your own pieces too (the target warns you). The Germans have mortars and artillery too, and their rounds are piled the same way. A gun with no rounds left isn't on the table until more arrive (the American mortars get one more every 2 rounds, the artillery every 3).</li>
       <li>🔊 <b>Sound</b>: rifles, the American .30-cal and the German MG 42, bazookas, tank guns, mortar bombs and shells whistling in, men running, tanks driving, and a battle going on in the distance. The 🔊 button in the bar at the bottom turns it all off.</li>
       <li>✂️ <b>Barbed wire</b> closes some gaps between fields: only tanks get through it, rolling over and flattening it. Men must go round, or wait for a tank to flatten it.</li>
       <li>🌳 <b>Hedges</b>: men climb over a hedge bank as they move (they hop up over it on the table), which uses one more move (the hedge stays); tanks drive straight through, leaving a gap. Charging across a hedge at Germans behind it is allowed, but they fight back hard.</li>
+      <li>⚔️ <b>Hand to hand</b>: a charge into a field the enemy holds is a fight to the finish. The two sides strike in turn, the attacker first: every base still standing rolls a die (3+, the attacker one more against men behind the hedge it crossed or in houses; elite one less), and each hit takes a base off the other side. The survivors fight on until only one side is left; the attacker takes the field if it wins. Being shaken doesn't count, and nobody is still shaken after the fight.</li>
       <li>🛡️ <b>Tanks</b> can't be hurt by rifles or machine guns: only bazookas, Panzerschrecks, anti-tank guns, other tanks and the artillery can knock them out, and infantry can't charge a field held only by tanks. A tank firing on men hits every piece on foot in that field (not the captain), like a mortar.</li>
-      <li>🎲 <b>Dice</b>: every shot rolls six-sided dice by the target: 3 or more hits. One more is needed for each of: a target in cover (lining a hedge, in a village or hamlet), long range (beyond the next field), firing on the move, and the shooter being shaken. A shot that would need 7 or more can't be taken: that target gets no red cross-hair. Elite troops need one less; the Panther's armour one more. Bazookas, Panzerschrecks and tank guns kill men with every hit. Every hit pins the target, and a coin toss says whether it wounds as well (a section, a team or a tank lost). A hit on a piece already pinned kills: two pins kill. The last three rolls stay in the target's field, with a tag saying who fired, the score needed and the hits: bright dice hit, dark ones missed.</li>
-      <li>🟢 <b>Who can move</b>: a green ring under a piece means it can still move this hour; a piece that has moved is greyed out.</li>
-      <li>😵 <b>Shaken</b> (pinned, red ! marker): a piece that is hit is shaken. It can still act, but it needs one more to hit and it can't charge. It recovers if it rests an hour without being hit; it can use its move to try to rally itself (half the time, elite troops more often); or the captain can rally it, up to three fields away. A second pin on a piece already pinned kills: a section, a team or a tank lost.</li>
-      <li>🛡️ <b>In the German hour</b>: when one of your pieces (not a tank) is fired on you can <b>take cover</b>: its men get down where they are (they crouch on the table), and one more is needed to hit it for the rest of that hour. It uses up its move this hour, unless the captain gets it up (Rally, up to three fields away). A piece that has already moved this hour can't take cover.</li>
-      <li>🧩 <b>The table</b>: 28 mm-style models: four men to a section base, three sections to a platoon; tanks in pairs. The men are bigger models (1:54) than the tanks (1:76), and the houses smaller (1:144), as on many wargame tables.</li>
+      <li>🎲 <b>Dice</b>: every shot rolls six-sided dice by the target: 3 or more hits. One more is needed for each of: a target in cover (lining a hedge, in an orchard; two more in a village or hamlet: houses are hard cover), a small target (two men or fewer: the sniper, a bazooka team, the captain; not an MG team, which is three), long range, firing on the move, and the shooter being shaken. A shot that would need 7 or more can't be taken: that target gets no red cross-hair. Elite troops need one less; the Panther's armour one more. Bazookas, Panzerschrecks and tank guns kill men with every hit. Every hit shakes the target, and a coin toss says whether it wounds as well (a section, a team or a tank lost). A hit on a piece already shaken kills. The last three rolls stay in the target's field, with a tag saying who fired, the score needed and the hits: bright dice hit, dark ones missed.</li>
+      <li>🟢 <b>Who can move</b>: a green ring under a piece means it can still move this round; a piece that has moved is greyed out, German pieces too.</li>
+      <li>😵 <b>Shaken</b> (a red ! token on the edge of its base, or on a tank's back deck): a piece that is hit is shaken. It can still act, but it needs one more to hit and it can't charge. It recovers if it rests a round without being hit; it can use its move to try to rally itself (half the time, elite troops more often); or the captain can rally it, up to three fields away. A hit on a piece already shaken kills: a section, a team or a tank lost.</li>
+      <li>🛡️ <b>Taking cover</b>: when one of your pieces (not a tank) is fired on you can <b>take cover</b>: its men get down where they are (they crouch on the table), and every shot at it rolls half the dice for the rest of the round (an odd die left over is a coin toss). It uses up its move this round, unless the captain gets it up (Rally, up to three fields away). A piece that has already moved this round can't take cover.</li>
+      <li>🧩 <b>The table</b>: 28 mm-style models: four men to a section base, three sections to a platoon; tanks in pairs. The men are bigger models (1:54) than the tanks (1:76), and the houses small, about as tall as a figure.</li>
     </ul>
-    <p class="sub" style="color:var(--muted)">Click one of your pieces: where it can go shows at once, and its menu opens; click a field, or pick from the menu. Enter ends the hour; Esc cancels.</p>
+    <p class="sub" style="color:var(--muted)">Click one of your pieces: where it can go shows at once, and its menu opens; click a field, or pick from the menu. Esc cancels.</p>
     <div class="buttons"><button data-close class="on">To the table</button></div>
   </div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="js/data.js?v=62"></script>
-<script src="js/sim.js?v=62"></script>
-<script src="js/sound.js?v=62"></script>
-<script src="js/models.js?v=62"></script>
-<script src="js/board3d.js?v=62"></script>
-<script src="js/ui.js?v=62"></script>
-<script src="js/main.js?v=62"></script>
+<script src="js/data.js?v=63"></script>
+<script src="js/sim.js?v=63"></script>
+<script src="js/sound.js?v=63"></script>
+<script src="js/models.js?v=63"></script>
+<script src="js/board3d.js?v=63"></script>
+<script src="js/ui.js?v=63"></script>
+<script src="js/main.js?v=63"></script>
 </body>
 </html>

@@ -13,7 +13,7 @@ const { chromium } = require(path.join(__dirname, '..', '..', 'harrier-carrier-p
   // (the rules no longer open at the start)
   // Each hour: end it, answering every "take cover?" with Stand fast
   for (let h = 0; h < +hours; h++) {
-    await page.click('#end');
+    await page.evaluate(() => Game.pass());
     for (let k = 0; k < 40; k++) {
       await page.waitForTimeout(400);
       if (await page.isVisible('#ask')) await page.click('#ask-stay');

@@ -145,12 +145,81 @@ const Board = (() => {
     ray.setFromCamera(new T.Vector2((clientX - r.left) / r.width * 2 - 1, -(clientY - r.top) / r.height * 2 + 1), camera);
     const from = new T.Vector3();
     if (!ray.ray.intersectPlane(table, from)) from.set(COLS / 2, 0, ROWS + 2);
-    const gun = GUNS[side].artillery;
-    const to = new T.Vector3(gun.x + (side === 'us' ? -0.1 : 0.1), 0.04, gun.z - 1.15);
+    // It lands above that side's artillery; the timer between the two sides' (Steve)
+    const gun = side === 'timer' ? { x: (GUNS.us.artillery.x + GUNS.de.artillery.x) / 2, z: GUNS.us.artillery.z } : GUNS[side].artillery;
+    const to = new T.Vector3(gun.x + (side === 'us' ? -0.1 : side === 'de' ? 0.1 : 0), 0.04, gun.z - 1.15);
     mesh.position.copy(from);
     scene.add(mesh);
     coinFlight = { mesh, from, to, t0: performance.now(), done, leaving: 0 };
   }
+  // A new round (Steve): a small coin, a third the size, flies up off each piece (and each gun with rounds) and back
+  // into the bag in the bar, the same way the drawn token comes out but in reverse; one after another on each side with
+  // a short overlap, both sides at once, then the timer. landed(side) is called as each one arrives, done after the last
+  const HOME_GAP = 110, HOME_TIME = 900;
+  let homing = [];                   // { mesh, from, to, t0, side, landed }
+  let homingDone = null;
+  function returnTokens(st, ends, landed, done) {
+    // Where each side's coins go: the bar's spot for its tokens, carried down onto the table's plane
+    const r = renderer.domElement.getBoundingClientRect();
+    const onTable = pt => {
+      ray.setFromCamera(new T.Vector2((pt.x - r.left) / r.width * 2 - 1, -(pt.y - r.top) / r.height * 2 + 1), camera);
+      const p = new T.Vector3();
+      if (!ray.ray.intersectPlane(table, p)) p.set(COLS / 2, 0, ROWS + 2);
+      return p;
+    };
+    const now = performance.now();
+    let last = now;
+    for (const side of ['us', 'de']) {
+      // The pieces that get a token this round, and the guns that still have rounds (as the bag does, see Sim.startRound)
+      const from = st.units.filter(u => u.side === side && u.x !== null && !u.acted).map(u => pieceCentre(u));
+      const ammo = side === 'us' ? st.ammo : { mortars: st.deMortarAmmo, artillery: st.deArtilleryAmmo };
+      for (const which of ['artillery', 'mortars']) if (ammo[which] > 0) from.push(new T.Vector3(GUNS[side][which].x, 0, GUNS[side][which].z));
+      const to = onTable(ends[side]);
+      from.forEach((p, i) => {
+        const t0 = now + i * HOME_GAP;
+        last = Math.max(last, t0);
+        homing.push(homeCoin(side, new T.Vector3(p.x, 0.1, p.z), to, t0, landed));
+      });
+    }
+    // The timer last, from between the two sides' artillery
+    if (st.bag && st.bag.timer) {
+      const mid = new T.Vector3((GUNS.us.artillery.x + GUNS.de.artillery.x) / 2, 0.1, GUNS.us.artillery.z - 1.15);
+      last += HOME_GAP;
+      homing.push(homeCoin('timer', mid, onTable(ends.timer), last, landed));
+    }
+    homingDone = done;
+  }
+  // One small coin on its way home, not on the table until it sets off
+  function homeCoin(side, from, to, t0, landed) {
+    const mesh = Models.coin(side);
+    mesh.visible = false;
+    mesh.position.copy(from);
+    scene.add(mesh);
+    return { mesh, from, to, t0, side, landed };
+  }
+  // Move the coins going home; returns true while any is still flying
+  function moveHoming(now) {
+    if (!homing.length) return false;
+    const size = COIN_SIZE / 3;
+    for (const c of homing) {
+      const p = Math.max(0, Math.min(1, (now - c.t0) / HOME_TIME));
+      // Not off yet
+      if (now < c.t0) continue;
+      const e = p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+      const m = c.mesh;
+      m.visible = true;
+      // Up in an arc, growing then shrinking, turning over, as the drawn token does
+      m.position.set(T.MathUtils.lerp(c.from.x, c.to.x, e), T.MathUtils.lerp(c.from.y, c.to.y, e) + 1.2 * Math.sin(Math.PI * e), T.MathUtils.lerp(c.from.z, c.to.z, e));
+      m.scale.setScalar(size * (1 + 0.9 * Math.sin(Math.PI * e)));
+      m.rotation.set(Math.PI * 2 * e, 0, 0.3 * Math.sin(Math.PI * e));
+      // Home: into the bag
+      if (p >= 1 && !c.home) { c.home = true; scene.remove(m); if (c.landed) c.landed(c.side); }
+    }
+    homing = homing.filter(c => !c.home);
+    if (!homing.length && homingDone) { const d = homingDone; homingDone = null; d(); }
+    return homing.length > 0;
+  }
+
   // The move is over: the coin shrinks away
   function clearToken() { if (coinFlight) coinFlight.leaving = coinFlight.leaving || performance.now(); }
   function clearTokenNow() { if (coinFlight) { scene.remove(coinFlight.mesh); coinFlight = null; } }
@@ -212,17 +281,38 @@ const Board = (() => {
         if (t === 'bridge') { built.add(at(Models.lane(1, 0.3), x + 0.5, 0.0012, y + 0.5, -Math.PI / 2, 0, 0)); const b = Models.bridge(); built.add(at(b, x + 0.5, 0, y + 0.5)); }
       }
       if (t === 'orchard') for (const [ox, oz] of [[0.2, 0.18], [0.82, 0.2], [0.18, 0.84], [0.84, 0.84]]) built.add(at(Models.tree(seed + ox * 10, 0.75), x + ox, 0, y + oz));
-      if (t === 'village' || t === 'hamlet') {
-        // Big model houses (about 1:44) round a yard: one along the back, one down the far side, the yard left free for a piece
-        const H = 1.9;
-        const back = Models.house(seed); back.scale.setScalar(H); built.add(at(back, x + 0.42, 0, y + 0.17, 0, 0, 0));
-        const side = Models.house(seed + 1); side.scale.setScalar(H * 0.85); built.add(at(side, x + 0.86, 0, y + 0.55, 0, -Math.PI / 2, 0));
-        // A low yard wall along the front of a hamlet
-        if (t === 'hamlet') built.add(at(new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.05, 0.03), Models.M.stone), x + 0.32, 0.025, y + 0.97));
-      }
+      if (t === 'village' || t === 'hamlet') addHouses(x, y, seed);
     }
     scene.add(built);
     hedgeKey = '';
+  }
+
+  // Houses round the square (Steve): small ones, about as tall as a figure, two along each side of the field with gaps
+  // between, their fronts facing in. They stand in a band just inside the edge; the pieces keep to the yard inside it
+  // (see YARD in arrange), so none stands under a house
+  function addHouses(x, y, seed) {
+    // Along each side: which way it runs, which edge, and which way the front faces (into the field)
+    const sides = [
+      { along: 'x', edge: 0, ry: 0 },               // north side, front facing south
+      { along: 'x', edge: 1, ry: Math.PI },         // south side, front facing north
+      { along: 'z', edge: 0, ry: Math.PI / 2 },     // west side, front facing east
+      { along: 'z', edge: 1, ry: -Math.PI / 2 },    // east side, front facing west
+    ];
+    // The house is 0.16 deep before scaling: its middle sits half that in from the edge, plus a little gap
+    const scaleAcross = 0.75, depth = 0.16 * scaleAcross, inset = 0.015 + depth / 2;
+    sides.forEach((sd, i) => {
+      for (const a of [0.3, 0.7]) {
+        const k = seed + i * 3 + (a > 0.5 ? 1 : 0);
+        const h = Models.house(k);
+        // A little variety: some houses a touch taller
+        h.scale.set(scaleAcross, 1 + (k % 3) * 0.06, scaleAcross);
+        // Where it stands: `a` along the side, just inside the edge
+        const across = sd.edge === 0 ? inset : 1 - inset;
+        const hx = sd.along === 'x' ? x + a : x + across;
+        const hz = sd.along === 'x' ? y + across : y + a;
+        built.add(at(h, hx, 0, hz, 0, sd.ry, 0));
+      }
+    });
   }
 
   // Hedges: every lump of foam on the table drawn as one instanced mesh (one for dark foam, one for light, one for the bases),
@@ -312,12 +402,13 @@ const Board = (() => {
     const g = new T.Group();
     if (u.kind === 'company') {
       // One base a platoon; the bases are shown or hidden as platoons are lost
-      g.userData.bases = [0, 1, 2].map(() => { const s = Models.squad(u.side); s.scale.setScalar(MEN); g.add(s); return s; });
+      g.userData.bases = [0, 1, 2].map(() => { const s = Models.squad(u.side); markerSpots(s); s.scale.setScalar(MEN); g.add(s); return s; });
     } else if (Sim.isTank(u)) {
       const make = { sherman: () => Models.sherman(Models.M.olive), firefly: () => Models.sherman(Models.M.olive, true), pz4: Models.panzer4, panther: Models.panther }[u.kind];
-      g.userData.bases = [0, 1].map(() => { const m = make(); m.scale.setScalar(TANKS); g.add(m); return m; });
+      g.userData.bases = [0, 1].map(() => { const m = make(); markerSpots(m); m.scale.setScalar(TANKS); m.userData.slowTurn = true; g.add(m); return m; });
     } else {
       const m = u.kind === 'captain' ? Models.captain(u.side) : u.kind === 'pak' ? Models.pak() : Models.team(u.side, u.kind);
+      markerSpots(m);
       m.scale.setScalar(u.kind === 'pak' ? TANKS * 1.3 : MEN);
       g.add(m); g.userData.bases = [m];
     }
@@ -332,22 +423,43 @@ const Board = (() => {
   // captains and teams along the back. Groups keep a loose formation that shuffles each time they move to a new field
   // Each piece stands at its place in the field (Steve): a corner, the middle of an edge, or the centre. A platoon's three
   // bases cluster round it, a tank pair side by side, a team on its own; loose, shuffled each time they move
+  // How far from the middle of the field a piece stands at the edge of its place: in an open field, and in the yard
+  // inside a field's houses (platoon: its centre; spread: how loosely its bases cluster; tank: the pair's centre;
+  // small: a team or the captain)
+  const OPEN = { platoon: 0.24, spread: 1, tank: 0.22, small: 0.33 };
+  const YARD = { platoon: 0.07, spread: 0.75, tank: 0.03, small: 0.2 };
   function arrange(st, x, y) {
     const here = Sim.at(st, x, y);
     const loose = (u, k) => { const R = seeded(u.id.length * 977 + x * 131 + y * 71 + k * 7 + u.id.charCodeAt(0)); return [(R() - 0.5) * 0.05, (R() - 0.5) * 0.05, (R() - 0.5) * 0.5]; };
+    // A field with houses round it: the pieces keep to the yard inside the houses (Steve: never under a house), so they
+    // stand closer to the middle and closer together
+    const houses = ['village', 'hamlet'].includes(Sim.tileType(x, y));
+    const reach = houses ? YARD : OPEN;
     for (const u of here) {
       const g = model(u), p = Sim.placeXY(u.at);
       if (u.kind === 'company') {
         // Pulled in a little from the edge, so the bases sit just inside the hedge
-        const cx = 0.5 + p.x * 0.24, cz = 0.5 + p.y * 0.24;
-        const spread = [[-0.11, -0.09], [0.11, -0.07], [0, 0.11]];
+        const cx = 0.5 + p.x * reach.platoon, cz = 0.5 + p.y * reach.platoon;
+        const spread = [[-0.11, -0.09], [0.11, -0.07], [0, 0.11]].map(([sx, sz]) => [sx * reach.spread, sz * reach.spread]);
         g.userData.bases.forEach((b, i) => { const [jx, jz, jr] = loose(u, i); b.visible = i < shownStrength(u); aim(b, cx + spread[i][0] + jx, cz + spread[i][1] + jz, g.userData.face + jr); });
       } else if (Sim.isTank(u)) {
-        const cx = 0.5 + p.x * 0.22, cz = 0.5 + p.y * 0.22;
+        const cx = 0.5 + p.x * reach.tank, cz = 0.5 + p.y * reach.tank;
         const facing = u.aim !== undefined ? u.aim : g.userData.face;
-        g.userData.bases.forEach((b, i) => { const [jx, jz, jr] = loose(u, i); b.visible = i < shownStrength(u); aim(b, cx + jx, cz + (i ? 0.11 : -0.11) + jz, facing + jr * 0.4); });
+        // Side by side across the way they face, far enough apart that they never overlap (Steve); one left: in the middle
+        const shown = shownStrength(u);
+        const half = (g.userData.bases[0].userData.halfWidth || 0.08) * TANKS;
+        const apart = shown > 1 ? half + 0.02 : 0;
+        // Square to the way they face: facing angle a points along (cos a, -sin a) on the table, so across is (sin a, cos a)
+        const acrossX = Math.sin(facing), acrossZ = Math.cos(facing);
+        g.userData.bases.forEach((b, i) => {
+          const [jx, jz, jr] = loose(u, i);
+          b.visible = i < shown;
+          const s = i ? 1 : -1;
+          // Only a little shuffle, and both turned nearly the same way, so they stay clear of each other
+          aim(b, cx + s * apart * acrossX + jx * 0.3, cz + s * apart * acrossZ + jz * 0.3, facing + jr * 0.1);
+        });
       } else {
-        aim(g.userData.bases[0], 0.5 + p.x * 0.33, 0.5 + p.y * 0.33, g.userData.face);
+        aim(g.userData.bases[0], 0.5 + p.x * reach.small, 0.5 + p.y * reach.small, g.userData.face);
       }
       aim(g, x, y, 0);
     }
@@ -363,6 +475,8 @@ const Board = (() => {
   function glide(dt) {
     let moving = false;
     const k = 1 - Math.exp(-dt * 6);
+    // Tanks turn at a steadier pace (Steve: medium speed), so you see them swing round onto a target before they fire
+    const kTurn = 1 - Math.exp(-dt * TANK_TURN_RATE);
     scene.traverse(o => {
       // On a longer move, through each field of the way in turn
       const way = o.userData.way;
@@ -371,19 +485,48 @@ const Board = (() => {
       if (!to) return;
       const dx = to.x - o.position.x, dz = to.z - o.position.z, dr = to.ry - o.rotation.y, dy = (to.y || 0) - o.position.y;
       if (Math.abs(dx) + Math.abs(dz) + Math.abs(dr) + Math.abs(dy) < 0.002) { o.position.x = to.x; o.position.z = to.z; o.position.y = to.y || 0; o.rotation.y = to.ry; return; }
-      o.position.x += dx * k; o.position.z += dz * k; o.rotation.y += dr * k; o.position.y += dy * Math.min(1, k * 2.5);
+      o.position.x += dx * k; o.position.z += dz * k; o.rotation.y += dr * (o.userData.slowTurn ? kTurn : k); o.position.y += dy * Math.min(1, k * 2.5);
       moving = true;
     });
     return moving;
   }
 
-  // Markers beside a piece: a red pin marker when shaken, a wooden order token once it has acted, a gold star for elite troops
-  function marker(u, key, colour, label, show, dx, dz, size = 1.6) {
-    const id = u.id + key;
-    if (!tokens[id]) { tokens[id] = Models.token(colour, label); tokens[id].scale.setScalar(size); scene.add(tokens[id]); }
-    const t = tokens[id];
-    t.visible = show && u.x !== null;
-    if (t.visible) { const to = pieces[u.id].userData.to; t.position.set(to.x + dx, 0, to.z + dz); }
+  // Markers on a piece (Steve): the red shaken token sits on the back edge of its (first) base, or on a tank's back
+  // deck; a gold star for an elite platoon on the side edge of its base. Each rides on the base, so it moves with it
+  function marker(u, key, colour, label, show, where) {
+    const id = u.id + key, base = pieces[u.id].userData.bases[0];
+    if (!tokens[id]) {
+      const t = Models.token(colour, label);
+      // About the same size on the table whatever the model's scale
+      const size = (Sim.isTank(u) ? 0.045 : 0.04) / (0.03 * base.scale.x);
+      t.scale.setScalar(size);
+      // Its colour stays when the piece is greyed out
+      t.traverse(c => { c.userData.keep = true; });
+      const spot = base.userData[where];
+      t.position.set(spot.x, spot.y, spot.z);
+      base.add(t);
+      tokens[id] = t;
+    }
+    tokens[id].visible = show && u.x !== null;
+  }
+
+  // Where on a model the markers sit, found once when it is made (before it is scaled): the top of whatever is at the
+  // back of it (the base's rim, or a tank's back deck), and the top of its side edge
+  const downRay = new T.Raycaster();
+  function markerSpots(m) {
+    m.updateMatrixWorld(true);
+    const box = new T.Box3().setFromObject(m);
+    // The height of the model's top surface at a point, looking straight down
+    const topAt = (x, z) => {
+      downRay.set(new T.Vector3(x, 2, z), new T.Vector3(0, -1, 0));
+      const hit = downRay.intersectObject(m, true)[0];
+      return hit ? hit.point.y + 0.001 : 0.009;
+    };
+    const backX = box.min.x * 0.85, sideZ = box.max.z * 0.85;
+    m.userData.back = { x: backX, y: topAt(backX, 0), z: 0 };
+    m.userData.side = { x: box.min.x * 0.3, y: topAt(box.min.x * 0.3, sideZ), z: sideZ };
+    // Half its width (across the way it faces), so a tank pair can stand side by side without overlapping
+    m.userData.halfWidth = (box.max.z - box.min.z) / 2;
   }
 
   // A piece that has had its move this hour is greyed out: every material swapped for a dull grey copy, and back again
@@ -392,7 +535,8 @@ const Board = (() => {
     if (g.userData.greyed === grey) return;
     g.userData.greyed = grey;
     g.traverse(c => {
-      if (!c.isMesh) return;
+      // Markers (the shaken token, the elite star) keep their colours
+      if (!c.isMesh || c.userData.keep) return;
       if (grey) {
         c.userData.orig = c.material;
         const swap = m => {
@@ -415,7 +559,9 @@ const Board = (() => {
     for (const u of st.units) {
       const g = u.x === null ? pieces[u.id] : model(u);
       const h = holding(u.id);
-      if (g) { g.visible = h ? h.visible : u.x !== null; greyOut(g, u.side === 'us' && u.acted); }
+      // Greyed out once its move is done, both sides (Steve); a German still making its move stays in colour
+      const movingNow = st.de && st.de.move && st.de.move.id === u.id;
+      if (g) { g.visible = h ? h.visible : u.x !== null; greyOut(g, u.acted && !movingNow); }
       // Taking cover: every figure crouches (tanks stay as they are)
       if (g && !Sim.isTank(u)) for (const b of g.userData.bases) b.scale.y = b.scale.x * (u.down ? 0.6 : 1);
       // A piece that has changed field: men run, tanks rumble (each sound once a frame, however many moved)
@@ -449,10 +595,8 @@ const Board = (() => {
     }
     for (const u of st.units) {
       if (!pieces[u.id]) continue;
-      const big = u.kind === 'company' || Sim.isTank(u);
-      const side = u.side === 'us' ? 1 : -1;
-      marker(u, ':shock', '#9b2a22', '!', u.shocked, big ? 0.06 * side : 0.12 * side, big ? 0.12 : 0.24);
-      marker(u, ':elite', '#b38a2e', '★', u.quality === 'elite' && u.kind === 'company', 0.06 * side, 0.93);
+      marker(u, ':shock', '#9b2a22', '!', u.shocked, 'back');
+      marker(u, ':elite', '#b38a2e', '★', u.quality === 'elite' && u.kind === 'company', 'side');
     }
   }
 
@@ -531,19 +675,19 @@ const Board = (() => {
 
   // ---------- Red targets over the pieces that can be shot ----------
   // A red ring and cross-hairs floating over the piece, always facing the camera, and a red ring on the table under it
-  let reticleTex = null;
-  function reticle() {
-    if (!reticleTex) {
+  const reticleTex = {};
+  function reticle(colour = '#e8352a') {
+    if (!reticleTex[colour]) {
       const c = document.createElement('canvas'); c.width = c.height = 128;
       const g = c.getContext('2d');
-      g.strokeStyle = '#e8352a'; g.lineWidth = 9; g.shadowColor = 'rgba(0,0,0,.6)'; g.shadowBlur = 6;
+      g.strokeStyle = colour; g.lineWidth = 9; g.shadowColor = 'rgba(0,0,0,.6)'; g.shadowBlur = 6;
       g.beginPath(); g.arc(64, 64, 42, 0, Math.PI * 2); g.stroke();
       g.lineWidth = 7;
       for (const [x1, y1, x2, y2] of [[64, 6, 64, 36], [64, 92, 64, 122], [6, 64, 36, 64], [92, 64, 122, 64]]) { g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke(); }
-      g.fillStyle = '#e8352a'; g.beginPath(); g.arc(64, 64, 7, 0, Math.PI * 2); g.fill();
-      reticleTex = new T.CanvasTexture(c);
+      g.fillStyle = colour; g.beginPath(); g.arc(64, 64, 7, 0, Math.PI * 2); g.fill();
+      reticleTex[colour] = new T.CanvasTexture(c);
     }
-    return new T.Sprite(new T.SpriteMaterial({ map: reticleTex, depthTest: false, transparent: true }));
+    return new T.Sprite(new T.SpriteMaterial({ map: reticleTex[colour], depthTest: false, transparent: true }));
   }
 
   // Where a piece is on the table: the middle of its bases
@@ -632,6 +776,17 @@ const Board = (() => {
       if (d < bestD) { bestD = d; best = u; }
     }
     return best;
+  }
+
+  // The pieces the chosen captain can rally (Steve): a blue ring and a blue cross-hair on each, himself too; a click rallies
+  function markRallies(list) {
+    for (const u of list) {
+      if (!pieces[u.id]) continue;
+      const p = pieceCentre(u), big = u.kind === 'company' || Sim.isTank(u);
+      const ring = new T.Mesh(new T.RingGeometry(big ? 0.26 : 0.17, big ? 0.32 : 0.22, 48), new T.MeshBasicMaterial({ color: 0x3f8cff, transparent: true, opacity: 0.9, depthWrite: false }));
+      at(ring, p.x, 0.008, p.z, -Math.PI / 2, 0, 0); marks.add(ring);
+      const r = reticle('#3f8cff'); r.scale.setScalar(big ? 0.62 : 0.5); r.position.copy(reticleSpot(u)); marks.add(r);
+    }
   }
 
   function markTargets(list, hot) {
@@ -775,6 +930,15 @@ const Board = (() => {
   const shownStrength = u => { const h = holding(u.id); return h ? h.count : u.platoons; };
   const seenFx = new WeakSet();
 
+  // Tanks (Steve): they turn onto the target first, then each tank fires one shell, one after the other
+  const TANK_TURN_RATE = 3;          // how fast a tank turns (higher is quicker; everything else glides at 6)
+  const TANK_TURN = 0.9;             // seconds a tank takes to swing round before it fires
+  const TANK_GAP = 0.45;             // seconds between the two tanks' shells
+  // Seconds between one round of a shot and the next: each tank's shell in turn, an MG's burst, a platoon's rifles
+  const roundGap = f => (f.weapon === 'gun' ? TANK_GAP : f.weapon === 'mg' ? 0.06 : 0.05);
+  // How many rounds a shot sends (one from each base, five from an MG), as counted when it is fired
+  const roundsOf = f => (f.weapon === 'mg' ? 5 : Math.max(1, f.bases || 1));
+
   function startShots(st) {
     for (const f of st.fx) {
       if (seenFx.has(f)) continue;
@@ -782,12 +946,18 @@ const Board = (() => {
       // A tank or gun turns to face what it fires at, and stays facing it
       const shooter = f.from && st.units.find(u => u.id === f.from.id);
       if (shooter && (Sim.isTank(shooter) || shooter.kind === 'pak')) shooter.aim = Math.atan2(-(f.y - f.from.y), f.x - f.from.x);
-      const t0 = performance.now() + shots.filter(s => performance.now() - s.t0 < 300).length * 180;
+      // A tank waits while it turns onto the target (Steve)
+      const turning = shooter && Sim.isTank(shooter) ? TANK_TURN * 1000 : 0;
+      // How many bases fire it: one round each (Steve)
+      f.bases = shooter && pieces[shooter.id] ? pieces[shooter.id].userData.bases.filter(b => b.visible).length : 1;
+      const t0 = performance.now() + shots.filter(s => performance.now() - s.t0 < 300).length * 180 + turning;
       shots.push({ f, t0, objs: [] });
       // The target keeps its bases (or stays on the table) until this shot lands
       const target = f.to && pieces[f.to.id];
       if (target) {
-        const land = f.from ? (f.weapon === 'gun' ? 0.25 : f.weapon === 'rocket' ? 0.45 : 0.35) : f.kind === 'shell' ? shellFlight(f) : 0;
+        // (the last of a tank pair's shells lands a moment after the first)
+        const lastRound = f.weapon === 'gun' ? (roundsOf(f) - 1) * TANK_GAP : 0;
+        const land = f.from ? (f.weapon === 'gun' ? 0.25 : f.weapon === 'rocket' ? 0.45 : 0.35) + lastRound : f.kind === 'shell' ? shellFlight(f) : 0;
         const until = t0 + (land + 0.15) * 1000;
         const before = held[f.to.id];
         held[f.to.id] = {
@@ -800,8 +970,12 @@ const Board = (() => {
       const wait = (t0 - performance.now()) / 1000;
       if (f.from) {
         const flight = f.weapon === 'gun' ? 0.25 : f.weapon === 'rocket' ? 0.45 : 0.35;
-        Sound.play(f.weapon === 'mg' && f.side === 'de' ? 'mg42' : f.weapon, wait);
-        Sound.play(f.armour && f.weapon === 'gun' ? 'clang' : f.weapon === 'gun' || f.weapon === 'rocket' ? 'he' : 'bullets', wait + flight);
+        // Each tank's gun is heard in turn, and each shell landing; other weapons once
+        const heard = f.weapon === 'gun' ? roundsOf(f) : 1;
+        for (let k = 0; k < heard; k++) {
+          Sound.play(f.weapon === 'mg' && f.side === 'de' ? 'mg42' : f.weapon, wait + k * TANK_GAP);
+          Sound.play(f.armour && f.weapon === 'gun' ? 'clang' : f.weapon === 'gun' || f.weapon === 'rocket' ? 'he' : 'bullets', wait + k * TANK_GAP + flight);
+        }
       } else if (f.kind === 'shell') {
         // Fire support: the first round of a mission is heard fired and coming in; up to four rounds are heard landing
         const flight = shellFlight(f);
@@ -854,18 +1028,25 @@ const Board = (() => {
       }
       const h = f.weapon === 'gun' ? 0.16 : 0.12;
       const flight = f.weapon === 'gun' ? 0.25 : f.weapon === 'rocket' ? 0.45 : 0.35;
-      // Muzzle flash
-      if (from && t < 0.12) { const m = add(glow('rgba(255,200,90,.95)')); m.scale.setScalar(f.weapon === 'gun' ? 0.32 : 0.16); m.position.set(from.x + 0.05, h, from.z); }
-      // Tracers, a shell or a rocket on its way
-      if (from && t < flight + 0.2) {
-        const n = f.weapon === 'mg' ? 9 : f.weapon === 'rifle' ? 4 : 1;
-        for (let k = 0; k < n; k++) {
-          const tk = t - k * (f.weapon === 'mg' ? 0.035 : 0.07);
+      // Muzzle flash: at each base as its round goes (each tank in turn)
+      if (from) {
+        shotMuzzles(f, from).forEach((o, k) => {
+          const mt = t - k * roundGap(f);
+          if (mt < 0 || mt > 0.12 || (f.weapon === 'mg' && k)) return;
+          const m = add(glow('rgba(255,200,90,.95)')); m.scale.setScalar(f.weapon === 'gun' ? 0.32 : 0.16); m.position.set(o.x, h, o.z);
+        });
+      }
+      // Tracers, a shell or a rocket on its way: one from each base that fires (Steve), the MG team five
+      if (from && t < flight + 0.2 + (roundsOf(f) - 1) * roundGap(f)) {
+        const muzzles = shotMuzzles(f, from);
+        for (let k = 0; k < muzzles.length; k++) {
+          const tk = t - k * roundGap(f);
           if (tk < 0 || tk > flight) continue;
-          const p = tk / flight, spread = (k % 3 - 1) * 0.03;
-          const head = new T.Vector3(T.MathUtils.lerp(from.x, to.x, p), h - 0.04 * p + 0.05 * Math.sin(p * Math.PI) * (f.weapon === 'rocket' ? 1 : 0.3), T.MathUtils.lerp(from.z, to.z, p) + spread);
+          const o = muzzles[k];
+          const p = tk / flight, spread = f.weapon === 'mg' ? (k % 3 - 1) * 0.03 : 0;
+          const head = new T.Vector3(T.MathUtils.lerp(o.x, to.x, p), h - 0.04 * p + 0.05 * Math.sin(p * Math.PI) * (f.weapon === 'rocket' ? 1 : 0.3), T.MathUtils.lerp(o.z, to.z, p) + spread);
           const back = Math.max(0, p - (f.weapon === 'gun' ? 0.18 : 0.1));
-          const tail = new T.Vector3(T.MathUtils.lerp(from.x, to.x, back), h - 0.04 * back, T.MathUtils.lerp(from.z, to.z, back) + spread);
+          const tail = new T.Vector3(T.MathUtils.lerp(o.x, to.x, back), h - 0.04 * back, T.MathUtils.lerp(o.z, to.z, back) + spread);
           // The streak: glowing beads from tail to head, red tracer for the Americans, green for the Germans, a white-hot shell
           const colour = f.weapon === 'gun' ? 'rgba(255,236,170,1)' : f.weapon === 'rocket' ? 'rgba(255,170,90,1)' : f.side === 'de' ? 'rgba(120,255,110,1)' : 'rgba(255,70,40,1)';
           for (let b = 0; b <= 4; b++) {
@@ -873,7 +1054,9 @@ const Board = (() => {
             bead.scale.setScalar((f.weapon === 'gun' ? 0.1 : 0.06) * (0.45 + b * 0.14));
             bead.position.lerpVectors(tail, head, b / 4);
           }
-          if (f.weapon === 'rocket') { const sm = add(new T.Sprite(new T.SpriteMaterial({ map: smokeTex(), transparent: true, depthWrite: false, opacity: 0.6 }))); sm.scale.setScalar(0.08); sm.position.copy(tail); }
+          if (f.weapon === 'rocket') rocketFlames(add, o, head, tail, tk);
+          // A tank's shell flies like the bazooka's rocket (Steve): a glowing round trailing smoke, no flame
+          if (f.weapon === 'gun') shellTrail(add, o, tail);
         }
       }
       // A mortar bomb or shell arcing in: a glowing round with a trail of smoke behind it
@@ -915,15 +1098,61 @@ const Board = (() => {
         }
       }
       const big = f.kind === 'shell' || (f.weapon === 'gun' && !f.armour) || f.weapon === 'rocket';
-      if (big) explosion(add, f, to, lt); else if (f.armour && f.weapon === 'gun') {
-        // A shell striking armour: a white-hot spark
-        if (lt < 0.25) { const b = add(glow('rgba(255,255,220,1)')); b.scale.setScalar(0.25 * (1 - lt * 2)); b.position.set(to.x, 0.12, to.z); }
+      // A tank pair's shells land one after the other: each its own burst (the first lands at lt = 0)
+      const bursts = f.weapon === 'gun' ? roundsOf(f) : 1;
+      if (big) for (let k = 0; k < bursts; k++) { const bt = lt - k * TANK_GAP; if (bt >= 0) explosion(add, f, to, bt); }
+      else if (f.armour && f.weapon === 'gun') {
+        // A shell striking armour: a white-hot spark for each tank's shell
+        for (let k = 0; k < bursts; k++) { const bt = lt - k * TANK_GAP; if (bt >= 0 && bt < 0.25) { const b = add(glow('rgba(255,255,220,1)')); b.scale.setScalar(0.25 * (1 - bt * 2)); b.position.set(to.x, 0.12, to.z); } }
       } else if (lt < 0.6) {
         // Bullets: little spurts of dust round the target
         for (let k = 0; k < (f.weapon === 'mg' ? 6 : 3); k++) { const d = add(new T.Sprite(new T.SpriteMaterial({ map: smokeTex(), transparent: true, depthWrite: false, opacity: 0.6 - lt }))); d.scale.setScalar(0.05 + lt * 0.1); d.position.set(to.x + Math.sin(k * 2.3) * 0.12, 0.03 + lt * 0.05, to.z + Math.cos(k * 1.7) * 0.1); }
       }
     }
     return shots.length > 0;
+  }
+
+  // Where each round of a shot leaves from (Steve): one from each base of the piece that fires (a rifle platoon one a
+  // section, a tank one a tank, the sniper, the captain and a bazooka one), but an MG team fires five from its gun
+  function shotMuzzles(f, from) {
+    const g = pieces[f.from.id];
+    const bases = g ? g.userData.bases.filter(b => b.visible && b.userData.to) : [];
+    // Each base, where it stands on the table
+    const spots = bases.map(b => new T.Vector3(g.userData.to.x + b.userData.to.x, 0, g.userData.to.z + b.userData.to.z));
+    if (!spots.length) spots.push(from);
+    // The machine gun: five rounds from the one gun
+    if (f.weapon === 'mg') return [0, 1, 2, 3, 4].map(() => spots[0]);
+    return spots;
+  }
+
+  // A tank's shell on its way: smoke left behind along the way it came
+  function shellTrail(add, from, tail) {
+    for (let b = 1; b <= 3; b++) {
+      const sm = add(new T.Sprite(new T.SpriteMaterial({ map: smokeTex(), transparent: true, depthWrite: false, opacity: 0.45 - b * 0.1 })));
+      sm.scale.setScalar(0.06 + b * 0.03);
+      sm.position.copy(tail).lerp(from, b * 0.12);
+    }
+  }
+
+  // A bazooka or Panzerschreck rocket (Steve): flames out of its tail, a trail of smoke behind, and the back-blast where
+  // it was fired; it explodes where it lands (see explosion)
+  function rocketFlames(add, from, head, tail, tk) {
+    // The flame at its tail, flickering
+    const flicker = 0.8 + 0.4 * Math.sin(tk * 90);
+    const flame = add(glow('rgba(255,150,40,1)')); flame.scale.setScalar(0.11 * flicker); flame.position.copy(tail).lerp(head, 0.35);
+    const core = add(glow('rgba(255,240,180,1)')); core.scale.setScalar(0.05 * flicker); core.position.copy(tail).lerp(head, 0.6);
+    // Smoke left behind it, along the way it came
+    for (let b = 1; b <= 3; b++) {
+      const sm = add(new T.Sprite(new T.SpriteMaterial({ map: smokeTex(), transparent: true, depthWrite: false, opacity: 0.5 - b * 0.12 })));
+      sm.scale.setScalar(0.07 + b * 0.03);
+      sm.position.copy(tail).lerp(from, b * 0.12);
+    }
+    // The back-blast as it leaves the tube
+    if (tk < 0.12) {
+      // Behind the tube: the other way from where the rocket is going
+      const away = new T.Vector3(head.x - from.x, 0, head.z - from.z).normalize();
+      const bb = add(glow('rgba(255,180,80,.9)')); bb.scale.setScalar(0.22 * (1 - tk * 5)); bb.position.set(from.x - away.x * 0.08, 0.12, from.z - away.z * 0.08);
+    }
   }
 
   // High explosive going off: how big depends on what it was (artillery biggest, then mortars, a tank's shell, a rocket)
@@ -1096,6 +1325,7 @@ const Board = (() => {
       at(ring, p.x, 0.009, p.z, -Math.PI / 2, 0, 0); marks.add(ring);
     }
     if (view.targets && view.targets.length) markTargets(view.targets, view.hotTarget);
+    if (view.rallies && view.rallies.length) markRallies(view.rallies);
     // The German piece or gun moving now: a ring round it and a word bubble saying what it does (Steve)
     if (view.deMove) germanMoveMark(st, view.deMove);
     // Shooting: a line of sight from the shooter to each target it can see
@@ -1114,7 +1344,7 @@ const Board = (() => {
     }
     const moving = glide(dt);
     const firing = playShots(now);
-    const flying = moveCoin(now);
+    const flying = moveCoin(now) | moveHoming(now);
     renderer.render(scene, camera);
     if (firing || flying) return true;
     // Targets pulse, so keep drawing while they show
@@ -1160,5 +1390,5 @@ const Board = (() => {
     return { x: r.left + (p.x + 1) / 2 * r.width, y: r.top + (1 - p.y) / 2 * r.height };
   }
 
-  return { init, resize, render, fieldAt, pieceAt, gunAt, targetAt, screenPoint, labelBox, clearDice, flyToken, clearToken, canvas: () => renderer.domElement };
+  return { init, resize, render, fieldAt, pieceAt, gunAt, targetAt, screenPoint, labelBox, clearDice, flyToken, clearToken, returnTokens, canvas: () => renderer.domElement };
 })();

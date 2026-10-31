@@ -141,7 +141,8 @@ const Sound = (() => {
     // The German MG 42: a ripping tear, twenty rounds a second
     mg42(t) { if (!playFile('mg42', t, 0.85, 0.85)) { burst(t, 14, 0.05, 0.85); burst(t + 0.95, 12, 0.05, 0.8); } },
     // A bazooka or Panzerschreck: the bang of the launch and the rocket's roar away
-    rocket(t) { noise(t, 0.05, 2500, 0.5, 0.8, 'highpass'); noise(t, 0.7, 900, 0.4, 0.6, 'bandpass'); tone(t, 0.5, 300, 900, 0.1, 'sawtooth'); },
+    // (Steve: a roar as it flies) a longer, louder rush under the launch
+    rocket(t) { noise(t, 0.05, 2500, 0.5, 0.8, 'highpass'); noise(t, 0.9, 700, 0.6, 0.9, 'bandpass'); noise(t + 0.05, 0.6, 250, 0.4, 0.8, 'lowpass'); tone(t, 0.6, 300, 900, 0.12, 'sawtooth'); },
     // A tank or anti-tank gun: a sharp crack, a huge ka-boom, and its echo rolling back off the hedges
     gun(t) {
       if (playFile('cannon', t, 1, 0.75 + Math.random() * 0.1)) {
