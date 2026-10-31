@@ -34,9 +34,11 @@
   .tok.us { background: #3f8a36; border: 2px solid #2a5e24; color: #f2c94c; font-size: 14px; line-height: 1; }
   .tok.de { background: #8c8c86; border: 2px solid #55554f; }
   .tok.de svg { width: 70%; height: 70%; }
-  .tok.timer { background: #111; border: 2px solid #444; }
-  .tok.timer svg { width: 72%; height: 72%; }
-  #bag-timer { display: flex; align-items: center; }
+  /* The timer token (Steve): bigger than the others, black with a pale rim, so it stands out on the dark bar */
+  .tok.timer { width: 34px; height: 34px; background: #0c0c0c; border: 3px solid #d8d2c4; box-shadow: 0 0 8px rgba(255,240,200,.45), 0 1px 3px rgba(0,0,0,.7); }
+  .tok.timer svg { width: 70%; height: 70%; }
+  #bag-timer { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 40px; }
+  #bag-timer .timer-label { font: 10px "Special Elite", monospace; color: var(--muted); letter-spacing: .5px; }
   #round { font: 30px "Special Elite", monospace; color: var(--accent); white-space: nowrap; letter-spacing: 2px; }
   #card { flex: 1 1 380px; min-width: 320px; display: grid; grid-template-columns: minmax(220px, 1fr) auto; column-gap: 12px; align-content: start; overflow-y: auto; }
   #card .stats { font-size: 12px; margin: 2px 0; }
@@ -112,7 +114,7 @@
 <aside id="panel">
   <div class="brand">
   <div class="top">
-    <h1>HEDGEROW <span id="ver" style="font-size:11px;color:var(--muted);letter-spacing:0">v64</span></h1>
+    <h1>HEDGEROW <span id="ver" style="font-size:11px;color:var(--muted);letter-spacing:0">v65</span></h1>
     <div class="links"><button id="sound-btn" title="Sound on or off">🔊</button><button id="help-btn">How to play</button><button id="new-btn">New game</button></div>
   </div>
   <div id="clock"></div>
@@ -164,12 +166,12 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="js/data.js?v=64"></script>
-<script src="js/sim.js?v=64"></script>
-<script src="js/sound.js?v=64"></script>
-<script src="js/models.js?v=64"></script>
-<script src="js/board3d.js?v=64"></script>
-<script src="js/ui.js?v=64"></script>
-<script src="js/main.js?v=64"></script>
+<script src="js/data.js?v=65"></script>
+<script src="js/sim.js?v=65"></script>
+<script src="js/sound.js?v=65"></script>
+<script src="js/models.js?v=65"></script>
+<script src="js/board3d.js?v=65"></script>
+<script src="js/ui.js?v=65"></script>
+<script src="js/main.js?v=65"></script>
 </body>
 </html>

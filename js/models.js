@@ -341,8 +341,9 @@ const Models = (() => {
       tex.encoding = T.sRGBEncoding;
       coinTex[side] = tex;
     }
-    const face = new T.MeshStandardMaterial({ map: coinTex[side], roughness: 0.5, metalness: 0.1 });
-    const rim = mat(side === 'us' ? '#2f6a29' : side === 'timer' ? '#222' : '#6c6c66', 0.45, 0.3);
+    // Matt, with no shine (Steve: the lamp washed the green out): it takes light and shadow but never glares
+    const face = new T.MeshLambertMaterial({ map: coinTex[side] });
+    const rim = new T.MeshLambertMaterial({ color: side === 'us' ? '#2f6a29' : side === 'timer' ? '#222' : '#6c6c66' });
     const m = new T.Mesh(new T.CylinderGeometry(1, 1, 0.3, 40), [rim, face, face]);
     m.castShadow = true;
     return m;

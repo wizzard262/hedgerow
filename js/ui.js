@@ -481,7 +481,7 @@ const UI = (() => {
     $('#bag-us').innerHTML = TOKEN.us.repeat(b.us);
     $('#bag-de').innerHTML = TOKEN.de.repeat(b.de);
     // The timer token, between the two sides' tokens (Steve)
-    $('#bag-timer').innerHTML = TOKEN.timer.repeat(b.timer || 0);
+    $('#bag-timer').innerHTML = b.timer ? TOKEN.timer + '<span class="timer-label">TIMER</span>' : '';
     $('#round').textContent = `ROUND ${st.turn}`;
   }
 
