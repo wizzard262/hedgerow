@@ -479,22 +479,33 @@ const Board = (() => {
 
   // "5+": the score each die needs, in a small red label, and under it why (Steve): "−1 cover · −1 long range"
   const labelTex = {};
-  function needLabel(n, why = []) {
-    const key = n + '|' + why.join(',');
+  // A word bubble (Steve): the score in big figures, why under it, and a pointed tail at the bottom (tailDown) or top,
+  // towards the target. The sprite's anchor is the tip of the tail
+  function needLabel(n, why = [], tailDown = true) {
+    const key = n + '|' + why.join(',') + '|' + tailDown;
     if (!labelTex[key]) {
       const c = document.createElement('canvas'), g = c.getContext('2d');
       const reason = why.join(' · ');
       g.font = 'bold 30px Georgia, serif';
-      c.width = Math.max(128, Math.ceil(g.measureText(reason).width) + 32); c.height = why.length ? 104 : 64;
-      g.fillStyle = 'rgba(150,25,20,.92)'; g.beginPath(); g.roundRect(4, 6, c.width - 8, c.height - 12, 14); g.fill();
+      const tail = 26, boxH = why.length ? 96 : 60;
+      c.width = Math.max(128, Math.ceil(g.measureText(reason).width) + 36); c.height = boxH + tail + 8;
+      const top = tailDown ? 4 : tail + 4, mid = c.width / 2;
+      // The bubble and its tail in one shape, with a pale outline
+      g.beginPath();
+      g.roundRect(4, top, c.width - 8, boxH, 16);
+      if (tailDown) { g.moveTo(mid - 16, top + boxH - 1); g.lineTo(mid, c.height - 2); g.lineTo(mid + 16, top + boxH - 1); }
+      else { g.moveTo(mid - 16, top + 1); g.lineTo(mid, 2); g.lineTo(mid + 16, top + 1); }
+      g.fillStyle = 'rgba(150,25,20,.94)'; g.fill();
+      g.lineWidth = 3; g.strokeStyle = 'rgba(255,230,200,.85)'; g.stroke();
       g.fillStyle = '#fff4e8'; g.font = 'bold 40px Georgia, serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
-      g.fillText(n >= 6 ? '6' : n + '+', c.width / 2, 34);
-      if (why.length) { g.font = 'bold 30px Georgia, serif'; g.fillStyle = '#ffd9a0'; g.fillText(reason, c.width / 2, 76); }
+      g.fillText(n >= 6 ? '6' : n + '+', mid, top + 30);
+      if (why.length) { g.font = 'bold 30px Georgia, serif'; g.fillStyle = '#ffd9a0'; g.fillText(reason, mid, top + 70); }
       labelTex[key] = { map: new T.CanvasTexture(c), w: c.width, h: c.height };
     }
     const t = labelTex[key];
     const s = new T.Sprite(new T.SpriteMaterial({ map: t.map, transparent: true, depthTest: false }));
-    s.scale.set(0.45 * t.w / 128, 0.225 * t.h / 64, 1);
+    s.scale.set(0.45 * t.w / 128, 0.45 * t.h / 128, 1);
+    s.center.set(0.5, tailDown ? 0 : 1);
     return s;
   }
 
@@ -521,8 +532,17 @@ const Board = (() => {
       at(ring, p.x, 0.008, p.z, -Math.PI / 2, 0, 0); marks.add(ring);
       // The cross-hair, bigger under the pointer
       const r = reticle(); r.scale.setScalar((big ? 0.62 : 0.5) * pulse * (lit ? 1.45 : 1)); r.position.copy(reticleSpot(u)); marks.add(r);
-      // The score and why, just in front of the piece so the cross-hair doesn't hide it
-      if (u.needNow) { const l = needLabel(u.needNow, u.needWhy || []); l.position.set(p.x, 0.12, p.z + (big ? 0.36 : 0.28)); marks.add(l); }
+      // The score and why in a word bubble about three fields away (Steve), so it hides nothing near the target: up the
+      // board for a target in the near half, down it for one in the far half, with a line from the tail to the cross-hair
+      if (u.needNow) {
+        const farHalf = u.y < ROWS / 2;
+        const anchor = new T.Vector3(p.x, 0.3, Math.max(0.4, Math.min(ROWS - 0.4, p.z + (farHalf ? 2.6 : -2.6))));
+        const l = needLabel(u.needNow, u.needWhy || [], !farHalf);
+        l.position.copy(anchor); marks.add(l);
+        const aim = reticleSpot(u);
+        const line = new T.Line(new T.BufferGeometry().setFromPoints([anchor, aim]), new T.LineBasicMaterial({ color: 0xffe2c8, transparent: true, opacity: lit ? 1 : 0.8, depthTest: false }));
+        marks.add(line);
+      }
     }
   }
 
