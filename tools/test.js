@@ -103,7 +103,7 @@ check('Move & shoot only goes where the piece will have someone to shoot', () =>
       for (const p of Sim.moveShootSpots(st, u)) {
         const home = { x: u.x, y: u.y, at: u.at, acted: u.acted };
         Sim.actMoveShoot(st, u, p.x, p.y);
-        assert(Sim.targets(st, u).length > 0, `seed ${seed}: ${u.name} moved to ${p.x},${p.y} with nobody to shoot`);
+        assert(Sim.targets(st, u, true).length > 0, `seed ${seed}: ${u.name} moved to ${p.x},${p.y} with nobody to shoot`);
         Object.assign(u, home); u.halfShot = false;
         break;
       }
@@ -437,6 +437,21 @@ check('artillery can hit your own pieces round the target', () => {
   const r = Sim.actFire(st, 'artillery', 3, 6);
   assert(r.ok, 'the artillery could not fire');
   assert(st.fx.some(f => f.to && f.to.id === 'B'), 'the shells round the target missed your own platoon');
+});
+
+check('a shot that would need 7 or more cannot be taken', () => {
+  const st = Sim.newGame(3);
+  st.hedges = {}; st.wire = {};
+  const B = Sim.unitById(st, 'B'), de = st.units.find(u => u.side === 'de' && u.kind === 'company');
+  for (const u of st.units) if (u !== B && u !== de) u.x = u.y = null;
+  // A German in the orchard two fields off (cover and long range), the shooter shaken: 3 + 1 + 1 + 1 = 6
+  B.x = 3; B.y = 0; B.at = null; B.quality = 'standard'; B.shocked = true;
+  de.x = 5; de.y = 0; de.at = null;
+  assert(Sim.tileType(5, 0) === 'orchard', 'the test needs an orchard at 5,0');
+  assert(Sim.targets(st, B).includes(de), 'a 6+ shot was refused');
+  // Taking cover makes it 7: no shot
+  de.down = true;
+  assert(!Sim.targets(st, B).includes(de), 'a 7+ shot was allowed');
 });
 
 check('leaving everything alone never wins', () => {

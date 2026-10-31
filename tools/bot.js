@@ -30,7 +30,7 @@ function playHour(st) {
       const empty = Sim.chargeSpots(st, u).find(p => p.x === st.objective.x && p.y === st.objective.y);
       if (empty) { Sim.actCharge(st, u, empty.x, empty.y); continue; }
       const closer = p => Math.abs(p.x - st.objective.x) + Math.abs(p.y - st.objective.y) < Math.abs(u.x - st.objective.x) + Math.abs(u.y - st.objective.y);
-      if (m && closer(m)) { Sim.actMoveShoot(st, u, m.x, m.y); const t = Sim.targets(st, u)[0]; if (t) Sim.actHalfShot(st, u, t); continue; }
+      if (m && closer(m)) { Sim.actMoveShoot(st, u, m.x, m.y); const t = Sim.targets(st, u, true)[0]; if (t) Sim.actHalfShot(st, u, t); continue; }
       const c = Sim.chargeSpots(st, u).filter(p => !Sim.at(st, p.x, p.y, 'de').length && closer(p))[0];
       if (c) { Sim.actCharge(st, u, c.x, c.y); continue; }
       const b = Sim.breachSpots(st, u).find(closer);

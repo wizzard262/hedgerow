@@ -35,17 +35,18 @@ const START_DATE = 'Tue 11 July 1944';
 const TAKE_COVER = 1;
 
 // Shooting: each point of firepower rolls one six-sided die, which hits on TO_HIT or more.
-// Cover adds to the score needed, elite troops take one off; a 6 always hits
+// Cover adds to the score needed, elite troops take one off; a shot needing more than MAX_NEED can't be taken
 const TO_HIT = 3;                // a die needs this or more to hit, before cover, range and moving (Steve: 3+)
 const MOVE_SHOOT_MOVES = 2;      // fields a Move & shoot can cover (Steve: one more than before)
 const CHARGE_MOVES = 3;          // fields a charge can cover
 const CLIMB = 1;                 // extra moves it costs men to climb a hedge bank (tanks drive through; wire stops men)
 const SHAKEN_SHOOT = 1;          // a shaken (pinned) piece needs one more to hit
+const MAX_NEED = 6;              // a shot that would need more than this can't be taken (Steve: no shooting at 7+)
 const WOUND_CHANCE = 0.5;        // each hit is a coin toss: heads it wounds (a section, a team or a tank lost); every hit pins
 const QUALITY = { elite: { name: 'Elite', shoot: 1, assault: 1.3, rally: 0.9 }, standard: { name: 'Standard', shoot: 0, assault: 1, rally: 0.7 } };
 const SIGHT_RANGE = 3;           // fields a piece can shoot across open ground (hedges, villages and orchards block the view)
-const LONG_RANGE = 1;
-const LONG_FROM = { normal: 1, far: 2 };   // fields away before long range starts: one for most, two for MGs, tanks and guns (Steve)            // added to the score needed beyond the next field (the three penalties stack; a 6 always hits)
+const LONG_RANGE = 1;             // added to the score needed at long range (the penalties stack)
+const LONG_FROM = { normal: 1, far: 2 };   // fields away before long range starts: one for most, two for MGs, tanks and guns (Steve)
 const ON_THE_MOVE = 1;           // added to the score needed when firing after a move (Steve: like range and cover, +1 each)
 const COVER = { hedge: 1, village: 1, hamlet: 1, orchard: 1, tank: 1 };   // tank: infantry sheltering behind or beside a tank (Steve)   // added to the score needed against a target behind a hedge, in the village, a hamlet or an orchard
 const CAPTAIN_RALLIES = { still: 2, moved: 1 };   // rallies an hour: two if he neither moves nor shoots, one if he does (before or after)

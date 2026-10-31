@@ -41,7 +41,7 @@ const UI = (() => {
     let list = [];
     if (view.mode === 'charge') list = Sim.chargeSpots(st, u);
     if (view.mode === 'moveShoot') list = Sim.moveShootSpots(st, u);
-    if (view.mode === 'shoot' || view.mode === 'halfShot') list = fields(Sim.targets(st, u));
+    if (view.mode === 'shoot' || view.mode === 'halfShot') list = fields(Sim.targets(st, u, view.mode === 'halfShot'));
     if (view.mode === 'rally') list = fields(Sim.rallyTargets(st, u));
     if (view.mode === 'breach') list = Sim.breachSpots(st, u);
     // A charge into a field the Germans hold is a hand-to-hand fight: marked differently
@@ -74,7 +74,7 @@ const UI = (() => {
     const u = selected();
     if (!u || !['shoot', 'halfShot'].includes(view.mode)) return [];
     const moving = view.mode === 'halfShot';
-    return Sim.targets(st, u).map(t => {
+    return Sim.targets(st, u, moving).map(t => {
       t.needNow = Math.min(6, Sim.needFor(st, u, t, moving) + (Sim.isTank(t) ? PIECES[t.kind].armour : 0));
       t.needWhy = Sim.needWhy(st, u, t, moving);
       return t;
@@ -98,7 +98,7 @@ const UI = (() => {
 
   // The best target for a shooter in a field: tanks for anti-tank weapons, otherwise the infantry
   function pickTarget(u, x, y) {
-    const ts = Sim.targets(st, u).filter(t => t.x === x && t.y === y);
+    const ts = Sim.targets(st, u, view.mode === 'halfShot').filter(t => t.x === x && t.y === y);
     const f = Sim.firepower(st, u);
     ts.sort((a, b) => ((Sim.isTank(b) ? f.hard : f.soft) - (Sim.isTank(a) ? f.hard : f.soft)));
     return ts[0] || null;

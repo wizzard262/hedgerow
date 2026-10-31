@@ -257,7 +257,7 @@ const Sim = (() => {
   // Whole dice from a firepower: the fraction is a chance of one more
   const dice = (st, f) => Math.floor(f) + (st.rand() < f - Math.floor(f) ? 1 : 0);
 
-  // Roll n six-sided dice needing `need` or more (a 6 always hits). The faces go into `faces` for the dice on the table
+  // Roll n six-sided dice needing `need` or more (shots needing 7+ aren't allowed, see targets). The faces go into `faces` for the dice on the table
   function roll(st, n, need, faces = []) {
     let hits = 0;
     const score = Math.min(6, need);
@@ -392,7 +392,7 @@ const Sim = (() => {
     // A tank firing high explosive at men hits the whole field, like a mortar: every other piece on foot in it rolls too
     if (isTank(shooter) && !isTank(target) && !blast) {
       for (const other of at(st, stood.x, stood.y, target.side)) {
-        if (other === target || isTank(other) || other.kind === 'captain') continue;
+        if (other === target || isTank(other) || other.kind === 'captain' || shotNeed(st, shooter, other, moving) > MAX_NEED) continue;
         out.push(...fireAt(st, shooter, other, power, false, moving, true));
       }
     }
@@ -412,14 +412,20 @@ const Sim = (() => {
     return u.side === 'us' && u.x !== null && u.kind !== 'captain' && !PIECES[u.kind].fixed && !u.spentNext && !u.down;
   }
 
-  // Pieces a shooter could fire at: enemies next to it (across any hedge) or two fields away along a clear line, that its side can see
-  function targets(st, shooter) {
+  // The score a shot needs, the Panther's armour included
+  function shotNeed(st, shooter, target, moving = false) {
+    return needFor(st, shooter, target, moving) + (isTank(target) ? PIECES[target.kind].armour : 0);
+  }
+
+  // Pieces a shooter could fire at (moving: firing on the move): enemies it can see, that its weapons can hurt, and
+  // that need 6 or less on the dice. A shot that would need 7 or more can't be taken (Steve)
+  function targets(st, shooter, moving = false) {
     // Anything without weapons shoots at nobody
     const f = firepower(st, shooter);
     if (f.soft + f.hard <= 0) return [];
     // Tanks only to those with anti-tank weapons: rifles and machine guns can't hurt them
     return st.units.filter(t => t.side !== shooter.side && t.x !== null && t.kind !== 'captain' && (!isTank(t) || f.hard > 0)
-      && !!sight(st, shooter, t));
+      && !!sight(st, shooter, t) && shotNeed(st, shooter, t, moving) <= MAX_NEED);
   }
 
   // ---------- Moving ----------
@@ -582,7 +588,7 @@ const Sim = (() => {
       u.x = goal.x; u.y = goal.y;
       for (const side of ['n', 'e', 's', 'w', null]) {
         u.at = side;
-        if (targets(st, u).length) { out.push(route); break; }
+        if (targets(st, u, true).length) { out.push(route); break; }
       }
       u.x = home.x; u.y = home.y; u.at = home.at;
     }
@@ -601,16 +607,16 @@ const Sim = (() => {
     const lines = followRoute(st, u, route);
     const how = step(st, u, x, y);
     // Where it stands: where it was sent, or (none given) the first place in the field with a shot
-    const place = side !== undefined ? side : [u.at, 'n', 'e', 's', 'w', null].find(p => { u.at = p; return targets(st, u).length; });
+    const place = side !== undefined ? side : [u.at, 'n', 'e', 's', 'w', null].find(p => { u.at = p; return targets(st, u, true).length; });
     standAt(st, u, place === undefined ? u.at : place);
     setTrail(st, u, route);
     lines.push(moveLine(u, how).replace(/\.$/, ''));
-    u.halfShot = targets(st, u).length > 0;
+    u.halfShot = targets(st, u, true).length > 0;
     return { ok: true, lines: [lines.join(', ') + '.'] };
   }
 
   function actHalfShot(st, u, target) {
-    if (!u || !u.halfShot || u.x === null || !targets(st, u).includes(target)) return { ok: false };
+    if (!u || !u.halfShot || u.x === null || !targets(st, u, true).includes(target)) return { ok: false };
     u.halfShot = false;
     return { ok: true, lines: [`🔫 ${u.name} moves and fires on ${target.name}: ` + fireAt(st, u, target, 1, false, true).join(', ') + '.'] };
   }
@@ -860,7 +866,7 @@ const Sim = (() => {
 
   // What a German piece would most like to shoot: tanks for anti-tank weapons, otherwise the weakest infantry
   function bestTarget(st, u) {
-    const ts = st.units.filter(t => t.side === 'us' && t.x !== null && t.kind !== 'captain' && (!isTank(t) || firepower(st, u).hard > 0) && !!sight(st, u, t));
+    const ts = targets(st, u);
     if (!ts.length) return null;
     const f = firepower(st, u);
     const score = t => (isTank(t) ? f.hard * 2 : f.soft + f.hard * 0.5) * (7 - TO_HIT - cover(st, u, t)) / 2 + (t.shocked ? 1 : 0) - t.platoons * 0.1;
