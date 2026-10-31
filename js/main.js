@@ -23,17 +23,29 @@ window.Game = (() => {
   function frame() {
     if (dirty) {
       const spots = UI.spots();
-      // During the German hour, show who is firing on whom
+      let targets = UI.targets();
+      // The shooter, for the lines of sight to its targets
+      let shooter = ['shoot', 'halfShot'].includes(UI.view.mode) ? UI.selected() : null, mortarAim = null;
+      // During the German hour, show who is aiming at whom (Steve): the shooter's field, a line of fire to the target,
+      // its red cross-hair with the score needed. German mortars: the line comes from their mortar off the board
       if (st.de && st.de.ask) {
         const shot = st.de.ask, t = Sim.unitById(st, shot.target), s = shot.shooter && Sim.unitById(st, shot.shooter);
         if (s) spots.push({ x: s.x, y: s.y, kind: 'charge' });
         spots.push({ x: t.x, y: t.y, kind: 'shoot' });
+        if (s) {
+          t.needNow = Math.min(6, Sim.needFor(st, s, t) + (Sim.isTank(t) ? PIECES[t.kind].armour : 0));
+          t.needWhy = Sim.needWhy(st, s, t);
+          shooter = s;
+        } else {
+          t.needNow = TO_HIT + (Sim.tileType(t.x, t.y) === 'village' ? COVER.village : 0);
+          t.needWhy = [];
+          mortarAim = t;
+        }
+        targets = [t];
       }
       // Green rings under pieces that can still act this hour, grey under those that have
-      const ready = st.de || st.won || st.lost ? null : u => Sim.canAct(st, u);
-      // The shooter, for the lines of sight to its targets
-      const shooter = ['shoot', 'halfShot'].includes(UI.view.mode) ? UI.selected() : null;
-      dirty = Board.render(st, { spots, selected: UI.selected(), hover, targets: UI.targets(), hotTarget, ready, shooter });
+      const ready = st.de || st.won || st.lost ? null : u => Sim.canAct(st, u) || (Sim.canRally(st, u) && Sim.rallyTargets(st, u).length > 0);
+      dirty = Board.render(st, { spots, selected: UI.selected(), hover, targets, hotTarget, ready, shooter, mortarAim });
       const p = Board.screenPoint(st.objective.x + 0.5, st.objective.y, 0.35), r = board.getBoundingClientRect();
       Object.assign($('#label').style, { left: p.x - r.left + 'px', top: p.y - r.top + 'px' });
       $('#label').textContent = `🎯 ${st.objective.name}`;

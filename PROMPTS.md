@@ -345,8 +345,33 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - It misses its move next hour (still crouched), unless the captain uses his move to Rally it (up to three fields away): that gets it up and moving at once, no dice. Then it stands up again
 - Also: the off-board guns and their rounds are bigger, their names readable, and the arcs a little lower so they stay on screen
 
+## 61. The captain's rallies; two pins kill (v41)
+
+- Steve: the captain can rally twice if he doesn't move (himself included), once if he moves or shoots, and either before or after the shot. And: two pins = kill, a second pin on a pinned piece kills it
+- Rally is no longer the captain's move: two rallies an hour if he neither moves nor shoots, one if he does (before or after). He can rally himself. His green ring stays while he still has a rally to use
+- Every hit pins; on a piece already pinned, a hit kills: a section of a platoon, a whole team, or a tank. The first hit on an unpinned piece still pins it with a coin toss to wound as well. The Germans play by the same rule
+
+## 62. Bazookas and tanks kill; longer reach; tanks as cover; no Break through; wire; hopping hedges (v41)
+
+- Steve: a bazooka hit on infantry is a kill, not a pin, as it's powerful; same with a tank. MGs and tanks have longer range. Tanks are cover for infantry. There's no Break through now, it's just a Charge. When men charge over a hedge they hop up over it (and still lose a move). Only tanks get through barbed wire
+- Every hit on men from a bazooka, Panzerschreck, tank gun or the PaK kills (a section or a team); against tanks they still pin, with the coin toss to knock one out
+- Long range starts beyond two fields for machine guns, tanks and the PaK (beyond one for everyone else)
+- Men are in cover (one more to hit) when a tank stands in a field between them and the shooter, or beside them in their own field
+- The Break through buttons are gone: pieces climb hedges as part of a Charge or Move & shoot (one more move), and hop up over the hedge on the table as they cross
+- Barbed wire now stops men completely: only tanks get through, flattening it, which opens the way
+
+## 63. Who is aiming at whom (v41)
+
+- Steve: show a line of who is shooting at whom for the take cover question; I need to know who is aiming at whom
+- While "Take cover?" is asked, the German shooter's field is marked, a dashed red line of fire runs from it to your piece, and your piece has a red cross-hair with the score the Germans need and why ("4+ · −1 cover"). For German mortars the line comes from their mortar off the board
+
+## 64. Blue hatching on the village to take (v41)
+
+- Steve: make it clear with blue hatching when a valid piece is moving onto the capture goal
+- When a rifle platoon (the only piece that can take the village) is choosing a Charge or Move & shoot and can reach the village, that field shows blue stripes instead of the usual mark; the hint line says so
+
 ## Sessions
 
 | # | Date | Length | What we did |
 |---|------|--------|-------------|
-| 1 | 2026-10-30 | about 10.5 hours | Prompts 1–60: rules, command points, reacting, tanks and hedge cutters, the look (pixel art to 3D tabletop), scales, river, villages, wire, six-move aim; one captain, piece menus, hedges stop moves, MG team model; bazooka teams, two-field charges; red targets; who has acted; company level; lining hedges, longer sight, the captain's guidon; one unit a field, no time limit; tracers and shells, greyed out, no activation tokens, Move & shoot hatching; tanks through hedges, charges for all; no plain move; teams and captain with a platoon, no attaching; one piece at a time; charging through friends; range, cover and moving +1 each; words off the target, tanks turn and recoil; rallying; MGs can't move and fire; easier targets; Move & shoot one action; tanks impervious to small arms; more gaps; no charging through houses; MGs fire five; hand to hand shown; sounds; select and move sounds; running and tank sounds; twisty wire, tank boom, a cleaner panel, better running; bigger dice with a tag; louder, more real sounds; distant battle; shells arcing in and explosions; Sherman and Firefly named; dice cleared on the next pick; fire support targets; real recordings; tank HE hits the whole field; 3+ to hit, pinned not stopped, 50/50 wounds; further moves, climbing hedges; click where in the field, cover shown, more orchards; routes shown, why a shot needs what it needs; flush roofs, lines of sight; pieces stay till hit, the captain shoots; mortars and artillery off the board; take cover |
+| 1 | 2026-10-30 | about 10.5 hours | Prompts 1–64: rules, command points, reacting, tanks and hedge cutters, the look (pixel art to 3D tabletop), scales, river, villages, wire, six-move aim; one captain, piece menus, hedges stop moves, MG team model; bazooka teams, two-field charges; red targets; who has acted; company level; lining hedges, longer sight, the captain's guidon; one unit a field, no time limit; tracers and shells, greyed out, no activation tokens, Move & shoot hatching; tanks through hedges, charges for all; no plain move; teams and captain with a platoon, no attaching; one piece at a time; charging through friends; range, cover and moving +1 each; words off the target, tanks turn and recoil; rallying; MGs can't move and fire; easier targets; Move & shoot one action; tanks impervious to small arms; more gaps; no charging through houses; MGs fire five; hand to hand shown; sounds; select and move sounds; running and tank sounds; twisty wire, tank boom, a cleaner panel, better running; bigger dice with a tag; louder, more real sounds; distant battle; shells arcing in and explosions; Sherman and Firefly named; dice cleared on the next pick; fire support targets; real recordings; tank HE hits the whole field; 3+ to hit, pinned not stopped, 50/50 wounds; further moves, climbing hedges; click where in the field, cover shown, more orchards; routes shown, why a shot needs what it needs; flush roofs, lines of sight; pieces stay till hit, the captain shoots; mortars and artillery off the board; take cover; captain rallies twice, two pins kill; bazookas and tanks kill, longer reach, tanks as cover, no Break through, wire for tanks only, hopping hedges; who is aiming at whom; blue hatching on the village |

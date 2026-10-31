@@ -211,15 +211,24 @@ const Sim = (() => {
   // only if the target lines it (it is then in cover, one more to hit); with one hedge between them either lining it will do,
   // and the target has cover if it lines it. Any other hedge in between blocks the view. Beyond the next field: one more to hit.
   // Returns null (can't see) or { cover } added to the score needed
+  // Is a target at long range for this shooter? Machine guns, tanks and guns reach a field further first (Steve)
+  function isFar(from, target) {
+    const reach = from.kind && (isTank(from) || from.kind === 'mg' || from.kind === 'mg42' || from.kind === 'pak') ? LONG_FROM.far : LONG_FROM.normal;
+    return Math.hypot(target.x - from.x, target.y - from.y) > reach + 0.5;
+  }
+
   function sight(st, from, target) {
     const dist = Math.hypot(target.x - from.x, target.y - from.y);
     if (dist === 0 || dist > SIGHT_RANGE + 0.01) return null;
     const path = fieldsAlong(from, target);
-    let c = dist > 1.5 ? LONG_RANGE : 0;
+    let c = isFar(from, target) ? LONG_RANGE : 0;
+    let behindTank = false;
     for (let i = 0; i + 1 < path.length; i++) {
       const p = path[i], q = path[i + 1];
       // A field in between that blocks the view
       if (i > 0 && ['village', 'hamlet', 'orchard'].includes(tileType(p.x, p.y))) return null;
+      // A tank in a field in between: men beyond it shelter behind it (Steve: tanks are cover for infantry)
+      if (i > 0 && target.kind && !isTank(target) && at(st, p.x, p.y).some(isTank)) behindTank = true;
       if (!hedge(st, p.x, p.y, q.x, q.y)) continue;
       const first = i === 0, last = i + 1 === path.length - 1;
       const shooterLines = first && from.at === dirTo(p, q);
@@ -227,6 +236,7 @@ const Sim = (() => {
       if (!shooterLines && !targetLines) return null;
       if (targetLines) c += COVER.hedge;
     }
+    if (behindTank) c += COVER.tank;
     return { cover: c };
   }
 
@@ -274,21 +284,28 @@ const Sim = (() => {
     if (t === 'village') c += COVER.village;
     if (t === 'hamlet') c += COVER.hamlet;
     if (t === 'orchard') c += COVER.orchard;
+    if (!isTank(target) && target.side && at(st, target.x, target.y, target.side).some(isTank)) c += COVER.tank;
     return c;
   }
 
   // What hits do to a piece (Steve): every hit pins it (shaken), and each hit is a coin toss whether it wounds: a section
   // of a platoon, a whole team, or a tank lost. Only anti-tank (hard) hits count against tanks
-  function damage(st, u, softHits, hardHits) {
+  function damage(st, u, softHits, hardHits, deadly = false) {
     const name = u.name, out = [];
     u.hit = u.hit || softHits + hardHits > 0;
     const hits = isTank(u) ? hardHits : softHits + hardHits;
     if (hits <= 0) return out;
-    // Toss a coin for each hit
+    // Each hit: on a piece already pinned it kills (Steve: two pins kill); otherwise it pins it, and a coin toss says
+    // whether it wounds as well
     let wounds = 0;
-    for (let k = 0; k < hits; k++) if (st.rand() < WOUND_CHANCE) wounds++;
     const wasShocked = u.shocked;
-    u.shocked = true;
+    for (let k = 0; k < hits; k++) {
+      // A bazooka, Panzerschreck or tank gun hitting men kills outright (Steve: they're powerful)
+      if (deadly && !isTank(u)) wounds++;
+      else if (u.shocked) wounds++;
+      else if (st.rand() < WOUND_CHANCE) wounds++;
+      u.shocked = true;
+    }
     if (isTank(u)) {
       const lost = Math.min(u.platoons, wounds);
       u.platoons -= lost;
@@ -329,9 +346,10 @@ const Sim = (() => {
   function needWhy(st, shooter, target, moving = false) {
     const why = [];
     const s = sight(st, shooter, target);
-    const far = Math.hypot(target.x - shooter.x, target.y - shooter.y) > 1.5;
+    const far = isFar(shooter, target);
     const t = tileType(target.x, target.y);
-    const covers = (s ? s.cover - (far ? LONG_RANGE : 0) : 0) + (COVER[t] || 0);
+    const besideTank = !isTank(target) && at(st, target.x, target.y, target.side).some(isTank) ? COVER.tank : 0;
+    const covers = (s ? s.cover - (far ? LONG_RANGE : 0) : 0) + (COVER[t] || 0) + besideTank;
     if (covers > 0) why.push(`−${covers} cover`);
     if (target.down) why.push(`−${TAKE_COVER} taking cover`);
     if (far) why.push(`−${LONG_RANGE} long range`);
@@ -361,7 +379,8 @@ const Sim = (() => {
     // Where the target stood, so its dice still land there if it is wiped out
     const stood = { x: target.x, y: target.y };
     const before = { strength: target.platoons, shocked: target.shocked };
-    const out = (pre ? [pre.line] : []).concat(damage(st, target, softHits, hardHits));
+    const deadly = isTank(shooter) || ['bazooka', 'schreck', 'pak'].includes(shooter.kind);
+    const out = (pre ? [pre.line] : []).concat(damage(st, target, softHits, hardHits, deadly));
     // In a word, what the shot did, for the words that float up off the target
     const lost = before.strength - (target.x === null ? 0 : target.platoons);
     const result = target.x === null ? (isTank(target) ? 'Destroyed' : 'Wiped out')
@@ -534,7 +553,16 @@ const Sim = (() => {
   // Each returns { ok, lines } and spends a command point when it works. A piece acts once an hour
 
   function canAct(st, u) {
+    // The captain can't move or shoot once he has used both his rallies
+    if (u && u.kind === 'captain' && (u.rallied || 0) >= CAPTAIN_RALLIES.still) return false;
     return !!u && u.side === 'us' && u.x !== null && !st.won && !st.lost && !st.de && !u.acted;
+  }
+
+  // Can the captain rally now (Steve): twice an hour if he doesn't move or shoot, once if he does, before or after
+  function canRally(st, cap) {
+    if (!cap || cap.kind !== 'captain' || cap.side !== 'us' || cap.x === null || st.won || st.lost || st.de) return false;
+    const allowed = cap.acted ? CAPTAIN_RALLIES.moved : CAPTAIN_RALLIES.still;
+    return (cap.rallied || 0) < allowed;
   }
 
   function actShoot(st, u, target) {
@@ -607,12 +635,13 @@ const Sim = (() => {
   const fightsHandToHand = u => u.kind === 'company' || isTank(u);
 
   // What it costs to go from one field into the next (Steve): one move, and CLIMB more for men climbing a hedge bank (it
-  // stays standing) or cutting through wire (it's cut); tanks drive straight through both. null where it can't go at all
+  // stays standing); barbed wire stops men; tanks drive straight through both. null where it can't go at all
   function stepCost(st, u, fx, fy, x, y) {
     if (!inside(x, y) || tileType(x, y) === 'river' || PIECES[u.kind].fixed) return null;
-    const crossing = hedge(st, fx, fy, x, y) || wire(st, fx, fy, x, y);
     if (isTank(u)) return hedge(st, fx, fy, x, y) && !cutter(u) ? null : 1;
-    return crossing ? 1 + CLIMB : 1;
+    // Men: barbed wire stops them (only tanks get through it, Steve); a hedge bank they climb, for one more move
+    if (wire(st, fx, fy, x, y)) return null;
+    return hedge(st, fx, fy, x, y) ? 1 + CLIMB : 1;
   }
 
   // Every field a piece can reach with `budget` moves, each with the cheapest way there: a list of the fields it passes
@@ -719,7 +748,7 @@ const Sim = (() => {
   function breachSpots(st, u) {
     if (PIECES[u.kind].fixed || cutter(u)) return [];
     return NEIGHBOURS.map(([dx, dy]) => ({ x: u.x + dx, y: u.y + dy })).filter(p => inside(p.x, p.y) && tileType(p.x, p.y) !== 'river'
-      && (hedge(st, u.x, u.y, p.x, p.y) || (!isTank(u) && wire(st, u.x, u.y, p.x, p.y))) && roomFor(st, u, p.x, p.y));
+      && hedge(st, u.x, u.y, p.x, p.y) && !wire(st, u.x, u.y, p.x, p.y) && roomFor(st, u, p.x, p.y));
   }
 
   function actBreach(st, u, x, y) {
@@ -751,8 +780,9 @@ const Sim = (() => {
   // Shocked friendly pieces a captain can reach
   function rallyTargets(st, cap) {
     // Shaken pieces, and pieces down in cover missing this hour, up to RALLY_RANGE fields away
+    // (himself too)
     const needsHim = t => t.shocked || (t.down && t.acted);
-    return st.units.filter(t => t.side === cap.side && t.x !== null && t !== cap && needsHim(t) && Math.abs(t.x - cap.x) + Math.abs(t.y - cap.y) <= RALLY_RANGE);
+    return st.units.filter(t => t.side === cap.side && t.x !== null && needsHim(t) && Math.abs(t.x - cap.x) + Math.abs(t.y - cap.y) <= RALLY_RANGE);
   }
 
   // A shaken piece uses its move to try to pull itself together (Steve: pieces can rally themselves)
@@ -768,8 +798,9 @@ const Sim = (() => {
   }
 
   function actRally(st, cap, target) {
-    if (!canAct(st, cap) || cap.kind !== 'captain' || !rallyTargets(st, cap).includes(target)) return { ok: false };
-    spend(st, cap);
+    if (!canRally(st, cap) || !rallyTargets(st, cap).includes(target)) return { ok: false };
+    // A rally isn't his move: it counts against his rallies for the hour
+    cap.rallied = (cap.rallied || 0) + 1;
     const lines = [];
     // Down in cover: he gets them up and moving, so they can act this hour after all (Steve)
     if (target.down && target.acted) {
@@ -1034,7 +1065,7 @@ const Sim = (() => {
       if (u.side !== 'us' || u.x === null) continue;
       if (u.shocked && !u.hit) { u.shocked = false; rep.push(`😮‍💨 ${u.name} has rested and recovered.`); }
       const missed = !!u.spentNext;
-      u.hit = false; u.acted = missed; u.spentNext = false;
+      u.hit = false; u.acted = missed; u.spentNext = false; u.rallied = 0;
       // Down in cover: it stays down through the hour it misses, then gets up
       if (!missed) u.down = false;
     }
@@ -1048,7 +1079,7 @@ const Sim = (() => {
     newGame, endTurn, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, moves, chargeSpots,
     rallyTargets, canAct, groupOf, groupName, members, canReact, firepower, teamsOf, canCallFire, holdsObjective, hourText, roomFor,
     startGermanHour, germanStep, answer, finishHour,
-    actShoot, actMoveShoot, moveShootSpots, chargeRoutes, DIRS, needWhy, needFor, canSelfRally, actSelfRally, actHalfShot, actMove, actCharge, actRally, actFire, actBreach, breachSpots, sight, isSmall, cover, wire, lineSides, actLine, atHedge, acrossHedge, SIDE_NAMES,
+    actShoot, actMoveShoot, moveShootSpots, chargeRoutes, DIRS, needWhy, canRally, needFor, canSelfRally, actSelfRally, actHalfShot, actMove, actCharge, actRally, actFire, actBreach, breachSpots, sight, isSmall, cover, wire, lineSides, actLine, atHedge, acrossHedge, SIDE_NAMES,
     hasCutters: u => cutter(u),
   };
 })();

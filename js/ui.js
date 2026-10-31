@@ -37,6 +37,10 @@ const UI = (() => {
     const marked = uniq(list).map(p => Object.assign(p, { kind: view.mode === 'charge' && Sim.at(st, p.x, p.y, 'de').length ? 'assault' : kind }));
     // Charging: its own field is marked too, to go and line another of its hedges (the old Line a hedge, Steve: implicit)
     if (view.mode === 'charge' && Sim.canAct(st, u) && Sim.lineSides(st, u).length) marked.push({ x: u.x, y: u.y, kind: 'line' });
+    // A rifle platoon that can reach the village to take: that field in blue hatching (Steve), so it's clear
+    if (u.kind === 'company' && ['charge', 'moveShoot'].includes(view.mode)) {
+      for (const p of marked) if (p.x === st.objective.x && p.y === st.objective.y && p.kind !== 'line') p.kind = 'goal';
+    }
     return marked;
   }
 
@@ -145,7 +149,7 @@ const UI = (() => {
       else if (u.shocked) menu.append(el('div', 'mnote', 'Shaken (pinned): it needs one more to hit and can\'t charge until it rallies'));
       else if (!u.acted && !u.shocked && u.kind !== 'pak' && !Sim.chargeSpots(st, u).length) {
         // Boxed in: say why it can't charge, and how to get out
-        menu.append(el('div', 'mnote', Sim.breachSpots(st, u).length ? 'Hedges or wire all round, or friends in the way: Break through to get out' : 'Nowhere to charge to: every way is blocked'));
+        menu.append(el('div', 'mnote', 'Nowhere to charge to: every way is blocked'));
       }
     }
     menu.hidden = false;
@@ -171,20 +175,18 @@ const UI = (() => {
       add('charge', fight ? '⚔️ Charge (hand to hand)' : '⚔️ Charge', Sim.chargeSpots(st, u).length > 0, 'Up to three fields without shooting (men climbing a hedge or cutting wire use one more); hand to hand if the Germans hold the field it ends in');
       add('moveShoot', '➡️ Move & shoot', Sim.moveShootSpots(st, u).length > 0, 'Up to two fields to where it can fire (the red-hatched fields), then fire needing one more on the dice');
       add('shoot', '🎯 Shoot', Sim.targets(st, u).length > 0, 'Fire with every die');
-      if (Sim.breachSpots(st, u).length) add('breach', '⛏️ Break through', true, 'Through a hedge or wire into the next field, leaving a gap: a move with no shooting');
     } else if (u.kind === 'captain') {
       // The four actions (Steve): Charge, Move & shoot, Shoot, Rally. The captain does all four
       add('charge', '⚔️ Charge', Sim.chargeSpots(st, u).length > 0, 'Up to three fields, no shooting (climbing a hedge uses one more)');
       add('moveShoot', '➡️ Move & shoot', Sim.moveShootSpots(st, u).length > 0, 'Up to two fields to where he can fire (the red-hatched fields), then fire needing one more on the dice');
       add('shoot', '🎯 Shoot', Sim.targets(st, u).length > 0, 'His HQ fires: one die');
-      add('rally', '📣 Rally', Sim.rallyTargets(st, u).length > 0, 'His move: get a piece that took cover up and moving, or steady a shaken one, up to three fields away');
-      if (Sim.breachSpots(st, u).length) add('breach', '⛏️ Break through', true, 'Through a hedge or wire into the next field: no shooting');
+      // Rallying isn't his move: two rallies if he stays put, one if he moves or shoots (before or after)
+      b.push({ mode: 'rally', label: '📣 Rally', ok: Sim.canRally(st, u) && Sim.rallyTargets(st, u).length > 0, title: 'Get a piece that took cover up and moving, or steady a shaken one (himself too), up to three fields away. Two rallies an hour if he stays put, one if he moves or shoots' });
     } else {
       add('charge', '⚔️ Charge', Sim.chargeSpots(st, u).length > 0, 'Up to three fields, no shooting (climbing a hedge uses one more)');
       // Machine guns can't move and fire: they Charge to a new spot, then Shoot next hour
       if (u.kind !== 'mg' && u.kind !== 'mg42') add('moveShoot', '➡️ Move & shoot', Sim.moveShootSpots(st, u).length > 0, 'Up to two fields to where it can fire (the red-hatched fields), then fire needing one more on the dice');
       add('shoot', '🎯 Shoot', Sim.targets(st, u).length > 0, 'Fire with every die');
-      if (Sim.breachSpots(st, u).length) add('breach', '⛏️ Break through', true, 'Through a hedge or wire into the next field: no shooting');
     }
     // Line another hedge of its field, to fire through it
     // Move & shoot is one action (Steve): after the move, the same button picks the target
@@ -227,7 +229,7 @@ const UI = (() => {
       : view.mode.startsWith('fire:') ? 'Click a red target, or a field with Germans your troops can see.'
       : view.mode === 'halfShot' ? 'Moved. Click a red target to fire on it (one more needed on the move), or Esc to hold fire.'
       : view.mode === 'shoot' ? 'Click a red target to fire on it. Esc cancels.'
-      : view.mode === 'charge' ? 'Click where in a field to go: by a hedge to line it (green: cover), or the middle for the open. Bright red fields are held by the Germans: a hand-to-hand fight. Its own field (green): line another hedge. Esc cancels.'
+      : view.mode === 'charge' ? 'Blue hatching: the village to take. Click where in a field to go: by a hedge to line it (green: cover), or the middle for the open. Bright red fields are held by the Germans: a hand-to-hand fight. Its own field (green): line another hedge. Esc cancels.'
       : view.mode === 'moveShoot' ? `Click where in a red-hatched field to go (by a hedge to line it, green: cover): ${u ? u.name : 'the piece'} moves there and can fire. Esc cancels.`
       : `Click a highlighted field for ${u ? u.name : 'the piece'}. Esc cancels.`;
     $('#hint').textContent = text;

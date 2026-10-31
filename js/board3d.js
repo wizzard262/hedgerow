@@ -287,9 +287,9 @@ const Board = (() => {
       if (way && way.length && Math.hypot(way[0].x - o.position.x, way[0].z - o.position.z) < 0.12) way.shift();
       const to = way && way.length ? Object.assign({}, way[0], { ry: o.userData.to.ry }) : o.userData.to;
       if (!to) return;
-      const dx = to.x - o.position.x, dz = to.z - o.position.z, dr = to.ry - o.rotation.y;
-      if (Math.abs(dx) + Math.abs(dz) + Math.abs(dr) < 0.002) { o.position.x = to.x; o.position.z = to.z; o.rotation.y = to.ry; return; }
-      o.position.x += dx * k; o.position.z += dz * k; o.rotation.y += dr * k;
+      const dx = to.x - o.position.x, dz = to.z - o.position.z, dr = to.ry - o.rotation.y, dy = (to.y || 0) - o.position.y;
+      if (Math.abs(dx) + Math.abs(dz) + Math.abs(dr) + Math.abs(dy) < 0.002) { o.position.x = to.x; o.position.z = to.z; o.position.y = to.y || 0; o.rotation.y = to.ry; return; }
+      o.position.x += dx * k; o.position.z += dz * k; o.rotation.y += dr * k; o.position.y += dy * Math.min(1, k * 2.5);
       moving = true;
     });
     return moving;
@@ -338,7 +338,7 @@ const Board = (() => {
       if (g && !Sim.isTank(u)) for (const b of g.userData.bases) b.scale.y = b.scale.x * (u.down ? 0.6 : 1);
       // A piece that has changed field: men run, tanks rumble (each sound once a frame, however many moved)
       const where = u.x === null ? null : u.x + ',' + u.y;
-      if (g && g.userData.field !== undefined && g.userData.field !== where && where) { if (Sim.isTank(u)) drove = true; else ran = true; g.userData.newTrail = u.trail || []; }
+      if (g && g.userData.field !== undefined && g.userData.field !== where && where) { if (Sim.isTank(u)) drove = true; else ran = true; g.userData.newTrail = u.trail || []; g.userData.fromField = g.userData.field; }
       if (g) g.userData.field = where;
     }
     if (ran) Sound.play('run');
@@ -349,7 +349,20 @@ const Board = (() => {
       const g = pieces[u.id];
       if (!g || !g.userData.newTrail || u.x === null) continue;
       const offX = g.userData.to.x - u.x, offZ = g.userData.to.z - u.y;
-      g.userData.way = g.userData.newTrail.map(p => ({ x: p.x + offX, z: p.y + offZ }));
+      // Every field of the way; where men cross a hedge they hop up over it (Steve)
+      const [fx, fy] = (g.userData.fromField || '').split(',').map(Number);
+      const fields = [{ x: fx, y: fy }, ...g.userData.newTrail, { x: u.x, y: u.y }];
+      const way = [];
+      for (let i = 1; i < fields.length; i++) {
+        const a = fields[i - 1], b = fields[i];
+        const climbs = !Sim.isTank(u) && Number.isFinite(a.x) && Sim.adjacent(a, b) && Sim.hedge(st, a.x, a.y, b.x, b.y);
+        if (climbs) {
+          const ex = (a.x + b.x) / 2 + offX, ez = (a.y + b.y) / 2 + offZ, dx = (b.x - a.x) * 0.12, dz = (b.y - a.y) * 0.12;
+          way.push({ x: ex - dx, z: ez - dz, y: 0.14 }, { x: ex + dx, z: ez + dz, y: 0.14 });
+        }
+        if (i < fields.length - 1) way.push({ x: b.x + offX, z: b.y + offZ, y: 0 });
+      }
+      g.userData.way = way;
       g.userData.newTrail = null;
     }
     for (const u of st.units) {
@@ -363,25 +376,27 @@ const Board = (() => {
 
   // ---------- Highlights on the table ----------
   // Red diagonal hatching for the fields a Move & shoot can go to (fire from there)
-  let hatchTex = null;
-  function hatch() {
-    if (!hatchTex) {
+  const hatchTex = {};
+  // Diagonal stripes: red for Move & shoot, blue for the village to take
+  function hatch(colour = 'rgba(232,53,42,.85)') {
+    if (!hatchTex[colour]) {
       const c = document.createElement('canvas'); c.width = c.height = 128;
       const g = c.getContext('2d');
-      g.strokeStyle = 'rgba(232,53,42,.85)'; g.lineWidth = 10;
+      g.strokeStyle = colour; g.lineWidth = 10;
       for (let k = -128; k < 256; k += 32) { g.beginPath(); g.moveTo(k, 128); g.lineTo(k + 128, 0); g.stroke(); }
-      hatchTex = new T.CanvasTexture(c);
-      hatchTex.wrapS = hatchTex.wrapT = T.RepeatWrapping;
+      hatchTex[colour] = new T.CanvasTexture(c);
+      hatchTex[colour].wrapS = hatchTex[colour].wrapT = T.RepeatWrapping;
     }
-    return hatchTex;
+    return hatchTex[colour];
   }
-  const MARK = { hatch: '#e8352a', assault: '#ff2a1a', cover: '#7dff5a', line: '#7dff5a', move: '#7fc6e0', charge: '#e0705f', shoot: '#e6c95a', rally: '#8fd47a', fire: '#e8a05a', breach: '#c9a46a', attach: '#b9a0e0', select: '#fff6dc', hover: '#ffffff' };
+  const MARK = { hatch: '#e8352a', goal: '#3c96ff', assault: '#ff2a1a', cover: '#7dff5a', line: '#7dff5a', move: '#7fc6e0', charge: '#e0705f', shoot: '#e6c95a', rally: '#8fd47a', fire: '#e8a05a', breach: '#c9a46a', attach: '#b9a0e0', select: '#fff6dc', hover: '#ffffff' };
 
   // A coloured square of light on a field, with a brighter rim
   function mark(x, y, kind, inset = 0.05) {
     const c = new T.Color(MARK[kind]);
-    const plane = new T.Mesh(new T.PlaneGeometry(1 - inset * 2, 1 - inset * 2), kind === 'hatch'
-      ? new T.MeshBasicMaterial({ map: hatch(), transparent: true, opacity: 0.75, depthWrite: false })
+    const striped = kind === 'hatch' || kind === 'goal';
+    const plane = new T.Mesh(new T.PlaneGeometry(1 - inset * 2, 1 - inset * 2), striped
+      ? new T.MeshBasicMaterial({ map: hatch(kind === 'goal' ? 'rgba(60,150,255,.9)' : undefined), transparent: true, opacity: 0.8, depthWrite: false })
       : new T.MeshBasicMaterial({ color: c, transparent: true, opacity: kind === 'hover' ? 0.06 : kind === 'assault' ? 0.32 : 0.16, depthWrite: false }));
     at(plane, x + 0.5, 0.004, y + 0.5, -Math.PI / 2, 0, 0); marks.add(plane);
     if (kind === 'hover') return;
@@ -393,7 +408,7 @@ const Board = (() => {
   // whether that is cover: a bright green bar along a hedge it would line, the field outlined green in houses or trees
   function showStand(st, view) {
     const h = view.hover;
-    const spot = h && (view.spots || []).find(s => s.x === h.x && s.y === h.y && ['charge', 'hatch', 'line'].includes(s.kind));
+    const spot = h && (view.spots || []).find(s => s.x === h.x && s.y === h.y && ['charge', 'hatch', 'line', 'goal'].includes(s.kind));
     if (!spot) return;
     const type = Sim.tileType(h.x, h.y);
     const d = h.side && Sim.DIRS[h.side];
@@ -839,6 +854,13 @@ const Board = (() => {
     if (view.targets && view.targets.length) markTargets(view.targets, view.hotTarget);
     // Shooting: a line of sight from the shooter to each target it can see
     if (view.shooter && view.shooter.x !== null && pieces[view.shooter.id]) sightLines(view.shooter, view.targets || [], view.hotTarget);
+    // German mortars ranging on a piece: a line from their mortar off the board
+    if (view.mortarAim && pieces[view.mortarAim.id]) {
+      const from = muzzle({ side: 'de', support: 'mortars' }), to = pieceCentre(view.mortarAim);
+      const line = new T.Line(new T.BufferGeometry().setFromPoints([from, new T.Vector3(to.x, 0.16, to.z)]), new T.LineDashedMaterial({ color: 0xff5a40, dashSize: 0.06, gapSize: 0.04, depthTest: false }));
+      line.computeLineDistances();
+      marks.add(line);
+    }
     if (view.ready) for (const u of st.units) {
       if (u.side !== 'us' || u.x === null || !pieces[u.id]) continue;
       const can = view.ready(u);

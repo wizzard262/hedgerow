@@ -133,7 +133,7 @@ check('a charge reaches three fields, Move & shoot two', () => {
   assert(Sim.actMoveShoot(st2, b, 2, 6).ok && b.x === 2, 'the two-field Move & shoot did not arrive');
 });
 
-check('every tank drives through hedges; wire stops men but not tanks; men break through', () => {
+check('every tank drives through hedges; only tanks get through wire; men climb hedges', () => {
   const st = Sim.newGame(5);
   const sher = Sim.unitById(st, 'T1'), ff = Sim.unitById(st, 'T2'), co = Sim.unitById(st, 'B');
   // Clear the board of everyone else, and put each piece in an empty field with a field to its east
@@ -146,7 +146,7 @@ check('every tank drives through hedges; wire stops men but not tanks; men break
   const k2 = setUp(ff, 6); st.hedges[k2] = true;
   assert(Sim.chargeSpots(st, ff).some(p => p.x === 1 && p.y === 6) && !Sim.breachSpots(st, ff).length, 'the Firefly should drive through hedges with no separate Break through');
   const k3 = setUp(co, 3); st.wire[k3] = true;
-  assert(Sim.actBreach(st, co, 1, 3).ok && !st.wire[k3] && co.x === 1, 'the company could not cut through the wire');
+  assert(!Sim.chargeSpots(st, co).some(p => p.x === 1 && p.y === 3) && !Sim.actBreach(st, co, 1, 3).ok, 'men got through barbed wire');
   // Men climb a hedge as part of a charge, using one more move: the hedge stays, and they get one field less far
   const k4 = setUp(co, 5); co.acted = false; st.hedges[k4] = true;
   assert(Sim.chargeSpots(st, co).some(p => p.x === 1 && p.y === 5), 'men could not climb the hedge in a charge');
@@ -305,8 +305,9 @@ check("a tank's high explosive hits every piece on foot in the field, like a mor
   const hitIds = st.fx.filter(f => f.faces).map(f => f.to.id);
   assert(hitIds.includes(platoon.id) && hitIds.includes(team.id), 'only the target rolled: ' + hitIds.join(','));
   // Rifles stay one target at a time
-  st.fx = []; A.acted = false;
-  Sim.actShoot(st, A, platoon);
+  // (the tank's shot may have killed it: set it up again)
+  st.fx = []; A.acted = false; platoon.x = 1; platoon.y = 6; platoon.platoons = 3; platoon.shocked = false;
+  assert(Sim.actShoot(st, A, platoon).ok, 'the rifle platoon could not shoot');
   assert(st.fx.filter(f => f.faces).length === 1, 'a rifle platoon hit more than one piece');
 });
 
@@ -349,6 +350,66 @@ check('the captain can shoot, but the Germans never target him', () => {
   assert(Sim.targets(st, cap).includes(de), 'the captain had no target next to him');
   assert(Sim.actShoot(st, cap, de).ok, 'the captain could not shoot');
   assert(!Sim.targets(st, de).includes(cap), 'a German could target the captain');
+});
+
+check('two pins kill; bazookas and tanks kill men outright; MGs and tanks reach further; tanks give cover', () => {
+  const setUp = () => {
+    const st = Sim.newGame(4);
+    st.hedges = {}; st.wire = {};
+    const A = Sim.unitById(st, 'A'), bz = Sim.unitById(st, 'bz1'), mg = Sim.unitById(st, 'mg1'), T1 = Sim.unitById(st, 'T1');
+    const de = st.units.find(u => u.side === 'de' && u.kind === 'company');
+    for (const u of st.units) if (![A, bz, mg, T1, de].includes(u)) u.x = u.y = null;
+    A.x = 0; A.y = 6; de.x = 1; de.y = 6; de.platoons = 3; de.at = null; A.at = 'e'; A.quality = 'standard';
+    bz.x = 0; bz.y = 7; mg.x = 9; mg.y = 0; T1.x = 9; T1.y = 2;
+    // Every die a 6, every coin toss tails: only the rules themselves kill
+    st.rand = () => 0.99;
+    return { st, A, bz, mg, T1, de };
+  };
+  let g = setUp();
+  Sim.actShoot(g.st, g.A, g.de);
+  assert(g.de.platoons === 1, `three rifle hits on a fresh platoon should pin with the first and kill with the next two (it has ${g.de.platoons})`);
+  g = setUp(); g.de.shocked = true;
+  Sim.actShoot(g.st, g.A, g.de);
+  assert(g.de.x === null, 'three hits on a pinned platoon did not wipe it out');
+  g = setUp();
+  g.bz.at = null; g.bz.x = 1; g.bz.y = 7;
+  Sim.actShoot(g.st, g.bz, g.de);
+  assert(g.de.platoons < 3 || g.de.x === null, 'a bazooka hit on men did not kill');
+  // Range: two fields away is long range for riflemen, not for a machine gun
+  const r = setUp();
+  const far = { x: 2, y: 6, kind: 'company', side: 'de', at: null };
+  assert(Sim.needWhy(r.st, r.A, far).some(w => w.includes('long range')), 'two fields away was not long range for a rifle platoon');
+  r.mg.x = 0; r.mg.y = 5; r.mg.at = null;
+  const far2 = { x: 2, y: 5, kind: 'company', side: 'de', at: null };
+  assert(!Sim.needWhy(r.st, r.mg, far2).some(w => w.includes('long range')), 'two fields away was long range for a machine gun');
+  // Cover: men beside their own tank
+  const c = setUp();
+  c.T1.x = 1; c.T1.y = 5;
+  const inOpen = Sim.needFor(c.st, c.de, c.A);
+  c.T1.x = 0; c.T1.y = 6;
+  assert(Sim.needFor(c.st, c.de, c.A) === inOpen + COVER.tank, 'a platoon beside its tank was not in cover');
+});
+
+check('the captain rallies twice if he stays put, once if he moves or shoots', () => {
+  const st = Sim.newGame(3);
+  const cap = Sim.unitById(st, 'cap'), A = Sim.unitById(st, 'A'), B = Sim.unitById(st, 'B');
+  for (const u of st.units) if (![cap, A, B].includes(u) && u.side === 'us') u.x = u.y = null;
+  st.hedges = {}; st.wire = {};
+  cap.x = 0; cap.y = 6; A.x = 0; A.y = 5; B.x = 1; B.y = 6;
+  A.down = true; A.acted = true; B.down = true; B.acted = true;
+  assert(Sim.actRally(st, cap, A).ok && Sim.actRally(st, cap, B).ok, 'two rallies refused');
+  assert(!Sim.canAct(st, cap), 'he could still move after two rallies');
+  // Next hour: he charges, then can rally just once
+  const st2 = Sim.newGame(3);
+  const c2 = Sim.unitById(st2, 'cap'), A2 = Sim.unitById(st2, 'A'), B2 = Sim.unitById(st2, 'B');
+  for (const u of st2.units) if (![c2, A2, B2].includes(u) && u.side === 'us') u.x = u.y = null;
+  st2.hedges = {}; st2.wire = {};
+  c2.x = 0; c2.y = 6; A2.x = 0; A2.y = 4; B2.x = 2; B2.y = 4;
+  A2.shocked = true; B2.shocked = true;
+  const spot = Sim.chargeSpots(st2, c2).find(p => p.x === 1 && p.y === 6) || Sim.chargeSpots(st2, c2)[0];
+  assert(Sim.actCharge(st2, c2, spot.x, spot.y).ok, 'the captain could not charge');
+  assert(Sim.canRally(st2, c2) && Sim.actRally(st2, c2, Sim.rallyTargets(st2, c2)[0]).ok, 'no rally after moving');
+  assert(!Sim.canRally(st2, c2), 'a second rally after moving');
 });
 
 check('leaving everything alone never wins', () => {
