@@ -256,7 +256,7 @@ const Board = (() => {
       gun.model.visible = n > 0;
       gun.name.visible = n > 0;
       // Fired this hour: greyed out like a piece that has moved (Steve)
-      greyOut(gun.model, !!fired[side][which]);
+      greyOut(gun.model, fired[side][which] ? (side === 'us' ? 'green' : 'grey') : false);
     }
   }
 
@@ -558,26 +558,35 @@ const Board = (() => {
 
   // A piece that has had its move this hour is greyed out: every material swapped for a dull grey copy, and back again
   const greyCache = {};
-  function greyOut(g, grey) {
-    if (g.userData.greyed === grey) return;
-    g.userData.greyed = grey;
+  // tint: false (its own colours), 'grey' (a German that has moved, or a gun that has fired) or 'green' (one of yours that
+  // has moved: light green, Steve, so yours and the Germans' are told apart)
+  function greyOut(g, tint) {
+    if (g.userData.greyed === tint) return;
+    g.userData.greyed = tint;
     g.traverse(c => {
       // Markers (the shaken token, the elite star) keep their colours
       if (!c.isMesh || c.userData.keep) return;
-      if (grey) {
-        c.userData.orig = c.material;
-        const swap = m => {
-          if (!greyCache[m.uuid]) {
-            const k = m.clone();
-            if (k.color) { const l = k.color.r * 0.3 + k.color.g * 0.59 + k.color.b * 0.11; k.color.setRGB(l * 0.8 + 0.06, l * 0.8 + 0.06, l * 0.8 + 0.06); }
-            if (k.map) k.map = null;
-            k.transparent = true; k.opacity = 0.75;
-            greyCache[m.uuid] = k;
+      // Back to its own colours first
+      if (c.userData.orig) { c.material = c.userData.orig; c.userData.orig = null; }
+      if (!tint) return;
+      c.userData.orig = c.material;
+      const swap = m => {
+        const key = m.uuid + tint;
+        if (!greyCache[key]) {
+          const k = m.clone();
+          // How light the colour is, kept, in grey or a pale green
+          if (k.color) {
+            const l = k.color.r * 0.3 + k.color.g * 0.59 + k.color.b * 0.11;
+            if (tint === 'green') k.color.setRGB(0.32 + l * 0.35, 0.58 + l * 0.35, 0.28 + l * 0.3);
+            else k.color.setRGB(l * 0.8 + 0.06, l * 0.8 + 0.06, l * 0.8 + 0.06);
           }
-          return greyCache[m.uuid];
-        };
-        c.material = Array.isArray(c.material) ? c.material.map(swap) : swap(c.material);
-      } else if (c.userData.orig) c.material = c.userData.orig;
+          if (k.map) k.map = null;
+          k.transparent = true; k.opacity = 0.75;
+          greyCache[key] = k;
+        }
+        return greyCache[key];
+      };
+      c.material = Array.isArray(c.material) ? c.material.map(swap) : swap(c.material);
     });
   }
 
@@ -588,7 +597,9 @@ const Board = (() => {
       const h = holding(u.id);
       // Greyed out once its move is done, both sides (Steve); a German still making its move stays in colour
       const movingNow = st.de && st.de.move && st.de.move.id === u.id;
-      if (g) { g.visible = h ? h.visible : u.x !== null; greyOut(g, u.acted && !movingNow); }
+      // Moved this round: yours light green, the Germans' grey (Steve)
+      const tint = u.acted && !movingNow ? (u.side === 'us' ? 'green' : 'grey') : false;
+      if (g) { g.visible = h ? h.visible : u.x !== null; greyOut(g, tint); }
       // Taking cover: every figure crouches (tanks stay as they are)
       if (g && !Sim.isTank(u)) for (const b of g.userData.bases) b.scale.y = b.scale.x * (u.down ? 0.6 : 1);
       // A piece that has changed field: men run, tanks rumble (each sound once a frame, however many moved)
