@@ -1064,10 +1064,18 @@ const Board = (() => {
       if (t < 0) continue;
       const add = o => { marks.add(o); s.objs.push(o); return o; };
       const { from, to } = shotEnds(f);
-      // A tank firing: it has turned to its target (see startShots); for a moment it rocks back with the recoil
-      if (from && f.weapon === 'gun' && pieces[f.from.id] && t < 0.35) {
-        const back = Math.sin(Math.min(1, t / 0.35) * Math.PI) * 0.04, d = new T.Vector3(to.x - from.x, 0, to.z - from.z).normalize();
-        for (const b of pieces[f.from.id].userData.bases) if (b.userData.to) { b.position.x = b.userData.to.x - d.x * back; b.position.z = b.userData.to.z - d.z * back; }
+      // A tank firing: it has turned to its target (see startShots); each tank rocks back with the recoil of its own
+      // shot, one after the other (Steve)
+      if (from && f.weapon === 'gun' && pieces[f.from.id]) {
+        const d = new T.Vector3(to.x - from.x, 0, to.z - from.z).normalize();
+        const firing = pieces[f.from.id].userData.bases.filter(b => b.visible && b.userData.to);
+        firing.forEach((b, k) => {
+          // This tank's own moment: from its shot to a third of a second after
+          const bt = t - k * roundGap(f);
+          if (bt < 0 || bt > 0.35) return;
+          const back = Math.sin(bt / 0.35 * Math.PI) * 0.04;
+          b.position.x = b.userData.to.x - d.x * back; b.position.z = b.userData.to.z - d.z * back;
+        });
       }
       const h = f.weapon === 'gun' ? 0.16 : 0.12;
       const flight = f.weapon === 'gun' ? 0.25 : f.weapon === 'rocket' ? 0.45 : 0.35;
