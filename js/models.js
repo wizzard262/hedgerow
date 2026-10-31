@@ -299,6 +299,42 @@ const Models = (() => {
     return castAll(g);
   }
 
+  // A move token from the bag (Steve): a thick coin. American: green with a gold star; German: grey with a black cross
+  // edged in white. Its faces are painted on a canvas; the rim is a darker shade
+  const coinTex = {};
+  function coin(side) {
+    if (!coinTex[side]) {
+      const c = document.createElement('canvas'); c.width = c.height = 256;
+      const g = c.getContext('2d');
+      g.fillStyle = side === 'us' ? '#3f8a36' : '#8c8c86';
+      g.beginPath(); g.arc(128, 128, 128, 0, Math.PI * 2); g.fill();
+      g.lineWidth = 14; g.strokeStyle = side === 'us' ? '#2a5e24' : '#5d5d57';
+      g.beginPath(); g.arc(128, 128, 112, 0, Math.PI * 2); g.stroke();
+      if (side === 'us') {
+        // A five-pointed gold star
+        g.fillStyle = '#f2c94c';
+        g.beginPath();
+        for (let k = 0; k < 10; k++) { const r = k % 2 ? 36 : 88, a = -Math.PI / 2 + k * Math.PI / 5; g.lineTo(128 + r * Math.cos(a), 128 + r * Math.sin(a)); }
+        g.closePath(); g.fill();
+      } else {
+        // The black cross with a white edge
+        g.fillStyle = '#111'; g.strokeStyle = '#eee'; g.lineWidth = 8;
+        g.beginPath();
+        const pts = [[98, 38], [158, 38], [158, 98], [218, 98], [218, 158], [158, 158], [158, 218], [98, 218], [98, 158], [38, 158], [38, 98], [98, 98]];
+        pts.forEach(([x, y], k) => (k ? g.lineTo(x, y) : g.moveTo(x, y)));
+        g.closePath(); g.stroke(); g.fill();
+      }
+      const tex = new T.CanvasTexture(c);
+      tex.encoding = T.sRGBEncoding;
+      coinTex[side] = tex;
+    }
+    const face = new T.MeshStandardMaterial({ map: coinTex[side], roughness: 0.5, metalness: 0.1 });
+    const rim = mat(side === 'us' ? '#2f6a29' : '#6c6c66', 0.45, 0.3);
+    const m = new T.Mesh(new T.CylinderGeometry(1, 1, 0.3, 40), [rim, face, face]);
+    m.castShadow = true;
+    return m;
+  }
+
   // A marker token on the table, like the counters wargamers put beside a unit: a small wooden or coloured disc
   function token(colour, label) {
     const g = new T.Group();
@@ -596,5 +632,5 @@ const Models = (() => {
     return castAll(g);
   }
 
-  return { materials, M, water, bridge, soldier, squad, team, captain, pak, mortar, howitzer, round, token, sherman, panther, panzer4, hedge, tree, house, die, table, field, lane, at };
+  return { materials, M, water, bridge, soldier, squad, team, captain, pak, mortar, howitzer, round, coin, token, sherman, panther, panzer4, hedge, tree, house, die, table, field, lane, at };
 })();

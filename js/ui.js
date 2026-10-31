@@ -322,23 +322,10 @@ const UI = (() => {
     $('#round').textContent = `ROUND ${st.turn}`;
   }
 
-  // The token drawn: it grows to about a field's size, floats to the middle of the table, and fades away; then `done`
+  // The token drawn: a thick coin flies from its place in the bar to the table above that side's artillery (see Board)
   function flyToken(side, done) {
     const grid = $(side === 'us' ? '#bag-us' : '#bag-de').getBoundingClientRect();
-    const boardBox = $('#board').getBoundingClientRect();
-    const a = Board.screenPoint(COLS / 2, ROWS / 2), b = Board.screenPoint(COLS / 2 + 1, ROWS / 2);
-    const size = Math.max(60, Math.min(140, b.x - a.x));
-    const t = document.createElement('div');
-    t.innerHTML = TOKEN[side];
-    const tok = t.firstChild;
-    tok.classList.add('fly');
-    Object.assign(tok.style, { left: grid.left + grid.width / 2 - 11 + 'px', top: grid.top + grid.height / 2 - 11 + 'px' });
-    document.body.append(tok);
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      Object.assign(tok.style, { left: a.x - size / 2 + 'px', top: Math.min(boardBox.bottom - size, a.y - size / 2) + 'px', width: size + 'px', height: size + 'px', fontSize: size * 0.6 + 'px', lineHeight: size + 'px' });
-    }));
-    setTimeout(() => { tok.style.opacity = '0'; }, 950);
-    setTimeout(() => { tok.remove(); done(); }, 1350);
+    Board.flyToken(side, grid.left + grid.width / 2, grid.top + grid.height / 2, done);
   }
 
   let refresh = () => {};

@@ -34,7 +34,6 @@
   .tok.us { background: #3f8a36; border: 2px solid #2a5e24; color: #f2c94c; font-size: 14px; line-height: 1; }
   .tok.de { background: #8c8c86; border: 2px solid #55554f; }
   .tok.de svg { width: 70%; height: 70%; }
-  .tok.fly { position: fixed; z-index: 20; transition: left .8s ease, top .8s ease, width .8s ease, height .8s ease, font-size .8s ease, opacity .35s ease; }
   #round { font: 30px "Special Elite", monospace; color: var(--accent); white-space: nowrap; letter-spacing: 2px; }
   #card { flex: 1 1 380px; min-width: 320px; display: grid; grid-template-columns: minmax(220px, 1fr) auto; column-gap: 12px; align-content: start; overflow-y: auto; }
   #card .stats { font-size: 12px; margin: 2px 0; }
@@ -110,7 +109,7 @@
 <aside id="panel">
   <div class="brand">
   <div class="top">
-    <h1>HEDGEROW <span id="ver" style="font-size:11px;color:var(--muted);letter-spacing:0">v53</span></h1>
+    <h1>HEDGEROW <span id="ver" style="font-size:11px;color:var(--muted);letter-spacing:0">v54</span></h1>
     <div class="links"><button id="sound-btn" title="Sound on or off">🔊</button><button id="help-btn">How to play</button><button id="new-btn">New game</button></div>
   </div>
   <div id="clock"></div>
@@ -146,7 +145,7 @@
     <p>Tuesday 11 July 1944, Normandy. Your American rifle company must fight through the bocage, field by field, and take a village (Saint-Jean or La Haye: it changes each game), then hold it at the end of an hour, or destroy every German on the field. Each move is an hour; there is no time limit for now. A German garrison holds it; more Germans march up from beyond the river.</p>
     <ul>
       <li>🪖 <b>Pieces</b>: your company: three rifle platoons (three sections of four men each, moving together; a fourth platoon comes later), the captain, machine-gun and bazooka teams, a sniper, and two tank sections: Shermans and Fireflies. 1st Platoon is elite.</li>
-      <li>📋 <b>The bag</b>: each round (an hour) a token goes in a blind bag for every piece on the table: green with a gold star for yours, grey with a black cross for the Germans'. Tokens are drawn one at a time; on yours, pick one piece and give it its move (or Pass); on theirs, a German piece moves. A piece destroyed, or one that loses its move, takes a token out. When the bag is empty the next round starts. The tokens left are shown right of the Pass button. Your mortars and artillery each have a token too, while they have rounds (out of rounds, they come out of the bag): on one of your tokens, firing them uses it. Any piece or gun can <b>Skip turn</b> (in its menu): it gives up its move this round and the token is used.</li>
+      <li>📋 <b>The bag</b>: each round (an hour) a token goes in a blind bag for every piece on the table: green with a gold star for yours, grey with a black cross for the Germans'. Tokens are drawn one at a time; on yours, pick one piece and give it its move (or Pass); on theirs, a German piece moves. A piece destroyed, or one that loses its move, takes a token out. When the bag is empty the next round starts. The tokens left are shown right of the Pass button; the one drawn flies onto the table above that side's artillery and stays there until its move is over. Your mortars and artillery each have a token too, while they have rounds (out of rounds, they come out of the bag): on one of your tokens, firing them uses it. Any piece or gun can <b>Skip turn</b> (in its menu): it gives up its move this round and the token is used.</li>
       <li>🖱️ <b>Picking a piece</b> shows where it can go straight away: red-hatched fields are a Move &amp; shoot (it moves there, then fires), the other marked fields a Charge. Click the field (where in it you want to stand) and that's the action. The menu by the piece has the rest.</li>
       <li>🎲 <b>Actions</b> (click a piece for its menu): <b>Charge</b>: up to three fields, without shooting, and through a field of your own pieces on the way, but not through a village or hamlet (rifle platoons and tanks fight hand to hand if Germans hold the field it ends in), <b>Move &amp; shoot</b> (up to two fields, to a red-hatched field from where it will have someone to fire at, then fire needing one more; machine guns can't fire on the move: they Charge to a new spot, then fire), <b>Shoot</b> (full dice), and the captain's <b>Rally</b>: not his move, he rallies twice an hour if he doesn't move or shoot, once if he does (before or after), himself included. He can Charge, Move &amp; shoot and Shoot too (one die). There is no plain move: to move without shooting, Charge.</li>
       <li>👁️ <b>Who can shoot whom</b>: along a line of sight (how far depends on the weapon, below) over open fields and lanes; villages, hamlets and orchards in between block it (and orchards, like houses, are cover), and so does any hedge except the ones the shooter or the target lines (below). How far: rifles 4 fields (long range beyond 2), machine guns, tanks and the PaK 6 (long range beyond 4), bazookas 3 (long range beyond 1); one more is needed on the dice at long range. The sniper sees as far as the board goes, and neither cover nor range helps his target. Men behind or beside a tank are in cover. Red targets show who a piece can hit, with the score its dice need.</li>
@@ -172,12 +171,12 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="js/data.js?v=53"></script>
-<script src="js/sim.js?v=53"></script>
-<script src="js/sound.js?v=53"></script>
-<script src="js/models.js?v=53"></script>
-<script src="js/board3d.js?v=53"></script>
-<script src="js/ui.js?v=53"></script>
-<script src="js/main.js?v=53"></script>
+<script src="js/data.js?v=54"></script>
+<script src="js/sim.js?v=54"></script>
+<script src="js/sound.js?v=54"></script>
+<script src="js/models.js?v=54"></script>
+<script src="js/board3d.js?v=54"></script>
+<script src="js/ui.js?v=54"></script>
+<script src="js/main.js?v=54"></script>
 </body>
 </html>

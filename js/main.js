@@ -27,6 +27,7 @@ window.Game = (() => {
       Sim.passToken(st);
       UI.view.mode = null;
       UI.update();
+      Board.clearToken();
       setTimeout(() => { drawing = false; drawNext(); }, 700);
     }
   }
@@ -89,12 +90,11 @@ window.Game = (() => {
       setTimeout(drawNext, 1200);
       return;
     }
-    Sound.play('select');
     changed();
     UI.flyToken(side, () => {
       if (side === 'de') return runGermans();
       // No American piece able to move on it: the token is used up
-      if (!Sim.usCanMove(st)) { Sim.passToken(st); changed(); setTimeout(drawNext, 400); return; }
+      if (!Sim.usCanMove(st)) { Sim.passToken(st); Board.clearToken(); changed(); setTimeout(drawNext, 600); return; }
       changed();
     });
   }
@@ -105,8 +105,9 @@ window.Game = (() => {
     UI.closeMenu();
     UI.view.mode = null;
     Sim.passToken(st);
+    Board.clearToken();
     changed();
-    drawNext();
+    setTimeout(drawNext, 400);
   }
 
   // The German piece moves; if it fires on a piece that could take cover, ask first
@@ -116,7 +117,7 @@ window.Game = (() => {
     Sim.endGermanToken(st);
     $('#ask').hidden = true;
     changed();
-    setTimeout(drawNext, 800);
+    setTimeout(() => { Board.clearToken(); setTimeout(drawNext, 400); }, 700);
   }
 
   function ask(shot) {

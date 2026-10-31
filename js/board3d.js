@@ -41,7 +41,8 @@ const Board = (() => {
     const dir = new T.Vector3(0, Math.sin(0.92), Math.cos(0.92));   // about 53° above the table, from the near side
     // The board's corners with the thinnest edge of table, and the guns and their names off each side
     const board = [[-0.06, -0.06], [COLS + 0.06, -0.06], [-0.06, ROWS + 0.06], [COLS + 0.06, ROWS + 0.06]];
-    const guns = [[-1.75, 2.1], [-1.75, 4.7], [COLS + 1.75, 2.1], [COLS + 1.75, 4.7]];
+    // (and where the drawn token lands, above each side's artillery)
+    const guns = [[-1.75, 2.1], [-1.75, 4.7], [COLS + 1.75, 2.1], [COLS + 1.75, 4.7], [-1.1, 1.3], [COLS + 1.1, 1.3]];
     const corners = board.concat(guns).map(([x, z]) => new T.Vector3(x, 0, z));
     // Move the camera in until something would go off the screen; then aim a little further up or down the board so
     // the edges of table above and below come out even, and move in again
@@ -127,6 +128,47 @@ const Board = (() => {
       const ring = new T.Mesh(new T.RingGeometry(0.3, s.chosen ? 0.36 : 0.335, 48), new T.MeshBasicMaterial({ color: colour, transparent: true, opacity: 0.85, depthWrite: false }));
       at(ring, spot.x, 0.006, spot.z, -Math.PI / 2, 0, 0); marks.add(ring);
     }
+  }
+
+  // ---------- The drawn token ----------
+  // It flies from its place in the bar up onto the table, just above that side's artillery (Steve), in an arc: rising
+  // (and growing) then dropping (and shrinking), turning over as it goes, and lands flat as a thick coin about twice the
+  // size of a one-man base. It sits there until that move is over, then shrinks away
+  const COIN_SIZE = 0.16;            // radius on the table
+  let coinFlight = null;             // { mesh, from, to, t0, done, leaving }
+  function flyToken(side, clientX, clientY, done) {
+    clearTokenNow();
+    const mesh = Models.coin(side);
+    mesh.scale.set(COIN_SIZE, COIN_SIZE, COIN_SIZE);
+    // Where it starts: the bar's spot, carried down onto the table's plane (off the bottom of the screen)
+    const r = renderer.domElement.getBoundingClientRect();
+    ray.setFromCamera(new T.Vector2((clientX - r.left) / r.width * 2 - 1, -(clientY - r.top) / r.height * 2 + 1), camera);
+    const from = new T.Vector3();
+    if (!ray.ray.intersectPlane(table, from)) from.set(COLS / 2, 0, ROWS + 2);
+    const gun = GUNS[side].artillery;
+    const to = new T.Vector3(gun.x + (side === 'us' ? -0.05 : 0.05), 0.015, gun.z - 0.95);
+    mesh.position.copy(from);
+    scene.add(mesh);
+    coinFlight = { mesh, from, to, t0: performance.now(), done, leaving: 0 };
+  }
+  // The move is over: the coin shrinks away
+  function clearToken() { if (coinFlight) coinFlight.leaving = coinFlight.leaving || performance.now(); }
+  function clearTokenNow() { if (coinFlight) { scene.remove(coinFlight.mesh); coinFlight = null; } }
+  function moveCoin(now) {
+    if (!coinFlight) return false;
+    const c = coinFlight, m = c.mesh;
+    if (c.leaving) {
+      const k = Math.min(1, (now - c.leaving) / 350);
+      m.scale.setScalar(COIN_SIZE * (1 - k));
+      if (k >= 1) { clearTokenNow(); return false; }
+      return true;
+    }
+    const p = Math.min(1, (now - c.t0) / 1150), e = p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+    m.position.set(T.MathUtils.lerp(c.from.x, c.to.x, e), c.to.y + 1.8 * Math.sin(Math.PI * e), T.MathUtils.lerp(c.from.z, c.to.z, e));
+    m.scale.setScalar(COIN_SIZE * (1 + 1.4 * Math.sin(Math.PI * e)));
+    m.rotation.set(Math.PI * 2 * (1 - e), 0, 0.3 * Math.sin(Math.PI * e));
+    if (p >= 1 && c.done) { const d = c.done; c.done = null; Sound.play('select'); d(); }
+    return p < 1;
   }
 
   // Show as many rounds beside each gun as it has shots left
@@ -968,8 +1010,9 @@ const Board = (() => {
     }
     const moving = glide(dt);
     const firing = playShots(now);
+    const flying = moveCoin(now);
     renderer.render(scene, camera);
-    if (firing) return true;
+    if (firing || flying) return true;
     // Targets pulse, so keep drawing while they show
     return moving || !!(view.targets && view.targets.length);
   }
@@ -1013,5 +1056,5 @@ const Board = (() => {
     return { x: r.left + (p.x + 1) / 2 * r.width, y: r.top + (1 - p.y) / 2 * r.height };
   }
 
-  return { init, resize, render, fieldAt, pieceAt, gunAt, targetAt, screenPoint, clearDice, canvas: () => renderer.domElement };
+  return { init, resize, render, fieldAt, pieceAt, gunAt, targetAt, screenPoint, clearDice, flyToken, clearToken, canvas: () => renderer.domElement };
 })();
