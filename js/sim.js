@@ -484,7 +484,8 @@ const Sim = (() => {
   // Can this piece react now: an American piece not already down in cover, that hasn't moved this round (Steve: taking
   // cover uses the move it still has)
   function canReact(st, u) {
-    return u.side === 'us' && u.x !== null && u.kind !== 'captain' && !PIECES[u.kind].fixed && !u.spentNext && !u.down && !u.acted;
+    // Tanks can't take cover (Steve): they just take it
+    return u.side === 'us' && u.x !== null && u.kind !== 'captain' && !isTank(u) && !PIECES[u.kind].fixed && !u.spentNext && !u.down && !u.acted;
   }
 
   // The score a shot needs, the Panther's armour included

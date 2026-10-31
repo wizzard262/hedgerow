@@ -637,6 +637,12 @@ check('mortars land on the one field, artillery on it and the four next to it; m
   assert(Sim.shellNeed(st, t) === TO_HIT + TAKE_COVER && Sim.shellWhy(st, t).includes(`−${TAKE_COVER} taking cover`), 'shells ignored men down in cover');
 });
 
+check('tanks cannot take cover', () => {
+  const st = Sim.newGame(3);
+  assert(!Sim.canReact(st, Sim.unitById(st, 'T1')), 'a tank could take cover');
+  assert(Sim.canReact(st, Sim.unitById(st, 'A')), 'a rifle platoon could not take cover');
+});
+
 check('leaving everything alone never wins', () => {
   for (let seed = 1; seed <= 30; seed++) assert(!play(seed, false).won, `seed ${seed} won by doing nothing`);
 });
