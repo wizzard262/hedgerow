@@ -13,6 +13,7 @@ window.Game = (() => {
   function start(seed) {
     st = Sim.newGame(seed);
     G.state = st;
+    UI.closeMenu();
     UI.setState(st);
     Sim.startRound(st);
     changed();
@@ -86,7 +87,10 @@ window.Game = (() => {
       // Green rings under pieces that can still act this hour, grey under those that have
       const ready = st.de || st.won || st.lost ? null : u => Sim.canAct(st, u) || Sim.captainCanRally(st, u);
       const guns = st.de || st.won || st.lost ? null : UI.supportState();
-      dirty = Board.render(st, { spots, selected: UI.selected(), hover, targets, hotTarget, ready, shooter, mortarAim, aimWhich, guns, blast, rallies: UI.rallies(), deMove: (st.de && st.de.move) || shownMove, fireFrom: (UI.view.mode || '').startsWith('fire:') ? UI.view.mode.slice(5) : null });
+      // Something done during the draw (a token landing starts the Germans' move) asks for another draw: keep that
+      dirty = false;
+      const more = Board.render(st, { spots, selected: UI.selected(), hover, targets, hotTarget, ready, shooter, mortarAim, aimWhich, guns, blast, rallies: UI.rallies(), deMove: (st.de && st.de.move) || shownMove, fireFrom: (UI.view.mode || '').startsWith('fire:') ? UI.view.mode.slice(5) : null });
+      if (more) dirty = true;
       const p = Board.screenPoint(st.objective.x + 0.5, st.objective.y, 0.35), r = board.getBoundingClientRect();
       Object.assign($('#label').style, { left: p.x - r.left + 'px', top: p.y - r.top + 'px' });
       $('#label').textContent = `🎯 ${st.objective.name}`;
@@ -152,23 +156,22 @@ window.Game = (() => {
     // Keep what it did on the table a moment after the token ends, so you can see it (Steve)
     shownMove = st.de && st.de.move;
     Sim.endGermanToken(st);
-    $('#ask').hidden = true;
     changed();
     // The Germans' move wiped one side out: the game is over
     if (st.won || st.lost) return showResult();
     setTimeout(() => { shownMove = null; dirty = true; Board.clearToken(); setTimeout(drawNext, 400); }, GERMAN_MOVE_SHOWN);
   }
 
+  // A piece of yours under fire: Stand fast or Take cover, in a word bubble by it (Steve: no dialog)
   function ask(shot) {
     const t = Sim.unitById(st, shot.target);
-    const who = shot.artillery ? 'German artillery ranges on' : shot.mortar ? 'German mortars range on' : `${Sim.unitById(st, shot.shooter).name} opens fire on`;
-    $('#ask-text').innerHTML = `${who} <b>${t.name}</b>. Take cover? Its men get down where they are: every shot at it rolls half the dice for the rest of this round, but it loses its move this round unless the captain gets it up. (Only a piece that hasn't moved yet can take cover.)`;
-    $('#ask').hidden = false;
+    UI.closeMenu();
     changed();
+    // Once the table shows the shot (its score bubble placed), put the choice by the piece
+    requestAnimationFrame(() => requestAnimationFrame(() => UI.openAsk(t, answer)));
   }
 
   function answer(pull) {
-    $('#ask').hidden = true;
     Sim.answer(st, pull);
     changed();
     // A moment to see the dice before the Germans carry on
@@ -190,13 +193,15 @@ window.Game = (() => {
 
   board.addEventListener('click', e => {
     if (e.target.closest('#menu')) return;
+    // Waiting for Stand fast or Take cover: the rest of the table waits too
+    if (st.de && st.de.ask) return;
     UI.closeMenu();
     // The captain rallying: the blue target nearest the click (Steve)
     const rallied = Board.targetAt(UI.rallies(), e.clientX, e.clientY);
     if (rallied && UI.rallyTarget(rallied)) { changed(); return; }
     // Shooting: the red cross-hair nearest the click, even one over a house
     const aimed = Board.targetAt(UI.targets(), e.clientX, e.clientY);
-    if (aimed && UI.shootTarget(aimed)) { hotTarget = null; changed(); if (st.won || st.lost) showResult(); return; }
+    if (aimed && UI.shootTarget(aimed)) { hotTarget = null; changed(); offerRally(); if (st.won || st.lost) showResult(); return; }
     // Your mortars or artillery off the board: choose them like a piece
     const gun = !st.de && Board.gunAt(e.clientX, e.clientY);
     if (gun) {
@@ -216,8 +221,19 @@ window.Game = (() => {
     // Picking the next piece clears the last shots' dice off the table
     // No pick-up sound as its moves spread out on the table (Steve)
     if (mine) { Board.clearDice(); const r = board.getBoundingClientRect(); UI.openMenu(mine, e.clientX - r.left, e.clientY - r.top, r); $('#tip').style.display = 'none'; }
+    else offerRally();
     if (st.won || st.lost) showResult();
   });
+
+  // The captain has moved or fired and can still rally someone (himself too): offer it straight away (Steve), his menu
+  // with Rally by him and blue targets on who he can rally
+  function offerRally() {
+    const cap = UI.selected();
+    // Only the captain, after his move, on his own token, with someone to rally
+    if (!cap || cap.kind !== 'captain' || !cap.acted || st.activeId !== cap.id || !Sim.captainCanRally(st, cap)) return;
+    const r = board.getBoundingClientRect(), p = Board.pieceScreen(cap);
+    UI.openMenu([cap], p.x - r.left, p.y - r.top, r);
+  }
   board.addEventListener('mousemove', e => {
     // The cross-hair under the pointer grows, so it is clear which target a click will fire on
     const hot = Board.targetAt(UI.targets(), e.clientX, e.clientY);
@@ -247,10 +263,8 @@ window.Game = (() => {
   }
 
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') { UI.view.mode = null; UI.closeMenu(); changed(); }
+    if (e.key === 'Escape' && !(st.de && st.de.ask)) { UI.view.mode = null; UI.closeMenu(); changed(); }
   });
-  $('#ask-pull').onclick = () => answer(true);
-  $('#ask-stay').onclick = () => answer(false);
   $('#help-btn').onclick = openHelp;
   // The rules all on the screen at once: the text gets a little smaller until it fits (Steve: no scrolling)
   function openHelp() {

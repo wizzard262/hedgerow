@@ -571,9 +571,27 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - Being shaken makes no difference in the fight, and every survivor comes out of it no longer shaken
 - (Assumed: only the charging piece fights for the attacker, tanks next door no longer help; if neither side can hurt the other the attacker stays back.) Balance: the test player wins 99% in about 3.7 rounds
 
+## 98. Stand fast or Take cover in a word bubble (v64)
+
+- Steve: Stand fast or Take cover should offer just that choice, in a word bubble on the attacked piece; remove the other dialog
+- The "Under fire" dialog is gone: a word bubble by the piece being fired on holds just two buttons, Stand fast and Take cover, placed clear of the shot's score bubble; the rest of the table waits until one is picked
+- Also fixed: the shot's red target and line of fire sometimes didn't show while the question waited (the table wasn't redrawn after the German token landed)
+
+## 99. Rally only when someone can be rallied; offered after the captain moves (v64)
+
+- Steve: Rally doesn't appear as an option unless a unit can be rallied now (itself or by the captain). If the captain moves and can rally, it is offered
+- Rally itself shows only for a shaken piece that hasn't moved; the captain's Rally only with someone in reach to rally (as in 87)
+- After the captain charges, moves and shoots, or shoots, and can still rally someone, his menu opens again by him with Rally, and the blue targets show who
+
+## 100. Villages and orchards block the view like hedges (v64)
+
+- Steve: the orchard can't be seen through, and neither can the village. A hedge can be seen through by a unit at the hedge, and a unit at the hedge can be seen; otherwise it can't be seen through (this also applies to units at the edge or corner of a hedge)
+- Villages, hamlets and orchards still block the view across them, and now their edges work like hedges: a piece at the edge (along that side, or in a corner on it) sees out and can be seen; a piece in the middle of the field can't see out or be seen. No hedge cover from those edges (the houses and trees are the field's own cover)
+- Hedges as before: seen through only by a piece lining them, and a piece lining one can be seen across it. Balance: the test player wins 99% in about 4 rounds
+
 ## Sessions
 
 | # | Date | Length | What we did |
 |---|------|--------|-------------|
 | 1 | 2026-10-30 | about 10.5 hours | Prompts 1–84: rules, command points, reacting, tanks and hedge cutters, the look (pixel art to 3D tabletop), scales, river, villages, wire, six-move aim; one captain, piece menus, hedges stop moves, MG team model; bazooka teams, two-field charges; red targets; who has acted; company level; lining hedges, longer sight, the captain's guidon; one unit a field, no time limit; tracers and shells, greyed out, no activation tokens, Move & shoot hatching; tanks through hedges, charges for all; no plain move; teams and captain with a platoon, no attaching; one piece at a time; charging through friends; range, cover and moving +1 each; words off the target, tanks turn and recoil; rallying; MGs can't move and fire; easier targets; Move & shoot one action; tanks impervious to small arms; more gaps; no charging through houses; MGs fire five; hand to hand shown; sounds; select and move sounds; running and tank sounds; twisty wire, tank boom, a cleaner panel, better running; bigger dice with a tag; louder, more real sounds; distant battle; shells arcing in and explosions; Sherman and Firefly named; dice cleared on the next pick; fire support targets; real recordings; tank HE hits the whole field; 3+ to hit, pinned not stopped, 50/50 wounds; further moves, climbing hedges; click where in the field, cover shown, more orchards; routes shown, why a shot needs what it needs; flush roofs, lines of sight; pieces stay till hit, the captain shoots; mortars and artillery off the board; take cover; captain rallies twice, two pins kill; bazookas and tanks kill, longer reach, tanks as cover, no Break through, wire for tanks only, hopping hedges; who is aiming at whom; blue hatching on the village; moves shown on picking a piece; win by wiping out the Germans, artillery friendly fire; full-screen table, bottom bar; score in a word bubble; no shooting at 7+; longer ranges, a sniper; fire support by clicking the guns; German artillery; rules in two columns, not at the start; nine places in a field, guns lower; the blind bag; guns in the bag, Skip turn; pointed bubble arrows; the token as a coin, three times bigger |
-| 2 | 2026-10-31 | about 2.5 hours | Prompts 85–97: small targets, houses +2, small houses round the square, stop at a wipe-out; shaken token on the base, shaken not pinned; captain's blue rally targets; no river; taking cover halves the dice; no pick-up sound; the timer token; brown German bases, Germans greyed out; no glare, rounds not hours; tokens fly back into the bag; one round per base, the rocket, tanks turn then fire in turn; tanks face the nearest enemy, side by side; no Pass button; hand to hand to the finish |
+| 2 | 2026-10-31 | about 3 hours | Prompts 85–100: small targets, houses +2, small houses round the square, stop at a wipe-out; shaken token on the base, shaken not pinned; captain's blue rally targets; no river; taking cover halves the dice; no pick-up sound; the timer token; brown German bases, Germans greyed out; no glare, rounds not hours; tokens fly back into the bag; one round per base, the rocket, tanks turn then fire in turn; tanks face the nearest enemy, side by side; no Pass button; hand to hand to the finish; take cover in a word bubble; rally offered after the captain moves; villages and orchards seen only at their edge |

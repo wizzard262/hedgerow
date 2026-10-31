@@ -249,6 +249,9 @@ const Sim = (() => {
     return Math.hypot(target.x - from.x, target.y - from.y) > rangeOf(from).long + 0.5;
   }
 
+  // A field whose houses or trees block the view across it, and across its edges except for a piece at that edge
+  const screens = f => ['village', 'hamlet', 'orchard'].includes(tileType(f.x, f.y));
+
   function sight(st, from, target) {
     const dist = Math.hypot(target.x - from.x, target.y - from.y);
     if (dist === 0 || dist > rangeOf(from).sight + 0.01) return null;
@@ -257,16 +260,20 @@ const Sim = (() => {
     let behindTank = false, behindHedge = false;
     for (let i = 0; i + 1 < path.length; i++) {
       const p = path[i], q = path[i + 1];
-      // A field in between that blocks the view
-      if (i > 0 && ['village', 'hamlet', 'orchard'].includes(tileType(p.x, p.y))) return null;
+      // A field in between that blocks the view: houses or trees can't be seen through (Steve)
+      if (i > 0 && screens(p)) return null;
       // A tank in a field in between: men beyond it shelter behind it (Steve: tanks are cover for infantry)
       if (i > 0 && target.kind && !isTank(target) && at(st, p.x, p.y).some(isTank)) behindTank = true;
-      if (!hedge(st, p.x, p.y, q.x, q.y)) continue;
+      // The edge between two fields: a hedge, or the edge of a village, hamlet or orchard, is seen through only by a piece
+      // at it (along that side or in a corner of it), and a piece at it can be seen; otherwise it blocks the view (Steve)
+      const hedged = hedge(st, p.x, p.y, q.x, q.y);
+      if (!hedged && !screens(p) && !screens(q)) continue;
       const first = i === 0, last = i + 1 === path.length - 1;
       const shooterLines = first && lines(from, dirTo(p, q));
       const targetLines = last && lines(target, dirTo(q, p));
       if (!shooterLines && !targetLines) return null;
-      if (targetLines) { c += COVER.hedge; behindHedge = true; }
+      // Only a hedge gives hedge cover (the houses and trees count as the field's own cover)
+      if (targetLines && hedged) { c += COVER.hedge; behindHedge = true; }
     }
     if (behindTank) c += COVER.tank;
     return { cover: c, hedge: behindHedge, behindTank };

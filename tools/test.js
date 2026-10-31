@@ -261,7 +261,7 @@ check('long range, cover and firing on the move each need one more on the dice',
   const us = Sim.unitById(st, 'B'), de = Sim.unitById(st, 'd2');
   for (const u of st.units) if (u !== us && u !== de) u.x = u.y = null;
   st.hedges = {}; st.wire = {};
-  us.x = 0; us.y = 7; de.x = 1; de.y = 7; us.at = null; de.at = null;
+  us.x = 0; us.y = 6; de.x = 1; de.y = 6; us.at = null; de.at = null;
   const near = Sim.needFor(st, us, de);
   de.x = 3;
   assert(Sim.needFor(st, us, de) === near + LONG_RANGE, 'long range did not add one');
@@ -306,7 +306,7 @@ check("a tank's high explosive hits every piece on foot in the field, like a mor
   const T1 = Sim.unitById(st, 'T1'), A = Sim.unitById(st, 'A');
   const platoon = st.units.find(u => u.side === 'de' && u.kind === 'company'), team = st.units.find(u => u.side === 'de' && u.kind === 'mg42');
   for (const u of st.units) if (![T1, A, platoon, team].includes(u)) u.x = u.y = null;
-  T1.x = 0; T1.y = 6; A.x = 0; A.y = 7; platoon.x = 1; platoon.y = 6; team.x = 1; team.y = 6;
+  T1.x = 0; T1.y = 6; A.x = 0; A.y = 5; A.at = null; platoon.x = 1; platoon.y = 6; team.x = 1; team.y = 6;
   st.fx = [];
   Sim.actShoot(st, T1, platoon);
   const hitIds = st.fx.filter(f => f.faces).map(f => f.to.id);
@@ -456,7 +456,8 @@ check('a shot that would need 7 or more cannot be taken', () => {
   for (const u of st.units) if (u !== B && u !== de) u.x = u.y = null;
   // A German in the orchard three fields off (cover and long range), the shooter shaken: 3 + 1 + 1 + 1 = 6
   B.x = 6; B.y = 0; B.at = null; B.quality = 'standard'; B.shocked = true;
-  de.x = 9; de.y = 0; de.at = null;
+  // (at the orchard's west edge, so it can be seen: trees block the view of anyone in the middle)
+  de.x = 9; de.y = 0; de.at = 'w';
   assert(Sim.tileType(9, 0) === 'orchard', 'the test needs an orchard at 9,0');
   assert(Sim.targets(st, B).includes(de), 'a 6+ shot was refused');
   // A small target (two men or fewer) makes it 7: no shot
@@ -795,6 +796,29 @@ check('hand to hand: blows in turn, attacker first, until one side is gone; nobo
     assert(/hit/.test(r.lines[0]), `seed ${seed}: no blows reported`);
   }
   assert(won > 0 && lost > 0, `the attacker won ${won} and lost ${lost} of 40: one side always wins`);
+});
+
+check('villages and orchards: seen into and out of only at their edge, never through', () => {
+  const st = Sim.newGame(3);
+  st.hedges = {}; st.wire = {};
+  const B = Sim.unitById(st, 'B'), de = st.units.find(u => u.side === 'de' && u.kind === 'company');
+  for (const u of st.units) if (u !== B && u !== de) u.x = u.y = null;
+  // A German in the orchard at 9,0; 2nd Platoon three fields west in the open
+  B.x = 6; B.y = 0; B.at = null;
+  de.x = 9; de.y = 0;
+  assert(Sim.tileType(9, 0) === 'orchard', 'the test needs an orchard at 9,0');
+  de.at = null;
+  assert(!Sim.sight(st, B, de), 'a piece in the middle of an orchard was seen');
+  de.at = 'w';
+  assert(Sim.sight(st, B, de), 'a piece at the orchard edge facing the shooter was not seen');
+  assert(!Sim.needWhy(st, B, de).some(w => /hedge/.test(w)), 'an orchard edge counted as a hedge');
+  de.at = 'nw';
+  assert(Sim.sight(st, B, de), 'a piece in the orchard corner on that side was not seen');
+  // From inside: only from its edge
+  de.at = null;
+  assert(!Sim.sight(st, de, B), 'a piece in the middle of an orchard could see out');
+  de.at = 'w';
+  assert(Sim.sight(st, de, B), 'a piece at the orchard edge could not see out');
 });
 
 console.log(failed ? `\n${failed} failed` : '\nall passed');

@@ -265,12 +265,32 @@ const UI = (() => {
     const tail = document.querySelector('#menu-tail'); if (tail) tail.style.display = 'none';
   }
 
+  // "Take cover?" (Steve): just the two choices, in a word bubble by the piece being fired on (no dialog)
+  function openAsk(t, onAnswer) {
+    const menu = document.querySelector('#menu');
+    menu.innerHTML = '';
+    // Stand fast, or take cover (ids kept for the screenshot tool)
+    const choices = [['ask-stay', '🧍 Stand fast', false], ['ask-pull', '🪖 Take cover', true]];
+    for (const [id, label, pull] of choices) {
+      const b = el('button', '', label);
+      b.id = id;
+      b.onclick = ev => { ev.stopPropagation(); closeMenu(); onAnswer(pull); };
+      menu.append(b);
+    }
+    menu.hidden = false;
+    // By the piece, clear of the shot's score bubble
+    const box = document.querySelector('#board').getBoundingClientRect();
+    const p = Board.pieceScreen(t);
+    const score = t.needNow ? [Board.labelBox(t)].map(b => ({ ...b, x: b.x - box.left, y: b.y - box.top })) : [];
+    placeMenu(menu, p.x - box.left, p.y - box.top, box, score);
+  }
+
   // Put the menu where it covers none of the fields you can move to or shoot at (Steve), trying spots round the
-  // piece nearest first, and point a word-bubble tail from it back to the piece
-  function placeMenu(menu, left, top, box) {
+  // piece nearest first, and point a word-bubble tail from it back to the piece. extra: more boxes to keep clear of
+  function placeMenu(menu, left, top, box, extra = []) {
     const w = menu.offsetWidth, h = menu.offsetHeight;
     // What it must not cover: each lit field, and the piece itself
-    const blocked = litFieldRects(box);
+    const blocked = litFieldRects(box).concat(extra);
     blocked.push({ x: left - 20, y: top - 20, w: 40, h: 40 });
     // Spots round the piece: right, left, below, above, then the corners, each a little further out if they're all taken
     let best = null;
@@ -489,5 +509,5 @@ const UI = (() => {
     refresh = onChange;
   }
 
-  return { init, setState, update, clickField, openMenu, openGunMenu, closeMenu, spots, targets, shootTarget, rallies, rallyTarget, view, selected, selectSupport, supportState, flyToken, returnTokens, KIND };
+  return { init, setState, update, clickField, openMenu, openGunMenu, openAsk, closeMenu, spots, targets, shootTarget, rallies, rallyTarget, view, selected, selectSupport, supportState, flyToken, returnTokens, KIND };
 })();

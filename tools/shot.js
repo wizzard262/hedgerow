@@ -16,7 +16,7 @@ const { chromium } = require(path.join(__dirname, '..', '..', 'harrier-carrier-p
     await page.evaluate(() => Game.pass());
     for (let k = 0; k < 40; k++) {
       await page.waitForTimeout(400);
-      if (await page.isVisible('#ask')) await page.click('#ask-stay');
+      if (await page.isVisible('#ask-stay')) await page.click('#ask-stay');
       else if (!(await page.evaluate(() => !!Game.state.de))) break;
     }
   }

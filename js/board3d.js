@@ -1385,10 +1385,16 @@ const Board = (() => {
   }
 
   // Where a field's top edge is on the page, for labels
+  // Where a piece is on the screen: the middle of its bases, a little above the table
+  function pieceScreen(u) {
+    const p = pieceCentre(u);
+    return screenPoint(p.x, p.z, 0.15);
+  }
+
   function screenPoint(x, y, h = 0) {
     const p = new T.Vector3(x, h, y).project(camera), r = renderer.domElement.getBoundingClientRect();
     return { x: r.left + (p.x + 1) / 2 * r.width, y: r.top + (1 - p.y) / 2 * r.height };
   }
 
-  return { init, resize, render, fieldAt, pieceAt, gunAt, targetAt, screenPoint, labelBox, clearDice, flyToken, clearToken, returnTokens, canvas: () => renderer.domElement };
+  return { init, resize, render, fieldAt, pieceAt, gunAt, targetAt, screenPoint, pieceScreen, labelBox, clearDice, flyToken, clearToken, returnTokens, canvas: () => renderer.domElement };
 })();
