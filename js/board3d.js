@@ -97,7 +97,7 @@ const Board = (() => {
         name.material.depthTest = true;
         name.position.set(spot.x + (side === 'us' ? -0.2 : 0.2), 0.05, spot.z + 0.55);
         built.add(name);
-        support[side][which] = { model, rounds };
+        support[side][which] = { model, rounds, name };
       }
     }
   }
@@ -107,12 +107,12 @@ const Board = (() => {
     if (!support) return null;
     const r = renderer.domElement.getBoundingClientRect();
     ray.setFromCamera(new T.Vector2((clientX - r.left) / r.width * 2 - 1, -(clientY - r.top) / r.height * 2 + 1), camera);
-    for (const which of ['artillery', 'mortars']) if (ray.intersectObject(support.us[which].model, true).length) return which;
+    for (const which of ['artillery', 'mortars']) if (support.us[which].model.visible && ray.intersectObject(support.us[which].model, true).length) return which;
     const p = new T.Vector3();
     if (!ray.ray.intersectPlane(table, p)) return null;
     for (const which of ['artillery', 'mortars']) {
       const spot = GUNS.us[which];
-      if (Math.hypot(p.x - spot.x, p.z - spot.z) < 0.45) return which;
+      if (support.us[which].model.visible && Math.hypot(p.x - spot.x, p.z - spot.z) < 0.45) return which;
     }
     return null;
   }
@@ -122,6 +122,7 @@ const Board = (() => {
     if (!state) return;
     for (const which of ['artillery', 'mortars']) {
       const spot = GUNS.us[which], s = state[which];
+      if (!s.present) continue;
       const colour = s.chosen ? 0xfff6dc : s.ready ? 0x7fd06a : 0x77776f;
       const ring = new T.Mesh(new T.RingGeometry(0.3, s.chosen ? 0.36 : 0.335, 48), new T.MeshBasicMaterial({ color: colour, transparent: true, opacity: 0.85, depthWrite: false }));
       at(ring, spot.x, 0.006, spot.z, -Math.PI / 2, 0, 0); marks.add(ring);
@@ -131,9 +132,13 @@ const Board = (() => {
   // Show as many rounds beside each gun as it has shots left
   function updateSupport(st) {
     if (!support) return;
-    const left = { us: { artillery: st.ammo.artillery, mortars: st.ammo.mortars }, de: { artillery: 0, mortars: st.deMortarAmmo || 0 } };
+    const left = { us: { artillery: st.ammo.artillery, mortars: st.ammo.mortars }, de: { artillery: st.deArtilleryAmmo || 0, mortars: st.deMortarAmmo || 0 } };
     for (const side of ['us', 'de']) for (const which of ['artillery', 'mortars']) {
-      support[side][which].rounds.forEach((r, k) => { r.visible = k < left[side][which]; });
+      const gun = support[side][which], n = left[side][which];
+      gun.rounds.forEach((r, k) => { r.visible = k < n; });
+      // Out of rounds: the gun isn't on the table this hour (Steve); it comes back when more arrive
+      gun.model.visible = n > 0;
+      gun.name.visible = n > 0;
     }
   }
 
@@ -913,7 +918,7 @@ const Board = (() => {
     if (view.shooter && view.shooter.x !== null && pieces[view.shooter.id]) sightLines(view.shooter, view.targets || [], view.hotTarget);
     // German mortars ranging on a piece: a line from their mortar off the board
     if (view.mortarAim && pieces[view.mortarAim.id]) {
-      const from = muzzle({ side: 'de', support: 'mortars' }), to = pieceCentre(view.mortarAim);
+      const from = muzzle({ side: 'de', support: view.aimWhich || 'mortars' }), to = pieceCentre(view.mortarAim);
       const line = new T.Line(new T.BufferGeometry().setFromPoints([from, new T.Vector3(to.x, 0.16, to.z)]), new T.LineDashedMaterial({ color: 0xff5a40, dashSize: 0.06, gapSize: 0.04, depthTest: false }));
       line.computeLineDistances();
       marks.add(line);

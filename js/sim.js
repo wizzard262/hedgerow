@@ -92,7 +92,7 @@ const Sim = (() => {
       seed, turn: 1, hedges: {}, wire: {}, units: [], report: [], fx: [],
       fired: {},          // fire support used this hour (the mortars and the guns each fire once an hour)
       ammo: { mortars: MORTARS.ammo, artillery: ARTILLERY.ammo },
-      deMortarAmmo: DE_MORTAR.ammo, won: false, lost: false,
+      deMortarAmmo: DE_MORTAR.ammo, deArtilleryAmmo: DE_ARTILLERY.ammo, won: false, lost: false,
     };
     // This game's objective: one of the villages
     st.objective = VILLAGES[Math.floor(R() * VILLAGES.length)];
@@ -845,14 +845,14 @@ const Sim = (() => {
 
   // A fire mission from the mortars or the guns: dice on every piece in the field, and a few on the fields round it
   function fireMission(st, which, x, y, side = 'us') {
-    const S = which === 'mortars' ? MORTARS : ARTILLERY;
+    const S = which === 'mortars' ? MORTARS : side === 'de' ? DE_ARTILLERY : ARTILLERY;
     const lines = [];
     // Round the target the shells fall on friend and foe alike (Steve): artillery can hit your own pieces there
     const hitField = (fx, fy, n, splash = false) => {
       const caught = splash ? at(st, fx, fy) : at(st, fx, fy, enemyOf(side));
       for (const t of caught) {
         if (t.x === null || t.kind === 'captain') continue;
-        const need = TO_HIT + (tileType(fx, fy) === 'village' ? COVER.village : 0);
+        const need = TO_HIT + (tileType(fx, fy) === 'village' ? COVER.village : 0) + (t.down ? TAKE_COVER : 0);
         const faces = [];
         const soft = roll(st, n, need, faces), hard = isTank(t) ? roll(st, S.hard || 0, need + PIECES[t.kind].armour, faces) : 0;
         const before = t.platoons, wasShocked = t.shocked;
@@ -909,7 +909,7 @@ const Sim = (() => {
     for (const u of st.units) if (u.side === 'de') u.hit = false;
     for (const u of st.units) u.halfShot = false;
     st.fx = [];
-    st.de = { queue: st.units.filter(u => u.side === 'de' && u.x !== null).map(u => u.id), mortar: st.deMortarAmmo > 0, rep: [], ask: null };
+    st.de = { queue: st.units.filter(u => u.side === 'de' && u.x !== null).map(u => u.id), mortar: st.deMortarAmmo > 0, artillery: st.deArtilleryAmmo > 0, rep: [], ask: null };
   }
 
   // What one German piece does: throw Americans out of the hamlet, counterattack a shaken company, shoot, or (reserves) move up.
@@ -962,6 +962,17 @@ const Sim = (() => {
   }
 
   // The German mortar picks the strongest American company next to a German field
+  // The German artillery's target: the American piece in a field the Germans can see with the most Americans in and round
+  // it, and no Germans in or next to it (they don't shell their own men)
+  function germanArtilleryTarget(st) {
+    const near = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y) <= 1;
+    const us = st.units.filter(t => t.side === 'us' && t.x !== null && t.kind !== 'captain');
+    const de = st.units.filter(g => g.side === 'de' && g.x !== null);
+    const ts = us.filter(t => sees(st, 'de', t.x, t.y) && !de.some(g => near(g, t)));
+    const score = t => us.filter(o => near(o, t)).reduce((n, o) => n + o.platoons, 0);
+    return ts.sort((a, b) => score(b) - score(a))[0] || null;
+  }
+
   function germanMortarTarget(st) {
     const ts = st.units.filter(t => t.side === 'us' && t.x !== null && t.kind === 'company' && st.units.some(g => g.side === 'de' && g.x !== null && adjacent(g, t)));
     return ts.sort((a, b) => b.platoons - a.platoons)[0] || null;
@@ -971,6 +982,13 @@ const Sim = (() => {
   function resolveShot(st, shot, withdraw) {
     const t = unitById(st, shot.target);
     if (t.x === null) return;
+    if (shot.artillery) {
+      st.deArtilleryAmmo--;
+      if (withdraw) takeCover(st, t);
+      const lines = fireMission(st, 'artillery', t.x, t.y, 'de');
+      st.de.rep.push(`🔺 German artillery on ${t.name}${withdraw ? ' (it takes cover)' : ''}: ${lines.length ? lines.join(', ') : 'no hits'}.`);
+      return;
+    }
     if (shot.mortar) {
       st.deMortarAmmo--;
       const fx = { x: t.x, y: t.y, kind: 'shell', support: 'mortars' };
@@ -1001,6 +1019,15 @@ const Sim = (() => {
       if (!shot) continue;
       if (canReact(st, unitById(st, shot.target))) { st.de.ask = shot; return { ask: shot }; }
       resolveShot(st, shot, false);
+    }
+    if (st.de.artillery) {
+      st.de.artillery = false;
+      const t = germanArtilleryTarget(st);
+      if (t) {
+        const shot = { artillery: true, target: t.id };
+        if (canReact(st, t)) { st.de.ask = shot; return { ask: shot }; }
+        resolveShot(st, shot, false);
+      }
     }
     if (st.de.mortar) {
       st.de.mortar = false;
@@ -1101,6 +1128,7 @@ const Sim = (() => {
     }
     if ((st.turn - 1) % MORTARS.resupplyEvery === 0) st.ammo.mortars++;
     if ((st.turn - 1) % ARTILLERY.resupplyEvery === 0) st.ammo.artillery++;
+    if ((st.turn - 1) % DE_ARTILLERY.resupplyEvery === 0) st.deArtilleryAmmo++;
     st.fired = {};
     reinforcements(st, rep);
   }

@@ -480,6 +480,20 @@ check('ranges: rifles 4, machine guns and tanks 6; the sniper the whole board, i
   assert(Sim.needFor(st, sn, tgt) === TO_HIT, 'the sniper was slowed by cover or range');
 });
 
+check('the German artillery shells Americans it can see, clear of its own men, and runs out', () => {
+  const st = Sim.newGame(3);
+  st.hedges = {}; st.wire = {};
+  const B = Sim.unitById(st, 'B'), de = st.units.find(u => u.side === 'de' && u.kind === 'company');
+  for (const u of st.units) if (u !== B && u !== de) u.x = u.y = null;
+  // In the lane row, three fields apart: seen, and not next to the Germans
+  B.x = 0; B.y = 2; B.at = null; de.x = 3; de.y = 2; de.at = null;
+  const before = st.deArtilleryAmmo;
+  Sim.startGermanHour(st);
+  for (let r = Sim.germanStep(st); !r.done; r = Sim.germanStep(st)) Sim.answer(st, false);
+  assert(st.deArtilleryAmmo === before - 1, 'the German artillery did not fire');
+  assert(st.fx.some(f => f.support === 'artillery' && f.side === 'de'), 'no German shells landed');
+});
+
 check('leaving everything alone never wins', () => {
   for (let seed = 1; seed <= 30; seed++) assert(!play(seed, false).won, `seed ${seed} won by doing nothing`);
 });

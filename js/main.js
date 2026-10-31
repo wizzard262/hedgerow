@@ -25,7 +25,7 @@ window.Game = (() => {
       const spots = UI.spots();
       let targets = UI.targets();
       // The shooter, for the lines of sight to its targets
-      let shooter = ['shoot', 'halfShot'].includes(UI.view.mode) ? UI.selected() : null, mortarAim = null;
+      let shooter = ['shoot', 'halfShot'].includes(UI.view.mode) ? UI.selected() : null, mortarAim = null, aimWhich = null;
       // During the German hour, show who is aiming at whom (Steve): the shooter's field, a line of fire to the target,
       // its red cross-hair with the score needed. German mortars: the line comes from their mortar off the board
       if (st.de && st.de.ask) {
@@ -40,13 +40,14 @@ window.Game = (() => {
           t.needNow = TO_HIT + (Sim.tileType(t.x, t.y) === 'village' ? COVER.village : 0);
           t.needWhy = [];
           mortarAim = t;
+          aimWhich = shot.artillery ? 'artillery' : 'mortars';
         }
         targets = [t];
       }
       // Green rings under pieces that can still act this hour, grey under those that have
       const ready = st.de || st.won || st.lost ? null : u => Sim.canAct(st, u) || (Sim.canRally(st, u) && Sim.rallyTargets(st, u).length > 0);
       const guns = st.de || st.won || st.lost ? null : UI.supportState();
-      dirty = Board.render(st, { spots, selected: UI.selected(), hover, targets, hotTarget, ready, shooter, mortarAim, guns });
+      dirty = Board.render(st, { spots, selected: UI.selected(), hover, targets, hotTarget, ready, shooter, mortarAim, aimWhich, guns });
       const p = Board.screenPoint(st.objective.x + 0.5, st.objective.y, 0.35), r = board.getBoundingClientRect();
       Object.assign($('#label').style, { left: p.x - r.left + 'px', top: p.y - r.top + 'px' });
       $('#label').textContent = `🎯 ${st.objective.name}`;
@@ -84,7 +85,7 @@ window.Game = (() => {
 
   function ask(shot) {
     const t = Sim.unitById(st, shot.target);
-    const who = shot.mortar ? 'German mortars range on' : `${Sim.unitById(st, shot.shooter).name} opens fire on`;
+    const who = shot.artillery ? 'German artillery ranges on' : shot.mortar ? 'German mortars range on' : `${Sim.unitById(st, shot.shooter).name} opens fire on`;
     $('#ask-text').innerHTML = `${who} <b>${t.name}</b>. Take cover? Its men get down where they are: one more is needed to hit it for the rest of this hour, but it misses its move next hour unless the captain gets it up.`;
     $('#ask').hidden = false;
     changed();

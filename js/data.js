@@ -85,6 +85,7 @@ const ASSAULT = { platoon: 1, mgTeam: 1.5, otherTeam: 0.5, tankSupport: 2, tank:
 const MORTARS = { name: '81 mm mortars', dice: 4, splash: 0, ammo: 6, resupplyEvery: 2 };
 const ARTILLERY = { name: '105 mm battery', dice: 6, splash: 1, ammo: 3, resupplyEvery: 3, hard: 1 };
 const DE_MORTAR = { dice: 3, ammo: 8 };   // the Germans' own mortar, one mission a turn while ammo lasts
+const DE_ARTILLERY = { name: '10.5 cm battery', dice: 6, splash: 1, ammo: 2, resupplyEvery: 4, hard: 1 };   // the Germans' guns: like ours, fewer rounds
 
 // Who starts on each side. Each side is spread at random over its own end of the board: this share of its width,
 // in cover where possible (the x, y below are only where they would stand without that)

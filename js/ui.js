@@ -24,7 +24,7 @@ const UI = (() => {
   // For the rings under the guns
   function supportState() {
     const out = {};
-    for (const which of ['mortars', 'artillery']) out[which] = { ready: canFire(which), chosen: view.support === which };
+    for (const which of ['mortars', 'artillery']) out[which] = { ready: canFire(which), chosen: view.support === which, present: st.ammo[which] > 0 };
     return out;
   }
   const selected = () => (view.sel ? Sim.unitById(st, view.sel) : null);
