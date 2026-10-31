@@ -41,7 +41,7 @@ const Board = (() => {
     const dir = new T.Vector3(0, Math.sin(0.92), Math.cos(0.92));   // about 53° above the table, from the near side
     // The board's corners with the thinnest edge of table, and the guns and their names off each side
     const board = [[-0.06, -0.06], [COLS + 0.06, -0.06], [-0.06, ROWS + 0.06], [COLS + 0.06, ROWS + 0.06]];
-    const guns = [[-1.75, 0.1], [-1.75, 2.7], [COLS + 1.75, 0.1], [COLS + 1.75, 2.7]];
+    const guns = [[-1.75, 2.1], [-1.75, 4.7], [COLS + 1.75, 2.1], [COLS + 1.75, 4.7]];
     const corners = board.concat(guns).map(([x, z]) => new T.Vector3(x, 0, z));
     // Move the camera in until something would go off the screen; then aim a little further up or down the board so
     // the edges of table above and below come out even, and move in again
@@ -62,8 +62,8 @@ const Board = (() => {
   // The mortars and artillery of each side, off the board behind its own back line, near the top (Steve): the Americans
   // left of the board, the Germans right. Where each stands, and where its pile of rounds goes (behind it)
   const GUNS = {
-    us: { artillery: { x: -0.7, z: 0.55, pileX: -1.45, pileZ: 0.3 }, mortars: { x: -0.7, z: 2.05, pileX: -1.45, pileZ: 1.85 } },
-    de: { artillery: { x: COLS + 0.7, z: 0.55, pileX: COLS + 1.25, pileZ: 0.3 }, mortars: { x: COLS + 0.7, z: 2.05, pileX: COLS + 1.25, pileZ: 1.85 } },
+    us: { artillery: { x: -0.7, z: 2.55, pileX: -1.45, pileZ: 2.3 }, mortars: { x: -0.7, z: 4.05, pileX: -1.45, pileZ: 3.85 } },
+    de: { artillery: { x: COLS + 0.7, z: 2.55, pileX: COLS + 1.25, pileZ: 2.3 }, mortars: { x: COLS + 0.7, z: 4.05, pileX: COLS + 1.25, pileZ: 3.85 } },
   };
   const GUN_NAMES = { us: { artillery: 'US artillery', mortars: 'US mortars' }, de: { artillery: 'German artillery', mortars: 'German mortars' } };
   const PILE_MAX = 12;
@@ -284,32 +284,27 @@ const Board = (() => {
 
   // Where things stand in a field: the company's three bases down the left, the pair of tanks on the right,
   // captains and teams along the back. Groups keep a loose formation that shuffles each time they move to a new field
+  // Each piece stands at its place in the field (Steve): a corner, the middle of an edge, or the centre. A platoon's three
+  // bases cluster round it, a tank pair side by side, a team on its own; loose, shuffled each time they move
   function arrange(st, x, y) {
     const here = Sim.at(st, x, y);
-    const company = here.find(u => u.kind === 'company'), armour = here.find(u => Sim.isTank(u)), small = here.filter(u => Sim.isSmall(u));
-    const west = here.length && here[0].side === 'us';
-    const flip = v => (west ? v : 1 - v);
-    // Pieces lining a hedge stand close to it: everything in the field is pushed that way
-    const lead = here.find(u => u.kind === 'company') || here.find(u => Sim.isTank(u)) || here[0];
-    const push = lead && lead.at && Sim.inside(x + Sim.DIRS[lead.at][0], y + Sim.DIRS[lead.at][1]) && Sim.hedge(st, x, y, x + Sim.DIRS[lead.at][0], y + Sim.DIRS[lead.at][1])
-      ? { e: [0.2, 0], w: [-0.2, 0], s: [0, 0.17], n: [0, -0.17] }[lead.at] : [0, 0];
-    const loose = (u, k) => { const R = seeded(u.id.length * 977 + x * 131 + y * 71 + k * 7 + u.id.charCodeAt(0)); return [(R() - 0.5) * 0.09, (R() - 0.5) * 0.07, (R() - 0.5) * 0.5]; };
-    if (company) {
-      const g = model(company), spots = armour ? [[0.2, 0.28], [0.17, 0.53], [0.22, 0.78]] : [[0.3, 0.3], [0.42, 0.55], [0.28, 0.8]];
-      g.userData.bases.forEach((b, i) => { const [jx, jz, jr] = loose(company, i); b.visible = i < shownStrength(company); aim(b, flip(spots[i][0] + jx), spots[i][1] + jz, g.userData.face + jr); });
-      aim(g, x + push[0], y + push[1], 0);
+    const loose = (u, k) => { const R = seeded(u.id.length * 977 + x * 131 + y * 71 + k * 7 + u.id.charCodeAt(0)); return [(R() - 0.5) * 0.05, (R() - 0.5) * 0.05, (R() - 0.5) * 0.5]; };
+    for (const u of here) {
+      const g = model(u), p = Sim.placeXY(u.at);
+      if (u.kind === 'company') {
+        // Pulled in a little from the edge, so the bases sit just inside the hedge
+        const cx = 0.5 + p.x * 0.24, cz = 0.5 + p.y * 0.24;
+        const spread = [[-0.11, -0.09], [0.11, -0.07], [0, 0.11]];
+        g.userData.bases.forEach((b, i) => { const [jx, jz, jr] = loose(u, i); b.visible = i < shownStrength(u); aim(b, cx + spread[i][0] + jx, cz + spread[i][1] + jz, g.userData.face + jr); });
+      } else if (Sim.isTank(u)) {
+        const cx = 0.5 + p.x * 0.22, cz = 0.5 + p.y * 0.22;
+        const facing = u.aim !== undefined ? u.aim : g.userData.face;
+        g.userData.bases.forEach((b, i) => { const [jx, jz, jr] = loose(u, i); b.visible = i < shownStrength(u); aim(b, cx + jx, cz + (i ? 0.11 : -0.11) + jz, facing + jr * 0.4); });
+      } else {
+        aim(g.userData.bases[0], 0.5 + p.x * 0.33, 0.5 + p.y * 0.33, g.userData.face);
+      }
+      aim(g, x, y, 0);
     }
-    if (armour) {
-      const g = model(armour);
-      const facing = armour.aim !== undefined ? armour.aim : g.userData.face;
-      g.userData.bases.forEach((b, i) => { const [jx, jz, jr] = loose(armour, i); b.visible = i < shownStrength(armour); aim(b, flip((company ? 0.64 : 0.5) + jx * 0.6), (i ? 0.72 : 0.33) + jz * 0.5, facing + jr * 0.4); });
-      aim(g, x + push[0] * 0.6, y + push[1] * 0.6, 0);
-    }
-    small.forEach((u, i) => {
-      const g = model(u);
-      aim(g.userData.bases[0], 0, 0, g.userData.face);
-      aim(g, x + flip(0.16 + i * 0.24), y + 0.1, 0);
-    });
   }
 
   // Set where an object should be; it glides there over a moment (snap: put it there at once)
@@ -452,21 +447,26 @@ const Board = (() => {
     const spot = h && (view.spots || []).find(s => s.x === h.x && s.y === h.y && ['charge', 'hatch', 'line', 'goal'].includes(s.kind));
     if (!spot) return;
     const type = Sim.tileType(h.x, h.y);
-    const d = h.side && Sim.DIRS[h.side];
-    const byHedge = d && Sim.inside(h.x + d[0], h.y + d[1]) && Sim.hedge(st, h.x, h.y, h.x + d[0], h.y + d[1]);
     const inCover = ['village', 'hamlet', 'orchard'].includes(type);
     const green = new T.MeshBasicMaterial({ color: 0x7dff5a, transparent: true, opacity: 0.85, depthWrite: false, depthTest: false });
-    if (byHedge) {
-      // The bar along the hedge it would line
-      const along = h.side === 'n' || h.side === 's';
+    // A bar along each hedge it would line (two in a corner where both edges have one)
+    let byHedge = false;
+    for (const d of (h.side || '').split('')) {
+      const v = Sim.DIRS[d];
+      if (!Sim.inside(h.x + v[0], h.y + v[1]) || !Sim.hedge(st, h.x, h.y, h.x + v[0], h.y + v[1])) continue;
+      byHedge = true;
+      const along = d === 'n' || d === 's';
       const bar = new T.Mesh(new T.PlaneGeometry(along ? 0.9 : 0.11, along ? 0.11 : 0.9), green);
-      const cx = h.x + 0.5 + d[0] * 0.36, cz = h.y + 0.5 + d[1] * 0.36;
-      at(bar, cx, 0.02, cz, -Math.PI / 2, 0, 0); marks.add(bar);
+      at(bar, h.x + 0.5 + v[0] * 0.36, 0.02, h.y + 0.5 + v[1] * 0.36, -Math.PI / 2, 0, 0); marks.add(bar);
     }
+    // A ring where it would stand
+    const p = Sim.placeXY(h.side);
+    const ring = new T.Mesh(new T.RingGeometry(0.1, 0.14, 32), new T.MeshBasicMaterial({ color: 0xfff6dc, transparent: true, opacity: 0.9, depthWrite: false, depthTest: false }));
+    at(ring, h.x + 0.5 + p.x * 0.3, 0.02, h.y + 0.5 + p.y * 0.3, -Math.PI / 2, 0, 0); marks.add(ring);
     if (inCover) mark(h.x, h.y, 'cover', 0.08);
     const text = byHedge ? 'Cover: hedge' : inCover ? `Cover: ${type === 'orchard' ? 'trees' : 'houses'}` : 'In the open';
     const w = word(text, byHedge || inCover ? '#9dff7a' : '#f0e8d6', false);
-    w.position.set(h.x + 0.5 + (d ? d[0] * 0.25 : 0), 0.32, h.y + 0.5 + (d ? d[1] * 0.25 : 0));
+    w.position.set(h.x + 0.5 + p.x * 0.2, 0.32, h.y + 0.5 + p.y * 0.2);
     marks.add(w);
   }
 
@@ -948,10 +948,10 @@ const Board = (() => {
     if (!ray.ray.intersectPlane(table, p)) return null;
     const x = Math.floor(p.x), y = Math.floor(p.z);
     if (!Sim.inside(x, y)) return null;
-    // The nearest edge, if the point is near one: that's the hedge a piece sent there will line
-    const edges = { w: p.x - x, e: x + 1 - p.x, n: p.z - y, s: y + 1 - p.z };
-    const nearest = Object.keys(edges).sort((a, b) => edges[a] - edges[b])[0];
-    const side = edges[nearest] < 0.3 ? nearest : null;
+    // Which of the nine places (Steve): thirds of the field across and down; a corner, an edge, or the middle (null)
+    const fx = p.x - x, fz = p.z - y;
+    const across = fx < 0.33 ? 'w' : fx > 0.67 ? 'e' : '', down = fz < 0.33 ? 'n' : fz > 0.67 ? 's' : '';
+    const side = down + across || null;
     return { x, y, side };
   }
 

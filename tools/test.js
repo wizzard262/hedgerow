@@ -494,6 +494,27 @@ check('the German artillery shells Americans it can see, clear of its own men, a
   assert(st.fx.some(f => f.support === 'artillery' && f.side === 'de'), 'no German shells landed');
 });
 
+check('nine places in a field: corners line both hedges; two pieces never share a place', () => {
+  const st = Sim.newGame(3);
+  st.hedges = {}; st.wire = {};
+  const A = Sim.unitById(st, 'A'), mg = Sim.unitById(st, 'mg1');
+  for (const u of st.units) if (u !== A && u !== mg && u.side === 'us') u.x = u.y = null;
+  A.x = 0; A.y = 6; mg.x = 9; mg.y = 0;
+  st.hedges['1,5|1,6'] = true; st.hedges['1,6|2,6'] = true;
+  assert(Sim.actCharge(st, A, 1, 6, 'ne').ok && A.at === 'ne', 'it did not stand in the corner it was sent to');
+  assert(Sim.atHedge(A, { x: 1, y: 5 }) && Sim.atHedge(A, { x: 2, y: 6 }), 'in the corner it did not line both hedges');
+  // A team sent to the same place takes the nearest free one
+  mg.x = 1; mg.y = 7; mg.acted = false;
+  assert(Sim.actCharge(st, mg, 1, 6, 'ne').ok, 'the team could not join the platoon');
+  assert(mg.at !== A.at, 'two pieces share a place');
+  for (let seed = 1; seed <= 10; seed++) {
+    const s2 = Sim.newGame(seed);
+    for (const u of s2.units.filter(o => o.x !== null)) {
+      assert(!s2.units.some(o => o !== u && o.x === u.x && o.y === u.y && o.at === u.at), `seed ${seed}: ${u.name} starts in the same place as another piece`);
+    }
+  }
+});
+
 check('leaving everything alone never wins', () => {
   for (let seed = 1; seed <= 30; seed++) assert(!play(seed, false).won, `seed ${seed} won by doing nothing`);
 });

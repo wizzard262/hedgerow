@@ -24,6 +24,21 @@ const Sim = (() => {
   // The four sides of a field, for a piece lining a hedge
   const DIRS = { e: [1, 0], w: [-1, 0], s: [0, 1], n: [0, -1] };
   const SIDE_NAMES = { n: 'north', e: 'east', s: 'south', w: 'west' };
+  // Where in its field a piece stands (Steve): one of nine places. u.at names the edges it is against: 'n', 'e', 's',
+  // 'w', a corner ('ne', 'nw', 'se', 'sw'), or null in the middle. A piece lines every hedge on an edge it is against
+  const PLACES = [null, 'n', 'e', 's', 'w', 'ne', 'nw', 'se', 'sw'];
+  const lines = (u, d) => !!u.at && u.at.includes(d);
+  const placeXY = at => ({ x: at && at.includes('e') ? 1 : at && at.includes('w') ? -1 : 0, y: at && at.includes('s') ? 1 : at && at.includes('n') ? -1 : 0 });
+  const placeName = at => !at ? 'the middle of the field' : at.length === 2 ? `the ${SIDE_NAMES[at[0]]}-${SIDE_NAMES[at[1]]} corner` : `the ${SIDE_NAMES[at]} side`;
+  // The place nearest the one wanted that no other piece in the field already has (Steve: where other pieces allow it)
+  function freePlace(st, u, x, y, want) {
+    const taken = st.units.filter(o => o !== u && o.x === x && o.y === y).map(o => o.at);
+    if (!taken.includes(want)) return want;
+    const w = placeXY(want);
+    const free = PLACES.filter(p => !taken.includes(p));
+    free.sort((a, b) => { const pa = placeXY(a), pb = placeXY(b); return Math.hypot(pa.x - w.x, pa.y - w.y) - Math.hypot(pb.x - w.x, pb.y - w.y); });
+    return free.length ? free[0] : want;
+  }
   // Which side of a's field faces b (b next to a)
   const dirTo = (a, b) => Object.keys(DIRS).find(d => DIRS[d][0] === b.x - a.x && DIRS[d][1] === b.y - a.y);
 
@@ -148,6 +163,8 @@ const Sim = (() => {
       const spot = options.find(o => roomFor(st, u, o.f.x, o.f.y));
       u.x = spot.f.x; u.y = spot.f.y;
     }
+    // Pieces sharing a field stand in different places in it
+    for (const u of st.units.filter(o => o.side === side && o.x !== null)) u.at = freePlace(st, u, u.x, u.y, u.at);
   }
 
   // A post given from the objective: the field there, or the nearest one that isn't river and no other unit has
@@ -239,8 +256,8 @@ const Sim = (() => {
       if (i > 0 && target.kind && !isTank(target) && at(st, p.x, p.y).some(isTank)) behindTank = true;
       if (!hedge(st, p.x, p.y, q.x, q.y)) continue;
       const first = i === 0, last = i + 1 === path.length - 1;
-      const shooterLines = first && from.at === dirTo(p, q);
-      const targetLines = last && target.at === dirTo(q, p);
+      const shooterLines = first && lines(from, dirTo(p, q));
+      const targetLines = last && lines(target, dirTo(q, p));
       if (!shooterLines && !targetLines) return null;
       if (targetLines) c += COVER.hedge;
     }
@@ -279,7 +296,7 @@ const Sim = (() => {
   }
 
   // Is a piece lining the hedge that faces another piece next to it? And is there a hedge between two pieces next to each other?
-  const atHedge = (u, other) => !!u.at && u.at === dirTo(u, other);
+  const atHedge = (u, other) => lines(u, dirTo(u, other));
   function acrossHedge(st, from, target) {
     return adjacent(from, target) && hedge(st, from.x, from.y, target.x, target.y);
   }
@@ -471,10 +488,10 @@ const Sim = (() => {
     }
     const teams = u.kind === 'company' ? teamsOf(st, u) : [];
     const heading = dirTo(u, { x, y });
-    u.x = x; u.y = y; u.at = heading;
+    u.x = x; u.y = y; u.at = freePlace(st, u, x, y, heading);
     // The way it is facing, for the table (tanks turn to fire, and turn again when they move)
     u.aim = { e: 0, n: Math.PI / 2, w: Math.PI, s: -Math.PI / 2 }[heading];
-    for (const t of teams) { t.x = x; t.y = y; t.at = heading; }
+    for (const t of teams) { t.x = x; t.y = y; t.at = freePlace(st, t, x, y, heading); }
     return how;
   }
 
@@ -602,7 +619,9 @@ const Sim = (() => {
       // Try it: stand at the goal by each hedge in turn, or in the open; any place with a shot will do
       const goal = route[route.length - 1];
       u.x = goal.x; u.y = goal.y;
-      for (const side of ['n', 'e', 's', 'w', null]) {
+      for (const side of PLACES) {
+        // (only places no other piece in that field has)
+        if (freePlace(st, u, goal.x, goal.y, side) !== side) continue;
         u.at = side;
         if (targets(st, u, true).length) { out.push(route); break; }
       }
@@ -623,7 +642,7 @@ const Sim = (() => {
     const lines = followRoute(st, u, route);
     const how = step(st, u, x, y);
     // Where it stands: where it was sent, or (none given) the first place in the field with a shot
-    const place = side !== undefined ? side : [u.at, 'n', 'e', 's', 'w', null].find(p => { u.at = p; return targets(st, u, true).length; });
+    const place = side !== undefined ? side : [u.at, ...PLACES].find(p => { if (freePlace(st, u, x, y, p) !== p) return false; u.at = p; return targets(st, u, true).length; });
     standAt(st, u, place === undefined ? u.at : place);
     setTrail(st, u, route);
     lines.push(moveLine(u, how).replace(/\.$/, ''));
@@ -738,12 +757,12 @@ const Sim = (() => {
     for (const t of u.kind === 'company' ? teamsOf(st, u) : []) t.trail = trail;
   }
 
-  // Where in its field a piece stands after a move (Steve: where the click was): lining that hedge, or out in the open
-  // (side null). Its teams stand with it
+  // Where in its field a piece stands after a move (Steve: where the click was, if no other piece is there); its teams
+  // take the free places nearest it
   function standAt(st, u, side) {
     if (side === undefined) return;
-    u.at = side;
-    for (const t of u.kind === 'company' ? teamsOf(st, u) : []) t.at = side;
+    u.at = freePlace(st, u, u.x, u.y, side);
+    for (const t of u.kind === 'company' ? teamsOf(st, u) : []) t.at = freePlace(st, t, t.x, t.y, u.at);
   }
 
   function actCharge(st, u, x, y, side) {
@@ -784,19 +803,19 @@ const Sim = (() => {
     return { ok: true, lines: [wasWire ? `✂️ ${u.name} cuts through the wire and pushes on.` : `⛏️ ${u.name} breaks through the hedge into the next field.`] };
   }
 
-  // The hedges of its field a piece could go and line (not the one it already lines)
+  // The other places in its own field a piece could move to (not where it is, nor where another piece stands)
   function lineSides(st, u) {
     if (PIECES[u.kind].fixed) return [];
-    return Object.keys(DIRS).filter(d => d !== u.at && inside(u.x + DIRS[d][0], u.y + DIRS[d][1]) && hedge(st, u.x, u.y, u.x + DIRS[d][0], u.y + DIRS[d][1]));
+    const taken = st.units.filter(o => o !== u && o.x === u.x && o.y === u.y).map(o => o.at);
+    return PLACES.filter(p => p !== u.at && !taken.includes(p));
   }
 
-  // Line a hedge of its own field: the piece's move for the hour, so it can fire through that hedge
+  // Move to another place in its own field (to line another hedge, or a corner): the piece's move for the hour
   function actLine(st, u, side) {
     if (!canAct(st, u) || !lineSides(st, u).includes(side)) return { ok: false };
     spend(st, u);
-    u.at = side;
-    for (const t of u.kind === 'company' ? teamsOf(st, u) : []) t.at = side;
-    return { ok: true, lines: [`🌳 ${u.name} lines the ${SIDE_NAMES[side]} hedge.`] };
+    standAt(st, u, side);
+    return { ok: true, lines: [`🌳 ${u.name} moves to ${placeName(u.at)}.`] };
   }
 
   // Shocked friendly pieces a captain can reach
@@ -1137,7 +1156,7 @@ const Sim = (() => {
     newGame, endTurn, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, moves, chargeSpots,
     rallyTargets, canAct, groupOf, groupName, members, canReact, firepower, teamsOf, canCallFire, holdsObjective, hourText, roomFor,
     startGermanHour, germanStep, answer, finishHour,
-    actShoot, actMoveShoot, moveShootSpots, chargeRoutes, DIRS, needWhy, canRally, needFor, canSelfRally, actSelfRally, actHalfShot, actMove, actCharge, actRally, actFire, actBreach, breachSpots, sight, isSmall, cover, wire, lineSides, actLine, atHedge, acrossHedge, SIDE_NAMES,
+    actShoot, actMoveShoot, moveShootSpots, chargeRoutes, DIRS, needWhy, canRally, needFor, canSelfRally, actSelfRally, actHalfShot, actMove, actCharge, actRally, actFire, actBreach, breachSpots, sight, isSmall, cover, wire, lineSides, actLine, atHedge, acrossHedge, SIDE_NAMES, PLACES, placeXY, placeName, lines,
     hasCutters: u => cutter(u),
   };
 })();

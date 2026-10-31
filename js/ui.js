@@ -261,7 +261,7 @@ const UI = (() => {
     const status = u.down && u.acted ? '<span class="pill bad">Taking cover: the captain can get it up</span>' : u.shocked ? '<span class="pill bad">Shaken: −1 to hit, no charging</span>' : u.acted ? '<span class="pill done">✓ Moved this hour</span>' : '<span class="pill ready">Ready</span>';
     box.append(el('div', 'name', `${u.name}${u.quality === 'elite' ? ' ★' : ''}`));
     box.append(el('div', 'sub', `${KIND[u.kind]}${Sim.hasCutters(u) ? ' · hedge cutters' : ''}`));
-    const where = u.kind === 'pak' ? '' : u.at ? `🌳 Lining the ${Sim.SIDE_NAMES[u.at]} hedge` : 'In the open';
+    const where = u.kind === 'pak' ? '' : `📍 At ${Sim.placeName(u.at)}`;
     box.append(el('div', 'stats', [strength, dice, where, status].filter(Boolean).map(s => `<span>${s}</span>`).join('')));
     const acts = el('div'); acts.id = 'actions'; acts.style.marginTop = '6px';
     for (const a of actionButtons(u)) {
@@ -279,7 +279,7 @@ const UI = (() => {
       : view.mode.startsWith('fire:') ? 'Click a red target, or a field with Germans your troops can see.'
       : view.mode === 'halfShot' ? 'Moved. Click a red target to fire on it (one more needed on the move), or Esc to hold fire.'
       : view.mode === 'shoot' ? 'Click a red target to fire on it. Esc cancels.'
-      : view.mode === 'go' ? 'Red hatching: Move & shoot. Other marked fields: Charge. Blue: the village. Click where in the field to stand (by a hedge to line it). Or use the menu.'
+      : view.mode === 'go' ? 'Red hatching: Move & shoot. Other marked fields: Charge. Blue: the village. Click where in the field to stand: a corner, an edge (lining its hedge) or the middle. Or use the menu.'
       : view.mode === 'charge' ? 'Blue hatching: the village to take. Click where in a field to go: by a hedge to line it (green: cover), or the middle for the open. Bright red fields are held by the Germans: a hand-to-hand fight. Its own field (green): line another hedge. Esc cancels.'
       : view.mode === 'moveShoot' ? `Click where in a red-hatched field to go (by a hedge to line it, green: cover): ${u ? u.name : 'the piece'} moves there and can fire. Esc cancels.`
       : `Click a highlighted field for ${u ? u.name : 'the piece'}. Esc cancels.`;
