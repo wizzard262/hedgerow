@@ -396,9 +396,9 @@ const Sim = (() => {
 
   // Pieces a shooter could fire at: enemies next to it (across any hedge) or two fields away along a clear line, that its side can see
   function targets(st, shooter) {
-    // Captains and anything without weapons shoot at nobody
+    // Anything without weapons shoots at nobody
     const f = firepower(st, shooter);
-    if (shooter.kind === 'captain' || f.soft + f.hard <= 0) return [];
+    if (f.soft + f.hard <= 0) return [];
     // Tanks only to those with anti-tank weapons: rifles and machine guns can't hurt them
     return st.units.filter(t => t.side !== shooter.side && t.x !== null && t.kind !== 'captain' && (!isTank(t) || f.hard > 0)
       && !!sight(st, shooter, t));
@@ -539,7 +539,7 @@ const Sim = (() => {
   }
 
   function actShoot(st, u, target) {
-    if (!canAct(st, u) || u.kind === 'captain' || !targets(st, u).includes(target)) return { ok: false };
+    if (!canAct(st, u) || !targets(st, u).includes(target)) return { ok: false };
     spend(st, u);
     return { ok: true, lines: [`🔫 ${u.name} fires on ${target.name}: ` + fireAt(st, u, target, 1).join(', ') + '.'] };
   }
@@ -547,7 +547,7 @@ const Sim = (() => {
   // The routes Move & shoot can take: up to MOVE_SHOOT_MOVES moves, ending only where the piece will have someone to
   // shoot (Steve). Captains don't shoot, and machine guns can't fire on the move (Steve): they set up, then shoot
   function moveShootRoutes(st, u) {
-    if (u.kind === 'captain' || u.kind === 'mg' || u.kind === 'mg42' || PIECES[u.kind].fixed) return [];
+    if (u.kind === 'mg' || u.kind === 'mg42' || PIECES[u.kind].fixed) return [];
     const home = { x: u.x, y: u.y, at: u.at }, out = [];
     for (const route of routesFor(st, u, MOVE_SHOOT_MOVES, false)) {
       // Try it: stand at the goal by each hedge in turn, or in the open; any place with a shot will do
@@ -736,7 +736,7 @@ const Sim = (() => {
 
   // The hedges of its field a piece could go and line (not the one it already lines)
   function lineSides(st, u) {
-    if (PIECES[u.kind].fixed || u.kind === 'captain') return [];
+    if (PIECES[u.kind].fixed) return [];
     return Object.keys(DIRS).filter(d => d !== u.at && inside(u.x + DIRS[d][0], u.y + DIRS[d][1]) && hedge(st, u.x, u.y, u.x + DIRS[d][0], u.y + DIRS[d][1]));
   }
 

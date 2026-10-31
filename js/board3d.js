@@ -196,13 +196,13 @@ const Board = (() => {
     const loose = (u, k) => { const R = seeded(u.id.length * 977 + x * 131 + y * 71 + k * 7 + u.id.charCodeAt(0)); return [(R() - 0.5) * 0.09, (R() - 0.5) * 0.07, (R() - 0.5) * 0.5]; };
     if (company) {
       const g = model(company), spots = armour ? [[0.2, 0.28], [0.17, 0.53], [0.22, 0.78]] : [[0.3, 0.3], [0.42, 0.55], [0.28, 0.8]];
-      g.userData.bases.forEach((b, i) => { const [jx, jz, jr] = loose(company, i); b.visible = i < company.platoons; aim(b, flip(spots[i][0] + jx), spots[i][1] + jz, g.userData.face + jr); });
+      g.userData.bases.forEach((b, i) => { const [jx, jz, jr] = loose(company, i); b.visible = i < shownStrength(company); aim(b, flip(spots[i][0] + jx), spots[i][1] + jz, g.userData.face + jr); });
       aim(g, x + push[0], y + push[1], 0);
     }
     if (armour) {
       const g = model(armour);
       const facing = armour.aim !== undefined ? armour.aim : g.userData.face;
-      g.userData.bases.forEach((b, i) => { const [jx, jz, jr] = loose(armour, i); b.visible = i < armour.platoons; aim(b, flip((company ? 0.64 : 0.5) + jx * 0.6), (i ? 0.72 : 0.33) + jz * 0.5, facing + jr * 0.4); });
+      g.userData.bases.forEach((b, i) => { const [jx, jz, jr] = loose(armour, i); b.visible = i < shownStrength(armour); aim(b, flip((company ? 0.64 : 0.5) + jx * 0.6), (i ? 0.72 : 0.33) + jz * 0.5, facing + jr * 0.4); });
       aim(g, x + push[0] * 0.6, y + push[1] * 0.6, 0);
     }
     small.forEach((u, i) => {
@@ -273,7 +273,8 @@ const Board = (() => {
     let ran = false, drove = false;
     for (const u of st.units) {
       const g = u.x === null ? pieces[u.id] : model(u);
-      if (g) { g.visible = u.x !== null; greyOut(g, u.side === 'us' && u.acted); }
+      const h = holding(u.id);
+      if (g) { g.visible = h ? h.visible : u.x !== null; greyOut(g, u.side === 'us' && u.acted); }
       // A piece that has changed field: men run, tanks rumble (each sound once a frame, however many moved)
       const where = u.x === null ? null : u.x + ',' + u.y;
       if (g && g.userData.field !== undefined && g.userData.field !== where && where) { if (Sim.isTank(u)) drove = true; else ran = true; g.userData.newTrail = u.trail || []; }
@@ -477,6 +478,17 @@ const Board = (() => {
   const RESULT_COLOUR = { 'Missed': '#d8d2c4', 'No effect': '#e6d29a', 'Pinned': '#ffb04a', 'Section lost': '#ff6a50', 'Tank knocked out': '#ff6a50', 'Wiped out': '#ff3b2e', 'Destroyed': '#ff3b2e' };
 
   let shots = [];              // effects playing: { fx, t0 }
+  // A piece hit keeps its look until the shot at it lands (Steve): piece id → { until, count, visible }
+  const held = {};
+  function holding(id) {
+    const h = held[id];
+    if (!h) return null;
+    if (performance.now() < h.until) return h;
+    delete held[id];
+    return null;
+  }
+  // How many bases of a piece to show: what it had until the shot lands, then what it has
+  const shownStrength = u => { const h = holding(u.id); return h ? h.count : u.platoons; };
   const seenFx = new WeakSet();
 
   function startShots(st) {
@@ -488,6 +500,18 @@ const Board = (() => {
       if (shooter && (Sim.isTank(shooter) || shooter.kind === 'pak')) shooter.aim = Math.atan2(-(f.y - f.from.y), f.x - f.from.x);
       const t0 = performance.now() + shots.filter(s => performance.now() - s.t0 < 300).length * 180;
       shots.push({ f, t0, objs: [] });
+      // The target keeps its bases (or stays on the table) until this shot lands
+      const target = f.to && pieces[f.to.id];
+      if (target) {
+        const land = f.from ? (f.weapon === 'gun' ? 0.25 : f.weapon === 'rocket' ? 0.45 : 0.35) : f.kind === 'shell' ? shellFlight(f) : 0;
+        const until = t0 + (land + 0.15) * 1000;
+        const before = held[f.to.id];
+        held[f.to.id] = {
+          until: Math.max(until, before ? before.until : 0),
+          count: before ? before.count : target.userData.bases.filter(b => b.visible).length,
+          visible: before ? before.visible : target.visible,
+        };
+      }
       // The sounds: the weapon firing, then what it does when it lands (same timing as the picture)
       const wait = (t0 - performance.now()) / 1000;
       if (f.from) {
@@ -736,6 +760,7 @@ const Board = (() => {
     lastT = now;
     if (!built || built.userData.seed !== st.seed) { for (const id in pieces) scene.remove(pieces[id]); for (const id in tokens) scene.remove(tokens[id]); pieces = {}; tokens = {}; build(st); built.userData.seed = st.seed; }
     buildHedges(st);
+    if (st.fxShown !== st.fx || st.fxCount !== st.fx.length) { showDice(st); startShots(st); st.fxShown = st.fx; st.fxCount = st.fx.length; }
     updatePieces(st);
     while (marks.children.length) marks.remove(marks.children[0]);
     if (view.hover) mark(view.hover.x, view.hover.y, 'hover', 0.02);
@@ -757,7 +782,6 @@ const Board = (() => {
       const ring = new T.Mesh(new T.RingGeometry(big ? 0.3 : 0.17, big ? 0.335 : 0.195, 48), new T.MeshBasicMaterial({ color: can ? 0x7fd06a : 0x77776f, transparent: true, opacity: can ? 0.8 : 0.6, depthWrite: false }));
       at(ring, p.x, 0.006, p.z, -Math.PI / 2, 0, 0); marks.add(ring);
     }
-    if (st.fxShown !== st.fx || st.fxCount !== st.fx.length) { showDice(st); startShots(st); st.fxShown = st.fx; st.fxCount = st.fx.length; }
     const moving = glide(dt);
     const firing = playShots(now);
     renderer.render(scene, camera);

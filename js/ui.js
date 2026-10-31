@@ -173,8 +173,10 @@ const UI = (() => {
       add('shoot', '🎯 Shoot', Sim.targets(st, u).length > 0, 'Fire with every die');
       if (Sim.breachSpots(st, u).length) add('breach', '⛏️ Break through', true, 'Through a hedge or wire into the next field, leaving a gap: a move with no shooting');
     } else if (u.kind === 'captain') {
-      // The four actions (Steve): Charge, Move & shoot, Shoot, Rally. The captain charges or rallies
+      // The four actions (Steve): Charge, Move & shoot, Shoot, Rally. The captain does all four
       add('charge', '⚔️ Charge', Sim.chargeSpots(st, u).length > 0, 'Up to three fields, no shooting (climbing a hedge uses one more)');
+      add('moveShoot', '➡️ Move & shoot', Sim.moveShootSpots(st, u).length > 0, 'Up to two fields to where he can fire (the red-hatched fields), then fire needing one more on the dice');
+      add('shoot', '🎯 Shoot', Sim.targets(st, u).length > 0, 'His HQ fires: one die');
       add('rally', '📣 Rally', Sim.rallyTargets(st, u).length > 0, 'Use his move to steady a shaken friendly piece up to three fields away');
       if (Sim.breachSpots(st, u).length) add('breach', '⛏️ Break through', true, 'Through a hedge or wire into the next field: no shooting');
     } else {
@@ -203,11 +205,11 @@ const UI = (() => {
     }
     const strength = u.kind === 'company' ? `${u.platoons} section${u.platoons > 1 ? 's' : ''} (${u.platoons * 4} men)` : Sim.isTank(u) ? `${u.platoons} tank${u.platoons > 1 ? 's' : ''}` : '';
     const f = Sim.firepower(st, u);
-    const dice = u.kind === 'captain' ? '' : `🎲 ${Math.round(f.soft * 10) / 10} dice vs men${f.hard ? `, ${Math.round(f.hard * 10) / 10} vs tanks` : ''}`;
+    const dice = `🎲 ${Math.round(f.soft * 10) / 10} dice vs men${f.hard ? `, ${Math.round(f.hard * 10) / 10} vs tanks` : ''}`;
     const status = u.shocked ? '<span class="pill bad">Shaken: −1 to hit, no charging</span>' : u.acted ? '<span class="pill done">✓ Moved this hour</span>' : '<span class="pill ready">Ready</span>';
     box.append(el('div', 'name', `${u.name}${u.quality === 'elite' ? ' ★' : ''}`));
     box.append(el('div', 'sub', `${KIND[u.kind]}${Sim.hasCutters(u) ? ' · hedge cutters' : ''}`));
-    const where = u.kind === 'captain' || u.kind === 'pak' ? '' : u.at ? `🌳 Lining the ${Sim.SIDE_NAMES[u.at]} hedge` : 'In the open';
+    const where = u.kind === 'pak' ? '' : u.at ? `🌳 Lining the ${Sim.SIDE_NAMES[u.at]} hedge` : 'In the open';
     box.append(el('div', 'stats', [strength, dice, where, status].filter(Boolean).map(s => `<span>${s}</span>`).join('')));
     const acts = el('div'); acts.id = 'actions'; acts.style.marginTop = '6px';
     for (const a of actionButtons(u)) {

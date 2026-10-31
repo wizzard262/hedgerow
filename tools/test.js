@@ -324,6 +324,17 @@ check('a piece arriving by a hedge lines it, in the middle stands in the open', 
   assert(Sim.actCharge(st, able, 1, 6, null).ok && able.at === null, 'it did not stand in the open');
 });
 
+check('the captain can shoot, but the Germans never target him', () => {
+  const st = Sim.newGame(3);
+  st.hedges = {}; st.wire = {};
+  const cap = Sim.unitById(st, 'cap'), de = st.units.find(u => u.side === 'de' && u.kind === 'company');
+  for (const u of st.units) if (u !== cap && u !== de) u.x = u.y = null;
+  cap.x = 0; cap.y = 6; de.x = 1; de.y = 6;
+  assert(Sim.targets(st, cap).includes(de), 'the captain had no target next to him');
+  assert(Sim.actShoot(st, cap, de).ok, 'the captain could not shoot');
+  assert(!Sim.targets(st, de).includes(cap), 'a German could target the captain');
+});
+
 check('leaving everything alone never wins', () => {
   for (let seed = 1; seed <= 30; seed++) assert(!play(seed, false).won, `seed ${seed} won by doing nothing`);
 });

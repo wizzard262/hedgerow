@@ -63,7 +63,7 @@ const PIECES = {
   mg42:     { name: 'MG 42 team', soft: 5, hard: 0, team: true },
   schreck:  { name: 'Panzerschreck team', soft: 0, hard: 2.5, team: true },
   pak:      { name: 'PaK 40 gun', soft: 0.5, hard: 3, team: true, fixed: true },
-  captain:  { name: 'Captain', soft: 0, hard: 0 },
+  captain:  { name: 'Captain', soft: 1, hard: 0 },   // his HQ's carbines and submachine guns (Steve: he can shoot)
 };
 
 // Close assault (a charge): strength of each side before cover and luck
