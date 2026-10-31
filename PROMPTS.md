@@ -474,7 +474,7 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - Your pieces can now share a field much more freely: at most one rifle platoon and one tank pair, and four pieces in all, each at its own place (a team or the captain no longer needs a platoon there, and tanks and infantry can stand together, so the tanks give the men cover). Never with the enemy except hand to hand; a dug-in gun stands alone
 - The words that float off a target are as wide as they need to be, so "Tank knocked out" and the like fit
 
-## 82. Tanks can't take cover; README (v58)
+## 82. Tanks can't take cover; README (v59)
 
 - Steve: tanks cannot take cover
 - A tank fired on is no longer offered "Take cover?"; it just takes the fire
