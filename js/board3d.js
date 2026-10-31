@@ -1074,6 +1074,8 @@ const Board = (() => {
     for (const f of st.fx) {
       if (seenFx.has(f)) continue;
       seenFx.add(f);
+      // A rally: its words float up off the piece
+      if (f.kind === 'rally') { shots.push({ f, t0: performance.now(), objs: [] }); continue; }
       // Hand to hand: its own show, blow by blow
       if (f.kind === 'melee') {
         const t0 = performance.now() + shots.filter(s => performance.now() - s.t0 < 300).length * 180;
@@ -1160,6 +1162,15 @@ const Board = (() => {
       if (t < 0) continue;
       const add = o => { marks.add(o); s.objs.push(o); return o; };
       if (f.kind === 'melee') { playMelee(f, t, add); continue; }
+      // A rally (Steve): "Rallied!" in green or "Still shaken" in red, rising off the piece
+      if (f.kind === 'rally') {
+        if (t > 1.8 || !pieces[f.to.id]) continue;
+        const p = pieceCentre({ id: f.to.id, x: f.x, y: f.y });
+        const w = add(word(f.result, f.ok ? '#9fe08a' : '#ff6a50', true));
+        w.material.opacity = Math.min(1, 2 * (1.8 - t));
+        w.position.set(p.x, 0.5 + t * 0.2, p.z);
+        continue;
+      }
       const { from, to } = shotEnds(f);
       // A tank firing: it has turned to its target (see startShots); each tank rocks back with the recoil of its own
       // shot, one after the other (Steve)

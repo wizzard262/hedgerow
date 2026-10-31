@@ -907,5 +907,42 @@ check('the Germans have a captain who rallies their shaken pieces', () => {
   assert(rallied > 5, `the German captain rallied only ${rallied} of 20 times`);
 });
 
+check('German moves follow your rules: men climb hedges (the hedge stays) and never cross wire', () => {
+  for (let seed = 1; seed <= 30; seed++) {
+    const st = Sim.newGame(seed);
+    // No tanks on either side, so any hedge that goes was knocked down by men
+    for (const u of st.units) if (Sim.isTank(u)) u.x = u.y = null;
+    for (let h = 0; h < 5 && !st.won && !st.lost; h++) {
+      const hedges = Object.keys(st.hedges).length, wire = Object.keys(st.wire).length;
+      const men = st.units.filter(u => u.side === 'de' && u.x !== null && !Sim.isTank(u)).map(u => [u, u.x, u.y]);
+      Sim.startGermanHour(st);
+      for (let r = Sim.germanStep(st); !r.done; r = Sim.germanStep(st)) Sim.answer(st, false);
+      Sim.finishHour(st);
+      // Only tanks take hedges down (and flatten wire)
+      assert(Object.keys(st.hedges).length === hedges, `seed ${seed}: German infantry knocked down a hedge`);
+      // Men can't get through wire, so none of it goes either
+      assert(Object.keys(st.wire).length === wire, `seed ${seed}: German infantry got through barbed wire`);
+      assert(men.length > 0, `seed ${seed}: no German infantry`);
+    }
+  }
+});
+
+check('a rally that works clears shaken (a tank too) and says so on the table; one that fails says so too', () => {
+  let worked = 0, failed2 = 0;
+  for (let seed = 1; seed <= 30; seed++) {
+    const st = Sim.newGame(seed);
+    const cap = Sim.unitById(st, 'cap'), T1 = Sim.unitById(st, 'T1');
+    for (const u of st.units) { u.shocked = false; u.down = false; }
+    T1.shocked = true; cap.x = T1.x; cap.y = T1.y === 0 ? 1 : T1.y - 1;
+    st.fx = [];
+    assert(Sim.actRally(st, cap, T1).ok, `seed ${seed}: the captain could not rally the tank pair`);
+    const shown = st.fx.find(f => f.kind === 'rally' && f.to.id === T1.id);
+    assert(shown, `seed ${seed}: the rally was not shown on the table`);
+    assert(shown.ok === !T1.shocked, `seed ${seed}: the table said ${shown.result} but shaken is ${T1.shocked}`);
+    if (shown.ok) worked++; else failed2++;
+  }
+  assert(worked > 10 && failed2 > 0, `rallies worked ${worked} and failed ${failed2} of 30`);
+});
+
 console.log(failed ? `\n${failed} failed` : '\nall passed');
 process.exit(failed ? 1 : 0);

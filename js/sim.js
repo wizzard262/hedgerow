@@ -966,7 +966,13 @@ const Sim = (() => {
     spend(st, u);
     const ok = st.rand() < SELF_RALLY[u.quality || 'standard'];
     if (ok) u.shocked = false;
+    rallyShown(st, u, ok);
     return { ok: true, lines: [ok ? `📣 ${u.name} pulls itself together.` : `📣 ${u.name} stays shaken.`] };
+  }
+
+  // How a rally went, in words that float up off the piece on the table (Steve: it wasn't clear whether it worked)
+  function rallyShown(st, t, ok) {
+    st.fx.push({ kind: 'rally', x: t.x, y: t.y, to: { id: t.id }, result: ok ? 'Rallied!' : 'Still shaken', ok });
   }
 
   function actRally(st, cap, target) {
@@ -980,10 +986,12 @@ const Sim = (() => {
       target.down = false;
       target.acted = false;
       lines.push(`📣 ${cap.name} gets ${target.name} up and moving.`);
+      if (!target.shocked) st.fx.push({ kind: 'rally', x: target.x, y: target.y, to: { id: target.id }, result: 'Up and moving', ok: true });
     }
     if (target.shocked) {
       const ok = st.rand() < QUALITY[target.quality || 'standard'].rally;
       if (ok) target.shocked = false;
+      rallyShown(st, target, ok);
       lines.push(ok ? `📣 ${cap.name} rallies ${target.name}.` : `📣 ${cap.name} can't steady ${target.name} yet.`);
     }
     return { ok: true, lines };
@@ -1056,14 +1064,15 @@ const Sim = (() => {
     return ts.sort((a, b) => score(b) - score(a))[0];
   }
 
-  // A step towards a goal for a German piece, staying out of American fields; through a hedge or wire if it must
-  function stepToward(st, u, goal) {
-    let best = null, bestD = Math.abs(u.x - goal.x) + Math.abs(u.y - goal.y);
-    for (const [dx, dy] of NEIGHBOURS) {
-      const x = u.x + dx, y = u.y + dy;
-      if (!canStep(st, u, x, y) && !breachSpots(st, u).some(p => p.x === x && p.y === y)) continue;
-      const d = Math.abs(x - goal.x) + Math.abs(y - goal.y);
-      if (d < bestD) { bestD = d; best = { x, y }; }
+  // Where a German piece moves towards a goal (Steve: the same rules as yours): any route a Charge of yours could take,
+  // as far, staying out of American fields; men climb hedge banks (the hedge stays) and are stopped by wire, tanks
+  // drive through. The route that ends nearest the goal, if it gets any nearer
+  function routeToward(st, u, goal) {
+    const far = p => Math.abs(p.x - goal.x) + Math.abs(p.y - goal.y);
+    let best = null, bestD = far(u);
+    for (const route of routesFor(st, u, reach(u, CHARGE_MOVES), false)) {
+      const end = route[route.length - 1];
+      if (far(end) < bestD) { bestD = far(end); best = route; }
     }
     return best;
   }
@@ -1093,6 +1102,7 @@ const Sim = (() => {
         const t = shaken[0];
         const ok = st.rand() < QUALITY[t.quality || 'standard'].rally;
         if (ok) t.shocked = false;
+        rallyShown(st, t, ok);
         deSays(st, `${ok ? 'Rallies' : 'Tries to rally'} ${t === u ? 'himself' : t.name}`);
         rep.push(ok ? `📣 ${u.name} rallies ${t.name}.` : `📣 ${u.name} can't steady ${t.name} yet.`);
         return null;
@@ -1122,8 +1132,8 @@ const Sim = (() => {
     }
     // On the way to its post: march there and dig in
     if (u.post && !u.reserve && (u.x !== u.post.x || u.y !== u.post.y) && !(isTeam(u) && u.attachedTo)) {
-      const next = stepToward(st, u, u.post);
-      if (next) { deSays(st, 'Marches to its post'); germanMove(st, u, next); }
+      const route = routeToward(st, u, u.post);
+      if (route) { deSays(st, 'Marches to its post'); germanMove(st, u, route); }
       return null;
     }
     // Reserves: a company goes to hold the hamlet if nobody does; the rest move up towards the nearest Americans
@@ -1133,8 +1143,8 @@ const Sim = (() => {
       const us = st.units.filter(o => o.side === 'us' && o.x !== null);
       const near = us.sort((a, b) => (Math.abs(a.x - u.x) + Math.abs(a.y - u.y)) - (Math.abs(b.x - u.x) + Math.abs(b.y - u.y)))[0];
       const goal = (!garrison && u.kind === 'company') || !near ? st.objective : near;
-      const next = stepToward(st, u, goal);
-      if (next) { deSays(st, goal === st.objective ? `Moves up to hold ${st.objective.name}` : `Moves up towards ${near.name}`); germanMove(st, u, next); }
+      const route = routeToward(st, u, goal);
+      if (route) { deSays(st, goal === st.objective ? `Moves up to hold ${st.objective.name}` : `Moves up towards ${near.name}`); germanMove(st, u, route); }
     }
     return null;
   }
@@ -1144,11 +1154,13 @@ const Sim = (() => {
     if (st.de && st.de.move) st.de.move.what = what;
   }
 
-  // A German piece moves a field, breaking through a hedge or wire on the way if it has to
-  function germanMove(st, u, p) {
-    const key = edgeKey(u.x, u.y, p.x, p.y);
-    if (!canStep(st, u, p.x, p.y)) { delete st.hedges[key]; delete st.wire[key]; }
-    step(st, u, p.x, p.y);
+  // A German piece goes along its route, as yours do: climbing hedge banks on foot, a tank driving through and leaving
+  // a gap; the table shows the way it went
+  function germanMove(st, u, route) {
+    followRoute(st, u, route);
+    const goal = route[route.length - 1];
+    step(st, u, goal.x, goal.y);
+    setTrail(st, u, route);
   }
 
   // The German mortar picks the strongest American company next to a German field
