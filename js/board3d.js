@@ -600,11 +600,16 @@ const Board = (() => {
     for (const u of st.units) {
       const g = u.x === null ? pieces[u.id] : model(u);
       const h = holding(u.id);
-      // Greyed out once its move is done, both sides (Steve); a German still making its move stays in colour
+      // Tinted only once its move is complete (Steve): not while its token is still in play (a German making its move,
+      // one of yours with a shot or a rally still to come), nor while its fight or shot is still being shown
       const movingNow = st.de && st.de.move && st.de.move.id === u.id;
+      const activeNow = st.drawn === 'us' && st.activeId === u.id;
+      const done = u.acted && !movingNow && !activeNow && !h;
       // Moved this round: yours light green, the Germans' grey (Steve)
-      const tint = u.acted && !movingNow ? (u.side === 'us' ? 'green' : 'grey') : false;
+      const tint = done ? (u.side === 'us' ? 'green' : 'grey') : false;
       if (g) { g.visible = h ? h.visible : u.x !== null; greyOut(g, tint); }
+      // A piece lost in hand to hand is no longer arranged in a field: its bases drop away blow by blow here
+      if (g && u.x === null && h) g.userData.bases.forEach((b, i) => { b.visible = i < shownStrength(u); });
       // Taking cover: every figure crouches (tanks stay as they are)
       if (g && !Sim.isTank(u)) for (const b of g.userData.bases) b.scale.y = b.scale.x * (u.down ? 0.6 : 1);
       // A piece that has changed field: men run, tanks rumble (each sound once a frame, however many moved)
@@ -969,8 +974,91 @@ const Board = (() => {
     delete held[id];
     return null;
   }
-  // How many bases of a piece to show: what it had until the shot lands, then what it has
-  const shownStrength = u => { const h = holding(u.id); return h ? h.count : u.platoons; };
+  // How many bases of a piece to show: what it had until the shot lands, then what it has. In hand to hand, a base
+  // goes at each blow that takes it (steps: the times they go)
+  const shownStrength = u => {
+    const h = holding(u.id);
+    if (!h) return u.platoons;
+    const now = performance.now();
+    const gone = h.steps ? h.steps.filter(t => now >= t).length : 0;
+    return Math.max(0, h.count - gone);
+  };
+
+  // Hand to hand on the table (Steve): each blow in turn, MELEE_BLOW seconds apart. The striking side's bases lunge at
+  // the other side, Hit! or Miss rises over the other side for each die, and each base a hit takes drops away
+  const MELEE_BLOW = 1.1;            // seconds for each side's blow
+  const MELEE_LAND = 0.45;           // when in its blow the hits land
+  // Until when the fights on the table are still being shown (the page waits for them before the next token)
+  let meleeUntil = 0;
+  function busyFor() { return Math.max(0, meleeUntil - performance.now()); }
+
+  function startMelee(f, t0) {
+    // When each piece loses each base, from the blows in order
+    const steps = {};
+    f.strikes.forEach((b, k) => b.losses.forEach((id, j) => (steps[id] = steps[id] || []).push(t0 + (k * MELEE_BLOW + MELEE_LAND + j * 0.08) * 1000)));
+    const end = t0 + f.strikes.length * MELEE_BLOW * 1000;
+    meleeUntil = Math.max(meleeUntil, end + 300);
+    // Everyone in the fight keeps the bases they started with until each is taken, and stays on the table till then
+    for (const id of Object.keys(f.before)) {
+      const times = steps[id] || [];
+      held[id] = { until: times.length && times.length >= f.before[id] ? times[times.length - 1] + 1 : end, count: f.before[id], visible: true, steps: times };
+    }
+    // The sounds of each blow: rifles and the thud of blows, a tank's gun for a tank
+    f.strikes.forEach((b, k) => {
+      const wait = (t0 - performance.now()) / 1000 + k * MELEE_BLOW;
+      Sound.play('rifle', wait);
+      if (b.losses.length) Sound.play('bullets', wait + MELEE_LAND);
+    });
+  }
+
+  // Draw one fight's blows at time t (seconds since it began)
+  function playMelee(f, t, add) {
+    f.strikes.forEach((b, k) => {
+      const bt = t - k * MELEE_BLOW;
+      if (bt < 0 || bt > MELEE_BLOW) return;
+      // Where the other side is: the middle of its pieces' bases
+      const spots = b.victims.filter(id => pieces[id]).map(id => pieceCentre({ id, x: f.x, y: f.y }));
+      if (!spots.length) return;
+      const aim = spots.reduce((a, p) => a.add(p), new T.Vector3()).multiplyScalar(1 / spots.length);
+      // The lunge: out and back in the first part of the blow
+      const lunge = bt < 0.5 ? Math.sin(bt / 0.5 * Math.PI) * 0.16 : 0;
+      for (const id of b.strikers) {
+        const g = pieces[id];
+        if (!g) continue;
+        for (const base of g.userData.bases) {
+          if (!base.visible || !base.userData.to) continue;
+          const wx = g.userData.to.x + base.userData.to.x, wz = g.userData.to.z + base.userData.to.z;
+          const d = new T.Vector3(aim.x - wx, 0, aim.z - wz);
+          if (d.length() < 0.001) continue;
+          d.normalize();
+          base.position.x = base.userData.to.x + d.x * lunge; base.position.z = base.userData.to.z + d.z * lunge;
+        }
+      }
+      // Hit! or Miss for each die, rising over the other side one after another
+      b.faces.slice(0, 9).forEach((r, i) => {
+        const wt = bt - MELEE_LAND + 0.1 - i * 0.07;
+        if (wt < 0 || wt > 0.9) return;
+        const w = add(word(r.hit ? 'Hit!' : 'Miss', r.hit ? '#ffcf6a' : '#cfcac0', false));
+        w.material.opacity = Math.min(1, 2.5 * (0.9 - wt));
+        w.position.set(aim.x + ((i % 3) - 1) * 0.28, 0.38 + wt * 0.4 + Math.floor(i / 3) * 0.12, aim.z);
+      });
+      // A puff of dust where the blows land
+      if (bt > MELEE_LAND - 0.1 && bt < MELEE_LAND + 0.5) {
+        const dt2 = bt - (MELEE_LAND - 0.1);
+        const d = add(new T.Sprite(new T.SpriteMaterial({ map: smokeTex(), color: 0x8a7a5a, transparent: true, depthWrite: false, opacity: 0.5 - dt2 * 0.8 })));
+        d.scale.setScalar(0.2 + dt2 * 0.4); d.position.set(aim.x, 0.08, aim.z);
+      }
+    });
+    // At the end, who won, over the field
+    const tEnd = t - f.strikes.length * MELEE_BLOW;
+    if (tEnd >= 0 && tEnd < 1.6) {
+      const ours = f.side === 'us';
+      const text = f.won ? (ours ? 'Field taken!' : 'Overrun!') : (ours ? 'Charge beaten' : 'Charge beaten off');
+      const w = add(word(text, f.won === ours ? '#9fe08a' : '#ff6a50', true));
+      w.material.opacity = Math.min(1, 2 * (1.6 - tEnd));
+      w.position.set(f.x + 0.5, 0.75 + tEnd * 0.15, f.y + 0.5);
+    }
+  }
   const seenFx = new WeakSet();
 
   // Tanks (Steve): they turn onto the target first, then each tank fires one shell, one after the other
@@ -986,6 +1074,13 @@ const Board = (() => {
     for (const f of st.fx) {
       if (seenFx.has(f)) continue;
       seenFx.add(f);
+      // Hand to hand: its own show, blow by blow
+      if (f.kind === 'melee') {
+        const t0 = performance.now() + shots.filter(s => performance.now() - s.t0 < 300).length * 180;
+        shots.push({ f, t0, objs: [] });
+        startMelee(f, t0);
+        continue;
+      }
       // A tank or gun turns to face what it fires at, and stays facing it
       const shooter = f.from && st.units.find(u => u.id === f.from.id);
       if (shooter && (Sim.isTank(shooter) || shooter.kind === 'pak')) shooter.aim = Math.atan2(-(f.y - f.from.y), f.x - f.from.x);
@@ -1058,11 +1153,13 @@ const Board = (() => {
 
   function playShots(now) {
     for (const s of shots) { for (const o of s.objs) marks.remove(o); s.objs = []; }
-    shots = shots.filter(s => now - s.t0 < 5000);
+    // (a hand-to-hand fight stays as long as its blows take)
+    shots = shots.filter(s => now - s.t0 < (s.f.kind === 'melee' ? (s.f.strikes.length * MELEE_BLOW + 2) * 1000 : 5000));
     for (const s of shots) {
       const f = s.f, t = (now - s.t0) / 1000;
       if (t < 0) continue;
       const add = o => { marks.add(o); s.objs.push(o); return o; };
+      if (f.kind === 'melee') { playMelee(f, t, add); continue; }
       const { from, to } = shotEnds(f);
       // A tank firing: it has turned to its target (see startShots); each tank rocks back with the recoil of its own
       // shot, one after the other (Steve)
@@ -1532,5 +1629,5 @@ const Board = (() => {
     return { x: r.left + (p.x + 1) / 2 * r.width, y: r.top + (1 - p.y) / 2 * r.height };
   }
 
-  return { init, resize, render, fieldAt, pieceAt, pieceUnder, portrait, bounce, bounceGun, gunAt, targetAt, screenPoint, pieceScreen, labelBox, clearDice, flyToken, clearToken, returnTokens, canvas: () => renderer.domElement };
+  return { init, resize, render, fieldAt, pieceAt, pieceUnder, portrait, bounce, bounceGun, busyFor, gunAt, targetAt, screenPoint, pieceScreen, labelBox, clearDice, flyToken, clearToken, returnTokens, canvas: () => renderer.domElement };
 })();

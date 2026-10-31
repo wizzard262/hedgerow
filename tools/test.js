@@ -859,5 +859,29 @@ check('the shaken platoon in hand to hand: shaken does not stop it charging in',
   assert(Sim.chargeSpots(st, A).some(p => p.x === 3 && p.y === 6), 'a shaken platoon could not charge the Germans next to it');
 });
 
+check('hand to hand: every defender fights, moved or taking cover; the fight is recorded blow by blow for the table', () => {
+  let struckBack = 0;
+  for (let seed = 1; seed <= 30; seed++) {
+    const st = Sim.newGame(seed);
+    st.hedges = {}; st.wire = {};
+    const A = Sim.unitById(st, 'A'), de = st.units.find(u => u.side === 'de' && u.kind === 'company');
+    for (const u of st.units) if (u !== A && u !== de) u.x = u.y = null;
+    A.x = 2; A.y = 6; A.at = null; A.acted = false;
+    de.x = 3; de.y = 6; de.at = null; de.acted = true; de.down = true;
+    st.fx = [];
+    Sim.actCharge(st, A, 3, 6);
+    const fight = st.fx.find(f => f.kind === 'melee');
+    assert(fight && fight.strikes.length > 0, `seed ${seed}: no fight recorded`);
+    assert(fight.strikes[0].side === 'us', `seed ${seed}: the attacker did not strike first`);
+    assert(fight.before[de.id] === 3 && fight.before[A.id] === 3, `seed ${seed}: the bases at the start were not recorded`);
+    const back = fight.strikes.find(b => b.side === 'de');
+    if (back) { struckBack++; assert(back.strikers.includes(de.id), `seed ${seed}: the moved, down defender did not strike back`); }
+    // Every hit took a base: the losses add up to what each side lost
+    const lost = id => fight.strikes.reduce((n, b) => n + b.losses.filter(x => x === id).length, 0);
+    assert(lost(de.id) === 3 - (de.x === null ? 0 : de.platoons) && lost(A.id) === 3 - (A.x === null ? 0 : A.platoons), `seed ${seed}: the blows don't add up to the bases lost`);
+  }
+  assert(struckBack > 10, `the defender struck back in only ${struckBack} of 30 fights`);
+});
+
 console.log(failed ? `\n${failed} failed` : '\nall passed');
 process.exit(failed ? 1 : 0);

@@ -33,7 +33,8 @@ window.Game = (() => {
       UI.view.mode = null;
       UI.update();
       Board.clearToken();
-      setTimeout(() => { drawing = false; drawNext(); }, 700);
+      // (a hand-to-hand fight still being shown on the table is seen to the end first)
+      setTimeout(() => { drawing = false; drawNext(); }, 700 + Board.busyFor());
     }
   }
 
@@ -171,7 +172,7 @@ window.Game = (() => {
     changed();
     // The Germans' move wiped one side out: the game is over
     if (st.won || st.lost) return showResult();
-    setTimeout(() => { shownMove = null; dirty = true; Board.clearToken(); setTimeout(drawNext, 400); }, GERMAN_MOVE_SHOWN);
+    setTimeout(() => { shownMove = null; dirty = true; Board.clearToken(); setTimeout(drawNext, 400); }, GERMAN_MOVE_SHOWN + Board.busyFor());
   }
 
   // A piece of yours under fire: Stand fast or Take cover, in a word bubble by it (Steve: no dialog)

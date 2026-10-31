@@ -624,17 +624,25 @@ const Sim = (() => {
     const attackNeed = TO_HIT + (sheltered ? 1 : 0) - QUALITY[u.quality || 'standard'].shoot;
     const attackers = [u];
     const standing = list => list.filter(p => p.x !== null);
+    // For the table (Steve: each exchange shown): the fight's field, where the attacker came from, everyone's bases at
+    // the start, and each blow in turn. Every defender in the field fights, moved or taking cover (Steve)
+    const fight = { kind: 'melee', x, y, from: { x: u.x, y: u.y }, attacker: u.id, defenders: defenders.map(d => d.id), side: u.side, before: {}, strikes: [] };
+    for (const p of [...attackers, ...defenders]) fight.before[p.id] = p.platoons;
     for (let exchange = 1; exchange <= HAND_TO_HAND_LIMIT; exchange++) {
       // The attacker strikes first, then whoever is left of the defenders strikes back
       const a = strike(st, attackers, standing(defenders), () => attackNeed);
       out.push(...a.lines);
+      if (a.able) fight.strikes.push(a.blow);
       if (!standing(defenders).length) break;
       const d = strike(st, standing(defenders), standing(attackers), s => TO_HIT - QUALITY[s.quality || 'standard'].shoot);
       out.push(...d.lines);
+      if (d.able) fight.strikes.push(d.blow);
       if (!standing(attackers).length) break;
       // Neither side can hurt the other (men against tanks alone): the attacker gives up and stays where it was
       if (!a.able && !d.able) break;
     }
+    fight.won = !standing(defenders).length && u.x !== null;
+    st.fx.push(fight);
     // Shaken doesn't last past the fight
     for (const p of [...attackers, ...defenders]) if (p.x !== null) { p.shocked = false; p.hit = true; }
     if (!standing(defenders).length && u.x !== null) {
@@ -649,10 +657,12 @@ const Sim = (() => {
 
   // One side's blow in a hand-to-hand fight: each base of each striker rolls a die needing need(striker); every hit
   // takes a base off one of the victims it can hurt (rifle platoons and tanks first, the teams and the captain last).
-  // Returns the lines to report and whether any striker could hurt anyone at all
+  // Returns the lines to report, whether any striker could hurt anyone at all, and the blow for the table: who struck,
+  // at whom, each die, and whose base each hit took
   function strike(st, strikers, victims, need) {
     const lines = [];
     let able = false;
+    const blow = { side: strikers[0] ? strikers[0].side : null, strikers: strikers.filter(s => s.x !== null).map(s => s.id), victims: victims.map(v => v.id), faces: [], losses: [] };
     const canHurt = (s, v) => !isTank(v) || isTank(s) || PIECES[s.kind].hard > 0;
     for (const s of strikers) {
       if (s.x === null) continue;
@@ -663,13 +673,16 @@ const Sim = (() => {
         if (!open.length) break;
         able = true;
         const face = 1 + Math.floor(st.rand() * 6);
-        if (face < Math.min(6, need(s))) continue;
+        const hit = face >= Math.min(6, need(s));
+        blow.faces.push({ face, hit });
+        if (!hit) continue;
         hits++;
+        blow.losses.push(open[0].id);
         lines.push(...loseBase(st, open[0]));
       }
       if (able) lines.splice(lines.length - hits, 0, `${s.name}: ${hits} hit${hits === 1 ? '' : 's'}`);
     }
-    return { lines, able };
+    return { lines, able, blow };
   }
 
   // One base lost in hand to hand: a section, a tank, or the whole of a team or the captain's HQ
