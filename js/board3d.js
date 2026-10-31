@@ -475,16 +475,21 @@ const Board = (() => {
     }
   }
 
-  // A piece picked hops up a little and drops back down (Steve), yours or the Germans'
+  // A piece picked hops up a little and drops back down (Steve), yours or the Germans', and so do the mortars and
+  // artillery off the board when they are picked
   const HOP = { height: 0.09, time: 340 };
-  let hop = null;                    // { id, t0 } of the piece hopping now
+  let hop = null;                    // { obj, t0 }: the model hopping now
   function bounce(u) {
-    if (u) hop = { id: u.id, t0: performance.now() };
+    if (u && pieces[u.id]) hop = { obj: pieces[u.id], t0: performance.now() };
   }
-  // Lift the hopping piece for this frame (after the glide); returns true while it is still in the air
+  function bounceGun(side, which) {
+    const gun = support && support[side] && support[side][which];
+    if (gun) hop = { obj: gun.model, t0: performance.now() };
+  }
+  // Lift the hopping model for this frame (after the glide); returns true while it is still in the air
   function moveHop(now) {
     if (!hop) return false;
-    const g = pieces[hop.id];
+    const g = hop.obj;
     const p = (now - hop.t0) / HOP.time;
     // Landed (or gone): back on the table
     if (!g || p >= 1) { if (g) g.position.y = 0; hop = null; return false; }
@@ -1519,5 +1524,5 @@ const Board = (() => {
     return { x: r.left + (p.x + 1) / 2 * r.width, y: r.top + (1 - p.y) / 2 * r.height };
   }
 
-  return { init, resize, render, fieldAt, pieceAt, pieceUnder, portrait, bounce, gunAt, targetAt, screenPoint, pieceScreen, labelBox, clearDice, flyToken, clearToken, returnTokens, canvas: () => renderer.domElement };
+  return { init, resize, render, fieldAt, pieceAt, pieceUnder, portrait, bounce, bounceGun, gunAt, targetAt, screenPoint, pieceScreen, labelBox, clearDice, flyToken, clearToken, returnTokens, canvas: () => renderer.domElement };
 })();

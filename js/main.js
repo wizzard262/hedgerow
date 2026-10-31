@@ -153,7 +153,10 @@ window.Game = (() => {
   // later it moves (its moving sounds are the same as yours: men running, tanks driving)
   const GERMAN_PICK_PAUSE = 650;
   function chooseGerman() {
-    if (st.de && st.de.move && st.de.move.id) { Sound.play('select'); Board.bounce(Sim.unitById(st, st.de.move.id)); }
+    const move = st.de && st.de.move;
+    // A piece, or their mortars or artillery off the board
+    if (move && move.id) { Sound.play('select'); Board.bounce(Sim.unitById(st, move.id)); }
+    if (move && move.gun) { Sound.play('select'); Board.bounceGun('de', move.gun); }
     changed();
     setTimeout(runGermans, GERMAN_PICK_PAUSE);
   }
@@ -214,7 +217,7 @@ window.Game = (() => {
     // Your mortars or artillery off the board: choose them like a piece
     const gun = !st.de && Board.gunAt(e.clientX, e.clientY);
     if (gun) {
-      Sound.play('select'); Board.clearDice(); UI.selectSupport(gun); changed();
+      Sound.play('select'); Board.bounceGun('us', gun); Board.clearDice(); UI.selectSupport(gun); changed();
       // Its menu by the click, with Skip turn (Steve)
       const r = board.getBoundingClientRect();
       UI.openGunMenu(gun, e.clientX - r.left, e.clientY - r.top, r);
