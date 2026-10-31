@@ -125,6 +125,10 @@ const DE_START = [
   { id: 'dmg4', kind: 'mg42', name: 'MG 42 Team', post: [-1, -1] },
   { id: 'dps1', kind: 'schreck', name: 'Panzerschreck Team', post: [-1, 1] },
   { id: 'd3', kind: 'company', name: '3. Zug', quality: 'standard', reserve: true },
+  // German armour (Steve: put them back): on the table from the start now there are no reinforcements, moving up
+  // towards the nearest Americans
+  { id: 'dt1', kind: 'pz4', name: 'Panzer IV pair', reserve: true },
+  { id: 'dt2', kind: 'panther', name: 'Panther pair', reserve: true },
 ];
 
 // Reinforcements: who arrives on which turn, at their own edge (US west, German east). None for now (Steve: both sides
