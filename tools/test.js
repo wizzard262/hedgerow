@@ -11,14 +11,12 @@ function check(name, fn) {
 }
 function assert(ok, message) { if (!ok) throw new Error(message); }
 const live = st => st.units.filter(u => u.x !== null);
-// A field's units are allowed: a tank pair or a dug-in gun alone; otherwise one rifle platoon and two smaller pieces,
-// or four smaller pieces (Steve)
+// A field's units are allowed (Steve): each field is nine areas, and no two pieces of a side take the same one
 function fieldOk(st, x, y) {
   for (const side of ['us', 'de']) {
-    const here = live(st).filter(u => u.x === x && u.y === y && u.side === side);
-    if (here.length <= 1) continue;
-    const platoons = here.filter(u => u.kind === 'company').length, smaller = here.length - platoons;
-    if (here.some(u => Sim.isTank(u) || u.kind === 'pak') || platoons > 1 || smaller > (platoons ? 2 : 4)) return false;
+    const taken = [];
+    for (const u of live(st).filter(o => o.x === x && o.y === y && o.side === side)) taken.push(...Sim.footprint(u));
+    if (new Set(taken).size !== taken.length) return false;
   }
   return true;
 }
@@ -163,32 +161,31 @@ check('every tank drives through hedges; only tanks get through wire; men climb 
   assert(Sim.actCharge(st, co, 2, 5).ok && co.x === 2 && st.hedges[k4], 'the climb did not arrive, or the men knocked the hedge down');
 });
 
-check('your pieces share a field: a tank alone; one platoon and two smaller pieces, or four smaller pieces', () => {
+check('your pieces share a field by its nine areas: one area most pieces, two the PaK, four a tank or a platoon of 2-3', () => {
   for (let seed = 1; seed <= 20; seed++) {
     const s2 = Sim.newGame(seed);
-    for (const u of live(s2)) assert(fieldOk(s2, u.x, u.y), `seed ${seed}: ${u.name} starts sharing a field it shouldn't`);
+    for (const u of live(s2)) assert(fieldOk(s2, u.x, u.y), `seed ${seed}: ${u.name} starts on another piece's area`);
   }
   const st = Sim.newGame(2);
-  // Everyone off the table, then put pieces in one empty field to try
-  for (const u of st.units) if (u.side === 'us') u.x = u.y = null;
-  const put = (id, x, y) => { const u = Sim.unitById(st, id); u.x = x; u.y = y; return u; };
+  for (const u of st.units) u.x = u.y = null;
   const get = id => Sim.unitById(st, id);
-  // A rifle platoon: no tank pair, no second platoon; two smaller pieces, not three
+  // Put a piece in the field where it fits, as a move does
+  const put = (id, x, y, want = null) => { const u = get(id); u.x = x; u.y = y; u.at = null; u.at = Sim.freePlace(st, u, x, y, want); return u; };
+  assert(Sim.sizeOf(get('A')) === 4 && Sim.sizeOf(get('T1')) === 4 && Sim.sizeOf(get('mg1')) === 1, 'a platoon or tank is not four areas, a team not one');
+  // A tank in a corner block: a second big piece can't fit, five small ones can
+  const T1 = put('T1', 0, 6, 'nw');
+  assert(T1.at === 'nw' && Sim.lines(T1, 'n') && Sim.lines(T1, 'w') && !Sim.lines(T1, 'e'), 'the tank block in the north-west corner does not line north and west');
+  assert(!Sim.roomFor(st, get('A'), 0, 6), 'a platoon fitted in beside a tank');
+  for (const id of ['mg1', 'cap', 'bz1', 'sn1']) { assert(Sim.roomFor(st, get(id), 0, 6), `${id} could not join the tank`); put(id, 0, 6); }
+  assert(fieldOk(st, 0, 6), 'two pieces on one area');
+  // A platoon down to one section takes one area
+  const B = get('B'); B.platoons = 1;
+  assert(Sim.sizeOf(B) === 1 && Sim.roomFor(st, B, 0, 6), 'a one-section platoon could not take the last free area');
   put('B', 0, 6);
-  assert(!Sim.roomFor(st, get('T1'), 0, 6), 'a tank pair joined a rifle platoon');
-  assert(!Sim.roomFor(st, get('A'), 0, 6), 'a second rifle platoon fitted in');
-  assert(Sim.roomFor(st, get('mg1'), 0, 6), 'a team could not join a rifle platoon');
-  put('mg1', 0, 6);
-  assert(Sim.roomFor(st, get('cap'), 0, 6), 'the captain could not join a platoon and one team');
-  put('cap', 0, 6);
-  assert(!Sim.roomFor(st, get('bz1'), 0, 6), 'a third smaller piece joined a rifle platoon');
-  // A tank pair alone: nobody joins it
-  put('T1', 1, 6);
-  assert(!Sim.roomFor(st, get('sn1'), 1, 6) && !Sim.roomFor(st, get('T2'), 1, 6), 'a piece joined a tank pair');
-  // Smaller pieces alone: four, not five, and no platoon on top of four
-  for (const id of ['mg1', 'cap', 'bz1', 'sn1']) put(id, 0, 7);
-  assert(fieldOk(st, 0, 7), 'four smaller pieces were not allowed');
-  assert(!Sim.roomFor(st, get('A'), 0, 7), 'a platoon joined four smaller pieces');
+  assert(!Sim.roomFor(st, get('C'), 0, 6) || Sim.sizeOf(get('C')) === 1, 'a full platoon fitted into a full field');
+  // The PaK takes two areas side by side
+  const pak = get('pak1');
+  assert(Sim.sizeOf(pak) === 2 && Sim.footprint(pak, 'n+ne').length === 2, 'the PaK is not two areas');
 });
 
 check('dice: every face is 1 to 6 and hits are the ones at or over the score needed', () => {
@@ -245,6 +242,8 @@ check('across a hedge: lining it you fire through; in the open you need them lin
   const us = Sim.unitById(st, 'A'), de = Sim.unitById(st, 'd2');
   for (const u of st.units) if (u !== us && u !== de) u.x = u.y = null;
   us.x = 1; us.y = 6; de.x = 2; de.y = 6;
+  // (one section each: one area, so either can stand clear of the hedge in the middle)
+  us.platoons = 1; de.platoons = 1;
   st.hedges = { '1,6|2,6': true }; st.wire = {};
   const need = (a, b) => TO_HIT + Sim.cover(st, a, b) - QUALITY[a.quality].shoot;
   us.at = 'e'; de.at = null;
@@ -413,6 +412,16 @@ check('no hedges or wire round villages, hamlets or orchards', () => {
   }
 });
 
+check('a piece moves to another area of its own field: its move, and it may still fire after', () => {
+  const st = Sim.newGame(3);
+  st.hedges = {}; st.wire = {};
+  const mg = Sim.unitById(st, 'mg1');
+  for (const u of st.units) if (u !== mg) u.x = u.y = null;
+  mg.x = 2; mg.y = 6; mg.at = 'n'; mg.acted = false;
+  const r = Sim.actLine(st, mg, 's');
+  assert(r.ok && mg.at === 's' && mg.acted, 'the move from north to south in the field did not happen');
+});
+
 check('machine guns fire five dice', () => {
   assert(PIECES.mg.soft === 5 && PIECES.mg42.soft === 5, 'an MG team does not fire five dice');
 });
@@ -478,9 +487,18 @@ check('a piece arriving by a hedge lines it, in the middle stands in the open', 
   for (const u of st.units) if (u !== able) u.x = u.y = null;
   able.x = 0; able.y = 6;
   st.hedges['2,6|3,6'] = true;
+  // One section: one area
+  able.platoons = 1;
   assert(Sim.actCharge(st, able, 2, 6, 'e').ok && able.at === 'e', 'it did not line the hedge it was sent to');
   able.acted = false;
   assert(Sim.actCharge(st, able, 1, 6, null).ok && able.at === null, 'it did not stand in the open');
+  // A full platoon (a 2×2 block) sent to the east edge takes a corner block on that side, lining it
+  const st2 = Sim.newGame(3);
+  st2.hedges = { '2,6|3,6': true }; st2.wire = {};
+  const A2 = Sim.unitById(st2, 'A');
+  for (const u of st2.units) if (u !== A2) u.x = u.y = null;
+  A2.x = 0; A2.y = 6;
+  assert(Sim.actCharge(st2, A2, 2, 6, 'e').ok && ['ne', 'se'].includes(A2.at) && Sim.lines(A2, 'e'), `a full platoon sent east stands at ${A2.at}`);
 });
 
 check('the captain can shoot, and be shot like anyone else (a small target): one wound and he is gone', () => {

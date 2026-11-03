@@ -481,8 +481,10 @@ const Board = (() => {
   // How far from the middle of the field a piece stands at the edge of its place: in an open field, and in the yard
   // inside a field's houses (platoon: its centre; spread: how loosely its bases cluster; tank: the pair's centre;
   // small: a team or the captain)
-  const OPEN = { platoon: 0.24, spread: 1, tank: 0.22, small: 0.33 };
-  const YARD = { platoon: 0.07, spread: 0.75, tank: 0.03, small: 0.2 };
+  // (Steve: nine areas a field) A piece stands at the middle of its areas: an area's middle is a third of the field
+  // from the field's middle
+  const OPEN = { platoon: 0.31, spread: 0.85, tank: 0.31, small: 0.31 };
+  const YARD = { platoon: 0.2, spread: 0.7, tank: 0.2, small: 0.2 };
   function arrange(st, x, y) {
     const here = Sim.at(st, x, y);
     const loose = (u, k) => { const R = seeded(u.id.length * 977 + x * 131 + y * 71 + k * 7 + u.id.charCodeAt(0)); return [(R() - 0.5) * 0.05, (R() - 0.5) * 0.05, (R() - 0.5) * 0.5]; };
@@ -491,7 +493,7 @@ const Board = (() => {
     const houses = ['village', 'hamlet'].includes(Sim.tileType(x, y));
     const reach = houses ? YARD : OPEN;
     for (const u of here) {
-      const g = model(u), p = Sim.placeXY(u.at);
+      const g = model(u), p = Sim.spotXY(u);
       if (u.kind === 'company') {
         // Pulled in a little from the edge, so the bases sit just inside the hedge
         const cx = 0.5 + p.x * reach.platoon, cz = 0.5 + p.y * reach.platoon;

@@ -48,7 +48,9 @@ const UI = (() => {
       view.mode = 'charge';
       const charges = spots().filter(p => p.kind !== 'line' && !shootAfter.some(q => q.x === p.x && q.y === p.y)).map(p => Object.assign(p, { act: 'charge' }));
       view.mode = 'go';
-      return shootAfter.concat(charges);
+      // Its own field: another area of it (Steve: its move, and it may fire after)
+      const inside = Sim.lineSides(st, u).length ? [{ x: u.x, y: u.y, kind: 'line', act: 'line' }] : [];
+      return shootAfter.concat(charges, inside);
     }
     const fields = list => list.map(p => ({ x: p.x, y: p.y }));
     const uniq = list => list.filter((p, i) => list.findIndex(q => q.x === p.x && q.y === p.y) === i);
@@ -178,16 +180,18 @@ const UI = (() => {
     if (st.won || st.lost || st.de) return null;
     const u = selected();
     let spot = spots().find(p => p.x === x && p.y === y);
-    // Both ways shown: a click on a field where another of your pieces can still act picks it instead.
-    // Pieces there that have already moved are only in the way of the eye: the click moves in beside them (Steve)
-    const readyThere = Sim.at(st, x, y, 'us').some(o => o !== u && Sim.canAct(st, o));
-    if (view.mode === 'go' && spot && spot.kind !== 'assault' && readyThere) spot = null;
+    // Both ways shown: a click on the very area another of your pieces stands in, one that can still act, picks it
+    // instead. A click on a free area moves there, beside whoever else is in the field (Steve: it picked the other
+    // piece, and the move couldn't be made)
+    const there = Sim.occupant(st, x, y, side);
+    const onReady = there && there.side === 'us' && there !== u && Sim.canAct(st, there);
+    if (view.mode === 'go' && spot && spot.kind !== 'assault' && onReady) spot = null;
     // Which action the click means
     const how = view.mode === 'go' && spot ? spot.act : view.mode;
     let r = null;
     if (view.mode && spot) {
       if (view.mode.startsWith('fire:')) r = Sim.actFire(st, view.mode.slice(5), x, y);
-      else if (how === 'charge' && spot.kind === 'line') r = Sim.lineSides(st, u).includes(side) ? Sim.actLine(st, u, side) : null;
+      else if (how === 'line' || (how === 'charge' && spot.kind === 'line')) r = Sim.actLine(st, u, side);
       else if (how === 'charge') r = Sim.actCharge(st, u, x, y, side);
       else if (how === 'moveShoot') r = Sim.actMoveShoot(st, u, x, y, side);
       else if (view.mode === 'breach') r = Sim.actBreach(st, u, x, y);
@@ -197,7 +201,7 @@ const UI = (() => {
       if (r && r.ok) {
         view.log.push(...r.lines);
         // After moving with Move & shoot, offer the half-dice shot straight away, with red targets on who can be hit
-        if (how === 'moveShoot') {
+        if (how === 'moveShoot' || how === 'line' || (how === 'charge' && spot.kind === 'line')) {
           if (u.halfShot) view.mode = 'halfShot';
           else { view.mode = null; view.log.push(`No Germans in reach for ${u.name} to shoot from here.`); }
         } else view.mode = null;

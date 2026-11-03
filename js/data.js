@@ -23,9 +23,8 @@ const VILLAGES = [
   { x: 7, y: 4, name: 'Saint-Jean' },
   { x: 7, y: 1, name: 'La Haye' },
 ];
-// Sharing a field (Steve): a tank stands alone; one rifle platoon at most, with this many smaller pieces (teams,
-// the captain) beside it, or this many smaller pieces on their own
-const FIELD_SMALL = { withPlatoon: 2, alone: 4 };
+// Sharing a field (Steve): each field is nine areas; pieces share it while their areas don't overlap (see footprint in
+// sim.js: most pieces one area, the PaK two, a tank or a platoon of two or three sections four)
 const HEDGE_GAP = 0.45;          // chance an edge between two fields has a gap (a gate or a broken bank)
 const WIRE = 0.5;                // chance a gap between two fields is closed by a barbed-wire fence: men must cut it, tanks flatten it
 

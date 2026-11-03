@@ -24,20 +24,76 @@ const Sim = (() => {
   // The four sides of a field, for a piece lining a hedge
   const DIRS = { e: [1, 0], w: [-1, 0], s: [0, 1], n: [0, -1] };
   const SIDE_NAMES = { n: 'north', e: 'east', s: 'south', w: 'west' };
-  // Where in its field a piece stands (Steve): one of nine places. u.at names the edges it is against: 'n', 'e', 's',
-  // 'w', a corner ('ne', 'nw', 'se', 'sw'), or null in the middle. A piece lines every hedge on an edge it is against
+  // Where in its field a piece stands (Steve): every field is nine areas, a 3×3 grid: the middle (null; 'c' in a list
+  // of areas), the four edges 'n', 'e', 's', 'w' and the four corners 'ne', 'nw', 'se', 'sw'. Most pieces take one
+  // area; the PaK 40 two side by side (u.at 'n+ne'); a tank, or a platoon of two or three sections, four in a 2×2
+  // block: a corner, the two edges beside it and the middle (u.at names its corner). Pieces share a field as long as
+  // their areas don't overlap. A piece lines every hedge one of its areas is against (the eight round the edge)
   const PLACES = [null, 'n', 'e', 's', 'w', 'ne', 'nw', 'se', 'sw'];
-  const lines = (u, d) => !!u.at && u.at.includes(d);
-  const placeXY = at => ({ x: at && at.includes('e') ? 1 : at && at.includes('w') ? -1 : 0, y: at && at.includes('s') ? 1 : at && at.includes('n') ? -1 : 0 });
-  const placeName = at => !at ? 'the middle of the field' : at.length === 2 ? `the ${SIDE_NAMES[at[0]]}-${SIDE_NAMES[at[1]]} corner` : `the ${SIDE_NAMES[at]} side`;
-  // The place nearest the one wanted that no other piece in the field already has (Steve: where other pieces allow it)
+  const CORNERS = ['nw', 'ne', 'sw', 'se'];
+  const GRID = ['nw', 'n', 'ne', 'w', 'c', 'e', 'sw', 's', 'se'];
+  // Every two areas side by side in a row or column (where the PaK can stand)
+  const PAIRS = [];
+  for (let i = 0; i < 9; i++) for (let j = i + 1; j < 9; j++) {
+    const far = Math.abs(i % 3 - j % 3) + Math.abs(Math.floor(i / 3) - Math.floor(j / 3));
+    if (far === 1) PAIRS.push(GRID[i] + '+' + GRID[j]);
+  }
+  const areaXY = k => ({ x: k.includes('e') ? 1 : k.includes('w') ? -1 : 0, y: k.includes('s') ? 1 : k.includes('n') ? -1 : 0 });
+  // A place given as one area (or null, the middle): where it is
+  const placeXY = at => areaXY(at || 'c');
+  // How many areas a piece takes
+  function sizeOf(u) {
+    // (a bare field or point, with no piece: one area)
+    if (!PIECES[u.kind]) return 1;
+    if (u.kind === 'pak') return 2;
+    if (isTank(u) || (u.kind === 'company' && u.platoons >= 2)) return 4;
+    return 1;
+  }
+  // The areas a piece takes, standing at `at` (its corner for a 2×2 block, its pair for the PaK)
+  function footprint(u, at = u.at) {
+    const size = sizeOf(u);
+    if (size === 4) {
+      // A block always sits in a corner; an edge or the middle asked for gives the corner on that side
+      const corner = CORNERS.includes(at) ? at : { n: 'nw', e: 'ne', s: 'se', w: 'sw' }[at] || 'nw';
+      return [corner, corner[0], corner[1], 'c'];
+    }
+    if (size === 2) return at && at.includes('+') ? at.split('+') : PAIRS.find(p => p.split('+').includes(at || 'c')).split('+');
+    return [at && !at.includes('+') ? at : 'c'];
+  }
+  // Every place a piece of its size could stand in a field
+  const anchorsFor = u => (sizeOf(u) === 4 ? CORNERS : sizeOf(u) === 2 ? PAIRS : PLACES);
+  // Where a piece is in its field, as one point (the middle of its areas): for the table and for distances
+  function spotXY(u, at = u.at) {
+    const areas = footprint(u, at).map(areaXY);
+    return { x: areas.reduce((n, a) => n + a.x, 0) / areas.length, y: areas.reduce((n, a) => n + a.y, 0) / areas.length };
+  }
+  const lines = (u, d) => footprint(u).some(k => k !== 'c' && k.includes(d));
+  const placeName = at => {
+    const a = at && at.includes('+') ? at.split('+').find(k => k !== 'c') : at;
+    return !a || a === 'c' ? 'the middle of the field' : a.length === 2 ? `the ${SIDE_NAMES[a[0]]}-${SIDE_NAMES[a[1]]} corner` : `the ${SIDE_NAMES[a]} side`;
+  };
+  // The areas of a field other pieces take (leaving: pieces on their way out)
+  function takenAreas(st, u, x, y, leaving = []) {
+    const taken = new Set();
+    for (const o of st.units) if (o !== u && o.x === x && o.y === y && !leaving.includes(o)) for (const k of footprint(o)) taken.add(k);
+    return taken;
+  }
+  const fitsAt = (st, u, x, y, at, leaving = []) => { const taken = takenAreas(st, u, x, y, leaving); return footprint(u, at).every(k => !taken.has(k)); };
+  // The place nearest the one wanted where the piece fits among the others (Steve: where other pieces allow it)
   function freePlace(st, u, x, y, want) {
-    const taken = st.units.filter(o => o !== u && o.x === x && o.y === y).map(o => o.at);
-    if (!taken.includes(want)) return want;
-    const w = placeXY(want);
-    const free = PLACES.filter(p => !taken.includes(p));
-    free.sort((a, b) => { const pa = placeXY(a), pb = placeXY(b); return Math.hypot(pa.x - w.x, pa.y - w.y) - Math.hypot(pb.x - w.x, pb.y - w.y); });
-    return free.length ? free[0] : want;
+    const options = anchorsFor(u).filter(a => fitsAt(st, u, x, y, a));
+    if (options.includes(want)) return want;
+    if (!options.length) return want;
+    // Nearest to the point wanted (an area, or a pair's middle)
+    const wantAreas = want && want.includes('+') ? want.split('+') : [want || 'c'];
+    const w = { x: wantAreas.reduce((n, k) => n + areaXY(k).x, 0) / wantAreas.length, y: wantAreas.reduce((n, k) => n + areaXY(k).y, 0) / wantAreas.length };
+    const far = a => { const p = spotXY(u, a); return Math.hypot(p.x - w.x, p.y - w.y); };
+    options.sort((a, b) => far(a) - far(b));
+    return options[0];
+  }
+  // Which piece takes a given area of a field (a click there means that piece)
+  function occupant(st, x, y, area) {
+    return st.units.find(o => o.x === x && o.y === y && footprint(o).includes(area || 'c')) || null;
   }
   // Which side of a's field faces b (b next to a)
   const dirTo = (a, b) => Object.keys(DIRS).find(d => DIRS[d][0] === b.x - a.x && DIRS[d][1] === b.y - a.y);
@@ -89,24 +145,14 @@ const Sim = (() => {
   const adjacent = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y) === 1;
   const teamsOf = (st, company) => st.units.filter(t => t.attachedTo === company.id && t.x !== null);
 
-  // Is there room for a unit in a field?
+  // Is there room for a unit in a field? (Steve: the nine areas decide, see footprint.) Never with the enemy, except in
+  // a hand-to-hand fight
   function roomFor(st, unit, x, y, leaving = []) {
-    // Your own pieces can share a field, but not crowd it (Steve): a tank stands alone; otherwise one rifle platoon
-    // and two smaller pieces (teams, the captain), or four smaller pieces; never two platoons. Never with the enemy,
-    // except in a hand-to-hand fight. A dug-in gun stands alone too
     const here = at(st, x, y).filter(u => !leaving.includes(u) && u !== unit && u.attachedTo !== unit.id);
     if (!here.length) return true;
     if (here.some(u => u.side !== unit.side)) return false;
-    if (PIECES[unit.kind].fixed || here.some(u => PIECES[u.kind].fixed)) return false;
-    // Everyone who would be there
-    const all = here.concat([unit]);
-    // A tank: nobody else
-    if (all.some(isTank)) return false;
-    // One platoon at most; with it two smaller pieces, without it four
-    const platoons = all.filter(u => u.kind === 'company').length;
-    const smaller = all.length - platoons;
-    if (platoons > 1) return false;
-    return smaller <= (platoons ? FIELD_SMALL.withPlatoon : FIELD_SMALL.alone);
+    const gone = leaving.concat(st.units.filter(u => u.attachedTo === unit.id));
+    return anchorsFor(unit).some(a => fitsAt(st, unit, x, y, a, gone));
   }
 
 
@@ -824,9 +870,9 @@ const Sim = (() => {
       // Try it: stand at the goal by each hedge in turn, or in the open; any place with a shot will do
       const goal = route[route.length - 1];
       u.x = goal.x; u.y = goal.y;
-      for (const side of PLACES) {
-        // (only places no other piece in that field has)
-        if (freePlace(st, u, goal.x, goal.y, side) !== side) continue;
+      for (const side of anchorsFor(u)) {
+        // (only places it fits among the other pieces in that field)
+        if (!fitsAt(st, u, goal.x, goal.y, side)) continue;
         u.at = side;
         if (targets(st, u, true).length) { out.push(route); break; }
       }
@@ -849,7 +895,7 @@ const Sim = (() => {
     if (u.snagged) { u.halfShot = targets(st, u, true).length > 0; return { ok: true, lines: [lines.join(', ') + '.'] }; }
     const how = step(st, u, x, y);
     // Where it stands: where it was sent, or (none given) the first place in the field with a shot
-    const place = side !== undefined ? side : [u.at, ...PLACES].find(p => { if (freePlace(st, u, x, y, p) !== p) return false; u.at = p; return targets(st, u, true).length; });
+    const place = side !== undefined ? side : [u.at, ...anchorsFor(u)].find(p => { if (!fitsAt(st, u, x, y, p)) return false; u.at = p; return targets(st, u, true).length; });
     standAt(st, u, place === undefined ? u.at : place);
     setTrail(st, u, route);
     lines.push(moveLine(u, how).replace(/\.$/, ''));
@@ -1034,18 +1080,21 @@ const Sim = (() => {
     return { ok: true, lines: [wasWire ? `✂️ ${u.name} cuts through the wire and pushes on.` : `⛏️ ${u.name} breaks through the hedge into the next field.`] };
   }
 
-  // The other places in its own field a piece could move to (not where it is, nor where another piece stands)
+  // The other places in its own field a piece could move to (not where it is; where it fits among the others)
   function lineSides(st, u) {
     if (PIECES[u.kind].fixed) return [];
-    const taken = st.units.filter(o => o !== u && o.x === u.x && o.y === u.y).map(o => o.at);
-    return PLACES.filter(p => p !== u.at && !taken.includes(p));
+    return anchorsFor(u).filter(p => p !== u.at && fitsAt(st, u, u.x, u.y, p));
   }
 
-  // Move to another place in its own field (to line another hedge, or a corner): the piece's move for the hour
+  // Move to another area of its own field (Steve: north hedge to south hedge, say): the piece's move for the round, and
+  // like a Move & shoot it may fire after, one more needed for moving. The area clicked, or the nearest place it fits
   function actLine(st, u, side) {
-    if (!canAct(st, u) || !lineSides(st, u).includes(side)) return { ok: false };
+    if (!canAct(st, u) || !lineSides(st, u).length) return { ok: false };
+    const to = freePlace(st, u, u.x, u.y, side);
+    if (to === u.at || !lineSides(st, u).includes(to)) return { ok: false };
     spend(st, u);
-    standAt(st, u, side);
+    standAt(st, u, to);
+    u.halfShot = targets(st, u, true).length > 0;
     return { ok: true, lines: [`🌳 ${u.name} moves to ${placeName(u.at)}.`] };
   }
 
@@ -1231,8 +1280,8 @@ const Sim = (() => {
     const across = st.units.find(o => o.side === 'us' && o.x !== null && acrossHedge(st, u, o) && !atHedge(u, o));
     if (across && !PIECES[u.kind].fixed && !(isTeam(u) && u.attachedTo)) {
       deSays(st, `Lines the hedge facing ${across.name}`);
-      u.at = dirTo(u, across);
-      for (const tm of u.kind === 'company' ? teamsOf(st, u) : []) tm.at = u.at;
+      u.at = freePlace(st, u, u.x, u.y, dirTo(u, across));
+      for (const tm of u.kind === 'company' ? teamsOf(st, u) : []) tm.at = freePlace(st, tm, tm.x, tm.y, u.at);
       return null;
     }
     // On the way to its post: march there and dig in
@@ -1618,7 +1667,7 @@ const Sim = (() => {
     newGame, endTurn, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, moves, chargeSpots,
     rallyTargets, canAct, groupOf, groupName, members, canReact, firepower, teamsOf, canCallFire, holdsObjective, roundText, roomFor,
     startGermanHour, germanStep, answer, finishHour, startRound, drawToken, endGermanToken, activationOver, passToken, usCanMove, endRound, canFire, actSkip, actSkipShot, skipSupport,
-    smallTarget, menDice, armourOf, captainCanRally, fireAt, actShoot, actMoveShoot, moveShootSpots, chargeRoutes, DIRS, needWhy, shellNeed, shellWhy, shellFields, canRally, needFor, canSelfRally, actSelfRally, actHalfShot, actMove, actCharge, actRally, actFire, actBreach, breachSpots, sight, isSmall, cover, wire, lineSides, actLine, atHedge, acrossHedge, SIDE_NAMES, PLACES, placeXY, placeName, lines,
+    smallTarget, menDice, armourOf, captainCanRally, fireAt, actShoot, actMoveShoot, moveShootSpots, chargeRoutes, DIRS, needWhy, shellNeed, shellWhy, shellFields, canRally, needFor, canSelfRally, actSelfRally, actHalfShot, actMove, actCharge, actRally, actFire, actBreach, breachSpots, sight, isSmall, cover, wire, lineSides, actLine, atHedge, acrossHedge, SIDE_NAMES, PLACES, placeXY, placeName, lines, sizeOf, footprint, spotXY, occupant, fitsAt, freePlace,
     hasCutters: u => cutter(u),
   };
 })();
