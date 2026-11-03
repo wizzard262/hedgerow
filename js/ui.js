@@ -104,7 +104,7 @@ const UI = (() => {
     if (!['shoot', 'halfShot'].includes(view.mode) && !shootFromHere) return [];
     const moving = view.mode === 'halfShot';
     return Sim.targets(st, u, moving).map(t => {
-      t.needNow = Math.min(6, Sim.needFor(st, u, t, moving) + (Sim.isTank(t) ? PIECES[t.kind].armour : 0));
+      t.needNow = Math.min(6, Sim.needFor(st, u, t, moving) + Sim.armourOf(t));
       t.needWhy = Sim.needWhy(st, u, t, moving);
       return t;
     });
@@ -470,13 +470,15 @@ const UI = (() => {
     const f = Sim.firepower(st, u);
     // Against men: its own dice and half its anti-tank ones (see Sim.menDice)
     const dice = `🎲 ${Math.round(Sim.menDice(f) * 10) / 10} dice vs men${f.hard ? `, ${Math.round(f.hard * 10) / 10} vs tanks` : ''}`;
+    // A tank's armour (Steve): what it adds to the score anti-tank dice need
+    const armour = Sim.isTank(u) ? `🛡️ Armour +${Sim.armourOf(u)}` : '';
     const status = u.down && u.acted ? '<span class="pill bad">Taking cover: the captain can get it up</span>' : u.shocked ? '<span class="pill bad">Shaken: +1 to hit, half moves</span>' : u.acted ? '<span class="pill done">✓ Moved this round</span>' : '<span class="pill ready">Ready</span>';
     box.append(el('div', 'name', `${u.name}${u.quality === 'elite' ? ' ★' : ''}`));
     // Elite troops say so (Steve): Rangers or Fallschirmjäger, one less needed to hit
     const elite = u.quality === 'elite' ? ` · <b class="elite">Elite</b> (${u.side === 'us' ? 'Rangers' : 'Fallschirmjäger'}: −1 to hit)` : '';
     box.append(el('div', 'sub', `${u.side === 'de' ? 'German · ' : ''}${KIND[u.kind]}${elite}${Sim.hasCutters(u) ? ' · hedge cutters' : ''}`));
     const where = u.kind === 'pak' ? '' : `📍 At ${Sim.placeName(u.at)}`;
-    box.append(el('div', 'stats', [strength, dice, where, status].filter(Boolean).map(s => `<span>${s}</span>`).join('')));
+    box.append(el('div', 'stats', [strength, dice, armour, where, status].filter(Boolean).map(s => `<span>${s}</span>`).join('')));
     // A German piece: just what it is (Steve), no actions
     if (u.side !== 'us') return;
     const acts = el('div'); acts.id = 'actions'; acts.style.marginTop = '6px';

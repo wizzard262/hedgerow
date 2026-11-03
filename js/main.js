@@ -77,14 +77,14 @@ window.Game = (() => {
         if (s) spots.push({ x: s.x, y: s.y, kind: 'charge' });
         spots.push({ x: t.x, y: t.y, kind: 'shoot' });
         if (s) {
-          t.needNow = Math.min(6, Sim.needFor(st, s, t) + (Sim.isTank(t) ? PIECES[t.kind].armour : 0));
+          t.needNow = Math.min(6, Sim.needFor(st, s, t) + Sim.armourOf(t));
           t.needWhy = Sim.needWhy(st, s, t);
           shooter = s;
           // A German tank's high explosive: the whole field
           blast = Sim.isTank(s) && !Sim.isTank(t) ? [{ x: t.x, y: t.y, main: true }] : [];
           // Still aiming: the other pieces it could have fired on, each with its score
           if (st.de.aim) others = Sim.targets(st, s).filter(o => o.id !== t.id).map(o => {
-            o.needNow = Math.min(6, Sim.needFor(st, s, o) + (Sim.isTank(o) ? PIECES[o.kind].armour : 0));
+            o.needNow = Math.min(6, Sim.needFor(st, s, o) + Sim.armourOf(o));
             o.needWhy = Sim.needWhy(st, s, o);
             return o;
           });

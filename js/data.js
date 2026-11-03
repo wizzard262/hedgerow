@@ -84,13 +84,14 @@ const RALLY_RANGE = 3;           // the captain rallies a shaken friendly piece 
 // What each kind of piece fights with. soft: against infantry and guns; hard: against tanks (anti-tank)
 const PIECES = {
   company:  { name: 'Rifle platoon', soft: 1, hard: 0 },          // per section (3 sections, a base each). Its kind is 'company' in the code
-  // Tanks: per tank (2 a section). armour: added to the score anti-tank dice need (the Panther's front is hard to beat).
+  // Tanks: one tank a unit (Steve). armour: added to the score anti-tank dice and shells need (the Panther's front is hard
+  // to beat), shown in the panel and on the label.
   // cutter: drives straight through a hedge, leaving a gap (Steve: every tank does; no separate Break through for tanks)
-  sherman:  { name: 'Sherman section', soft: 1.5, hard: 1, tank: true, armour: 0, cutter: true },
-  firefly:  { name: 'Firefly section', soft: 1, hard: 2, tank: true, armour: 0, cutter: true },
-  pz4:      { name: 'Panzer IV section', soft: 1.5, hard: 1.5, tank: true, armour: 0, cutter: true },
-  panther:  { name: 'Panther section', soft: 1.5, hard: 3, tank: true, armour: 1, cutter: true },
-  mg:       { name: 'MG team', soft: 5, hard: 0, team: true, men: 3 },        // machine guns fire 5 dice (Steve)
+  sherman:  { name: 'Sherman', soft: 1.5, hard: 1, tank: true, armour: 0, cutter: true },
+  firefly:  { name: 'Firefly', soft: 1, hard: 2, tank: true, armour: 0, cutter: true },
+  pz4:      { name: 'Panzer IV', soft: 1.5, hard: 1.5, tank: true, armour: 0, cutter: true },
+  panther:  { name: 'Panther', soft: 1.5, hard: 3, tank: true, armour: 1, cutter: true },
+  mg:       { name: '.50 cal team', soft: 5, hard: 0, team: true, men: 3 },        // machine guns fire 5 dice (Steve)
   bazooka:  { name: 'Bazooka team', soft: 0, hard: 2, team: true, men: 2 },
   sniper:   { name: 'Sniper team', soft: 1, hard: 0, team: true, sniper: true, men: 2 },   // the sniper and his spotter (Steve: a two-man team); sees the whole board, ignores cover and range (Steve)
   mg42:     { name: 'MG 42 team', soft: 5, hard: 0, team: true, men: 3 },

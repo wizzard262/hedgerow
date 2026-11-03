@@ -390,6 +390,29 @@ check('a bazooka rolls one die at men (half its two anti-tank dice); a rifle pla
   assert(Sim.menDice(Sim.firepower(st, Sim.unitById(st, 'A'))) === 3, 'a rifle platoon does not roll three dice at men');
 });
 
+check("a tank's armour is on its label and in its score, for shots and shells", () => {
+  const st = Sim.newGame(3);
+  st.hedges = {}; st.wire = {};
+  const T2 = Sim.unitById(st, 'T2'), pan = Sim.unitById(st, 'dt2');
+  for (const u of st.units) if (u !== T2 && u !== pan) u.x = u.y = null;
+  T2.x = 2; T2.y = 5; T2.at = null; pan.x = 4; pan.y = 5; pan.at = null;
+  assert(Sim.armourOf(pan) === 1 && Sim.armourOf(T2) === 0, 'the Panther is not armour +1, the Firefly +0');
+  assert(Sim.needWhy(st, T2, pan).includes('+1 armour'), 'the label does not say +1 armour');
+  assert(Sim.shellWhy(st, pan).includes('+1 armour') && Sim.shellNeed(st, pan) === TO_HIT + 1, 'shells on the Panther ignore its armour');
+});
+
+check('no hedges or wire round villages, hamlets or orchards', () => {
+  for (let seed = 1; seed <= 10; seed++) {
+    const st = Sim.newGame(seed);
+    for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) for (const [dx, dy] of [[1, 0], [0, 1]]) {
+      const bx = x + dx, by = y + dy;
+      if (bx >= COLS || by >= ROWS) continue;
+      const placed = PLACE_COVER[Sim.tileType(x, y)] || PLACE_COVER[Sim.tileType(bx, by)];
+      if (placed) assert(!Sim.hedge(st, x, y, bx, by) && !Sim.wire(st, x, y, bx, by), `seed ${seed}: a hedge or wire at ${x},${y}|${bx},${by}`);
+    }
+  }
+});
+
 check('machine guns fire five dice', () => {
   assert(PIECES.mg.soft === 5 && PIECES.mg42.soft === 5, 'an MG team does not fire five dice');
 });
@@ -694,7 +717,8 @@ check('the blind bag: a token for each piece, one piece a token, the round ends 
     }
     if (draws > 60) break;
   }
-  assert(draws <= us + de + usGuns + deGuns, `${draws} tokens drawn from a bag of ${us + de + usGuns + deGuns}`);
+  // (the timer is a token too)
+  assert(draws <= us + de + usGuns + deGuns + ROUND_TIMER, `${draws} tokens drawn from a bag of ${us + de + usGuns + deGuns} and the timer`);
   Sim.endRound(st);
   assert(st.won || st.lost || st.turn === turn + 1, 'the round did not end');
 });

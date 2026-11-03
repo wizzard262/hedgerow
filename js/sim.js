@@ -47,10 +47,11 @@ const Sim = (() => {
     return ax < bx || (ax === bx && ay < by) ? `${ax},${ay}|${bx},${by}` : `${bx},${by}|${ax},${ay}`;
   }
 
-  // Does a hedge grow on this edge before any gaps are made? Villages have none; lanes run between hedges but not along themselves
+  // Does a hedge grow on this edge before any gaps are made? Villages, hamlets and orchards have none round them (Steve);
+  // lanes run between hedges but not along themselves
   function hedgeWanted(ax, ay, bx, by) {
     const a = tileType(ax, ay), b = tileType(bx, by);
-    if (a === 'village' || b === 'village') return false;
+    if (PLACE_COVER[a] || PLACE_COVER[b]) return false;
     // The river has open banks, and a bridge carries its lane straight on
     if (a === 'river' || b === 'river') return false;
     const eastWest = ay === by;
@@ -432,7 +433,7 @@ const Sim = (() => {
     if (far) why.push(`+${LONG_RANGE} long range`);
     if (moving) why.push(`+${ON_THE_MOVE} moving`);
     if (shooter.shocked) why.push(`+${SHAKEN_SHOOT} shaken`);
-    if (isTank(target) && PIECES[target.kind].armour) why.push(`+${PIECES[target.kind].armour} armour`);
+    if (armourOf(target)) why.push(`+${armourOf(target)} armour`);
     if (QUALITY[shooter.quality || 'standard'].shoot) why.push(`−${QUALITY[shooter.quality || 'standard'].shoot} elite`);
     return withStart(why);
   }
@@ -478,11 +479,17 @@ const Sim = (() => {
     return [`${TO_HIT}+`, ...why];
   }
 
-  // The score mortar and artillery dice need against a piece: only a village gives cover from shells (men down in cover
-  // roll against half the dice instead, see underCover)
+  // The score mortar and artillery dice need against a piece: a village, hamlet or orchard gives cover from shells, and
+  // a tank its armour (men down in cover roll against half the dice instead, see underCover)
   function shellNeed(st, t) {
     // Cover from shells: a village, hamlet or orchard (Steve: +1 against mortars and artillery)
-    return TO_HIT + placeCover(st, t, null, true);
+    const place = placeCover(st, t, null, true);
+    return TO_HIT + place + armourOf(t);
+  }
+
+  // A tank's armour (Steve: shown on the label and the panel): added to what anti-tank dice need; 0 for anyone else
+  function armourOf(t) {
+    return isTank(t) ? PIECES[t.kind].armour || 0 : 0;
   }
 
   // Dice against a piece taking cover (Steve): half of them, and an odd one left over is a coin toss
@@ -501,6 +508,7 @@ const Sim = (() => {
     const why = [];
     // Only the village counts against shells
     why.push(...placeWhy(st, t, null, true));
+    if (armourOf(t)) why.push(`+${armourOf(t)} armour`);
     // Men already down in cover: half the dice
     if (t.down) why.push('½ dice: taking cover');
     return withStart(why);
@@ -515,7 +523,7 @@ const Sim = (() => {
     const faces = [];
     let softHits, hardHits, fullDice = 0;
     if (isTank(target)) {
-      hardHits = roll(st, dice(st, f.hard * power), need + PIECES[target.kind].armour, faces);
+      hardHits = roll(st, dice(st, f.hard * power), need + armourOf(target), faces);
       softHits = roll(st, dice(st, f.soft * power), need, []);
     } else {
       // Anti-tank weapons are poor against men in a hedge: half value. Men taking cover face half the dice (Steve)
@@ -537,7 +545,7 @@ const Sim = (() => {
       : target.shocked && !before.shocked ? 'Shaken' : softHits + hardHits ? 'No effect' : 'Missed';
     // What the table shows: the weapon's muzzle flash and tracers from the shooter, and what lands on the target
     const weapon = isTank(shooter) || shooter.kind === 'pak' ? 'gun' : shooter.kind === 'mg' || shooter.kind === 'mg42' ? 'mg' : shooter.kind === 'bazooka' || shooter.kind === 'schreck' ? 'rocket' : 'rifle';
-    st.fx.push({ from: { id: shooter.id, x: shooter.x, y: shooter.y }, to: { id: target.id }, weapon, armour: isTank(target), x: target.x === null ? stood.x : target.x, y: target.x === null ? stood.y : target.y, kind: softHits + hardHits ? 'hit' : 'miss', faces, need: Math.min(6, need + (isTank(target) ? PIECES[target.kind].armour : 0)), side: shooter.side, result, tookCover: !!pre, fullDice });
+    st.fx.push({ from: { id: shooter.id, x: shooter.x, y: shooter.y }, to: { id: target.id }, weapon, armour: isTank(target), x: target.x === null ? stood.x : target.x, y: target.x === null ? stood.y : target.y, kind: softHits + hardHits ? 'hit' : 'miss', faces, need: Math.min(6, need + armourOf(target)), side: shooter.side, result, tookCover: !!pre, fullDice });
     // A tank firing high explosive at men hits the whole field, like a mortar: every other piece on foot in it rolls too
     if (isTank(shooter) && !isTank(target) && !blast) {
       for (const other of at(st, stood.x, stood.y, target.side)) {
@@ -566,7 +574,7 @@ const Sim = (() => {
 
   // The score a shot needs, the Panther's armour included
   function shotNeed(st, shooter, target, moving = false) {
-    return needFor(st, shooter, target, moving) + (isTank(target) ? PIECES[target.kind].armour : 0);
+    return needFor(st, shooter, target, moving) + armourOf(target);
   }
 
   // Pieces a shooter could fire at (moving: firing on the move): enemies it can see, that its weapons can hurt, and
@@ -1121,7 +1129,8 @@ const Sim = (() => {
         if (t.x === null) continue;
         const need = shellNeed(st, t);
         const faces = [];
-        const soft = roll(st, underCover(st, t, n), need, faces), hard = isTank(t) ? roll(st, S.hard || 0, need + PIECES[t.kind].armour, faces) : 0;
+        // Against a tank only the anti-tank dice count (its armour is in need); against men every die
+        const soft = isTank(t) ? 0 : roll(st, underCover(st, t, n), need, faces), hard = isTank(t) ? roll(st, S.hard || 0, need, faces) : 0;
         // Taking cover: how many dice it would have faced standing (for the tag)
         const fullDice = t.down && !isTank(t) ? n : 0;
         const before = t.platoons, wasShocked = t.shocked;
@@ -1609,7 +1618,7 @@ const Sim = (() => {
     newGame, endTurn, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, moves, chargeSpots,
     rallyTargets, canAct, groupOf, groupName, members, canReact, firepower, teamsOf, canCallFire, holdsObjective, roundText, roomFor,
     startGermanHour, germanStep, answer, finishHour, startRound, drawToken, endGermanToken, activationOver, passToken, usCanMove, endRound, canFire, actSkip, actSkipShot, skipSupport,
-    smallTarget, menDice, captainCanRally, fireAt, actShoot, actMoveShoot, moveShootSpots, chargeRoutes, DIRS, needWhy, shellNeed, shellWhy, shellFields, canRally, needFor, canSelfRally, actSelfRally, actHalfShot, actMove, actCharge, actRally, actFire, actBreach, breachSpots, sight, isSmall, cover, wire, lineSides, actLine, atHedge, acrossHedge, SIDE_NAMES, PLACES, placeXY, placeName, lines,
+    smallTarget, menDice, armourOf, captainCanRally, fireAt, actShoot, actMoveShoot, moveShootSpots, chargeRoutes, DIRS, needWhy, shellNeed, shellWhy, shellFields, canRally, needFor, canSelfRally, actSelfRally, actHalfShot, actMove, actCharge, actRally, actFire, actBreach, breachSpots, sight, isSmall, cover, wire, lineSides, actLine, atHedge, acrossHedge, SIDE_NAMES, PLACES, placeXY, placeName, lines,
     hasCutters: u => cutter(u),
   };
 })();
