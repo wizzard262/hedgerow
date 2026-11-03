@@ -527,6 +527,20 @@ check('a captain who only rallies is done once his token passes: no second token
   assert(!Sim.canAct(st, cap) && !Sim.canRally(st, cap) && cap.acted, 'the captain could act again on a second token');
 });
 
+check('past the corner of a village, hamlet or orchard: only from a corner area at that point, +1 both', () => {
+  const st = Sim.newGame(3);
+  st.wire = {}; st.hedges = {};
+  const a = Sim.unitById(st, 'mg1'), b = st.units.find(u => u.side === 'de' && u.kind === 'mg42');
+  for (const u of st.units) if (u !== a && u !== b) u.x = u.y = null;
+  // (8,0) and (9,1) corner to corner; the line touches the orchard (9,0) and the village (8,1) beside it
+  assert(Sim.tileType(9, 0) === 'orchard' && Sim.tileType(8, 1) === 'village', 'the test needs an orchard at 9,0 and a village at 8,1');
+  a.x = 8; a.y = 0; a.at = null; b.x = 9; b.y = 1; b.at = null;
+  assert(!Sim.sight(st, a, b), 'a line past their corner from the middle was not blocked');
+  a.at = 'se';
+  const s = Sim.sight(st, a, b);
+  assert(s && s.placeCorner && s.cover === 1, 'from the corner it did not see past them, with +1');
+});
+
 check('machine guns fire five dice', () => {
   assert(PIECES.mg.soft === 5 && PIECES.mg42.soft === 5, 'an MG team does not fire five dice');
 });

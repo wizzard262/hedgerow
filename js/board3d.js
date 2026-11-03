@@ -1512,11 +1512,10 @@ const Board = (() => {
   // ---------- Dice on the table ----------
   // The dice of every attack (Steve: shots, shells and hand to hand, both sides) sit in the top corner of the table above
   // the attacking side's artillery, not on the board: the red dice, six to a row, each with a tag over it saying who
-  // rolled, what each die needed and how many hit. The newest at the bottom, up to three a side stacked above it. Hits
+  // rolled at whom, what each die needed and how many hit. The newest at the bottom, the rest stacked above it. Hits
   // are outlined in yellow on a glow; misses are dimmed. They appear once the attack has landed on the table, and stay
   // until the next piece is chosen (Steve)
   const DIE_SIZE = 6.5, DIE_GAP = 0.22;
-  const DICE_STACK = 3;                // rolls shown a side
   const DICE_OUT = 0.45;               // how far out past the artillery (away from the board) the dice sit
   let diceDue = null;                  // when the dice of the latest attack go on the table
   let diceComing = [];                 // those rolls, kept as they were (the next token clears the attacks list)
@@ -1532,7 +1531,8 @@ const Board = (() => {
       const cx = gun.x + (side === 'us' ? -DICE_OUT : DICE_OUT);
       // Newest first, from just above the drawn token's spot upwards
       let z = 0.62;
-      for (const r of rolls.filter(o => o.side === side).slice(-DICE_STACK).reverse()) {
+      // (every roll since the last piece was picked: a fire mission has a row for each piece it caught, Steve)
+      for (const r of rolls.filter(o => o.side === side).reverse()) {
         const rows = Math.ceil(r.faces.length / 6), across = Math.min(6, r.faces.length);
         const left = cx - (across - 1) * DIE_GAP / 2;
         r.faces.forEach((d, i) => {
@@ -1556,11 +1556,11 @@ const Board = (() => {
         // No room left at the top of the screen: the older rolls are left off
         if (offTop(anchor)) break;
         const tag = diceTag(r.text, side, false);
-        tag.scale.multiplyScalar(1.35);
+        tag.scale.multiplyScalar(1.15);
         tag.center.x = side === 'us' ? 0 : 1;
         tag.position.copy(anchor); tag.renderOrder = 6;
         scene.add(tag); dice.push(tag);
-        z = top - 0.55;
+        z = top - 0.48;
       }
     }
   }
@@ -1616,15 +1616,14 @@ const Board = (() => {
   // ["1st Platoon", "needs 5+ · 2 hits"]: who fired, then the score each die needed and the hits
   function shotTagText(st, f) {
     const shooter = f.from ? st.units.find(u => u.id === f.from.id) : null;
-    const who = shooter ? shooter.name
-      : f.side === 'de' ? 'German mortars'
-      : f.support === 'artillery' ? 'Our artillery' : 'Our mortars';
+    const who = shooter ? shooter.name : `${f.side === 'de' ? 'German' : 'Our'} ${f.support === 'artillery' ? 'artillery' : 'mortars'}`;
     const need = f.need >= 6 ? 'needs 6' : `needs ${f.need}+`;
     const hits = f.faces.filter(r => r.hit).length;
     // Taking cover (Steve: the tag says so; its +2 is in the score needed)
     const target = f.to && st.units.find(u => u.id === f.to.id);
     const cover = target && target.down ? 'taking cover · ' : '';
-    return [who, `${cover}${need} · ${hits} hit${hits === 1 ? '' : 's'}`];
+    // Who it was at (Steve: a mortar or artillery mission has a row for each piece it caught)
+    return [target ? `${who} → ${target.name}` : who, `${cover}${need} · ${hits} hit${hits === 1 ? '' : 's'}`];
   }
 
   // The tag: a small rounded label, blue for our shots and grey for the Germans', drawn once for each text

@@ -379,7 +379,7 @@ const Sim = (() => {
       if (s > EPS && s < 1 - EPS) hits.push({ s, x: a.x + s * dx, y: k });
     }
     hits.sort((p, q) => p.s - q.s);
-    let hedgeCover = false;
+    let hedgeCover = false, placeCorner = null;
     const corners = new Set();
     for (const h of hits) {
       const onX = Math.abs(h.x - Math.round(h.x)) < EPS, onY = Math.abs(h.y - Math.round(h.y)) < EPS;
@@ -391,6 +391,10 @@ const Sim = (() => {
         const atCorner = cornerHedge(st, from, target, vx, vy);
         if (atCorner === 'blocked') return null;
         if (atCorner === 'cover') hedgeCover = true;
+        // The corner of a village, hamlet or orchard beside the line, the same way (Steve)
+        const place = cornerPlace(st, from, target, vx, vy, dx, dy);
+        if (place === 'blocked') return null;
+        if (place) placeCorner = place;
         continue;
       }
       // Across a line between two fields, side by side (a line x = k) or one above the other (y = k)
@@ -417,7 +421,7 @@ const Sim = (() => {
     const tank = tankInWay(st, from, target, a, b);
     if (tank === 'blocked') return null;
     const tankCorner = tank === 'cover';
-    return { cover: (hedgeCover ? COVER.hedge : 0) + (tankCorner ? COVER.tankCorner : 0), hedge: hedgeCover, tankCorner };
+    return { cover: (hedgeCover ? COVER.hedge : 0) + (tankCorner ? COVER.tankCorner : 0) + (placeCorner ? COVER.placeCorner : 0), hedge: hedgeCover, tankCorner, placeCorner };
   }
 
   // One area of a field as a square on the board (a third of a field a side)
@@ -470,6 +474,19 @@ const Sim = (() => {
   // The corner area of each of the four fields round the point that touches it
   const cornerAreas = (vx, vy) => [[vx - 1, vy - 1, 'se'], [vx, vy - 1, 'sw'], [vx - 1, vy, 'ne'], [vx, vy, 'nw']];
   const atPoint = (u, vx, vy) => !!u.kind && cornerAreas(vx, vy).some(([fx, fy, k]) => u.x === fx && u.y === fy && standsIn(u).includes(k));
+  // A line through the corner point (vx, vy) only touches the two fields either side of it there (it runs through the
+  // other two). If one is a village, hamlet or orchard: 'blocked' unless one of the pieces stands in a corner area at
+  // that point (Steve: as at a hedge end); then its kind, and both get +1. null if neither is
+  function cornerPlace(st, from, target, vx, vy, dx, dy) {
+    const beside = [[vx - (dx > 0 ? 1 : 0), vy - (dy > 0 ? 0 : 1)], [vx - (dx > 0 ? 0 : 1), vy - (dy > 0 ? 1 : 0)]];
+    for (const [fx, fy] of beside) {
+      if (!inside(fx, fy) || !PLACE_COVER[tileType(fx, fy)]) continue;
+      if (!atPoint(from, vx, vy) && !atPoint(target, vx, vy)) return 'blocked';
+      return tileType(fx, fy);
+    }
+    return null;
+  }
+
   function cornerHedge(st, from, target, vx, vy) {
     // The four hedges that can end at this point: [field a, field b, a's side, b's side, the third at this end]
     const ends = [
@@ -616,6 +633,7 @@ const Sim = (() => {
     // The covers one by one: the hedge it lines, a tank in a field in between, the field it stands in, its own tank beside it
     if (s && s.hedge) why.push(`+${COVER.hedge} hedge`);
     if (s && s.tankCorner) why.push(`+${COVER.tankCorner} tank's corner`);
+    if (s && s.placeCorner) why.push(`+${COVER.placeCorner} ${s.placeCorner}'s corner`);
     why.push(...placeWhy(st, target, shooter));
     if (target.down) why.push(`+${TAKE_COVER} take cover`);
     // Two men or fewer (Steve)
