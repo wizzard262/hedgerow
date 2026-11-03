@@ -1045,6 +1045,19 @@ const Sim = (() => {
     return moveShootRoutes(st, u).map(r => ({ x: r[r.length - 1].x, y: r[r.length - 1].y }));
   }
 
+  // Of the nine areas of a field it could Move & shoot to, the ones a click on would leave it able to fire (Steve: only
+  // those are hatched red): for each area, where it would stand (the nearest place it fits) and whether it has a shot
+  function shootCells(st, u, x, y) {
+    const home = { x: u.x, y: u.y, at: u.at }, out = [];
+    u.x = x; u.y = y;
+    for (const k of GRID) {
+      u.at = freePlace(st, u, x, y, k === 'c' ? null : k);
+      if (targets(st, u, true).length) out.push(k);
+    }
+    u.x = home.x; u.y = home.y; u.at = home.at;
+    return out;
+  }
+
   // Move and shoot: the piece moves a field, then it may fire once on the move, needing one more (actHalfShot), before doing anything else
   function actMoveShoot(st, u, x, y, side) {
     const route = canAct(st, u) && moveShootRoutes(st, u).find(r => r[r.length - 1].x === x && r[r.length - 1].y === y);
@@ -1833,7 +1846,7 @@ const Sim = (() => {
     newGame, endTurn, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, moves, chargeSpots,
     rallyTargets, canAct, groupOf, groupName, members, canReact, firepower, teamsOf, canCallFire, holdsObjective, roundText, roomFor,
     startGermanHour, germanStep, answer, finishHour, startRound, drawToken, endGermanToken, activationOver, passToken, usCanMove, endRound, canFire, actSkip, actSkipShot, skipSupport,
-    smallTarget, menDice, armourOf, mayFire, captainCanRally, fireAt, actShoot, actMoveShoot, moveShootSpots, chargeRoutes, DIRS, needWhy, shellNeed, shellWhy, shellFields, canRally, needFor, canSelfRally, actSelfRally, actHalfShot, actMove, actCharge, actRally, actFire, actBreach, breachSpots, sight, isSmall, cover, wire, lineSides, actLine, atHedge, acrossHedge, SIDE_NAMES, PLACES, placeXY, placeName, lines, sizeOf, footprint, spotXY, occupant, fitsAt, freePlace,
+    smallTarget, menDice, armourOf, mayFire, shootCells, captainCanRally, fireAt, actShoot, actMoveShoot, moveShootSpots, chargeRoutes, DIRS, needWhy, shellNeed, shellWhy, shellFields, canRally, needFor, canSelfRally, actSelfRally, actHalfShot, actMove, actCharge, actRally, actFire, actBreach, breachSpots, sight, isSmall, cover, wire, lineSides, actLine, atHedge, acrossHedge, SIDE_NAMES, PLACES, placeXY, placeName, lines, sizeOf, footprint, spotXY, occupant, fitsAt, freePlace,
     hasCutters: u => cutter(u),
   };
 })();

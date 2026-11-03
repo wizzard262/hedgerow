@@ -46,7 +46,10 @@ const UI = (() => {
       view.mode = 'moveShoot';
       const shootAfter = spots().map(p => Object.assign(p, { act: 'moveShoot' }));
       view.mode = 'charge';
-      const charges = spots().filter(p => p.kind !== 'line' && !shootAfter.some(q => q.x === p.x && q.y === p.y)).map(p => Object.assign(p, { act: 'charge' }));
+      const chargeAll = spots().filter(p => p.kind !== 'line');
+      // A Move & shoot field's other areas (no shot from there) are a Charge, if it can charge there
+      for (const p of shootAfter) p.canCharge = chargeAll.some(q => q.x === p.x && q.y === p.y);
+      const charges = chargeAll.filter(p => !shootAfter.some(q => q.x === p.x && q.y === p.y)).map(p => Object.assign(p, { act: 'charge' }));
       view.mode = 'go';
       // Its own field: another area of it (Steve: its move, and it may fire after)
       const inside = Sim.lineSides(st, u).length ? [{ x: u.x, y: u.y, kind: 'line', act: 'line' }] : [];
@@ -63,6 +66,8 @@ const UI = (() => {
     if (view.mode === 'breach') list = Sim.breachSpots(st, u);
     // A charge into a field the Germans hold is a hand-to-hand fight: marked differently
     const marked = uniq(list).map(p => Object.assign(p, { kind: view.mode === 'charge' && Sim.at(st, p.x, p.y, 'de').length ? 'assault' : kind }));
+    // Move & shoot: only the areas it could fire from are hatched (Steve)
+    if (view.mode === 'moveShoot') for (const p of marked) p.cells = Sim.shootCells(st, u, p.x, p.y);
     // Charging: its own field is marked too, to go and line another of its hedges (the old Line a hedge, Steve: implicit)
     if (view.mode === 'charge' && Sim.canAct(st, u) && Sim.lineSides(st, u).length) marked.push({ x: u.x, y: u.y, kind: 'line' });
     // Rallying: every field the captain's voice reaches, faintly, round the pieces he can rally (Steve)
@@ -186,8 +191,13 @@ const UI = (() => {
     const there = Sim.occupant(st, x, y, side);
     const onReady = there && there.side === 'us' && there !== u && Sim.canAct(st, there);
     if (view.mode === 'go' && spot && spot.kind !== 'assault' && onReady) spot = null;
-    // Which action the click means
-    const how = view.mode === 'go' && spot ? spot.act : view.mode;
+    // Which action the click means. On a Move & shoot field, an area it couldn't fire from is a Charge there (if it can
+    // charge there), or nothing
+    let how = view.mode === 'go' && spot ? spot.act : view.mode;
+    if (spot && spot.cells && how === 'moveShoot' && !spot.cells.includes(side || 'c')) {
+      how = view.mode === 'go' && spot.canCharge ? 'charge' : null;
+      if (!how) spot = null;
+    }
     let r = null;
     if (view.mode && spot) {
       if (view.mode.startsWith('fire:')) r = Sim.actFire(st, view.mode.slice(5), x, y);

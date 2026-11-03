@@ -757,8 +757,11 @@ const Board = (() => {
   const MARK = { hatch: '#e8352a', goal: '#3c96ff', assault: '#ff2a1a', cover: '#7dff5a', line: '#7dff5a', move: '#7fc6e0', charge: '#e0705f', shoot: '#e6c95a', rally: '#8fd47a', fire: '#e8a05a', breach: '#c9a46a', attach: '#b9a0e0', select: '#fff6dc', hover: '#ffffff', blast: '#ff5a1e', splash: '#ff9a3c', reach: '#8fd47a' };
 
   // A coloured square of light on a field, with a brighter rim
-  function mark(x, y, kind, inset = 0.05) {
+  // spot: a Move & shoot field's cells (Steve: only the areas it can fire from are hatched; the rest a Charge's wash if
+  // it can charge there)
+  function mark(x, y, kind, inset = 0.05, spot = null) {
     const c = new T.Color(MARK[kind]);
+    if (spot && spot.cells && kind === 'hatch') { markCells(x, y, spot); return; }
     const striped = kind === 'hatch' || kind === 'goal';
     const plane = new T.Mesh(new T.PlaneGeometry(1 - inset * 2, 1 - inset * 2), striped
       ? new T.MeshBasicMaterial({ map: hatch(kind === 'goal' ? 'rgba(60,150,255,.9)' : undefined), transparent: true, opacity: 0.8, depthWrite: false })
@@ -768,6 +771,24 @@ const Board = (() => {
     if (kind === 'hover' || kind === 'reach') return;
     const s = 0.5 - inset, pts = [[-s, -s], [s, -s], [s, s], [-s, s], [-s, -s]].map(([a, b]) => new T.Vector3(x + 0.5 + a, 0.006, y + 0.5 + b));
     marks.add(new T.Line(new T.BufferGeometry().setFromPoints(pts), new T.LineBasicMaterial({ color: c, transparent: true, opacity: 0.95 })));
+  }
+
+  // A Move & shoot field area by area: red hatching on each area it could fire from, a Charge's wash on the others if it
+  // can charge there, and the field's red rim
+  function markCells(x, y, spot) {
+    const red = new T.Color(MARK.hatch);
+    for (const k of ['nw', 'n', 'ne', 'w', 'c', 'e', 'sw', 's', 'se']) {
+      const p = Sim.placeXY(k === 'c' ? null : k), cx = x + 0.5 + p.x / 3, cz = y + 0.5 + p.y / 3;
+      const shoots = spot.cells.includes(k);
+      if (!shoots && !spot.canCharge) continue;
+      const material = shoots
+        ? new T.MeshBasicMaterial({ map: hatch(), transparent: true, opacity: 0.8, depthWrite: false })
+        : new T.MeshBasicMaterial({ color: new T.Color(MARK.charge), transparent: true, opacity: 0.16, depthWrite: false });
+      const cell = new T.Mesh(new T.PlaneGeometry(1 / 3 - 0.02, 1 / 3 - 0.02), material);
+      at(cell, cx, 0.004, cz, -Math.PI / 2, 0, 0); marks.add(cell);
+    }
+    const s = 0.45, pts = [[-s, -s], [s, -s], [s, s], [-s, s], [-s, -s]].map(([a, b]) => new T.Vector3(x + 0.5 + a, 0.006, y + 0.5 + b));
+    marks.add(new T.Line(new T.BufferGeometry().setFromPoints(pts), new T.LineBasicMaterial({ color: red, transparent: true, opacity: 0.95 })));
   }
 
   // Over a field a piece can move to: where it would stand (by the hedge under the pointer, or in the open), and
@@ -849,15 +870,14 @@ const Board = (() => {
       const c = document.createElement('canvas'), g = c.getContext('2d');
       // One row for each modifier (Steve: stacked, not all on one line), then the score
       g.font = 'bold 30px Georgia, serif';
-      const tail = 26, row = 36, big = 64, boxH = big + why.length * row + (why.length ? 10 : 0);
+      // (no tail of its own, Steve: the long arrow to the target comes out from behind the bubble)
+      const tail = 0, row = 36, big = 64, boxH = big + why.length * row + (why.length ? 10 : 0);
       const widest = Math.max(0, ...why.map(w => g.measureText(w).width));
       c.width = Math.max(128, Math.ceil(widest) + 36); c.height = boxH + tail + 8;
       const top = tailDown ? 4 : tail + 4, mid = c.width / 2;
       // The bubble and its tail in one shape, with a pale outline
       g.beginPath();
       g.roundRect(4, top, c.width - 8, boxH, 16);
-      if (tailDown) { g.moveTo(mid - 16, top + boxH - 1); g.lineTo(mid, c.height - 2); g.lineTo(mid + 16, top + boxH - 1); }
-      else { g.moveTo(mid - 16, top + 1); g.lineTo(mid, 2); g.lineTo(mid + 16, top + 1); }
       g.fillStyle = 'rgba(150,25,20,.94)'; g.fill();
       g.lineWidth = 3; g.strokeStyle = 'rgba(255,230,200,.85)'; g.stroke();
       g.textAlign = 'center'; g.textBaseline = 'middle';
@@ -950,7 +970,8 @@ const Board = (() => {
         const { farHalf, anchor } = labelAnchor(u);
         const l = needLabel(u.needNow, u.needWhy || [], !farHalf);
         l.position.copy(anchor); l.renderOrder = 6; marks.add(l);
-        marks.add(wedge(anchor, reticleSpot(u), 0.2, lit ? 0xc0261c : 0x961914));
+        // The arrow starts behind the middle of the bubble, so it seems to come out of it (Steve)
+        marks.add(wedge(bubbleMiddle(l, anchor, farHalf), reticleSpot(u), 0.22, lit ? 0xc0261c : 0x961914));
       }
     }
   }
@@ -962,6 +983,13 @@ const Board = (() => {
     if (labelPlaces.has(u.id)) return labelPlaces.get(u.id);
     const p = pieceCentre(u), farHalf = u.y < ROWS / 2;
     return { farHalf, anchor: new T.Vector3(p.x, 0.3, Math.max(0.4, Math.min(ROWS - 0.4, p.z + (farHalf ? 2.6 : -2.6)))) };
+  }
+
+  // The middle of a bubble on the table, from its anchor (the edge nearest its target)
+  function bubbleMiddle(l, anchor, farHalf) {
+    camera.updateMatrixWorld();
+    const up = new T.Vector3().setFromMatrixColumn(camera.matrixWorld, 1);
+    return anchor.clone().addScaledVector(up, l.scale.y * 0.5 * (farHalf ? -1 : 1));
   }
 
   // The box a bubble covers on the page, from its tail's spot (farHalf: the bubble hangs below its tail)
@@ -1017,6 +1045,28 @@ const Board = (() => {
       if (!best) { const z = Math.max(0.4, Math.min(ROWS - 0.4, p.z + 2.6 * way)); best = { anchor: new T.Vector3(p.x, 0.3, z), farHalf: z > p.z, box: { x: 0, y: 0, w: 0, h: 0 } }; }
       labelPlaces.set(u.id, { anchor: best.anchor, farHalf: best.farHalf });
       placed.push(best.box);
+    }
+    uncross(list, aims);
+  }
+
+  // Many bubbles (a mortar's targets, say): no two arrows cross (Steve). Where two do, the bubbles swap places, until
+  // none cross (a few goes at most); each then points from about where its neighbours' did
+  function uncross(list, aims) {
+    const centre = u => { const { anchor, farHalf } = labelPlaces.get(u.id); const b = bubbleBox(u, anchor, farHalf); return { x: b.x + b.w / 2, y: b.y + b.h / 2 }; };
+    const side = (a, b, c) => Math.sign((b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x));
+    const crosses = (p1, p2, q1, q2) => side(p1, p2, q1) * side(p1, p2, q2) < 0 && side(q1, q2, p1) * side(q1, q2, p2) < 0;
+    for (let go = 0; go < 12; go++) {
+      let swapped = false;
+      for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) {
+        const a = list[i], b = list[j];
+        if (!crosses(centre(a), aims[i], centre(b), aims[j])) continue;
+        const pa = labelPlaces.get(a.id), pb = labelPlaces.get(b.id);
+        // (a bubble now below its target on the screen hangs down from its edge, one above stands on it)
+        labelPlaces.set(a.id, { anchor: pb.anchor, farHalf: pb.anchor.z > pieceCentre(a).z });
+        labelPlaces.set(b.id, { anchor: pa.anchor, farHalf: pa.anchor.z > pieceCentre(b).z });
+        swapped = true;
+      }
+      if (!swapped) break;
     }
   }
 
@@ -1673,7 +1723,7 @@ const Board = (() => {
     updatePieces(st);
     while (marks.children.length) marks.remove(marks.children[0]);
     if (view.hover) mark(view.hover.x, view.hover.y, 'hover', 0.02);
-    for (const s of view.spots || []) mark(s.x, s.y, s.kind);
+    for (const s of view.spots || []) mark(s.x, s.y, s.kind, 0.05, s);
     // Where a shot that hits several pieces would land (Steve): the target's field bright, the fields its blast reaches paler
     for (const b of view.blast || []) mark(b.x, b.y, b.main ? 'blast' : 'splash', 0.03);
     showStand(st, view);

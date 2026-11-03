@@ -500,6 +500,21 @@ check('two fields corner to corner see each other along the 45° line, but past 
   assert(Sim.sight(st, a, b), 'from the corner the piece could not see past the end of the hedge');
 });
 
+check('Move & shoot: only the areas of a field it could fire from are offered (Steve)', () => {
+  let checked = 0;
+  for (let seed = 1; seed <= 15 && checked < 5; seed++) {
+    const st = Sim.newGame(seed);
+    for (const u of st.units.filter(o => o.side === 'us' && o.x !== null)) {
+      for (const p of Sim.moveShootSpots(st, u)) {
+        const cells = Sim.shootCells(st, u, p.x, p.y);
+        assert(cells.length > 0, `seed ${seed}: a Move & shoot field with no area to fire from`);
+        checked++;
+      }
+    }
+  }
+  assert(checked > 0, 'no Move & shoot fields to check');
+});
+
 check('machine guns fire five dice', () => {
   assert(PIECES.mg.soft === 5 && PIECES.mg42.soft === 5, 'an MG team does not fire five dice');
 });
