@@ -199,7 +199,9 @@ const UI = (() => {
     view.support = null;
     if (!picked) { view.sel = null; return null; }
     view.sel = picked.id;
-    if (picked.side === 'us' && Sim.canAct(st, picked)) view.mode = 'go';
+    // Moved with Move & shoot and still to fire (Steve): picked again, its red targets show again
+    if (picked.side === 'us' && picked.halfShot) view.mode = 'halfShot';
+    else if (picked.side === 'us' && Sim.canAct(st, picked)) view.mode = 'go';
     return [picked];
   }
 

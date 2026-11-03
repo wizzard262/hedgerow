@@ -405,7 +405,7 @@ const Board = (() => {
 
   // The model for a piece, made the first time it is needed
   // The models that make up a piece, each a base on the table, scaled: a rifle platoon's three section bases, a tank
-  // pair's two tanks, or a team's (or the captain's) one base. Used for the table and for the panel's picture
+  // (one to a unit, Steve), or a team's (or the captain's) one base. Used for the table and for the panel's picture
   function buildBases(side, kind) {
     if (kind === 'company') {
       // One base a section; the bases are shown or hidden as sections are lost
@@ -413,7 +413,7 @@ const Board = (() => {
     }
     if (PIECES[kind].tank) {
       const make = { sherman: () => Models.sherman(Models.M.olive), firefly: () => Models.sherman(Models.M.olive, true), pz4: Models.panzer4, panther: Models.panther }[kind];
-      return [0, 1].map(() => { const m = make(); markerSpots(m); m.scale.setScalar(TANKS); m.userData.slowTurn = true; return m; });
+      return [0].map(() => { const m = make(); markerSpots(m); m.scale.setScalar(TANKS); m.userData.slowTurn = true; return m; });
     }
     const m = kind === 'captain' ? Models.captain(side) : kind === 'pak' ? Models.pak() : Models.team(side, kind);
     markerSpots(m);
@@ -430,6 +430,8 @@ const Board = (() => {
     for (const b of g.userData.bases) g.add(b);
     // Elite, yours or theirs (Steve): a gold band round the edge of every base
     if (u.quality === 'elite') for (const b of g.userData.bases) Models.eliteBand(b);
+    // A tank drives (Steve): it turns towards where it is going and goes forward, in curves, instead of sliding
+    if (Sim.isTank(u)) g.userData.drives = g.userData.bases[0];
     // The Germans face west
     g.userData.face = u.side === 'us' ? 0 : Math.PI;
     scene.add(g);
@@ -525,12 +527,55 @@ const Board = (() => {
       if (way && way.length && Math.hypot(way[0].x - o.position.x, way[0].z - o.position.z) < 0.12) way.shift();
       const to = way && way.length ? Object.assign({}, way[0], { ry: o.userData.to.ry }) : o.userData.to;
       if (!to) return;
-      const dx = to.x - o.position.x, dz = to.z - o.position.z, dr = to.ry - o.rotation.y, dy = (to.y || 0) - o.position.y;
+      // A tank drives there instead of sliding
+      if (o.userData.drives) { if (drive(o, to, dt)) moving = true; return; }
+      // The short way round (Steve: tanks spun a whole turn when the angles were a full turn apart)
+      const dr = shortTurn(to.ry - o.rotation.y);
+      const dx = to.x - o.position.x, dz = to.z - o.position.z, dy = (to.y || 0) - o.position.y;
       if (Math.abs(dx) + Math.abs(dz) + Math.abs(dr) + Math.abs(dy) < 0.002) { o.position.x = to.x; o.position.z = to.z; o.position.y = to.y || 0; o.rotation.y = to.ry; return; }
-      o.position.x += dx * k; o.position.z += dz * k; o.rotation.y += dr * (o.userData.slowTurn ? kTurn : k); o.position.y += dy * Math.min(1, k * 2.5);
+      o.position.x += dx * k; o.position.z += dz * k; o.position.y += dy * Math.min(1, k * 2.5);
+      // A tank driving does its own turning (see drive); otherwise it turns onto the way it should face
+      if (!o.userData.driving) o.rotation.y += dr * (o.userData.slowTurn ? kTurn : k);
       moving = true;
     });
     return moving;
+  }
+
+  // An angle brought into -π..π, so a turn always goes the short way round
+  function shortTurn(a) {
+    return Math.atan2(Math.sin(a), Math.cos(a));
+  }
+
+  // A tank driving to a point (Steve: in normal driving curves): it turns towards it a little at a time and goes forward
+  // the way it is facing, slower while it is still turning and on the spot if the point is behind it. Once there, it
+  // stops driving and turns to the way it should face (as any piece does, in glide). Returns true while it is moving
+  const TANK_SPEED = 2.2;            // fields a second, flat out
+  const TANK_STEER = 3.5;            // how fast it can turn while driving, in radians a second
+  function drive(g, to, dt) {
+    const tank = g.userData.drives;
+    const dx = to.x - g.position.x, dz = to.z - g.position.z, dy = (to.y || 0) - g.position.y;
+    const far = Math.hypot(dx, dz);
+    // The hop when it is picked still lifts it
+    g.position.y += dy * Math.min(1, (1 - Math.exp(-dt * 6)) * 2.5);
+    // There: it stops driving
+    if (far < 0.01) {
+      g.position.x = to.x; g.position.z = to.z;
+      tank.userData.driving = false;
+      return Math.abs(dy) > 0.002;
+    }
+    tank.userData.driving = true;
+    // The way to go, and how far off its heading that is (facing angle a points along cos a, -sin a on the table)
+    const want = Math.atan2(-dz, dx);
+    const off = shortTurn(want - tank.rotation.y);
+    // Steer towards it
+    const steer = Math.max(-TANK_STEER * dt, Math.min(TANK_STEER * dt, off));
+    tank.rotation.y += steer;
+    // Forward along its heading: full speed when facing the way, slowing as it turns, never past the point
+    const speed = TANK_SPEED * Math.max(0, Math.cos(off));
+    const step = Math.min(far, speed * dt);
+    g.position.x += Math.cos(tank.rotation.y) * step;
+    g.position.z -= Math.sin(tank.rotation.y) * step;
+    return true;
   }
 
   // Markers on a piece (Steve): the red shaken token sits on the back edge of its (first) base, or on a tank's back
@@ -971,7 +1016,7 @@ const Board = (() => {
     s.scale.set(size * t.wide, size / 4, 1);
     return s;
   }
-  const RESULT_COLOUR = { 'Missed': '#d8d2c4', 'No effect': '#e6d29a', 'Pinned': '#ffb04a', 'Section lost': '#ff6a50', 'Tank knocked out': '#ff6a50', 'Wiped out': '#ff3b2e', 'Destroyed': '#ff3b2e' };
+  const RESULT_COLOUR = { 'Missed': '#d8d2c4', 'No effect': '#e6d29a', 'Shaken': '#ffb04a', 'Section lost': '#ff6a50', 'Tank knocked out': '#ff6a50', 'Wiped out': '#ff3b2e', 'Destroyed': '#ff3b2e' };
 
   let shots = [];              // effects playing: { fx, t0 }
   // A piece hit keeps its look until the shot at it lands (Steve): piece id → { until, count, visible }

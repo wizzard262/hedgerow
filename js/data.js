@@ -23,7 +23,7 @@ const VILLAGES = [
   { x: 10, y: 4, name: 'Saint-Jean' },
   { x: 10, y: 1, name: 'La Haye' },
 ];
-// Sharing a field (Steve): a tank pair stands alone; one rifle platoon at most, with this many smaller pieces (teams,
+// Sharing a field (Steve): a tank stands alone; one rifle platoon at most, with this many smaller pieces (teams,
 // the captain) beside it, or this many smaller pieces on their own
 const FIELD_SMALL = { withPlatoon: 2, alone: 4 };
 const HEDGE_GAP = 0.45;          // chance an edge between two fields has a gap (a gate or a broken bank)
@@ -108,8 +108,8 @@ const US_START = [
   { id: 'B', kind: 'company', name: '2nd Platoon', quality: 'standard', x: 0, y: 4 },
   { id: 'C', kind: 'company', name: '3rd Platoon', quality: 'standard', x: 0, y: 6 },
   { id: 'cap', kind: 'captain', name: 'Captain (company HQ)', x: 0, y: 4 },   // one captain, with the company guidon
-  { id: 'T1', kind: 'sherman', name: 'Sherman pair', x: 1, y: 4 },
-  { id: 'T2', kind: 'firefly', name: 'Firefly pair', x: 0, y: 3 },
+  { id: 'T1', kind: 'sherman', name: 'Sherman', x: 1, y: 4 },
+  { id: 'T2', kind: 'firefly', name: 'Firefly', x: 0, y: 3 },
   { id: 'mg1', kind: 'mg', name: 'MG Team 1', x: 1, y: 4 },
   { id: 'bz1', kind: 'bazooka', name: 'Bazooka Team 1', x: 0, y: 5 },
   { id: 'sn1', kind: 'sniper', name: 'Sniper Team', x: 0, y: 1 },
@@ -131,8 +131,8 @@ const DE_START = [
   { id: 'd3', kind: 'company', name: '3. Zug', quality: 'standard', reserve: true },
   // German armour (Steve: put them back): on the table from the start now there are no reinforcements, moving up
   // towards the nearest Americans
-  { id: 'dt1', kind: 'pz4', name: 'Panzer IV pair', reserve: true },
-  { id: 'dt2', kind: 'panther', name: 'Panther pair', reserve: true },
+  { id: 'dt1', kind: 'pz4', name: 'Panzer IV', reserve: true },
+  { id: 'dt2', kind: 'panther', name: 'Panther', reserve: true },
 ];
 
 // Reinforcements: who arrives on which turn, at their own edge (US west, German east). None for now (Steve: both sides

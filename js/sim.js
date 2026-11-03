@@ -70,7 +70,7 @@ const Sim = (() => {
     // at: the hedge the piece lines (n, e, s or w), or null out in the open. Both sides start lining the hedge towards the enemy
     const u = Object.assign({ side, shocked: false, hit: false, acted: false, attachedTo: null, at: side === 'us' ? 'e' : 'w' }, def);
     if (kind === 'company') u.platoons = 3;
-    else if (PIECES[kind].tank) u.platoons = 2;
+    // A team, the captain, a gun, or a tank (Steve: one tank to a unit, not a pair)
     else u.platoons = 1;
     if (!u.quality) u.quality = 'standard';
     return u;
@@ -90,7 +90,7 @@ const Sim = (() => {
 
   // Is there room for a unit in a field?
   function roomFor(st, unit, x, y, leaving = []) {
-    // Your own pieces can share a field, but not crowd it (Steve): a tank pair stands alone; otherwise one rifle platoon
+    // Your own pieces can share a field, but not crowd it (Steve): a tank stands alone; otherwise one rifle platoon
     // and two smaller pieces (teams, the captain), or four smaller pieces; never two platoons. Never with the enemy,
     // except in a hand-to-hand fight. A dug-in gun stands alone too
     const here = at(st, x, y).filter(u => !leaving.includes(u) && u !== unit && u.attachedTo !== unit.id);
@@ -99,7 +99,7 @@ const Sim = (() => {
     if (PIECES[unit.kind].fixed || here.some(u => PIECES[u.kind].fixed)) return false;
     // Everyone who would be there
     const all = here.concat([unit]);
-    // A tank pair: nobody else
+    // A tank: nobody else
     if (all.some(isTank)) return false;
     // One platoon at most; with it two smaller pieces, without it four
     const platoons = all.filter(u => u.kind === 'company').length;

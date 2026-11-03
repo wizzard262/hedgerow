@@ -156,7 +156,7 @@ check('every tank drives through hedges; only tanks get through wire; men climb 
   assert(Sim.actCharge(st, co, 2, 5).ok && co.x === 2 && st.hedges[k4], 'the climb did not arrive, or the men knocked the hedge down');
 });
 
-check('your pieces share a field: a tank pair alone; one platoon and two smaller pieces, or four smaller pieces', () => {
+check('your pieces share a field: a tank alone; one platoon and two smaller pieces, or four smaller pieces', () => {
   for (let seed = 1; seed <= 20; seed++) {
     const s2 = Sim.newGame(seed);
     for (const u of live(s2)) assert(fieldOk(s2, u.x, u.y), `seed ${seed}: ${u.name} starts sharing a field it shouldn't`);
@@ -292,6 +292,13 @@ check('a shaken piece can try to rally itself once; the captain rallies up to th
   assert(Sim.rallyTargets(st, cap).includes(B), 'the captain could not reach three fields');
 });
 
+check('every tank unit is one tank, both sides (Steve: not a pair)', () => {
+  const st = Sim.newGame(2);
+  const tanks = st.units.filter(u => Sim.isTank(u));
+  assert(tanks.length === 4 && tanks.every(u => u.platoons === 1), `tank units start with ${tanks.map(u => u.platoons).join(', ')} tanks`);
+  assert(tanks.every(u => !/pair/i.test(u.name)), 'a tank unit is still called a pair');
+});
+
 check('machine guns fire five dice', () => {
   assert(PIECES.mg.soft === 5 && PIECES.mg42.soft === 5, 'an MG team does not fire five dice');
 });
@@ -377,7 +384,7 @@ check('the captain can shoot, and be shot like anyone else (a small target): one
   assert(cap.x === null, 'the captain could not be killed');
 });
 
-check('two pins kill; bazookas and tanks kill men outright; MGs and tanks reach further; tanks give cover', () => {
+check('shaken twice kills; bazookas and tanks kill men outright; MGs and tanks reach further; tanks give cover', () => {
   const setUp = () => {
     const st = Sim.newGame(4);
     st.hedges = {}; st.wire = {};
@@ -392,10 +399,10 @@ check('two pins kill; bazookas and tanks kill men outright; MGs and tanks reach 
   };
   let g = setUp();
   Sim.actShoot(g.st, g.A, g.de);
-  assert(g.de.platoons === 1, `three rifle hits on a fresh platoon should pin with the first and kill with the next two (it has ${g.de.platoons})`);
+  assert(g.de.platoons === 1, `three rifle hits on a fresh platoon should shake it with the first and kill with the next two (it has ${g.de.platoons})`);
   g = setUp(); g.de.shocked = true;
   Sim.actShoot(g.st, g.A, g.de);
-  assert(g.de.x === null, 'three hits on a pinned platoon did not wipe it out');
+  assert(g.de.x === null, 'three hits on a shaken platoon did not wipe it out');
   g = setUp();
   g.bz.at = null; g.bz.x = 1; g.bz.y = 7;
   Sim.actShoot(g.st, g.bz, g.de);

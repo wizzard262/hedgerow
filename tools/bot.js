@@ -51,7 +51,7 @@ function playHour(st) {
 // Take cover when a weakened or shaken piece is fired on
 function decide(st, shot) {
   const t = Sim.unitById(st, shot.target);
-  return t.shocked || t.platoons < (t.kind === 'company' ? 3 : 2);
+  return t.shocked || t.platoons < (t.kind === 'company' ? 3 : 1);
 }
 
 // Play a game; with no time limit it stops after maxHours if neither side has won

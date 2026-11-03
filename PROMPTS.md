@@ -769,10 +769,37 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - The board is 12 fields long (was 10). Both villages, Saint-Jean and La Haye, are now at the back of the German end (fields 11 and 12), so the German garrison starts there; the hamlets moved towards the middle
 - Balance: the test player now wins 13% in about 13 rounds (was 29% in 5.5); doing nothing never wins
 
+## 134. Picked again after Move & shoot: its targets come back (v81)
+
+- Steve (passed on from another session): reselecting the active piece after a move, but before it shoots, should highlight the enemy pieces it can shoot again
+- Clicking the piece again while its Move & shoot shot is still to come puts its red targets back on the table
+
+## 135. One tank to a tank unit (v81)
+
+- Steve: every tank unit should be 1 tank, not 2
+- The Sherman, the Firefly, the Panzer IV and the Panther are each one tank now (named without "pair"), with that one tank's dice
+- Balance: the test player wins 9% in about 13 rounds (was 13%); doing nothing never wins
+
+## 136. Tanks drive in curves, and never spin a whole turn (v81)
+
+- Steve: a single tank should drive in normal driving arcs. Tanks sometimes spin a full 360 when they move or shoot; they shouldn't
+- A moving tank now turns a little at a time towards where it is going and drives forward the way it faces (slowing while it turns, turning on the spot if the way is behind it), so it goes round in curves instead of sliding sideways. Once there it turns to face the nearest enemy as before
+- Every turn on the table (tanks, the PaK, everyone) now goes the short way round, so nothing spins a whole turn
+
+## 137. Shaken after winning hand to hand (v81)
+
+- Steve: still lose shaken after winning hand to hand
+- Checked: since v80 the rules keep shaken after a fight (40 of 40 test fights). The page was probably still v79 from the browser's cache just after the push; a refresh (Ctrl+F5) loads the new version
+
+## 138. Never "pinned", always shaken (v81)
+
+- Steve: we don't say pinned anywhere any more, it's just shaken
+- The last "Pinned" (a colour name in the table's code) and the test names now say shaken. (Older prompts in this file still quote "pinned" as it was said then)
+
 ## Sessions
 
 | # | Date | Length | What we did |
 |---|------|--------|-------------|
 | 1 | 2026-10-30 | about 10.5 hours | Prompts 1–84: rules, command points, reacting, tanks and hedge cutters, the look (pixel art to 3D tabletop), scales, river, villages, wire, six-move aim; one captain, piece menus, hedges stop moves, MG team model; bazooka teams, two-field charges; red targets; who has acted; company level; lining hedges, longer sight, the captain's guidon; one unit a field, no time limit; tracers and shells, greyed out, no activation tokens, Move & shoot hatching; tanks through hedges, charges for all; no plain move; teams and captain with a platoon, no attaching; one piece at a time; charging through friends; range, cover and moving +1 each; words off the target, tanks turn and recoil; rallying; MGs can't move and fire; easier targets; Move & shoot one action; tanks impervious to small arms; more gaps; no charging through houses; MGs fire five; hand to hand shown; sounds; select and move sounds; running and tank sounds; twisty wire, tank boom, a cleaner panel, better running; bigger dice with a tag; louder, more real sounds; distant battle; shells arcing in and explosions; Sherman and Firefly named; dice cleared on the next pick; fire support targets; real recordings; tank HE hits the whole field; 3+ to hit, pinned not stopped, 50/50 wounds; further moves, climbing hedges; click where in the field, cover shown, more orchards; routes shown, why a shot needs what it needs; flush roofs, lines of sight; pieces stay till hit, the captain shoots; mortars and artillery off the board; take cover; captain rallies twice, two pins kill; bazookas and tanks kill, longer reach, tanks as cover, no Break through, wire for tanks only, hopping hedges; who is aiming at whom; blue hatching on the village; moves shown on picking a piece; win by wiping out the Germans, artillery friendly fire; full-screen table, bottom bar; score in a word bubble; no shooting at 7+; longer ranges, a sniper; fire support by clicking the guns; German artillery; rules in two columns, not at the start; nine places in a field, guns lower; the blind bag; guns in the bag, Skip turn; pointed bubble arrows; the token as a coin, three times bigger |
 | 2 | 2026-10-31 | about 7 hours | Prompts 85–124: small targets, houses +2, small houses round the square, stop at a wipe-out; shaken token on the base, shaken not pinned; captain's blue rally targets; no river; taking cover halves the dice; no pick-up sound; the timer token; brown German bases, Germans greyed out; no glare, rounds not hours; tokens fly back into the bag; one round per base, the rocket, tanks turn then fire in turn; tanks face the nearest enemy, side by side; no Pass button; hand to hand to the finish; take cover in a word bubble; rally offered after the captain moves; villages and orchards seen only at their edge; a clearer timer token, a matt coin; no crowding in a field, no token sound; German cards and pictures, shaken half moves, sounds back, timer in the middle, bubbles below at the top, bombers; the prompts page; German pick sounds, hops, the timer hovering, louder bombers; moved pieces green for yours, grey for theirs; the guns hop too; the elite token explained, each tank recoils on its own; hand to hand shown blow by blow, tinted only when the move is complete; the timer never first; German tanks back; pieces in a village see out; a German captain; Germans move by your rules, rallies shown; tanks drive men back, captains can die |
-| 3 | 2026-11-03 | about 1 hour | Prompts 125–133: rallies always work and are the only cure for shaken; the end waits for the last shot; elite gold band, grey German tanks; a cleaner sand-glass; PaK crew of three that turns to fire; no more ammo; the table lower; the timer checked fair; a longer board with the villages at the back |
+| 3 | 2026-11-03 | about 1.5 hours | Prompts 125–138: rallies always work and are the only cure for shaken; the end waits for the last shot; elite gold band, grey German tanks; a cleaner sand-glass; PaK crew of three that turns to fire; no more ammo; the table lower; the timer checked fair; a longer board with the villages at the back; targets back on reselecting; one tank a unit; tanks drive in curves, no spinning; shaken, never pinned |
