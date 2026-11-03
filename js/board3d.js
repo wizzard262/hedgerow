@@ -192,6 +192,8 @@ const Board = (() => {
       homing.push(homeCoin('timer', mid, onTable(ends.timer), last, landed));
     }
     homingDone = done;
+    // Nothing to fly home: done at once
+    if (!homing.length) { homingDone = null; done(); }
   }
   // Where a side's coins fly home from this round: as many as its bag gained (its new tokens less those still in it)
   function homeFrom(st, side) {
@@ -312,11 +314,19 @@ const Board = (() => {
         built.add(at(Models.water(0.42, bottom - top), x + 0.5, 0, y + (top + bottom) / 2));
         if (t === 'bridge') { built.add(at(Models.lane(1, 0.3), x + 0.5, 0.0012, y + 0.5, -Math.PI / 2, 0, 0)); const b = Models.bridge(); built.add(at(b, x + 0.5, 0, y + 0.5)); }
       }
-      if (t === 'orchard') for (const [ox, oz] of [[0.2, 0.18], [0.82, 0.2], [0.18, 0.84], [0.84, 0.84]]) built.add(at(Models.tree(seed + ox * 10, 0.75), x + ox, 0, y + oz));
+      if (t === 'orchard') for (const [ox, oz] of orchardTrees(seed)) built.add(at(Models.tree(seed + ox * 10 + oz * 3, 0.68 + ((ox * 31 + oz * 17) % 1) * 0.15), x + ox, 0, y + oz));
       if (t === 'village' || t === 'hamlet') addHouses(x, y, seed);
     }
     scene.add(built);
     hedgeKey = '';
+  }
+
+  // Where an orchard's trees stand (Steve: a couple more, staggered at random): six trees, each pushed about its own
+  // spot in two loose rows, kept clear of the middle where the pieces stand and of the hedges
+  function orchardTrees(seed) {
+    const R = seeded(seed * 5 + 3);
+    const spots = [[0.18, 0.18], [0.5, 0.14], [0.82, 0.2], [0.2, 0.84], [0.52, 0.86], [0.84, 0.8]];
+    return spots.map(([x, z]) => [x + (R() - 0.5) * 0.14, z + (R() - 0.5) * 0.12]);
   }
 
   // Houses round the square (Steve): small ones, about as tall as a figure, two along each side of the field with gaps
@@ -431,10 +441,10 @@ const Board = (() => {
   // The model for a piece, made the first time it is needed
   // The models that make up a piece, each a base on the table, scaled: a rifle platoon's three section bases, a tank
   // (one to a unit, Steve), or a team's (or the captain's) one base. Used for the table and for the panel's picture
-  function buildBases(side, kind) {
+  function buildBases(side, kind, elite = false) {
     if (kind === 'company') {
-      // One base a section; the bases are shown or hidden as sections are lost
-      return [0, 1, 2].map(() => { const s = Models.squad(side); markerSpots(s); s.scale.setScalar(MEN); return s; });
+      // One base a section; the bases are shown or hidden as sections are lost. Elite: in camouflage (Steve)
+      return [0, 1, 2].map(() => { const s = Models.squad(side, elite); markerSpots(s); s.scale.setScalar(MEN); return s; });
     }
     if (PIECES[kind].tank) {
       const make = { sherman: () => Models.sherman(Models.M.olive), firefly: () => Models.sherman(Models.M.olive, true), pz4: Models.panzer4, panther: Models.panther }[kind];
@@ -451,7 +461,7 @@ const Board = (() => {
   function model(u) {
     if (pieces[u.id]) return pieces[u.id];
     const g = new T.Group();
-    g.userData.bases = buildBases(u.side, u.kind);
+    g.userData.bases = buildBases(u.side, u.kind, u.quality === 'elite');
     for (const b of g.userData.bases) g.add(b);
     // Elite, yours or theirs (Steve): a gold band round the edge of every base
     if (u.quality === 'elite') for (const b of g.userData.bases) Models.eliteBand(b);
@@ -826,17 +836,18 @@ const Board = (() => {
     return n.k ? new T.Vector3(to.x + c.x / n.k, 0, to.z + c.z / n.k) : new T.Vector3(u.x + 0.5, 0, u.y + 0.5);
   }
 
-  // "5+": the score each die needs, in a small red label, and under it why (Steve): "−1 cover · −1 long range"
+  // The score each die needs, in a red label that reads top to bottom (Steve): "3+", "+1 small target", "+1 long range",
+  // then the total, "5+", in big figures
   const labelTex = {};
-  // A word bubble (Steve): the score in big figures, why under it, and a pointed tail at the bottom (tailDown) or top,
-  // towards the target. The sprite's anchor is the tip of the tail
+  // A word bubble: why, row by row, the score in big figures under it, and a pointed tail at the bottom (tailDown) or
+  // top, towards the target. The sprite's anchor is the tip of the tail
   function needLabel(n, why = [], tailDown = true) {
     const key = n + '|' + why.join(',') + '|' + tailDown;
     if (!labelTex[key]) {
       const c = document.createElement('canvas'), g = c.getContext('2d');
-      // The score on top, then one row for each modifier (Steve: stacked, not all on one line)
+      // One row for each modifier (Steve: stacked, not all on one line), then the score
       g.font = 'bold 30px Georgia, serif';
-      const tail = 26, row = 36, boxH = 60 + why.length * row + (why.length ? 6 : 0);
+      const tail = 26, row = 36, big = 64, boxH = big + why.length * row + (why.length ? 10 : 0);
       const widest = Math.max(0, ...why.map(w => g.measureText(w).width));
       c.width = Math.max(128, Math.ceil(widest) + 36); c.height = boxH + tail + 8;
       const top = tailDown ? 4 : tail + 4, mid = c.width / 2;
@@ -847,10 +858,15 @@ const Board = (() => {
       else { g.moveTo(mid - 16, top + 1); g.lineTo(mid, 2); g.lineTo(mid + 16, top + 1); }
       g.fillStyle = 'rgba(150,25,20,.94)'; g.fill();
       g.lineWidth = 3; g.strokeStyle = 'rgba(255,230,200,.85)'; g.stroke();
-      g.fillStyle = '#fff4e8'; g.font = 'bold 40px Georgia, serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
-      g.fillText(n >= 6 ? '6' : n + '+', mid, top + 30);
+      g.textAlign = 'center'; g.textBaseline = 'middle';
+      // The rows: the 3+ start, then each +1 (or −1 elite)
       g.font = 'bold 30px Georgia, serif'; g.fillStyle = '#ffd9a0';
-      why.forEach((w, k) => g.fillText(w, mid, top + 62 + row / 2 + k * row));
+      why.forEach((w, k) => g.fillText(w, mid, top + 10 + row / 2 + k * row));
+      // A line under them, then the score in big figures
+      const scoreY = top + (why.length ? 10 + why.length * row : 0) + big / 2;
+      if (why.length) { g.fillStyle = 'rgba(255,230,200,.6)'; g.fillRect(16, scoreY - big / 2 - 2, c.width - 32, 2); }
+      g.fillStyle = '#fff4e8'; g.font = 'bold 48px Georgia, serif';
+      g.fillText(n >= 6 ? '6' : n + '+', mid, scoreY);
       labelTex[key] = { map: new T.CanvasTexture(c), w: c.width, h: c.height };
     }
     const t = labelTex[key];
@@ -1492,7 +1508,9 @@ const Board = (() => {
       : f.support === 'artillery' ? 'Our artillery' : 'Our mortars';
     const need = f.need >= 6 ? 'needs 6' : `needs ${f.need}+`;
     const hits = f.faces.filter(r => r.hit).length;
-    return [who, `${need} · ${hits} hit${hits === 1 ? '' : 's'}`];
+    // Taking cover (Steve: the tag says so, with the dice it really rolled)
+    const cover = f.fullDice ? `taking cover: ${f.faces.length} of ${f.fullDice} dice · ` : '';
+    return [who, `${cover}${need} · ${hits} hit${hits === 1 ? '' : 's'}`];
   }
 
   // The tag: a small rounded label, blue for our shots and grey for the Germans', drawn once for each text
@@ -1720,10 +1738,16 @@ const Board = (() => {
     return screenPoint(p.x, p.z, 0.15);
   }
 
+  // The top corner of the table above a side's artillery, on the page: where its last roll shows (Steve)
+  function rollSpot(side) {
+    const gun = GUNS[side].artillery;
+    return screenPoint(gun.x, 0.35, 0);
+  }
+
   function screenPoint(x, y, h = 0) {
     const p = new T.Vector3(x, h, y).project(camera), r = renderer.domElement.getBoundingClientRect();
     return { x: r.left + (p.x + 1) / 2 * r.width, y: r.top + (1 - p.y) / 2 * r.height };
   }
 
-  return { init, resize, render, fieldAt, pieceAt, pieceUnder, portrait, bounce, bounceGun, busyFor, settledIn, gunAt, targetAt, screenPoint, pieceScreen, labelBox, clearDice, flyToken, clearToken, returnTokens, canvas: () => renderer.domElement };
+  return { init, resize, render, fieldAt, pieceAt, pieceUnder, portrait, bounce, bounceGun, busyFor, settledIn, gunAt, targetAt, screenPoint, rollSpot, shotTagText, pieceScreen, labelBox, clearDice, flyToken, clearToken, returnTokens, canvas: () => renderer.domElement };
 })();

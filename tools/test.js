@@ -321,6 +321,32 @@ check('a new round knows who a token activated and what stayed in the bag (Steve
   assert(st.returning.left.us === left.us && st.returning.left.de === left.de, 'the round forgot what stayed in the bag');
 });
 
+check('on the page, each German shot is aimed (shown) first, then fired; headless it fires at once', () => {
+  let aimed = 0;
+  for (let seed = 1; seed <= 20; seed++) {
+    const st = Sim.newGame(seed);
+    Sim.startGermanHour(st);
+    for (let r = Sim.germanStep(st, true), n = 0; !r.done && n < 200; r = Sim.germanStep(st, true), n++) {
+      if (r.aim) { aimed++; assert(st.de.aim === r.aim, `seed ${seed}: the aimed shot was not kept`); continue; }
+      if (r.ask) Sim.answer(st, false);
+    }
+    assert(!st.de || !st.de.aim, `seed ${seed}: a shot was left aimed but never fired`);
+  }
+  assert(aimed > 0, 'no German shot was ever aimed');
+});
+
+check('seeing reaches the whole board (to call fire); shooting only the weapon\'s reach', () => {
+  const st = Sim.newGame(3);
+  st.hedges = {}; st.wire = {};
+  const B = Sim.unitById(st, 'B');
+  for (const u of st.units) if (u !== B) u.x = u.y = null;
+  // Down the lane at the bottom of the open row: from one end of the board to the other
+  B.x = 0; B.y = 5; B.at = null; B.acted = true;
+  const far = { x: COLS - 1, y: 5, at: null };
+  assert(Sim.sees(st, 'us', far.x, far.y), 'a piece could not see the far end of an open lane (moved this round, too)');
+  assert(!Sim.sight(st, B, far), 'a rifle platoon could shoot the whole length of the board');
+});
+
 check('machine guns fire five dice', () => {
   assert(PIECES.mg.soft === 5 && PIECES.mg42.soft === 5, 'an MG team does not fire five dice');
 });
@@ -652,7 +678,7 @@ check('a shot label adds up: the 3+ start, then each cover named on its own, to 
   const labelSum = why => why.reduce((n, w) => {
     const m = /^([−+])(\d+) /.exec(w);
     if (!m) return n;
-    return m[1] === '−' ? n + Number(m[2]) : n - Number(m[2]);
+    return m[1] === '+' ? n + Number(m[2]) : n - Number(m[2]);
   }, TO_HIT);
   let checked = 0;
   for (let seed = 1; seed <= 15; seed++) {
@@ -665,9 +691,9 @@ check('a shot label adds up: the 3+ start, then each cover named on its own, to 
       for (const t of Sim.targets(st, u)) {
         const why = Sim.needWhy(st, u, t);
         const need = Sim.needFor(st, u, t) + (Sim.isTank(t) ? PIECES[t.kind].armour : 0);
-        assert(!why.some(w => /^−\d+ cover$/.test(w)), `seed ${seed}: a lumped "cover" reason: ${why.join(', ')}`);
+        assert(!why.some(w => /^[+−]\d+ cover$/.test(w)), `seed ${seed}: a lumped "cover" reason: ${why.join(', ')}`);
         if (!why.length) { assert(need === TO_HIT, `seed ${seed}: ${u.name} → ${t.name} needs ${need}+ with no reasons`); continue; }
-        assert(why[0] === `${TO_HIT}+ start`, `seed ${seed}: the label does not start from ${TO_HIT}+: ${why.join(', ')}`);
+        assert(why[0] === `${TO_HIT}+`, `seed ${seed}: the label does not start from ${TO_HIT}+: ${why.join(', ')}`);
         if (!PIECES[u.kind].sniper) assert(labelSum(why) === need, `seed ${seed}: ${u.name} → ${t.name} needs ${need}+ but the label says ${why.join(', ')}`);
         checked++;
       }
@@ -711,7 +737,7 @@ check('a small target (two men or fewer) needs one more; an MG team (three men) 
   // The Panzerschreck team: two men
   de.kind = 'schreck';
   assert(Sim.needFor(st, A, de) === open + SMALL_TARGET, 'a two-man team was no harder to hit');
-  assert(Sim.needWhy(st, A, de).includes(`−${SMALL_TARGET} small target`), 'the label did not say small target');
+  assert(Sim.needWhy(st, A, de).includes(`+${SMALL_TARGET} small target`), 'the label did not say small target');
   // An MG 42 team: three men, not small
   de.kind = 'mg42';
   assert(Sim.needFor(st, A, de) === open, 'a three-man MG team counted as a small target');

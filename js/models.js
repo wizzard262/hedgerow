@@ -73,14 +73,17 @@ const Models = (() => {
     M.usTrousers = mat('#5e5b3d', 0.85);
     M.usHelmet = mat('#4f5434', 0.6);
     M.usWebbing = mat('#9a8f62', 0.9);
-    M.deUniform = mat('#5d6862', 0.85);        // field grey
-    M.deHelmet = mat('#4a524f', 0.55);
+    M.deUniform = mat('#5f6a5a', 0.85);        // the Fallschirmjäger's grey-green jump smock (Steve: they look like paratroopers)
+    M.deTrousers = mat('#56605a', 0.85);       // field grey trousers
+    M.deHelmet = mat('#141414', 0.5);          // black helmets (Steve)
     M.deHelmet.side = T.DoubleSide;           // the Stahlhelm is a lathed shell: both faces show
     M.deWebbing = mat('#2e2a25', 0.7);
     M.olive = mat('#4f5432', 0.65, 0.15);      // olive drab paint
     M.dunkelgelb = mat('#a8975f', 0.65, 0.15); // German dark yellow
     M.panzerGrey = mat('#565c5f', 0.65, 0.15); // German tanks (Steve): panzer grey
-    M.gold = mat('#c9a13a', 0.35, 0.7);       // an elite piece's band round its bases
+    M.gold = mat('#e2b53a', 0.3, 0.6);        // an elite piece's band round its bases: bright, glowing a little
+    M.gold.emissive = new T.Color('#6a4c08');
+    M.gold.side = T.DoubleSide;
     M.white = mat('#e8e4d6', 0.6);
     M.black = mat('#151515', 0.6);
     M.stone = mat('#bfb397', 0.95);
@@ -109,9 +112,12 @@ const Models = (() => {
   // ---------- Men ----------
   // A painted figure, on its own round base or (base = false) standing on a shared one. A man is about 0.11 tall
   // before the game scales the men up (they are bigger models than the tanks: 1:54 against 1:76)
-  function soldier(side, pose = 0, base = true) {
+  // elite (Steve): in a camouflage outfit, both sides
+  function soldier(side, pose = 0, base = true, elite = false) {
     const us = side === 'us', g = new T.Group();
-    const uni = us ? M.usUniform : M.deUniform, legs = us ? M.usTrousers : M.deUniform, web = us ? M.usWebbing : M.deWebbing;
+    const plain = us ? M.usUniform : M.deUniform;
+    const uni = elite ? camoCloth(side) : plain;
+    const legs = elite ? uni : us ? M.usTrousers : M.deTrousers, web = us ? M.usWebbing : M.deWebbing;
     // Base: a black disc with a bevel
     if (base) g.add(at(cyl(0.032, 0.034, 0.008, M.base, 24), 0, 0.004, 0));
     // Legs apart, boots (US leggings are paler)
@@ -119,8 +125,10 @@ const Models = (() => {
       g.add(at(cyl(0.0065, 0.0055, 0.045, legs, 8), 0.004 * s + pose * 0.004 * s, 0.032, 0.007 * s, 0, 0, 0.12 * s * pose));
       g.add(at(box(0.012, 0.008, 0.009, us ? M.usWebbing : M.boot), 0.006 * s, 0.012, 0.007 * s));
     }
-    // Body: jacket, belt with pouches, and (German) the bread bag and mess tin
+    // Body: jacket, belt with pouches, and (German) the bread bag and mess tin. The German jump smock is longer, down
+    // over the hips
     g.add(at(box(0.026, 0.038, 0.016, uni), 0, 0.075, 0));
+    if (!us) g.add(at(box(0.028, 0.014, 0.018, uni), 0, 0.052, 0));
     g.add(at(box(0.027, 0.006, 0.017, web), 0, 0.058, 0));
     for (const s of [-1, 1]) g.add(at(box(0.007, 0.008, 0.004, web), 0.008 * s, 0.059, 0.009));
     g.add(at(box(0.004, 0.036, 0.018, web), 0.0, 0.077, 0.0, 0, 0, 0.5));
@@ -139,14 +147,37 @@ const Models = (() => {
       const h = sphere(0.0125, M.usHelmet, 16, 10); h.scale.set(1, 0.72, 1.05); g.add(at(h, 0, 0.11, 0));
       g.add(at(cyl(0.0135, 0.0135, 0.002, M.usHelmet, 16), 0, 0.106, 0));
     } else {
-      const lathe = new T.LatheGeometry([[0, 0.012], [0.008, 0.011], [0.0115, 0.006], [0.0125, 0.0], [0.0155, -0.004], [0.0158, -0.0045]].map(([x, y]) => new T.Vector2(x, y)), 16);
+      // The paratrooper's helmet (Steve): round, close to the head, no flared brim, in black
+      const lathe = new T.LatheGeometry([[0, 0.0125], [0.008, 0.0115], [0.0118, 0.006], [0.0128, 0.0], [0.0132, -0.003], [0.0128, -0.0035]].map(([x, y]) => new T.Vector2(x, y)), 16);
       g.add(at(new T.Mesh(lathe, M.deHelmet), 0, 0.108, 0));
     }
     return castAll(g);
   }
 
-  // A platoon: four figures together on one small flocked base, as wargamers base a section. Built facing +x (east)
-  function squad(side) {
+  // Camouflage cloth for elite troops (Steve), made once a side: the American two-tone green and brown spots, the German
+  // paratroopers' splinter pattern of green and brown slashes on tan
+  const camo = {};
+  function camoCloth(side) {
+    if (camo[side]) return camo[side];
+    const us = side === 'us';
+    const tex = canvasTexture(128, 128, (g, w, h) => {
+      const R = seeded(us ? 61 : 67);
+      g.fillStyle = us ? '#6f7448' : '#8f8a62'; g.fillRect(0, 0, w, h);
+      for (let k = 0; k < 60; k++) {
+        g.fillStyle = ['#3f4a2a', '#5a4630', '#4f6236'][k % 3];
+        g.beginPath();
+        if (us) g.ellipse(R() * w, R() * h, 4 + R() * 8, 3 + R() * 6, R() * 3, 0, 7);
+        else { const x = R() * w, y = R() * h, a = R() * 3; g.moveTo(x, y); g.lineTo(x + Math.cos(a) * 22, y + Math.sin(a) * 22); g.lineTo(x + Math.cos(a + 0.5) * 9, y + Math.sin(a + 0.5) * 9); }
+        g.fill();
+      }
+    });
+    camo[side] = new T.MeshStandardMaterial({ map: tex, roughness: 0.85 });
+    return camo[side];
+  }
+
+  // A platoon: three figures together on one small flocked base (Steve: three a base), as wargamers base a section.
+  // Elite ones in camouflage. Built facing +x (east)
+  function squad(side, elite = false) {
     const g = new T.Group();
     // A small oval base, its top flocked like the table, its edge painted dark
     const b = new T.Mesh(new T.CylinderGeometry(0.05, 0.052, 0.008, 32), [mat('#3b3326', 0.8), baseTop(side), M.base]);
@@ -154,8 +185,8 @@ const Models = (() => {
     // A little flock on the base, as on a finished model
     const tuft = mat(side === 'de' ? '#6e5a3a' : '#5d6b3c', 1);
     for (const [x, z] of [[-0.03, 0.05], [0.035, -0.045], [0.02, 0.06]]) g.add(at(sphere(0.007, tuft, 6, 4), x, 0.009, z));
-    [[-0.02, -0.05, 0], [0.022, -0.018, 1], [-0.016, 0.018, -1], [0.02, 0.052, 0]].forEach(([x, z, p], i) => {
-      const s = soldier(side, p, false); at(s, x, 0.008, z, 0, (i - 1.5) * 0.18, 0); g.add(s);
+    [[-0.018, -0.045, 0], [0.022, 0.0, 1], [-0.014, 0.046, -1]].forEach(([x, z, p], i) => {
+      const s = soldier(side, p, false, elite); at(s, x, 0.008, z, 0, (i - 1) * 0.2, 0); g.add(s);
     });
     return castAll(g);
   }
@@ -560,10 +591,13 @@ const Models = (() => {
     const base = m.children.find(c => c.isMesh && Array.isArray(c.material) && c.material.includes(M.base));
     if (!base) return;
     const p = base.geometry.parameters;
-    const band = new T.Mesh(new T.CylinderGeometry(p.radiusTop * 1.05, p.radiusBottom * 1.05, p.height * 1.2, p.radialSegments, 1, true), M.gold);
-    // It keeps its gold when the piece is greyed out
-    band.userData.keep = true;
-    base.add(band);
+    const band = new T.Mesh(new T.CylinderGeometry(p.radiusTop * 1.06, p.radiusBottom * 1.06, p.height * 1.5, p.radialSegments, 1, true), M.gold);
+    // A flat gold rim round the top edge, so it shows from above
+    const rim = new T.Mesh(new T.RingGeometry(p.radiusTop * 0.86, p.radiusTop * 1.06, p.radialSegments), M.gold);
+    rim.rotation.x = -Math.PI / 2; rim.position.y = p.height / 2 + 0.0008;
+    // They keep their gold when the piece is greyed out
+    band.userData.keep = true; rim.userData.keep = true;
+    base.add(band, rim);
   }
 
   // Flat decals: a five-point star, a Balkenkreuz
@@ -638,12 +672,35 @@ const Models = (() => {
   // One field of the mat: flock for grass, wheat or the village yard; lanes painted on top
   const texCache = {};
   function field(type, wheat, seed) {
-    const key = type === 'village' ? 'v' : wheat ? 'w' : 'g' + (seed % 3);
-    if (!texCache[key]) texCache[key] = key === 'v' ? flockTex('#7c7465', ['#6e675a', '#8a8272', '#5f584c', '#99907e'], 11) : key === 'w' ? flockTex('#9c8b55', WHEAT, 12) : flockTex(['#5f6d3c', '#647140', '#5a6838'][seed % 3], GRASS, 13 + seed % 3);
+    const key = type === 'village' ? 'v' : type === 'orchard' ? 'o' : wheat ? 'w' : 'g' + (seed % 3);
+    if (!texCache[key]) texCache[key] = key === 'o' ? orchardGrass() : key === 'v' ? flockTex('#7c7465', ['#6e675a', '#8a8272', '#5f584c', '#99907e'], 11) : key === 'w' ? flockTex('#9c8b55', WHEAT, 12) : flockTex(['#5f6d3c', '#647140', '#5a6838'][seed % 3], GRASS, 13 + seed % 3);
     const m = new T.Mesh(new T.PlaneGeometry(1, 1), new T.MeshStandardMaterial({ map: texCache[key], roughness: 1 }));
     m.rotation.x = -Math.PI / 2; m.receiveShadow = true;
     return m;
   }
+  // The grass under an orchard's trees (Steve): darker than a field, rough and tufty, in mixed shades. Soft patches of
+  // greens and browns, then hundreds of little tufts: a dark shadow under each, a spray of short blades over it
+  function orchardGrass() {
+    return canvasTexture(512, 512, (g, w, h) => {
+      const R = seeded(53);
+      g.fillStyle = '#3f4d29'; g.fillRect(0, 0, w, h);
+      // Patches of mixed shades
+      const patches = ['#4a5a30', '#36421f', '#55613a', '#4d4a2c', '#3a4a2c'];
+      for (let k = 0; k < 40; k++) { g.fillStyle = patches[k % patches.length]; g.globalAlpha = 0.35; g.beginPath(); g.ellipse(R() * w, R() * h, 20 + R() * 60, 14 + R() * 40, R() * 3, 0, 7); g.fill(); }
+      g.globalAlpha = 1;
+      // The tufts
+      const blades = ['#5d6e3a', '#6f7d45', '#4b5b2e', '#7d7a48', '#3c4a24', '#88864f'];
+      for (let k = 0; k < 900; k++) {
+        const x = R() * w, y = R() * h, r = 3 + R() * 5;
+        g.fillStyle = 'rgba(20,26,10,.45)'; g.beginPath(); g.ellipse(x, y + 1.5, r, r * 0.6, 0, 0, 7); g.fill();
+        g.strokeStyle = blades[Math.floor(R() * blades.length)]; g.lineWidth = 1.2;
+        g.beginPath();
+        for (let b = 0; b < 7; b++) { const a = -Math.PI / 2 + (R() - 0.5) * 2.2; g.moveTo(x, y); g.lineTo(x + Math.cos(a) * r * 1.4, y + Math.sin(a) * r * 1.4); }
+        g.stroke();
+      }
+    });
+  }
+
   function lane(len, width) {
     if (!texCache.lane) texCache.lane = flockTex('#8f7d60', EARTH, 21);
     const m = new T.Mesh(new T.PlaneGeometry(len, width), new T.MeshStandardMaterial({ map: texCache.lane, roughness: 1 }));

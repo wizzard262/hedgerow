@@ -53,7 +53,7 @@ const SHAKEN_MOVE = 0.5;         // a shaken piece still moves and charges, but 
 const MAX_NEED = 6;              // a shot that would need more than this can't be taken (Steve: no shooting at 7+)
 const WOUND_CHANCE = 0.5;        // each hit is a coin toss: heads it wounds (a section, a team or a tank lost); every hit shakes
 const QUALITY = { elite: { name: 'Elite', shoot: 1, assault: 1.3 }, standard: { name: 'Standard', shoot: 0, assault: 1 } };
-const SIGHT_RANGE = 3;           // fields a piece without a weapon of its own sees (the rest: RANGES; hedges, villages and orchards block the view)
+const SIGHT_RANGE = 99;          // how far any piece sees (Steve: the whole board; hedges, villages and orchards block the view). Shooting: RANGES
 const LONG_RANGE = 1;             // added to the score needed at long range (the penalties stack)
 // How far each kind of weapon sees and shoots, and how many fields away before long range starts (Steve: rifles one
 // further, machine guns and tanks two beyond the rifles, the sniper the whole board with no long range)
@@ -110,7 +110,7 @@ const US_START = [
   { id: 'cap', kind: 'captain', name: 'Captain (company HQ)', x: 0, y: 4 },   // one captain, with the company guidon
   { id: 'T1', kind: 'sherman', name: 'Sherman', x: 1, y: 4 },
   { id: 'T2', kind: 'firefly', name: 'Firefly', x: 0, y: 3 },
-  { id: 'mg1', kind: 'mg', name: 'MG Team 1', x: 1, y: 4 },
+  { id: 'mg1', kind: 'mg', name: '.50 cal', x: 1, y: 4 },
   { id: 'bz1', kind: 'bazooka', name: 'Bazooka Team 1', x: 0, y: 5 },
   { id: 'sn1', kind: 'sniper', name: 'Sniper Team', x: 0, y: 1 },
 ];

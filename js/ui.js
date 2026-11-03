@@ -459,7 +459,7 @@ const UI = (() => {
     const strength = u.kind === 'company' ? `${u.platoons} section${u.platoons > 1 ? 's' : ''} (${u.platoons * 4} men)` : Sim.isTank(u) ? `${u.platoons} tank${u.platoons > 1 ? 's' : ''}` : PIECES[u.kind].men ? `${PIECES[u.kind].men} men` : '';
     const f = Sim.firepower(st, u);
     const dice = `🎲 ${Math.round(f.soft * 10) / 10} dice vs men${f.hard ? `, ${Math.round(f.hard * 10) / 10} vs tanks` : ''}`;
-    const status = u.down && u.acted ? '<span class="pill bad">Taking cover: the captain can get it up</span>' : u.shocked ? '<span class="pill bad">Shaken: −1 to hit, half moves</span>' : u.acted ? '<span class="pill done">✓ Moved this round</span>' : '<span class="pill ready">Ready</span>';
+    const status = u.down && u.acted ? '<span class="pill bad">Taking cover: the captain can get it up</span>' : u.shocked ? '<span class="pill bad">Shaken: +1 to hit, half moves</span>' : u.acted ? '<span class="pill done">✓ Moved this round</span>' : '<span class="pill ready">Ready</span>';
     box.append(el('div', 'name', `${u.name}${u.quality === 'elite' ? ' ★' : ''}`));
     box.append(el('div', 'sub', `${u.side === 'de' ? 'German · ' : ''}${KIND[u.kind]}${Sim.hasCutters(u) ? ' · hedge cutters' : ''}`));
     const where = u.kind === 'pak' ? '' : `📍 At ${Sim.placeName(u.at)}`;
@@ -532,6 +532,8 @@ const UI = (() => {
     // Each one home: one more in the bar
     const landed = side => { view.bagShown[side]++; bag(); };
     Board.returnTokens(st, ends, landed, () => { view.bagShown = null; bag(); done(); });
+    // Draw the table, so the coins start flying (it only draws when something has changed)
+    refresh();
   }
 
   // The token drawn: a thick coin flies from its place in the bar to the table above that side's artillery (see Board)

@@ -183,7 +183,7 @@ const Sound = (() => {
         if (!playFile('rifle', w, 0.5 + Math.random() * 0.3, 0.92 + Math.random() * 0.16)) shot(w, 0.8 + Math.random() * 0.2);
       }
     },
-    // The American .30-cal: a steady chug, about ten rounds a second
+    // The American .50 cal (Steve): a steady chug, about ten rounds a second
     mg(t) { if (!playFile('mg30', t, 0.85, 0.9)) burst(t, 11, 0.115, 0.9); },
     // The German MG 42: a ripping tear, twenty rounds a second
     mg42(t) { if (!playFile('mg42', t, 0.85, 0.85)) { burst(t, 14, 0.05, 0.85); burst(t + 0.95, 12, 0.05, 0.8); } },

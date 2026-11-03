@@ -267,9 +267,12 @@ const Sim = (() => {
   // A field whose houses or trees block the view across it
   const screens = f => ['village', 'hamlet', 'orchard'].includes(tileType(f.x, f.y));
 
-  function sight(st, from, target) {
+  // spotting: only whether it can be seen (to call fire on it), as far as the board goes (Steve); otherwise whether
+  // the piece can shoot at it, up to its weapon's reach
+  function sight(st, from, target, spotting = false) {
     const dist = Math.hypot(target.x - from.x, target.y - from.y);
-    if (dist === 0 || dist > rangeOf(from).sight + 0.01) return null;
+    const reach = spotting ? SIGHT_RANGE : rangeOf(from).sight;
+    if (dist === 0 || dist > reach + 0.01) return null;
     const path = fieldsAlong(from, target);
     let c = isFar(from, target) ? LONG_RANGE : 0;
     let behindTank = false, behindHedge = false;
@@ -294,9 +297,10 @@ const Sim = (() => {
     return { cover: c, hedge: behindHedge, behindTank };
   }
 
-  // Can a side see this field (to call fire on it)? Any of its pieces next to it, or with a line of sight to it
+  // Can a side see this field (to call fire on it)? Any of its pieces next to it, or with a line of sight to it, however
+  // far (Steve: the whole board), moved this round or not
   function sees(st, side, x, y) {
-    return st.units.some(u => u.side === side && u.x !== null && (Math.abs(u.x - x) + Math.abs(u.y - y) <= 1 || sight(st, u, { x, y, at: null })));
+    return st.units.some(u => u.side === side && u.x !== null && (Math.abs(u.x - x) + Math.abs(u.y - y) <= 1 || sight(st, u, { x, y, at: null }, true)));
   }
 
   // ---------- Fire ----------
@@ -407,26 +411,26 @@ const Sim = (() => {
     const why = [];
     if (PIECES[shooter.kind].sniper) {
       why.push('sniper: no cover or range');
-      if (smallTarget(target)) why.push(`−${SMALL_TARGET} small target`);
-      if (moving) why.push(`−${ON_THE_MOVE} moving`);
-      if (shooter.shocked) why.push(`−${SHAKEN_SHOOT} shaken`);
+      if (smallTarget(target)) why.push(`+${SMALL_TARGET} small target`);
+      if (moving) why.push(`+${ON_THE_MOVE} moving`);
+      if (shooter.shocked) why.push(`+${SHAKEN_SHOOT} shaken`);
       return withStart(why);
     }
     const s = sight(st, shooter, target);
     const far = isFar(shooter, target);
     // The covers one by one: the hedge it lines, a tank in a field in between, the field it stands in, its own tank beside it
-    if (s && s.hedge) why.push(`−${COVER.hedge} hedge`);
-    if (s && s.behindTank) why.push(`−${COVER.tank} behind a tank`);
+    if (s && s.hedge) why.push(`+${COVER.hedge} hedge`);
+    if (s && s.behindTank) why.push(`+${COVER.tank} behind a tank`);
     why.push(...placeWhy(target));
-    if (!isTank(target) && at(st, target.x, target.y, target.side).some(isTank)) why.push(`−${COVER.tank} beside a tank`);
+    if (!isTank(target) && at(st, target.x, target.y, target.side).some(isTank)) why.push(`+${COVER.tank} beside a tank`);
     if (target.down) why.push('½ dice: taking cover');
     // Two men or fewer (Steve)
-    if (smallTarget(target)) why.push(`−${SMALL_TARGET} small target`);
-    if (far) why.push(`−${LONG_RANGE} long range`);
-    if (moving) why.push(`−${ON_THE_MOVE} moving`);
-    if (shooter.shocked) why.push(`−${SHAKEN_SHOOT} shaken`);
-    if (isTank(target) && PIECES[target.kind].armour) why.push(`−${PIECES[target.kind].armour} armour`);
-    if (QUALITY[shooter.quality || 'standard'].shoot) why.push(`+${QUALITY[shooter.quality || 'standard'].shoot} elite`);
+    if (smallTarget(target)) why.push(`+${SMALL_TARGET} small target`);
+    if (far) why.push(`+${LONG_RANGE} long range`);
+    if (moving) why.push(`+${ON_THE_MOVE} moving`);
+    if (shooter.shocked) why.push(`+${SHAKEN_SHOOT} shaken`);
+    if (isTank(target) && PIECES[target.kind].armour) why.push(`+${PIECES[target.kind].armour} armour`);
+    if (QUALITY[shooter.quality || 'standard'].shoot) why.push(`−${QUALITY[shooter.quality || 'standard'].shoot} elite`);
     return withStart(why);
   }
 
@@ -436,13 +440,14 @@ const Sim = (() => {
     const t = tileType(target.x, target.y);
     // Open fields and lanes give no cover
     if (!['village', 'hamlet', 'orchard'].includes(t)) return [];
-    return [`−${COVER[t]} ${t}`];
+    return [`+${COVER[t]} ${t}`];
   }
 
-  // Put the score every shot starts from first, so the sum adds up on the label; a plain 3+ shot needs no reasons at all
+  // Put the score every shot starts from first (Steve: "3+", then "+1 small target"…, then the total), so the sum adds
+  // up on the label; a plain 3+ shot needs no reasons at all
   function withStart(why) {
     if (!why.length) return why;
-    return [`${TO_HIT}+ start`, ...why];
+    return [`${TO_HIT}+`, ...why];
   }
 
   // The score mortar and artillery dice need against a piece: only a village gives cover from shells (men down in cover
@@ -468,7 +473,7 @@ const Sim = (() => {
   function shellWhy(st, t) {
     const why = [];
     // Only the village counts against shells
-    if (tileType(t.x, t.y) === 'village') why.push(`−${COVER.village} village`);
+    if (tileType(t.x, t.y) === 'village') why.push(`+${COVER.village} village`);
     // Men already down in cover: half the dice
     if (t.down) why.push('½ dice: taking cover');
     return withStart(why);
@@ -481,14 +486,17 @@ const Sim = (() => {
     const pre = withdraw ? takeCover(st, target) : null;
     const need = needFor(st, shooter, target, moving);
     const faces = [];
-    let softHits, hardHits;
+    let softHits, hardHits, fullDice = 0;
     if (isTank(target)) {
       hardHits = roll(st, dice(st, f.hard * power), need + PIECES[target.kind].armour, faces);
       softHits = roll(st, dice(st, f.soft * power), need, []);
     } else {
       // Anti-tank weapons are poor against men in a hedge: half value. Men taking cover face half the dice (Steve)
-      softHits = roll(st, underCover(st, target, dice(st, (f.soft + f.hard * 0.5) * power)), need, faces);
+      const full = dice(st, (f.soft + f.hard * 0.5) * power);
+      softHits = roll(st, underCover(st, target, full), need, faces);
       hardHits = 0;
+      // Taking cover: how many dice it would have rolled standing (for the tag on the table)
+      if (target.down) fullDice = full;
     }
     // Where the target stood, so its dice still land there if it is wiped out
     const stood = { x: target.x, y: target.y };
@@ -502,7 +510,7 @@ const Sim = (() => {
       : target.shocked && !before.shocked ? 'Shaken' : softHits + hardHits ? 'No effect' : 'Missed';
     // What the table shows: the weapon's muzzle flash and tracers from the shooter, and what lands on the target
     const weapon = isTank(shooter) || shooter.kind === 'pak' ? 'gun' : shooter.kind === 'mg' || shooter.kind === 'mg42' ? 'mg' : shooter.kind === 'bazooka' || shooter.kind === 'schreck' ? 'rocket' : 'rifle';
-    st.fx.push({ from: { id: shooter.id, x: shooter.x, y: shooter.y }, to: { id: target.id }, weapon, armour: isTank(target), x: target.x === null ? stood.x : target.x, y: target.x === null ? stood.y : target.y, kind: softHits + hardHits ? 'hit' : 'miss', faces, need: Math.min(6, need + (isTank(target) ? PIECES[target.kind].armour : 0)), side: shooter.side, result, tookCover: !!pre });
+    st.fx.push({ from: { id: shooter.id, x: shooter.x, y: shooter.y }, to: { id: target.id }, weapon, armour: isTank(target), x: target.x === null ? stood.x : target.x, y: target.x === null ? stood.y : target.y, kind: softHits + hardHits ? 'hit' : 'miss', faces, need: Math.min(6, need + (isTank(target) ? PIECES[target.kind].armour : 0)), side: shooter.side, result, tookCover: !!pre, fullDice });
     // A tank firing high explosive at men hits the whole field, like a mortar: every other piece on foot in it rolls too
     if (isTank(shooter) && !isTank(target) && !blast) {
       for (const other of at(st, stood.x, stood.y, target.side)) {
@@ -1074,12 +1082,14 @@ const Sim = (() => {
         const need = shellNeed(st, t);
         const faces = [];
         const soft = roll(st, underCover(st, t, n), need, faces), hard = isTank(t) ? roll(st, S.hard || 0, need + PIECES[t.kind].armour, faces) : 0;
+        // Taking cover: how many dice it would have faced standing (for the tag)
+        const fullDice = t.down && !isTank(t) ? n : 0;
         const before = t.platoons, wasShocked = t.shocked;
         const hurt = damage(st, t, soft, hard);
         lines.push(...(t.side === side ? hurt.map(l => `⚠️ friendly fire: ${l}`) : hurt));
         const lost = before - (t.x === null ? 0 : t.platoons);
         const result = t.x === null ? 'Wiped out' : lost ? (isTank(t) ? 'Tank knocked out' : 'Section lost') : t.shocked && !wasShocked ? 'Shaken' : soft + hard ? 'No effect' : 'Missed';
-        st.fx.push({ x: fx, y: fy, kind: 'shell', faces, need, side, to: { id: t.id }, result, support: which });
+        st.fx.push({ x: fx, y: fy, kind: 'shell', faces, need, side, to: { id: t.id }, result, support: which, fullDice });
       }
       // An empty field still gets its shell, flying from the side that fired (Steve: never from both sides' guns)
       if (!at(st, fx, fy, enemyOf(side)).length) st.fx.push({ x: fx, y: fy, kind: 'shell', support: which, side });
@@ -1245,7 +1255,7 @@ const Sim = (() => {
       const need = shellNeed(st, t);
       const faces = [];
       const hits = roll(st, underCover(st, t, DE_MORTAR.dice), need, faces);
-      fx.faces = faces; fx.need = need; fx.side = 'de'; fx.tookCover = !!pre;
+      fx.faces = faces; fx.need = need; fx.side = 'de'; fx.tookCover = !!pre; fx.fullDice = t.down ? DE_MORTAR.dice : 0;
       const lines = (pre ? [pre.line] : []).concat(damage(st, t, hits, 0));
       st.fx.push(fx);
       st.de.rep.push(`🔺 German mortars on ${t.name}: ${lines.length ? lines.join(', ') : 'no hits'}.`);
@@ -1257,17 +1267,33 @@ const Sim = (() => {
   }
 
   // Run the German hour until it ends or a question needs the player. Returns { ask } or { done: true }
-  function germanStep(st) {
+  // showAim (the page, Steve: the Germans show their targeting as yours do): each shot first comes back as { aim }, so
+  // the table can show its targets and the score needed; the next call fires it (or asks its target first)
+  function germanStep(st, showAim = false) {
     if (!st.de || st.won || st.lost) return { done: true };
     if (st.de.ask) return { ask: st.de.ask };
+    // A shot shown on the table last step: now it fires, or its target is asked first
+    if (st.de.aim) {
+      const shot = st.de.aim;
+      st.de.aim = null;
+      if (canReact(st, unitById(st, shot.target))) { st.de.ask = shot; return { ask: shot }; }
+      resolveShot(st, shot, false);
+    }
+    // Aim it (shown first on the page), or straight on to firing it
+    const plan = shot => {
+      if (showAim) { st.de.aim = shot; return { aim: shot }; }
+      if (canReact(st, unitById(st, shot.target))) { st.de.ask = shot; return { ask: shot }; }
+      resolveShot(st, shot, false);
+      return null;
+    };
     while (st.de.queue.length) {
       const u = unitById(st, st.de.queue.shift());
       if (u.x === null) continue;
       if (st.won || st.lost) break;
       const shot = germanAct(st, u);
       if (!shot) continue;
-      if (canReact(st, unitById(st, shot.target))) { st.de.ask = shot; return { ask: shot }; }
-      resolveShot(st, shot, false);
+      const r = plan(shot);
+      if (r) return r;
     }
     // A side wiped out: nothing more happens
     if (st.won || st.lost) return { done: true };
@@ -1276,9 +1302,8 @@ const Sim = (() => {
       const t = germanArtilleryTarget(st);
       deSays(st, t ? `Shells ${t.name}` : 'Holds fire: no target');
       if (t) {
-        const shot = { artillery: true, target: t.id };
-        if (canReact(st, t)) { st.de.ask = shot; return { ask: shot }; }
-        resolveShot(st, shot, false);
+        const r = plan({ artillery: true, target: t.id });
+        if (r) return r;
       }
     }
     if (st.de.mortar) {
@@ -1286,9 +1311,8 @@ const Sim = (() => {
       const t = germanMortarTarget(st);
       deSays(st, t ? `Mortars ${t.name}` : 'Holds fire: no target');
       if (t) {
-        const shot = { mortar: true, target: t.id };
-        if (canReact(st, t)) { st.de.ask = shot; return { ask: shot }; }
-        resolveShot(st, shot, false);
+        const r = plan({ mortar: true, target: t.id });
+        if (r) return r;
       }
     }
     return { done: true };

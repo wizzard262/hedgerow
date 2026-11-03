@@ -13,6 +13,9 @@ window.Game = (() => {
   function start(seed) {
     st = Sim.newGame(seed);
     G.state = st;
+    // A new game: no rolls to show yet
+    lastRoll.us = lastRoll.de = null;
+    showRolls();
     UI.closeMenu();
     UI.setState(st);
     Sim.startRound(st);
@@ -52,6 +55,41 @@ window.Game = (() => {
     return [];
   }
 
+  // Each side's last roll (Steve): in the top corner of the table above its artillery, once the shot has landed. Every
+  // die with its number; the hits ringed with a yellow glow
+  const PIPS = { 1: [[10, 10]], 2: [[5, 5], [15, 15]], 3: [[5, 5], [10, 10], [15, 15]], 4: [[5, 5], [15, 5], [5, 15], [15, 15]], 5: [[5, 5], [15, 5], [10, 10], [5, 15], [15, 15]], 6: [[5, 5], [15, 5], [5, 10], [15, 10], [5, 15], [15, 15]] };
+  const lastRoll = { us: null, de: null };
+  let rollsSeen = null, rollsCount = 0;
+  function noteRolls() {
+    // Only when the shots on the table have changed
+    if (st.fx === rollsSeen && st.fx.length === rollsCount) return;
+    rollsSeen = st.fx; rollsCount = st.fx.length;
+    const rolls = st.fx.filter(f => f.faces && f.faces.length);
+    if (!rolls.length) return;
+    // The last roll each side made in these shots
+    const latest = { us: null, de: null };
+    for (const f of rolls) latest[f.side] = f;
+    // Shown once the shot has landed on the table
+    setTimeout(() => {
+      for (const side of ['us', 'de']) if (latest[side]) lastRoll[side] = latest[side];
+      showRolls();
+    }, Board.settledIn());
+  }
+  function showRolls() {
+    const r = board.getBoundingClientRect();
+    for (const side of ['us', 'de']) {
+      const f = lastRoll[side], box = $('#roll-' + side);
+      if (!f) { box.hidden = true; continue; }
+      const [who, line] = Board.shotTagText(st, f);
+      const target = f.to && Sim.unitById(st, f.to.id);
+      const dice = f.faces.map(d => `<span class="die${d.hit ? ' hit' : ''}" title="${d.face}"><svg viewBox="0 0 20 20">${PIPS[d.face].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="2.1" fill="#1a1a1a"/>`).join('')}</svg></span>`).join('');
+      box.innerHTML = `<div class="who">${who}${target ? ' → ' + target.name : ''}</div><div class="need">${line}</div><div class="dice">${dice}</div>`;
+      box.hidden = false;
+      const p = Board.rollSpot(side);
+      Object.assign(box.style, { left: p.x - r.left + 'px', top: p.y - r.top + 'px' });
+    }
+  }
+
   // Draw the table whenever something changed or pieces are still gliding; place the hamlet's name over it
   function frame() {
     if (dirty) {
@@ -63,10 +101,15 @@ window.Game = (() => {
       let shooter = aiming ? UI.selected() : null, mortarAim = null, aimWhich = null;
       // The fields a shot that hits more than one piece would land on, shown round its target (Steve)
       let blast = blastFor(shooter, hotTarget);
-      // During the German hour, show who is aiming at whom (Steve): the shooter's field, a line of fire to the target,
-      // its red cross-hair with the score needed. German mortars: the line comes from their mortar off the board
-      if (st.de && st.de.ask) {
-        const shot = st.de.ask, t = Sim.unitById(st, shot.target), s = shot.shooter && Sim.unitById(st, shot.shooter);
+      // The German's chosen target while it aims (see below), shown like the one under your pointer
+      let aimedAt = null;
+      // During the German move, show who is aiming at whom (Steve): the shooter's field, a line of fire to the target,
+      // its red cross-hair with the score needed. German mortars: the line comes from their mortar off the board.
+      // Aiming (before it fires): every target it could hit, with its score and why, as yours show (Steve)
+      const planned = st.de && (st.de.ask || st.de.aim);
+      let others = [];
+      if (planned) {
+        const shot = planned, t = Sim.unitById(st, shot.target), s = shot.shooter && Sim.unitById(st, shot.shooter);
         if (s) spots.push({ x: s.x, y: s.y, kind: 'charge' });
         spots.push({ x: t.x, y: t.y, kind: 'shoot' });
         if (s) {
@@ -75,6 +118,12 @@ window.Game = (() => {
           shooter = s;
           // A German tank's high explosive: the whole field
           blast = Sim.isTank(s) && !Sim.isTank(t) ? [{ x: t.x, y: t.y, main: true }] : [];
+          // Still aiming: the other pieces it could have fired on, each with its score
+          if (st.de.aim) others = Sim.targets(st, s).filter(o => o.id !== t.id).map(o => {
+            o.needNow = Math.min(6, Sim.needFor(st, s, o) + (Sim.isTank(o) ? PIECES[o.kind].armour : 0));
+            o.needWhy = Sim.needWhy(st, s, o);
+            return o;
+          });
         } else {
           t.needNow = Sim.shellNeed(st, t);
           t.needWhy = Sim.shellWhy(st, t);
@@ -83,18 +132,21 @@ window.Game = (() => {
           // German guns: the field and the four round it. Their mortar drops on the one piece only
           blast = shot.artillery ? Sim.shellFields('artillery', t.x, t.y, 'de') : [];
         }
-        targets = [t];
+        targets = [t, ...others];
+        // The one it picked stands out, as the target under your pointer does
+        if (st.de.aim && others.length) aimedAt = t;
       }
       // Green rings under pieces that can still act this hour, grey under those that have
       const ready = st.de || st.won || st.lost ? null : u => Sim.canAct(st, u) || Sim.captainCanRally(st, u);
       const guns = st.de || st.won || st.lost ? null : UI.supportState();
       // Something done during the draw (a token landing starts the Germans' move) asks for another draw: keep that
       dirty = false;
-      const more = Board.render(st, { spots, selected: UI.selected(), hover, targets, hotTarget, ready, shooter, mortarAim, aimWhich, guns, blast, rallies: UI.rallies(), deMove: (st.de && st.de.move) || shownMove, fireFrom: (UI.view.mode || '').startsWith('fire:') ? UI.view.mode.slice(5) : null });
+      const more = Board.render(st, { spots, selected: UI.selected(), hover, targets, hotTarget: aimedAt || hotTarget, ready, shooter, mortarAim, aimWhich, guns, blast, rallies: UI.rallies(), deMove: (st.de && st.de.move) || shownMove, fireFrom: (UI.view.mode || '').startsWith('fire:') ? UI.view.mode.slice(5) : null });
       if (more) dirty = true;
       const p = Board.screenPoint(st.objective.x + 0.5, st.objective.y, 0.35), r = board.getBoundingClientRect();
       Object.assign($('#label').style, { left: p.x - r.left + 'px', top: p.y - r.top + 'px' });
       $('#label').textContent = `🎯 ${st.objective.name}`;
+      noteRolls();
     }
     requestAnimationFrame(frame);
   }
@@ -103,6 +155,8 @@ window.Game = (() => {
     const r = board.getBoundingClientRect();
     Board.resize(Math.max(200, r.width), Math.max(200, r.height));
     dirty = true;
+    // The roll panels follow the table
+    showRolls();
   }
 
   // ---------- The bag ----------
@@ -162,9 +216,12 @@ window.Game = (() => {
     setTimeout(runGermans, GERMAN_PICK_PAUSE);
   }
 
-  // The German piece moves; if it fires on a piece that could take cover, ask first
+  // The German piece moves; before it fires, its targets show as yours do (Steve), then if it fires on a piece that
+  // could take cover, ask first
+  const GERMAN_AIM_SHOWN = 1400;
   function runGermans() {
-    const r = Sim.germanStep(st);
+    const r = Sim.germanStep(st, true);
+    if (r.aim) { changed(); setTimeout(runGermans, GERMAN_AIM_SHOWN + Board.busyFor()); return; }
     if (r.ask) return ask(r.ask);
     // Keep what it did on the table a moment after the token ends, so you can see it (Steve)
     shownMove = st.de && st.de.move;

@@ -807,10 +807,59 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - Steve: when tokens fly back at the end of a round, only those that were activated by a token fly back (correction: they don't need to have moved, only been activated)
 - At a new round, a token flies back into the bag only from each piece or gun a token activated last round (moved, fired, rallied or skipped). The tokens never drawn stay in the bag in the bar, and stay there when the timer ends the round. The timer flies back only if it came out. If the bag gains more (a piece that took cover, say), the extra come from the side's other pieces. The first round, the whole bag flies in as before
 
+## 141. The game no longer stalls at the start (v84)
+
+- Found while checking: since v81 the first round's tokens never flew into the bag (the table only redraws when something changes, and nothing did once the tanks stopped gliding for ever), so the first token was never drawn. Fixed: the table redraws as the tokens set off. v81–v83 were never pushed
+
+## 142. The Germans show their aim first (v84)
+
+- Steve: before the Germans shoot, they show the same targeting and info as the Americans. Both sides behave identically, except we don't see the Germans' pop-up menu (Skip turn etc.)
+- Before a German piece fires, the table shows what yours does: red targets on every piece it could hit, each with its score and why, the one it picked picked out, a line of fire to it; then it fires (or asks Stand fast / Take cover first). Their mortars and artillery show their target and blast the same way
+
+## 143. The red label reads top to bottom (v84)
+
+- Steve: the red label should read 3+, +1 small target, +1 long range, then 5+ (large)
+- The label now lists the start (3+), then each thing that makes it harder as +1 (elite −1), a line, then the score in big figures at the bottom. Everywhere else that said −1 for those now says +1
+
+## 144. Taking cover on the dice tag (v84)
+
+- Steve: if the target takes cover, the grey info box should say so and adjust the numbers
+- The tag by the dice now says "taking cover: 3 of 6 dice" (the dice it really rolled, of those it would have faced standing), for shots, mortars and artillery, both sides
+
+## 145. The last roll in the corner (v84)
+
+- Steve: show the dice result for a roll at the top corner above the artillery; the right dice count and numbers, each hitting die with a yellow glow border
+- Each side's last roll shows in a small panel at the top corner of the table above its artillery (yours left, the Germans' right), once the shot has landed: who fired at whom, the score and hits, and every die with its pips; the hits ringed in a yellow glow, the misses faded. (Assumed: one panel a side, the Germans' above theirs)
+
+## 146. The American MG is the .50 cal (v84)
+
+- Steve: refer to the American MG as the ".50 cal"
+- The American machine-gun team is called ".50 cal" (in the menus, cards and log), and the rules say so
+
+## 147. Seeing has no limit (v84)
+
+- Steve: line of sight is the full length of the board: two pieces at opposite edges with nothing blocking can see each other, for the mortars for example, even if a piece has moved already
+- Any piece sees as far as the board goes where nothing blocks the view (hedges, villages, orchards as before), moved this round or not, and that is enough to call fire on a field, both sides. Shooting with a piece's own weapon still reaches only its range (rifles 4, MGs and tanks 6, bazookas 3)
+
+## 148. Orchards (v84)
+
+- Steve: a couple more trees in orchards, staggered more at random; the grass underneath darker, tufty, mixed shades
+- Six trees an orchard (was four), each pushed off its spot at random, a little different in size; the orchard floor is a darker grass of mixed shades covered in tufts
+
+## 149. Three men a base; elite camouflage; Fallschirmjäger (v84)
+
+- Steve: three infantry a base; elite squads, German and American, in camouflage; the Germans can look like Fallschirmjäger paratroopers; black helmets
+- Every section base has three men (was four). Elite platoons wear camouflage (the Americans two-tone green and brown spots, the Germans a splinter pattern). Every German wears the paratrooper's grey-green jump smock, longer over the hips, and the round, rimless paratrooper's helmet in black. (Assumed: black helmets for the Germans)
+
+## 150. The elite ring shows (v84)
+
+- Steve: do the elites have a yellow ring round the bases? I can't see it
+- They did, but it was thin and dull. It is now brighter gold, taller, with a flat gold rim round the top edge of each base, so it shows from above
+
 ## Sessions
 
 | # | Date | Length | What we did |
 |---|------|--------|-------------|
 | 1 | 2026-10-30 | about 10.5 hours | Prompts 1–84: rules, command points, reacting, tanks and hedge cutters, the look (pixel art to 3D tabletop), scales, river, villages, wire, six-move aim; one captain, piece menus, hedges stop moves, MG team model; bazooka teams, two-field charges; red targets; who has acted; company level; lining hedges, longer sight, the captain's guidon; one unit a field, no time limit; tracers and shells, greyed out, no activation tokens, Move & shoot hatching; tanks through hedges, charges for all; no plain move; teams and captain with a platoon, no attaching; one piece at a time; charging through friends; range, cover and moving +1 each; words off the target, tanks turn and recoil; rallying; MGs can't move and fire; easier targets; Move & shoot one action; tanks impervious to small arms; more gaps; no charging through houses; MGs fire five; hand to hand shown; sounds; select and move sounds; running and tank sounds; twisty wire, tank boom, a cleaner panel, better running; bigger dice with a tag; louder, more real sounds; distant battle; shells arcing in and explosions; Sherman and Firefly named; dice cleared on the next pick; fire support targets; real recordings; tank HE hits the whole field; 3+ to hit, pinned not stopped, 50/50 wounds; further moves, climbing hedges; click where in the field, cover shown, more orchards; routes shown, why a shot needs what it needs; flush roofs, lines of sight; pieces stay till hit, the captain shoots; mortars and artillery off the board; take cover; captain rallies twice, two pins kill; bazookas and tanks kill, longer reach, tanks as cover, no Break through, wire for tanks only, hopping hedges; who is aiming at whom; blue hatching on the village; moves shown on picking a piece; win by wiping out the Germans, artillery friendly fire; full-screen table, bottom bar; score in a word bubble; no shooting at 7+; longer ranges, a sniper; fire support by clicking the guns; German artillery; rules in two columns, not at the start; nine places in a field, guns lower; the blind bag; guns in the bag, Skip turn; pointed bubble arrows; the token as a coin, three times bigger |
 | 2 | 2026-10-31 | about 7 hours | Prompts 85–124: small targets, houses +2, small houses round the square, stop at a wipe-out; shaken token on the base, shaken not pinned; captain's blue rally targets; no river; taking cover halves the dice; no pick-up sound; the timer token; brown German bases, Germans greyed out; no glare, rounds not hours; tokens fly back into the bag; one round per base, the rocket, tanks turn then fire in turn; tanks face the nearest enemy, side by side; no Pass button; hand to hand to the finish; take cover in a word bubble; rally offered after the captain moves; villages and orchards seen only at their edge; a clearer timer token, a matt coin; no crowding in a field, no token sound; German cards and pictures, shaken half moves, sounds back, timer in the middle, bubbles below at the top, bombers; the prompts page; German pick sounds, hops, the timer hovering, louder bombers; moved pieces green for yours, grey for theirs; the guns hop too; the elite token explained, each tank recoils on its own; hand to hand shown blow by blow, tinted only when the move is complete; the timer never first; German tanks back; pieces in a village see out; a German captain; Germans move by your rules, rallies shown; tanks drive men back, captains can die |
-| 3 | 2026-11-03 | about 2 hours | Prompts 125–140: rallies always work and are the only cure for shaken; the end waits for the last shot; elite gold band, grey German tanks; a cleaner sand-glass; PaK crew of three that turns to fire; no more ammo; the table lower; the timer checked fair; a longer board with the villages at the back; targets back on reselecting; one tank a unit; tanks drive in curves, no spinning; shaken, never pinned; the villages three fields nearer; only used tokens fly back |
+| 3 | 2026-11-03 | about 3 hours | Prompts 125–150: rallies always work and are the only cure for shaken; the end waits for the last shot; elite gold band, grey German tanks; a cleaner sand-glass; PaK crew of three that turns to fire; no more ammo; the table lower; the timer checked fair; a longer board with the villages at the back; targets back on reselecting; one tank a unit; tanks drive in curves, no spinning; shaken, never pinned; the villages three fields nearer; only used tokens fly back; no stall at the start; the Germans show their aim; the label top to bottom; taking cover on the tag; the last roll in the corner; the .50 cal; seeing the whole board; orchards; three men a base, camouflage, Fallschirmjäger; a brighter elite ring |
