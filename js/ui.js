@@ -553,9 +553,9 @@ const UI = (() => {
     // In the bag before any fly home: the tokens never drawn last round (none in the first), and the timer if it
     // didn't come out (Steve: only the tokens that activated someone fly back)
     const back = st.returning || { first: true };
-    const kept = side => back.first ? 0 : Math.min(back.left[side], st.bag[side]);
+    const home = Sim.tokensHome(st);
     const timerKept = !back.first && !back.timerOut && st.bag.timer ? st.bag.timer : 0;
-    view.bagShown = { us: kept('us'), de: kept('de'), timer: timerKept };
+    view.bagShown = { us: home.us.kept, de: home.de.kept, timer: timerKept };
     bag();
     // The middle of each side's place in the bar
     const spot = id => { const r = $(id).getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; };

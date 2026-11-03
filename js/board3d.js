@@ -195,31 +195,10 @@ const Board = (() => {
     // Nothing to fly home: done at once
     if (!homing.length) { homingDone = null; done(); }
   }
-  // Where a side's coins fly home from this round: as many as its bag gained (its new tokens less those still in it)
+  // Where a side's coins fly home from this round (see Sim.tokensHome: only those a token activated, Steve)
   function homeFrom(st, side) {
-    const back = st.returning || { first: true, activated: [], left: { us: 0, de: 0 } };
-    const live = st.units.filter(u => u.side === side && u.x !== null);
     const gunAt = which => new T.Vector3(GUNS[side][which].x, 0, GUNS[side][which].z);
-    // The first round: every piece that gets a token, and every gun with rounds (as the bag does, see Sim.startRound)
-    if (back.first) {
-      const from = live.filter(u => !u.acted).map(u => pieceCentre(u));
-      const ammo = side === 'us' ? st.ammo : { mortars: st.deMortarAmmo, artillery: st.deArtilleryAmmo };
-      for (const which of ['artillery', 'mortars']) if (ammo[which] > 0) from.push(gunAt(which));
-      return from;
-    }
-    // How many come home: the new bag less the tokens that stayed in it
-    const stayed = Math.min(back.left[side], st.bag[side]);
-    const count = Math.max(0, st.bag[side] - stayed);
-    // From whoever a token activated last round (still on the table), then, if the bag gained more (a piece that took
-    // cover, say), from the side's other pieces
-    const from = [];
-    for (const a of back.activated.filter(a => a.side === side)) {
-      if (a.gun) { from.push(gunAt(a.gun)); continue; }
-      const u = live.find(o => o.id === a.id);
-      if (u) from.push(pieceCentre(u));
-    }
-    for (const u of live) if (!back.activated.some(a => a.id === u.id)) from.push(pieceCentre(u));
-    return from.slice(0, count);
+    return Sim.tokensHome(st)[side].from.map(w => (w.gun ? gunAt(w.gun) : pieceCentre(Sim.unitById(st, w.id))));
   }
 
   // One small coin on its way home, not on the table until it sets off
@@ -929,7 +908,10 @@ const Board = (() => {
   }
 
   // Where a target's red cross-hair floats
-  const reticleSpot = u => { const p = pieceCentre(u), big = u.kind === 'company' || Sim.isTank(u); return new T.Vector3(p.x, big ? 0.62 : 0.5, p.z); };
+  const reticleHome = u => { const p = pieceCentre(u), big = u.kind === 'company' || Sim.isTank(u); return new T.Vector3(p.x, big ? 0.62 : 0.5, p.z); };
+  // (nudged clear of the cross-hair beside it when two would overlap, Steve: see placeLabels)
+  let reticleNudges = new Map();     // target id: how far it is moved, on the table
+  const reticleSpot = u => { const home = reticleHome(u), nudge = reticleNudges.get(u.id); return nudge ? home.add(nudge) : home; };
 
   // The red target nearest the pointer on the screen, within easy reach (a cross-hair over a house can be clicked)
   function targetAt(list, clientX, clientY) {
@@ -964,6 +946,8 @@ const Board = (() => {
       at(ring, p.x, 0.008, p.z, -Math.PI / 2, 0, 0); marks.add(ring);
       // The cross-hair, bigger under the pointer
       const r = reticle(); r.scale.setScalar((big ? 0.62 : 0.5) * pulse * (lit ? 1.45 : 1)); r.position.copy(reticleSpot(u)); marks.add(r);
+      // Nudged off its piece: a thin red line back down to it, so it is clear whose it is
+      if (reticleNudges.has(u.id)) marks.add(new T.Line(new T.BufferGeometry().setFromPoints([reticleSpot(u), new T.Vector3(p.x, 0.02, p.z)]), new T.LineBasicMaterial({ color: 0xe8352a, transparent: true, opacity: 0.8, depthTest: false })));
       // The score and why in a word bubble about three fields away (Steve), so it hides nothing near the target: up the
       // board for a target in the near half, down it for one in the far half, with a line from the tail to the cross-hair
       if (u.needNow) {
@@ -1019,20 +1003,31 @@ const Board = (() => {
   const LABEL_ANGLES = 16;
   let labelKey = '', labelReport = null;
   function placeLabels(list) {
-    if (!list.length) { labelPlaces = new Map(); labelKey = ''; labelReport = null; return; }
+    if (!list.length) { labelPlaces = new Map(); reticleNudges = new Map(); labelKey = ''; labelReport = null; return; }
     const r = renderer.domElement.getBoundingClientRect();
     const key = [r.width, r.height, ...list.map(u => { const p = pieceCentre(u); return [u.id, p.x.toFixed(2), p.z.toFixed(2), u.needNow, (u.needWhy || []).join('/')].join(':'); })].join('|');
     if (key === labelKey) return;
     labelKey = key;
     camera.updateMatrixWorld();
-    const right = new T.Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
-    const items = list.map(u => {
-      const p = pieceCentre(u), spot = reticleSpot(u), big = u.kind === 'company' || Sim.isTank(u);
+    const right = new T.Vector3().setFromMatrixColumn(camera.matrixWorld, 0), up = new T.Vector3().setFromMatrixColumn(camera.matrixWorld, 1);
+    // First the cross-hairs, nudged apart where they would overlap (see Labels.spread)
+    reticleNudges = new Map();
+    const sized = list.map(u => {
+      const spot = reticleHome(u), p = pieceCentre(u), big = u.kind === 'company' || Sim.isTank(u), world = big ? 0.3 : 0.24;
+      const aim = screenPoint(spot.x, spot.z, spot.y), across = spot.clone().addScaledVector(right, world), edge = screenPoint(across.x, across.z, across.y);
+      const radius = Math.hypot(edge.x - aim.x, edge.y - aim.y), base = screenPoint(p.x, p.z, 0);
+      return { x: aim.x, y: aim.y, r: radius, base: { x: base.x, y: base.y, r: radius }, perPixel: world / radius };
+    });
+    Labels.spread(sized).forEach((m, i) => {
+      if (Math.hypot(m.dx, m.dy) < 0.5) return;
+      // Pixels on the page to a move on the table: across and up the screen (the page's y runs down)
+      reticleNudges.set(list[i].id, right.clone().multiplyScalar(m.dx * sized[i].perPixel).addScaledVector(up, -m.dy * sized[i].perPixel));
+    });
+    const items = list.map((u, n) => {
+      const p = pieceCentre(u), spot = reticleSpot(u), radius = sized[n].r;
       const aim = screenPoint(spot.x, spot.z, spot.y);
       // The target on the page: its cross-hair and the ring round its base, each a circle
-      const across = spot.clone().addScaledVector(right, big ? 0.3 : 0.24), edge = screenPoint(across.x, across.z, across.y);
-      const radius = Math.hypot(edge.x - aim.x, edge.y - aim.y);
-      const base = screenPoint(p.x, p.z, 0);
+      const base = sized[n].base;
       const circles = [{ x: aim.x, y: aim.y, r: radius }, { x: base.x, y: base.y, r: radius }];
       // The spots round it
       const options = [];

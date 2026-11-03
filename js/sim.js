@@ -1673,6 +1673,27 @@ const Sim = (() => {
     st.roundRep = [];
   }
 
+  // The new round's tokens (Steve): one flies home from each piece or gun a token activated last round, and from nobody
+  // else; the rest of the side's new bag is already in it. The first round, every token flies in. For each side:
+  // { from: [{ id } or { gun }], kept }
+  function tokensHome(st) {
+    const back = st.returning || { first: true, activated: [] };
+    const out = {};
+    for (const side of ['us', 'de']) {
+      const ammo = side === 'us' ? st.ammo : { mortars: st.deMortarAmmo, artillery: st.deArtilleryAmmo };
+      // Who has a token in the new bag at all
+      const hasToken = w => (w.gun ? ammo[w.gun] > 0 : (u => !!u && u.x !== null && !u.acted)(unitById(st, w.id)));
+      let from;
+      if (back.first) {
+        from = st.units.filter(u => u.side === side && u.x !== null && !u.acted).map(u => ({ id: u.id }));
+        for (const gun of ['artillery', 'mortars']) if (ammo[gun] > 0) from.push({ gun });
+      } else from = back.activated.filter(a => a.side === side && hasToken(a));
+      from = from.slice(0, st.bag[side]);
+      out[side] = { from, kept: st.bag[side] - from.length };
+    }
+    return out;
+  }
+
   // No more tokens for a side than it has pieces still to move
   function trimBag(st) {
     st.bag.us = Math.min(st.bag.us, movable(st, 'us'));
@@ -1857,7 +1878,7 @@ const Sim = (() => {
     newGame, endTurn, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, moves, chargeSpots,
     rallyTargets, canAct, groupOf, groupName, members, canReact, firepower, teamsOf, canCallFire, holdsObjective, roundText, roomFor,
     startGermanHour, germanStep, answer, finishHour, startRound, drawToken, endGermanToken, activationOver, passToken, usCanMove, endRound, canFire, actSkip, actSkipShot, skipSupport,
-    smallTarget, menDice, armourOf, mayFire, shootCells, captainCanRally, fireAt, actShoot, actMoveShoot, moveShootSpots, chargeRoutes, DIRS, needWhy, shellNeed, shellWhy, shellFields, canRally, needFor, canSelfRally, actSelfRally, actHalfShot, actMove, actCharge, actRally, actFire, actBreach, breachSpots, sight, isSmall, cover, wire, lineSides, actLine, atHedge, acrossHedge, SIDE_NAMES, PLACES, placeXY, placeName, lines, sizeOf, footprint, spotXY, occupant, fitsAt, freePlace,
+    smallTarget, menDice, armourOf, mayFire, shootCells, tokensHome, captainCanRally, fireAt, actShoot, actMoveShoot, moveShootSpots, chargeRoutes, DIRS, needWhy, shellNeed, shellWhy, shellFields, canRally, needFor, canSelfRally, actSelfRally, actHalfShot, actMove, actCharge, actRally, actFire, actBreach, breachSpots, sight, isSmall, cover, wire, lineSides, actLine, atHedge, acrossHedge, SIDE_NAMES, PLACES, placeXY, placeName, lines, sizeOf, footprint, spotXY, occupant, fitsAt, freePlace,
     hasCutters: u => cutter(u),
   };
 })();

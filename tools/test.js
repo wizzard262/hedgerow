@@ -563,10 +563,42 @@ check('red bubbles: neither a box nor an arrow covers another target, and arrows
   // Two cross-hairs overlapping: no bubble can keep that arrow's point off the other, and it is counted as that
   const close = [[700, 400], [712, 400]].map(([x, y], n) => ({ id: n, aim: { x, y }, circles: [{ x, y, r: 22 }], options: [{ mid: { x, y: y - 120 }, box: { x: x - 45, y: y - 155, w: 90, h: 70 } }] }));
   assert(Labels.problems(close, [0, 0]).tipInside === 2, 'overlapping cross-hairs were not counted as such');
+  // Cross-hairs that close are nudged apart: none ends up on another's cross-hair or base
+  const near = [[700, 400], [712, 400], [700, 400], [730, 420]].map(([x, y]) => ({ x, y, r: 25, base: { x, y: y + 40, r: 25 } }));
+  const nudged = Labels.spread(near).map((m, i) => ({ x: near[i].x + m.dx, y: near[i].y + m.dy }));
+  nudged.forEach((p, i) => near.forEach((q, j) => {
+    if (i === j) return;
+    assert(Math.hypot(p.x - nudged[j].x, p.y - nudged[j].y) >= 25, `cross-hairs ${i} and ${j} still overlap`);
+    assert(Math.hypot(p.x - q.base.x, p.y - q.base.y) >= 25, `cross-hair ${i} still on the base of ${j}`);
+  }));
   // On its own, a bubble takes a near spot
   const one = [Object.assign({}, items[5])];
   const pick = one[0].options[Labels.place(one, bounds)[0]];
   assert(Math.hypot(pick.mid.x - 900, pick.mid.y - 300) <= 140, 'a lone bubble went a long way from its target');
+});
+
+check('the timer ends the round: tokens fly home only from the pieces a token activated, the rest stay in the bag', () => {
+  const st = Sim.newGame(5);
+  Sim.startRound(st);
+  // Three American pieces activated, then the round ends with the timer; another piece took cover without a token
+  const pieces = st.units.filter(u => u.side === 'us' && u.x !== null && u.kind !== 'captain').slice(0, 4);
+  for (const u of pieces.slice(0, 3)) {
+    st.drawn = 'us'; st.activeId = null; st.bag.us--;
+    assert(Sim.actSkip(st, u).ok, `${u.name} could not skip`);
+    Sim.passToken(st);
+  }
+  pieces[3].acted = true; pieces[3].down = true;
+  st.bag.timer = 1; st.drawnThisRound = 3;
+  // The timer comes out next
+  st.rand = () => 0.999999;
+  assert(Sim.drawToken(st) === 'timer', 'the timer did not come out');
+  Sim.endRound(st);
+  Sim.startRound(st);
+  const home = Sim.tokensHome(st);
+  const ids = home.us.from.map(w => w.id).sort();
+  assert(ids.join() === pieces.slice(0, 3).map(u => u.id).sort().join(), `tokens flew home from ${ids.join()}`);
+  assert(home.us.kept === st.bag.us - 3, `${home.us.kept} American tokens stayed in a bag of ${st.bag.us}`);
+  assert(home.de.from.length === 0 && home.de.kept === st.bag.de, 'German tokens flew home with no German activated');
 });
 
 check('machine guns fire five dice', () => {

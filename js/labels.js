@@ -66,9 +66,8 @@ const Labels = (() => {
 
   // The spot chosen for each item: one at a time, left to right, then each looks again now the others are placed,
   // until nobody wants to move (a few goes at most)
-  function place(items, bounds) {
+  function placeInOrder(items, bounds, order) {
     const chosen = items.map(() => null);
-    const order = items.map((_, i) => i).sort((a, b) => items[a].aim.x - items[b].aim.x);
     for (let go = 0; go < 8; go++) {
       let moved = false;
       for (const i of order) {
@@ -82,6 +81,29 @@ const Labels = (() => {
       if (!moved) break;
     }
     return chosen;
+  }
+
+  // Try the targets in several orders (who chooses first matters most in a tight cluster, the ones in the middle above
+  // all) and keep whichever leaves the least in the way
+  function place(items, bounds) {
+    const all = items.map((_, i) => i);
+    const midX = items.reduce((n, o) => n + o.aim.x, 0) / items.length, midY = items.reduce((n, o) => n + o.aim.y, 0) / items.length;
+    const crowded = i => items.filter(o => Math.hypot(o.aim.x - items[i].aim.x, o.aim.y - items[i].aim.y) < 120).length;
+    const orders = [
+      all.slice().sort((a, b) => crowded(b) - crowded(a)),
+      all.slice().sort((a, b) => items[a].aim.x - items[b].aim.x),
+      all.slice().sort((a, b) => items[b].aim.x - items[a].aim.x),
+      all.slice().sort((a, b) => items[a].aim.y - items[b].aim.y),
+      all.slice().sort((a, b) => items[b].aim.y - items[a].aim.y),
+      all.slice().sort((a, b) => Math.hypot(items[a].aim.x - midX, items[a].aim.y - midY) - Math.hypot(items[b].aim.x - midX, items[b].aim.y - midY)),
+    ];
+    let best = null, bestCost = Infinity;
+    for (const order of orders) {
+      const chosen = placeInOrder(items, bounds, order);
+      const cost = items.reduce((n, item, i) => n + costOf(items, chosen, i, item.options[chosen[i]], bounds), 0);
+      if (cost < bestCost) { best = chosen; bestCost = cost; }
+    }
+    return best;
   }
 
   // What is still in the way after placing: what Steve asked for, for the tests and for checking in the browser
@@ -107,7 +129,35 @@ const Labels = (() => {
     return out;
   }
 
-  return { place, problems };
+  // Cross-hairs too close to tell apart (Steve: an arrow's point landed on the piece beside it): how far to nudge each one
+  // on the page, so that none sits on another's cross-hair or base. points: { x, y, r, base: { x, y, r } }. Each pair
+  // pushes apart a little at a time; two exactly together go opposite ways. Returns [{ dx, dy }], in pixels
+  function spread(points) {
+    const moved = points.map(() => ({ dx: 0, dy: 0 }));
+    const at = i => ({ x: points[i].x + moved[i].dx, y: points[i].y + moved[i].dy });
+    const push = (i, fromX, fromY, need) => {
+      const p = at(i);
+      let vx = p.x - fromX, vy = p.y - fromY, d = Math.hypot(vx, vy);
+      if (d >= need) return false;
+      const by = need - d;
+      if (d < 1e-6) { const a = i * 2.4; vx = Math.cos(a); vy = Math.sin(a); d = 1; }
+      moved[i].dx += vx / d * by; moved[i].dy += vy / d * by;
+      return true;
+    };
+    for (let go = 0; go < 60; go++) {
+      let any = false;
+      for (let i = 0; i < points.length; i++) for (let j = 0; j < points.length; j++) {
+        if (i === j) continue;
+        const other = at(j), need = Math.max(points[i].r, points[j].r) + 2;
+        if (push(i, other.x, other.y, need)) any = true;
+        if (push(i, points[j].base.x, points[j].base.y, points[j].base.r + 2)) any = true;
+      }
+      if (!any) break;
+    }
+    return moved;
+  }
+
+  return { place, problems, spread };
 })();
 
 if (typeof module !== 'undefined') module.exports = Labels;
