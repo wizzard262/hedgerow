@@ -722,9 +722,57 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - Both captains are ordinary targets now: fired on (a small target, one more to hit), shelled by mortars and artillery, caught in a tank's high-explosive burst, and one wound kills his HQ. Your captain can take cover when fired on, like the others
 - Balance: the test player wins 29% in about 5.5 rounds
 
+## 125. Only a rally clears shaken, and it always works (v80)
+
+- Steve: rally is the only way to remove shaken and always removes shaken. Turn end does not remove shaken
+- A rally never fails now: the captain's (yours or the German's) and a piece rallying itself. "Rallied!" floats off the piece every time
+- Shaken no longer wears off at the end of a round (both sides), and (assumed, from "the only way") it lasts through a hand-to-hand fight too, undoing that part of 97
+
+## 126. The end waits for the last shot (v80)
+
+- Steve: wait to show the Americans / Germans wiped out message until they are actually hit by the shot
+- The end-of-game message now waits until the table has shown every shot landing and every fight, then a moment more
+
+## 127. Elite gold band; German tanks grey (v80)
+
+- Steve: a gold edge ring on the bases of elite units, both sides, and remove the token on the base. Make the German tanks grey
+- Elite pieces (1st Platoon, 1. Fallschirmjäger-Zug) have a gold band round the edge of every base; the ★ token is gone (the ★ after the name stays). The Panzer IVs and Panthers are panzer grey; the German howitzer keeps its camouflage
+
+## 128. A cleaner sand-glass (v80)
+
+- Steve: a better sand timer icon: just the top and bottom with the bulge in the middle
+- The timer token (in the bar and on the coin) is now the two bars and the glass bulging out between them, pinched at the waist; no crossing lines, no sand
+
+## 129. The PaK 40: three crew, turns to fire (v80)
+
+- Steve: 3 men on the PaK 40, and it turns to shoot in the correct direction
+- The PaK has a crew of three (gunner at the sight, loader, one at the trail). It swings round onto its target before firing, as a tank does, and stays facing that way
+
+## 130. Fire support never comes back (v80)
+
+- Steve: artillery, bomber and mortar never replenish (the bomber is a new piece we'll add later)
+- Mortars and artillery, both sides, start with their rounds and get no more. (Bombers: not yet in the game)
+
+## 131. The table a little lower (v80)
+
+- Steve: the top of the board is slightly out of sight; bring the whole board down slightly, better to lose a little at the bottom
+- The whole picture is moved down 5% of the screen's height (clicks and labels move with it)
+
+## 132. Is the timer random? (v80)
+
+- Steve: is the timer really random, it often comes last; the timer has the same odds as all the other pieces left in the bag
+- Checked: it already does. Each draw, every token left in the bag (the timer included) is equally likely; the only exception is that the timer can't be the very first draw (prompt from session 2). Over 300 simulated rounds it came out last 13 times, against 12 expected by chance. A test now checks this
+
+## 133. Two fields longer, the village at the back (v80)
+
+- Steve: the board can be 2 squares longer; put the target village right back in the German area
+- The board is 12 fields long (was 10). Both villages, Saint-Jean and La Haye, are now at the back of the German end (fields 11 and 12), so the German garrison starts there; the hamlets moved towards the middle
+- Balance: the test player now wins 13% in about 13 rounds (was 29% in 5.5); doing nothing never wins
+
 ## Sessions
 
 | # | Date | Length | What we did |
 |---|------|--------|-------------|
 | 1 | 2026-10-30 | about 10.5 hours | Prompts 1–84: rules, command points, reacting, tanks and hedge cutters, the look (pixel art to 3D tabletop), scales, river, villages, wire, six-move aim; one captain, piece menus, hedges stop moves, MG team model; bazooka teams, two-field charges; red targets; who has acted; company level; lining hedges, longer sight, the captain's guidon; one unit a field, no time limit; tracers and shells, greyed out, no activation tokens, Move & shoot hatching; tanks through hedges, charges for all; no plain move; teams and captain with a platoon, no attaching; one piece at a time; charging through friends; range, cover and moving +1 each; words off the target, tanks turn and recoil; rallying; MGs can't move and fire; easier targets; Move & shoot one action; tanks impervious to small arms; more gaps; no charging through houses; MGs fire five; hand to hand shown; sounds; select and move sounds; running and tank sounds; twisty wire, tank boom, a cleaner panel, better running; bigger dice with a tag; louder, more real sounds; distant battle; shells arcing in and explosions; Sherman and Firefly named; dice cleared on the next pick; fire support targets; real recordings; tank HE hits the whole field; 3+ to hit, pinned not stopped, 50/50 wounds; further moves, climbing hedges; click where in the field, cover shown, more orchards; routes shown, why a shot needs what it needs; flush roofs, lines of sight; pieces stay till hit, the captain shoots; mortars and artillery off the board; take cover; captain rallies twice, two pins kill; bazookas and tanks kill, longer reach, tanks as cover, no Break through, wire for tanks only, hopping hedges; who is aiming at whom; blue hatching on the village; moves shown on picking a piece; win by wiping out the Germans, artillery friendly fire; full-screen table, bottom bar; score in a word bubble; no shooting at 7+; longer ranges, a sniper; fire support by clicking the guns; German artillery; rules in two columns, not at the start; nine places in a field, guns lower; the blind bag; guns in the bag, Skip turn; pointed bubble arrows; the token as a coin, three times bigger |
 | 2 | 2026-10-31 | about 7 hours | Prompts 85–124: small targets, houses +2, small houses round the square, stop at a wipe-out; shaken token on the base, shaken not pinned; captain's blue rally targets; no river; taking cover halves the dice; no pick-up sound; the timer token; brown German bases, Germans greyed out; no glare, rounds not hours; tokens fly back into the bag; one round per base, the rocket, tanks turn then fire in turn; tanks face the nearest enemy, side by side; no Pass button; hand to hand to the finish; take cover in a word bubble; rally offered after the captain moves; villages and orchards seen only at their edge; a clearer timer token, a matt coin; no crowding in a field, no token sound; German cards and pictures, shaken half moves, sounds back, timer in the middle, bubbles below at the top, bombers; the prompts page; German pick sounds, hops, the timer hovering, louder bombers; moved pieces green for yours, grey for theirs; the guns hop too; the elite token explained, each tank recoils on its own; hand to hand shown blow by blow, tinted only when the move is complete; the timer never first; German tanks back; pieces in a village see out; a German captain; Germans move by your rules, rallies shown; tanks drive men back, captains can die |
+| 3 | 2026-11-03 | about 1 hour | Prompts 125–133: rallies always work and are the only cure for shaken; the end waits for the last shot; elite gold band, grey German tanks; a cleaner sand-glass; PaK crew of three that turns to fire; no more ammo; the table lower; the timer checked fair; a longer board with the villages at the back |

@@ -224,7 +224,7 @@ const UI = (() => {
         };
         menu.append(b);
       }
-      if (!acts.some(a => a.ok)) menu.append(el('div', 'mnote', u.shocked ? 'Shaken: it has moved this round; it can rest, or the captain can rally it' : 'It has moved this round'));
+      if (!acts.some(a => a.ok)) menu.append(el('div', 'mnote', u.shocked ? 'Shaken: it has moved this round; the captain can rally it' : 'It has moved this round'));
       else if (u.shocked) menu.append(el('div', 'mnote', 'Shaken: it needs one more to hit and moves or charges half as far until it rallies'));
       if (acts.some(a => a.ok) && !u.acted && u.kind !== 'pak' && !Sim.chargeSpots(st, u).length) {
         // Boxed in: say why it can't charge, and how to get out
@@ -368,7 +368,7 @@ const UI = (() => {
     const add = (mode, label, ok, title) => b.push({ mode, label, ok: can && ok, title });
     // A shaken piece can still act (moving and charging half as far), or use its move to try to rally itself
     if (Sim.canSelfRally(st, u)) {
-      b.push({ mode: 'selfRally', label: '📣 Rally itself', ok: true, title: `Its move: a ${Math.round(SELF_RALLY[u.quality || 'standard'] * 100)}% chance to shake it off (the captain does better)`, run: () => Sim.actSelfRally(st, u) });
+      b.push({ mode: 'selfRally', label: '📣 Rally itself', ok: true, title: 'Its move: it shakes it off (a rally always works)', run: () => Sim.actSelfRally(st, u) });
     }
     if (u.kind === 'company' || Sim.isTank(u)) {
       const fight = Sim.chargeSpots(st, u).some(p => Sim.at(st, p.x, p.y, 'de').length);
@@ -499,7 +499,7 @@ const UI = (() => {
   // (right); the round beside them in big letters
   const TOKEN = {
     us: '<span class="tok us">★</span>',
-    timer: '<span class="tok timer" title="Timer: drawn, it ends the round"><svg viewBox="0 0 20 20"><path d="M5 2h10M5 18h10M6 2c0 5 8 5 8 8s-8 3-8 8M14 2c0 5-8 5-8 8s8 3 8 8" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/><path d="M8 16.5h4l-2-2.5z" fill="#fff"/></svg></span>',
+    timer: '<span class="tok timer" title="Timer: drawn, it ends the round"><svg viewBox="0 0 20 20"><path d="M5 2h10M5 18h10M6.5 2C5 7 9.6 8 9.6 10S5 13 6.5 18M13.5 2C15 7 10.4 8 10.4 10S15 13 13.5 18" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>',
     de: '<span class="tok de"><svg viewBox="0 0 20 20"><path d="M7 2h6v5h5v6h-5v5H7v-5H2V7h5z" fill="#111" stroke="#eee" stroke-width="1.4"/></svg></span>',
   };
   function bag() {

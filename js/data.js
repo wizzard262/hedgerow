@@ -6,21 +6,22 @@
 // One unit to a field (Steve); only hand-to-hand fighting brings two sides into the same field.
 // MG and bazooka teams and the captain can also stand in a rifle platoon's field (Steve). Teams are never attached: each moves on its own
 //   =  lane east-west    |  lane north-south    +  crossroads (lanes have no hedges along their length)
+// Twelve fields long (Steve: two more), the villages right at the back of the German end
 const MAP = [
-  '..|o.o...o',
-  '..|.vv...h',
-  '..+=======',
-  '.o|.v...o.',
-  '.h|.vv...o',
-  '==+=======',
-  '..|.oo...h',
-  'o.|.o.h...',
+  '..|o.o...o.h',
+  '..|.h...o.vv',
+  '..+=========',
+  '.o|.o..h..vv',
+  '.h|...o...vv',
+  '==+=========',
+  '..|.oo..h..h',
+  'o.|.o.h....o',
 ];
 const COLS = MAP[0].length, ROWS = MAP.length;
 // The villages; each game one of them is the objective: the field to take and hold, its church in the middle
 const VILLAGES = [
-  { x: 4, y: 4, name: 'Saint-Jean' },
-  { x: 5, y: 1, name: 'La Haye' },
+  { x: 10, y: 4, name: 'Saint-Jean' },
+  { x: 10, y: 1, name: 'La Haye' },
 ];
 // Sharing a field (Steve): a tank pair stands alone; one rifle platoon at most, with this many smaller pieces (teams,
 // the captain) beside it, or this many smaller pieces on their own
@@ -51,7 +52,7 @@ const SHAKEN_SHOOT = 1;          // a shaken piece needs one more to hit
 const SHAKEN_MOVE = 0.5;         // a shaken piece still moves and charges, but only half as far (rounded down, at least one field)
 const MAX_NEED = 6;              // a shot that would need more than this can't be taken (Steve: no shooting at 7+)
 const WOUND_CHANCE = 0.5;        // each hit is a coin toss: heads it wounds (a section, a team or a tank lost); every hit shakes
-const QUALITY = { elite: { name: 'Elite', shoot: 1, assault: 1.3, rally: 0.9 }, standard: { name: 'Standard', shoot: 0, assault: 1, rally: 0.7 } };
+const QUALITY = { elite: { name: 'Elite', shoot: 1, assault: 1.3 }, standard: { name: 'Standard', shoot: 0, assault: 1 } };
 const SIGHT_RANGE = 3;           // fields a piece without a weapon of its own sees (the rest: RANGES; hedges, villages and orchards block the view)
 const LONG_RANGE = 1;             // added to the score needed at long range (the penalties stack)
 // How far each kind of weapon sees and shoots, and how many fields away before long range starts (Steve: rifles one
@@ -67,7 +68,7 @@ const COVER = { hedge: 1, village: 2, hamlet: 2, orchard: 1, tank: 1 };   // tan
 const SMALL_TARGET = 1;          // added to the score needed against a small target: a piece of two men or fewer (Steve: sniper, bazooka, captain; not the MG, three men)
 const CAPTAIN_RALLIES = { still: 2, moved: 1 };   // rallies an hour: two if he neither moves nor shoots, one if he does (before or after)
 const RALLY_RANGE = 3;           // the captain rallies a shaken friendly piece up to this many fields away (Steve)
-const SELF_RALLY = { standard: 0.5, elite: 0.65 };   // a shaken piece can use its move to try to rally itself: its chance
+// A rally always works, and it is the only thing that clears shaken (Steve): not resting, not a round ending, not a fight
 
 // What each kind of piece fights with. soft: against infantry and guns; hard: against tanks (anti-tank)
 const PIECES = {
@@ -92,11 +93,12 @@ const PIECES = {
 // (only reached when neither side can hurt the other)
 const HAND_TO_HAND_LIMIT = 40;
 
-// Fire support: dice on the target field (and a few on the fields around it for artillery), ammo and how it comes back
-const MORTARS = { name: '81 mm mortars', dice: 4, splash: 0, ammo: 6, resupplyEvery: 2 };
-const ARTILLERY = { name: '105 mm battery', dice: 6, splash: 1, ammo: 3, resupplyEvery: 3, hard: 1 };
+// Fire support: dice on the target field (and a few on the fields around it for artillery), and its ammo: once fired it
+// never comes back (Steve: mortars, artillery and, later, bombers never replenish)
+const MORTARS = { name: '81 mm mortars', dice: 4, splash: 0, ammo: 6 };
+const ARTILLERY = { name: '105 mm battery', dice: 6, splash: 1, ammo: 3, hard: 1 };
 const DE_MORTAR = { dice: 3, ammo: 8 };   // the Germans' own mortar, one mission a turn while ammo lasts
-const DE_ARTILLERY = { name: '10.5 cm battery', dice: 6, splash: 1, ammo: 2, resupplyEvery: 4, hard: 1 };   // the Germans' guns: like ours, fewer rounds
+const DE_ARTILLERY = { name: '10.5 cm battery', dice: 6, splash: 1, ammo: 2, hard: 1 };   // the Germans' guns: like ours, fewer rounds
 
 // Who starts on each side. Each side is spread at random over its own end of the board: this share of its width,
 // in cover where possible (the x, y below are only where they would stand without that)

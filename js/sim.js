@@ -338,7 +338,6 @@ const Sim = (() => {
   // of a platoon, a whole team, or a tank lost. Only anti-tank (hard) hits count against tanks
   function damage(st, u, softHits, hardHits, deadly = false) {
     const name = u.name, out = [];
-    u.hit = u.hit || softHits + hardHits > 0;
     const hits = isTank(u) ? hardHits : softHits + hardHits;
     if (hits <= 0) return out;
     // Each hit: on a piece already shaken it kills (Steve: shaken twice kills); otherwise it shakes it, and a coin toss says
@@ -655,7 +654,7 @@ const Sim = (() => {
 
   // Hand to hand (Steve): the two sides strike at each other in turn, the attacker first. Every base still standing rolls
   // a die and each hit takes a base off the other side; the survivors go on until only one side has anyone left.
-  // Being shaken doesn't count in the fight, and nobody who comes out of it is still shaken
+  // Being shaken doesn't count in the fight, and it lasts past it: only a rally clears it (Steve)
   function handToHand(st, u, defenders, x, y) {
     const out = [`⚔️ ${u.name} charges ${defenders.map(d => d.name).join(' and ')}`];
     // The attacker's dice: 3+, one more against men behind the hedge it went over or in houses; elite one less
@@ -682,8 +681,6 @@ const Sim = (() => {
     }
     fight.won = !standing(defenders).length && u.x !== null;
     st.fx.push(fight);
-    // Shaken doesn't last past the fight
-    for (const p of [...attackers, ...defenders]) if (p.x !== null) { p.shocked = false; p.hit = true; }
     if (!standing(defenders).length && u.x !== null) {
       // The field is the attacker's
       if (wire(st, u.x, u.y, x, y)) delete st.wire[edgeKey(u.x, u.y, x, y)];
@@ -996,7 +993,7 @@ const Sim = (() => {
     return st.units.filter(t => t.side === cap.side && t.x !== null && needsHim(t) && Math.abs(t.x - cap.x) + Math.abs(t.y - cap.y) <= RALLY_RANGE);
   }
 
-  // A shaken piece uses its move to try to pull itself together (Steve: pieces can rally themselves)
+  // A shaken piece uses its move to pull itself together (Steve: pieces can rally themselves; a rally always works)
   function canSelfRally(st, u) {
     return !!u && u.side === 'us' && u.x !== null && u.shocked && !u.acted && !st.won && !st.lost && !st.de && u.kind !== 'captain' && tokenAllows(st, u);
   }
@@ -1008,15 +1005,14 @@ const Sim = (() => {
   function actSelfRally(st, u) {
     if (!canSelfRally(st, u)) return { ok: false };
     spend(st, u);
-    const ok = st.rand() < SELF_RALLY[u.quality || 'standard'];
-    if (ok) u.shocked = false;
-    rallyShown(st, u, ok);
-    return { ok: true, lines: [ok ? `📣 ${u.name} pulls itself together.` : `📣 ${u.name} stays shaken.`] };
+    u.shocked = false;
+    rallyShown(st, u);
+    return { ok: true, lines: [`📣 ${u.name} pulls itself together.`] };
   }
 
   // How a rally went, in words that float up off the piece on the table (Steve: it wasn't clear whether it worked)
-  function rallyShown(st, t, ok) {
-    st.fx.push({ kind: 'rally', x: t.x, y: t.y, to: { id: t.id }, result: ok ? 'Rallied!' : 'Still shaken', ok });
+  function rallyShown(st, t) {
+    st.fx.push({ kind: 'rally', x: t.x, y: t.y, to: { id: t.id }, result: 'Rallied!', ok: true });
   }
 
   function actRally(st, cap, target) {
@@ -1032,11 +1028,11 @@ const Sim = (() => {
       lines.push(`📣 ${cap.name} gets ${target.name} up and moving.`);
       if (!target.shocked) st.fx.push({ kind: 'rally', x: target.x, y: target.y, to: { id: target.id }, result: 'Up and moving', ok: true });
     }
+    // Shaken: a rally always steadies them (Steve)
     if (target.shocked) {
-      const ok = st.rand() < QUALITY[target.quality || 'standard'].rally;
-      if (ok) target.shocked = false;
-      rallyShown(st, target, ok);
-      lines.push(ok ? `📣 ${cap.name} rallies ${target.name}.` : `📣 ${cap.name} can't steady ${target.name} yet.`);
+      target.shocked = false;
+      rallyShown(st, target);
+      lines.push(`📣 ${cap.name} rallies ${target.name}.`);
     }
     return { ok: true, lines };
   }
@@ -1124,9 +1120,7 @@ const Sim = (() => {
   // The German hour runs a piece at a time, so it can stop and ask the player whether a piece being fired on pulls back.
   // st.de holds the hour in progress: who still has to act, the report so far, and any question waiting for an answer
   function startGermanHour(st) {
-    // Shocked Germans who weren't hit this hour come round; some rally anyway
-    for (const u of st.units) if (u.side === 'de' && u.x !== null && u.shocked && (!u.hit || st.rand() < 0.3)) u.shocked = false;
-    for (const u of st.units) if (u.side === 'de') u.hit = false;
+    // Shaken Germans stay shaken until their captain rallies them (Steve: only a rally clears it)
     for (const u of st.units) u.halfShot = false;
     st.fx = [];
     st.de = { queue: st.units.filter(u => u.side === 'de' && u.x !== null).map(u => u.id), mortar: st.deMortarAmmo > 0, artillery: st.deArtilleryAmmo > 0, rep: [], ask: null };
@@ -1144,11 +1138,11 @@ const Sim = (() => {
       const shaken = st.units.filter(t => t.side === 'de' && t.x !== null && t.shocked && far(t) <= RALLY_RANGE).sort((a, b) => far(a) - far(b));
       if (shaken.length) {
         const t = shaken[0];
-        const ok = st.rand() < QUALITY[t.quality || 'standard'].rally;
-        if (ok) t.shocked = false;
-        rallyShown(st, t, ok);
-        deSays(st, `${ok ? 'Rallies' : 'Tries to rally'} ${t === u ? 'himself' : t.name}`);
-        rep.push(ok ? `📣 ${u.name} rallies ${t.name}.` : `📣 ${u.name} can't steady ${t.name} yet.`);
+        // A rally always works (Steve)
+        t.shocked = false;
+        rallyShown(st, t);
+        deSays(st, `Rallies ${t === u ? 'himself' : t.name}`);
+        rep.push(`📣 ${u.name} rallies ${t.name}.`);
         return null;
       }
     }
@@ -1344,9 +1338,8 @@ const Sim = (() => {
 
   function startRound(st) {
     st.tokens = true;
-    // Shocked Germans who weren't hit last round come round; some rally anyway
-    for (const u of st.units) if (u.side === 'de' && u.x !== null && u.shocked && (!u.hit || st.rand() < 0.3)) u.shocked = false;
-    for (const u of st.units) { if (u.side === 'de') u.hit = false; u.halfShot = false; }
+    // Shaken Germans stay shaken until their captain rallies them (Steve: only a rally clears it)
+    for (const u of st.units) u.halfShot = false;
     st.bag = { us: movable(st, 'us'), de: movable(st, 'de'), timer: ROUND_TIMER };
     // Tokens drawn so far this round (the timer can't be the first, Steve)
     st.drawnThisRound = 0;
@@ -1513,21 +1506,17 @@ const Sim = (() => {
     st.report = rep.length ? rep : ['A quiet round.'];
   }
 
-  // A new hour: rest the shaken, a fresh move for every piece (except those that took cover), fire support, ammo and reinforcements
+  // A new hour (shaken stays: only a rally clears it, Steve): a fresh move for every piece (except those that took cover), fire support (no more ammo: it never comes back, Steve) and reinforcements
   function newTurn(st, rep) {
     st.turn++;
     for (const u of st.units) {
       if (u.side !== 'us' || u.x === null) continue;
-      if (u.shocked && !u.hit) { u.shocked = false; rep.push(`😮‍💨 ${u.name} has rested and recovered.`); }
       const missed = !!u.spentNext;
-      u.hit = false; u.acted = missed; u.spentNext = false; u.rallied = 0;
+      u.acted = missed; u.spentNext = false; u.rallied = 0;
       // Down in cover: it stays down through the hour it misses, then gets up
       if (!missed) u.down = false;
     }
     for (const u of st.units) if (u.side === 'de') u.acted = false;
-    if ((st.turn - 1) % MORTARS.resupplyEvery === 0) st.ammo.mortars++;
-    if ((st.turn - 1) % ARTILLERY.resupplyEvery === 0) st.ammo.artillery++;
-    if ((st.turn - 1) % DE_ARTILLERY.resupplyEvery === 0) st.deArtilleryAmmo++;
     st.fired = {};
     reinforcements(st, rep);
   }

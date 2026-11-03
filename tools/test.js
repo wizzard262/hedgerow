@@ -630,6 +630,8 @@ check('a shot label adds up: the 3+ start, then each cover named on its own, to 
     const st = Sim.newGame(seed);
     // Some German pieces down in cover, so that reason shows up too
     st.units.filter(u => u.side === 'de').forEach((u, i) => { u.down = i % 3 === 0; });
+    // The Germans brought six fields nearer, so plenty of them are in reach on the longer board
+    for (const u of st.units) if (u.side === 'de' && u.x !== null) u.x = Math.max(0, u.x - 6);
     for (const u of st.units.filter(o => o.side === 'us' && o.x !== null)) {
       for (const t of Sim.targets(st, u)) {
         const why = Sim.needWhy(st, u, t);
@@ -690,8 +692,10 @@ check('a small target (two men or fewer) needs one more; an MG team (three men) 
 check('houses are hard cover: two more to hit anyone in a village or hamlet', () => {
   assert(COVER.village === 2 && COVER.hamlet === 2, 'houses are not +2');
   const st = Sim.newGame(3);
-  const t = { x: 4, y: 4, side: 'de', kind: 'company' };
-  assert(Sim.tileType(4, 4) === 'village' && Sim.cover(st, null, t) === 2, 'a piece in the village did not get +2');
+  // Nobody else on the board (a tank beside it would give cover too)
+  for (const u of st.units) u.x = u.y = null;
+  const t = { x: 10, y: 4, side: 'de', kind: 'company' };
+  assert(Sim.tileType(10, 4) === 'village' && Sim.cover(st, null, t) === 2, 'a piece in the village did not get +2');
 });
 
 check('taking cover halves the dice: an odd one left over is a coin toss', () => {
@@ -794,14 +798,15 @@ check('skip the shot after Move & shoot ends the token', () => {
   assert(Sim.actSkipShot(st, A).ok && !A.halfShot, 'the shot could not be skipped');
 });
 
-check('hand to hand: blows in turn, attacker first, until one side is gone; nobody stays shaken', () => {
+check('hand to hand: blows in turn, attacker first, until one side is gone; shaken lasts past the fight', () => {
   let won = 0, lost = 0;
   for (let seed = 1; seed <= 40; seed++) {
     const st = Sim.newGame(seed);
     st.hedges = {}; st.wire = {};
     const A = Sim.unitById(st, 'A'), de = st.units.find(u => u.side === 'de' && u.kind === 'company');
     for (const u of st.units) if (u !== A && u !== de) u.x = u.y = null;
-    A.x = 2; A.y = 6; A.at = null; A.acted = false; A.shocked = true;
+    // A standard platoon against the elite Fallschirmjäger, so it can go either way
+    A.x = 2; A.y = 6; A.at = null; A.acted = false; A.shocked = true; A.quality = 'standard';
     de.x = 3; de.y = 6; de.at = null; de.shocked = true;
     // (being shaken doesn't stop a charge in this check)
     A.shocked = false;
@@ -809,8 +814,9 @@ check('hand to hand: blows in turn, attacker first, until one side is gone; nobo
     assert(r.ok, `seed ${seed}: the charge was refused`);
     const aLeft = A.x !== null, dLeft = de.x !== null;
     assert(aLeft !== dLeft, `seed ${seed}: both sides (or neither) came out of the fight`);
-    if (aLeft) { won++; assert(A.x === 3 && A.y === 6, `seed ${seed}: the winner did not take the field`); assert(!A.shocked, 'the winner is still shaken'); }
-    else { lost++; assert(!de.shocked, 'the defender is still shaken'); }
+    if (aLeft) won++;
+    else { lost++; assert(de.shocked, 'the fight cleared the defender\'s shaken (only a rally does)'); }
+    if (aLeft) assert(A.x === 3 && A.y === 6, `seed ${seed}: the winner did not take the field`);
     assert(/hit/.test(r.lines[0]), `seed ${seed}: no blows reported`);
   }
   assert(won > 0 && lost > 0, `the attacker won ${won} and lost ${lost} of 40: one side always wins`);
@@ -827,15 +833,15 @@ check('villages and orchards: never seen through, but pieces in one see out and 
   assert(Sim.tileType(9, 0) === 'orchard', 'the test needs an orchard at 9,0');
   assert(Sim.sight(st, B, de) && Sim.sight(st, de, B), 'a piece in the middle of an orchard could not see out or be seen');
   // In the village with 2nd Platoon at a hedge two fields away: they see each other (Steve)
-  const v = { x: 4, y: 4 };
-  assert(Sim.tileType(v.x, v.y) === 'village', 'the test needs the village at 4,4');
+  const v = { x: 10, y: 4 };
+  assert(Sim.tileType(v.x, v.y) === 'village', 'the test needs the village at 10,4');
   de.x = v.x; de.y = v.y; de.at = null;
-  B.x = 2; B.y = 4; B.at = 'e'; st.hedges['2,4|3,4'] = true;
+  B.x = 8; B.y = 4; B.at = 'e'; st.hedges['8,4|9,4'] = true;
   assert(Sim.sight(st, B, de) && Sim.sight(st, de, B), 'a piece at a hedge and a German in the village could not see each other');
-  // Through a village: no
-  B.x = 3; B.y = 4; B.at = null; st.hedges = {};
-  de.x = 6; de.y = 4; de.at = null;
-  assert(Sim.tileType(5, 4) === 'village' && !Sim.sight(st, B, de), 'a piece was seen through the village');
+  // Through a village: no (down its column, over two village fields)
+  B.x = 10; B.y = 2; B.at = null; st.hedges = {};
+  de.x = 10; de.y = 5; de.at = null;
+  assert(Sim.tileType(10, 3) === 'village' && Sim.tileType(10, 4) === 'village' && !Sim.sight(st, B, de), 'a piece was seen through the village');
 });
 
 check('a shaken piece still moves and charges, half as far; it needs one more to hit', () => {
@@ -931,8 +937,7 @@ check('German moves follow your rules: men climb hedges (the hedge stays) and ne
   }
 });
 
-check('a rally that works clears shaken (a tank too) and says so on the table; one that fails says so too', () => {
-  let worked = 0, failed2 = 0;
+check('a rally always clears shaken (a tank too, the Germans too) and says so on the table', () => {
   for (let seed = 1; seed <= 30; seed++) {
     const st = Sim.newGame(seed);
     const cap = Sim.unitById(st, 'cap'), T1 = Sim.unitById(st, 'T1');
@@ -942,10 +947,45 @@ check('a rally that works clears shaken (a tank too) and says so on the table; o
     assert(Sim.actRally(st, cap, T1).ok, `seed ${seed}: the captain could not rally the tank pair`);
     const shown = st.fx.find(f => f.kind === 'rally' && f.to.id === T1.id);
     assert(shown, `seed ${seed}: the rally was not shown on the table`);
-    assert(shown.ok === !T1.shocked, `seed ${seed}: the table said ${shown.result} but shaken is ${T1.shocked}`);
-    if (shown.ok) worked++; else failed2++;
+    assert(!T1.shocked && shown.ok && shown.result === 'Rallied!', `seed ${seed}: the rally did not work (${shown.result})`);
+    // Rallying itself works every time too
+    const B = Sim.unitById(st, 'B');
+    B.shocked = true; B.acted = false;
+    assert(Sim.actSelfRally(st, B).ok && !B.shocked, `seed ${seed}: the platoon did not rally itself`);
   }
-  assert(worked > 10 && failed2 > 0, `rallies worked ${worked} and failed ${failed2} of 30`);
+});
+
+check('shaken lasts through the end of the round, both sides: only a rally clears it', () => {
+  const st = Sim.newGame(4);
+  const B = Sim.unitById(st, 'B'), de = st.units.find(u => u.side === 'de' && u.kind === 'company');
+  B.shocked = true; de.shocked = true;
+  Sim.endRound(st);
+  Sim.startRound(st);
+  assert(B.shocked, 'your shaken platoon recovered at the end of the round');
+  assert(de.shocked, 'the shaken German platoon recovered at the end of the round');
+});
+
+check('mortars and artillery never get more rounds, both sides', () => {
+  const st = Sim.newGame(6);
+  st.ammo.mortars = 0; st.ammo.artillery = 0; st.deArtilleryAmmo = 0; st.deMortarAmmo = 0;
+  for (let k = 0; k < 6; k++) { Sim.endRound(st); Sim.startRound(st); }
+  assert(st.ammo.mortars === 0 && st.ammo.artillery === 0, 'your guns got more rounds');
+  assert(st.deArtilleryAmmo === 0 && st.deMortarAmmo === 0, 'the German guns got more rounds');
+});
+
+check('the timer has the same odds as every other token left in the bag (never the first)', () => {
+  // Where it comes out, as a share of the bag, over many rounds: about as often in each half
+  let early = 0, late = 0;
+  for (let seed = 1; seed <= 400; seed++) {
+    const st = Sim.newGame(seed);
+    Sim.startRound(st);
+    const n = st.bag.us + st.bag.de;
+    let k = 0, side;
+    while ((side = Sim.drawToken(st)) && side !== 'timer') { k++; st.bag.us = Math.max(0, st.bag.us); st.drawn = null; }
+    assert(k >= 1, `seed ${seed}: the timer came out first`);
+    if (side === 'timer') { if (k <= n / 2) early++; else late++; }
+  }
+  assert(Math.abs(early - late) < 80, `the timer came out early ${early} times and late ${late}`);
 });
 
 check('tanks never fight hand to hand: a tank charging men makes them fall back, and takes the field', () => {

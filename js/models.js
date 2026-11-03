@@ -79,6 +79,8 @@ const Models = (() => {
     M.deWebbing = mat('#2e2a25', 0.7);
     M.olive = mat('#4f5432', 0.65, 0.15);      // olive drab paint
     M.dunkelgelb = mat('#a8975f', 0.65, 0.15); // German dark yellow
+    M.panzerGrey = mat('#565c5f', 0.65, 0.15); // German tanks (Steve): panzer grey
+    M.gold = mat('#c9a13a', 0.35, 0.7);       // an elite piece's band round its bases
     M.white = mat('#e8e4d6', 0.6);
     M.black = mat('#151515', 0.6);
     M.stone = mat('#bfb397', 0.95);
@@ -237,7 +239,11 @@ const Models = (() => {
     g.add(at(box(0.006, 0.05, 0.09, paint), 0.012, 0.04, 0, 0, 0, -0.15));
     g.add(at(cyl(0.004, 0.005, 0.15, M.steel, 10), 0.08, 0.04, 0, 0, 0, Math.PI / 2));
     g.add(at(cyl(0.007, 0.007, 0.012, M.steel, 10), 0.155, 0.04, 0, 0, 0, Math.PI / 2));
-    g.add(at(team('de', 'pak').children[1], -0.07, 0, 0.045));
+    // Its crew of three (Steve): the gunner crouched at the sight behind the shield, the loader with a shell beside the
+    // breech, and one kneeling at the trail
+    const gunner = soldier('de', 0, false); gunner.scale.y = 0.75; g.add(at(gunner, -0.025, 0, -0.03, 0, 0, 0));
+    const loader = soldier('de', 1, false); loader.scale.y = 0.8; g.add(at(loader, -0.03, 0, 0.035, 0, -0.3, 0));
+    const trail = soldier('de', -1, false); trail.scale.y = 0.72; g.add(at(trail, -0.1, 0, 0, 0, 0.4, 0));
     return castAll(g);
   }
 
@@ -317,15 +323,15 @@ const Models = (() => {
       g.lineWidth = 14; g.strokeStyle = side === 'us' ? '#2a5e24' : side === 'timer' ? '#3a3a3a' : '#5d5d57';
       g.beginPath(); g.arc(128, 128, 112, 0, Math.PI * 2); g.stroke();
       if (side === 'timer') {
-        // A white sand-glass: the top and bottom bars, the two bulbs, a little sand run down. Turned a quarter, so it
-        // stands upright as the coin lies on the table seen from the front
+        // A white sand-glass (Steve): the top and bottom bars, and the glass bulging out between them, pinched in the
+        // middle. Turned a quarter, so it stands upright as the coin lies on the table seen from the front
         g.save(); g.translate(128, 128); g.rotate(-Math.PI / 2); g.translate(-128, -128);
         g.strokeStyle = '#fff'; g.lineWidth = 12; g.lineCap = 'round';
         g.beginPath(); g.moveTo(78, 52); g.lineTo(178, 52); g.moveTo(78, 204); g.lineTo(178, 204); g.stroke();
         g.lineWidth = 10;
-        g.beginPath(); g.moveTo(90, 52); g.bezierCurveTo(90, 110, 166, 110, 166, 128); g.bezierCurveTo(166, 146, 90, 146, 90, 204); g.stroke();
-        g.beginPath(); g.moveTo(166, 52); g.bezierCurveTo(166, 110, 90, 110, 90, 128); g.bezierCurveTo(90, 146, 166, 146, 166, 204); g.stroke();
-        g.fillStyle = '#fff'; g.beginPath(); g.moveTo(104, 194); g.lineTo(152, 194); g.lineTo(128, 162); g.closePath(); g.fill();
+        // Each side: out from the bar, round the bulb, in to the waist, then the same again down to the bottom bar
+        g.beginPath(); g.moveTo(93, 52); g.bezierCurveTo(78, 100, 122, 112, 122, 128); g.bezierCurveTo(122, 144, 78, 156, 93, 204); g.stroke();
+        g.beginPath(); g.moveTo(163, 52); g.bezierCurveTo(178, 100, 134, 112, 134, 128); g.bezierCurveTo(134, 144, 178, 156, 163, 204); g.stroke();
         g.restore();
       } else if (side === 'us') {
         // A five-pointed gold star
@@ -477,7 +483,7 @@ const Models = (() => {
   // The Panther: long sloped glacis, upper sides sloping in, eight big interleaved road wheels a side, rear deck fans,
   // a narrow-fronted turret with a rounded mantlet, the commander's cupola, the long 75 mm with a double muzzle brake
   function panther() {
-    const paint = camoPaint();
+    const paint = M.panzerGrey;
     const g = new T.Group(), W = 0.22, L = 0.46;
     g.add(at(box(0.4, 0.05, W * 0.6, paint), -0.01, 0.06, 0));
     // Upper hull: glacis at the front, a short slope at the back
@@ -516,7 +522,7 @@ const Models = (() => {
   // The Panzer IV (late model): a box hull, eight small road wheels in pairs on four bogies, return rollers,
   // armour skirts hung beside the hull and round the turret, the long 75 mm with its double muzzle brake
   function panzer4() {
-    const paint = camoPaint();
+    const paint = M.panzerGrey;
     const g = new T.Group(), W = 0.19, L = 0.38;
     g.add(at(box(0.36, 0.055, W * 0.62, paint), 0, 0.065, 0));
     g.add(at(profile([[-0.19, 0.09], [0.165, 0.09], [0.19, 0.11], [0.15, 0.135], [-0.19, 0.135]], W, paint, 0.004), 0, 0, 0));
@@ -545,6 +551,19 @@ const Models = (() => {
     for (const dx of [0.305, 0.318]) g.add(at(cyl(0.011, 0.011, 0.009, M.steel, 14), dx, 0.157, 0, 0, 0, Math.PI / 2));
     for (const s of [-1, 1]) g.add(at(crossMesh(0.02), 0.0, 0.08, s * (W / 2 + 0.03), 0, s > 0 ? 0 : Math.PI, 0));
     return castAll(g);
+  }
+
+  // An elite piece's mark (Steve): a gold band round the edge of a base, in place of the old star token. The band is
+  // the base's own edge made a touch bigger, so it fits an oval section base as well as a round team base
+  function eliteBand(m) {
+    // The base: the flocked cylinder at the bottom of the model (none on a tank)
+    const base = m.children.find(c => c.isMesh && Array.isArray(c.material) && c.material.includes(M.base));
+    if (!base) return;
+    const p = base.geometry.parameters;
+    const band = new T.Mesh(new T.CylinderGeometry(p.radiusTop * 1.05, p.radiusBottom * 1.05, p.height * 1.2, p.radialSegments, 1, true), M.gold);
+    // It keeps its gold when the piece is greyed out
+    band.userData.keep = true;
+    base.add(band);
   }
 
   // Flat decals: a five-point star, a Balkenkreuz
@@ -650,5 +669,5 @@ const Models = (() => {
     return castAll(g);
   }
 
-  return { materials, M, water, bridge, soldier, squad, team, captain, pak, mortar, howitzer, round, coin, token, sherman, panther, panzer4, hedge, tree, house, die, table, field, lane, at };
+  return { materials, M, eliteBand, water, bridge, soldier, squad, team, captain, pak, mortar, howitzer, round, coin, token, sherman, panther, panzer4, hedge, tree, house, die, table, field, lane, at };
 })();

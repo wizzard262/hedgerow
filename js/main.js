@@ -191,7 +191,20 @@ window.Game = (() => {
     setTimeout(runGermans, 350);
   }
 
+  // The game is over: the message waits until the table has shown the last shot landing (Steve: it came up before the
+  // last piece was hit), then a moment more to see it
+  const RESULT_PAUSE = 900;
+  let resultWaiting = false;
   function showResult() {
+    // Called once for the end, however many ways it is reached
+    if (resultWaiting) return;
+    resultWaiting = true;
+    // Two frames, so the table has started showing the shots, then until they land
+    requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(openResult, Board.settledIn() + RESULT_PAUSE)));
+  }
+
+  function openResult() {
+    resultWaiting = false;
     // How it ended: a side wiped out, the village taken, or time run out
     const germansLeft = st.units.some(u => u.side === 'de' && u.x !== null);
     const usLeft = st.units.some(u => u.side === 'us' && u.x !== null);

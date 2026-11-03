@@ -56,7 +56,11 @@ const Board = (() => {
       if (Math.abs(above - below) < 0.01) break;
       centre.z = Math.max(0, Math.min(ROWS, centre.z + (above - below) * ROWS * 0.35));
     }
+    // Then the whole picture moved down a little (Steve: the top of the board was just out of sight; losing a little
+    // of the table at the bottom doesn't matter). Picking and labels use the same camera, so they move with it
+    camera.setViewOffset(w, h, 0, -h * BOARD_DOWN, w, h);
   }
+  const BOARD_DOWN = 0.05;           // how far down the picture moves, as a share of the screen's height
 
   // ---------- The table: built once a game, hedges again when one is cut ----------
 
@@ -414,6 +418,8 @@ const Board = (() => {
     const m = kind === 'captain' ? Models.captain(side) : kind === 'pak' ? Models.pak() : Models.team(side, kind);
     markerSpots(m);
     m.scale.setScalar(kind === 'pak' ? TANKS * 1.3 : MEN);
+    // The PaK swings round onto its target before it fires, as a tank does (Steve)
+    if (kind === 'pak') m.userData.slowTurn = true;
     return [m];
   }
 
@@ -422,6 +428,8 @@ const Board = (() => {
     const g = new T.Group();
     g.userData.bases = buildBases(u.side, u.kind);
     for (const b of g.userData.bases) g.add(b);
+    // Elite, yours or theirs (Steve): a gold band round the edge of every base
+    if (u.quality === 'elite') for (const b of g.userData.bases) Models.eliteBand(b);
     // The Germans face west
     g.userData.face = u.side === 'us' ? 0 : Math.PI;
     scene.add(g);
@@ -469,7 +477,9 @@ const Board = (() => {
           aim(b, cx + s * apart * acrossX + jx * 0.3, cz + s * apart * acrossZ + jz * 0.3, facing + jr * 0.1);
         });
       } else {
-        aim(g.userData.bases[0], 0.5 + p.x * reach.small, 0.5 + p.y * reach.small, g.userData.face);
+        // The PaK faces the way it last fired (Steve: it turns to shoot); everyone else the enemy's side
+        const facing = u.kind === 'pak' && u.aim !== undefined ? u.aim : g.userData.face;
+        aim(g.userData.bases[0], 0.5 + p.x * reach.small, 0.5 + p.y * reach.small, facing);
       }
       aim(g, x, y, 0);
     }
@@ -524,7 +534,7 @@ const Board = (() => {
   }
 
   // Markers on a piece (Steve): the red shaken token sits on the back edge of its (first) base, or on a tank's back
-  // deck; a gold star for an elite platoon on the side edge of its base. Each rides on the base, so it moves with it
+  // deck. It rides on the base, so it moves with it. (Elite pieces have a gold band round their bases instead, see model)
   function marker(u, key, colour, label, show, where) {
     const id = u.id + key, base = pieces[u.id].userData.bases[0];
     if (!tokens[id]) {
@@ -569,7 +579,7 @@ const Board = (() => {
     if (g.userData.greyed === tint) return;
     g.userData.greyed = tint;
     g.traverse(c => {
-      // Markers (the shaken token, the elite star) keep their colours
+      // Markers (the shaken token, the elite band) keep their colours
       if (!c.isMesh || c.userData.keep) return;
       // Back to its own colours first
       if (c.userData.orig) { c.material = c.userData.orig; c.userData.orig = null; }
@@ -644,7 +654,6 @@ const Board = (() => {
     for (const u of st.units) {
       if (!pieces[u.id]) continue;
       marker(u, ':shock', '#9b2a22', '!', u.shocked, 'back');
-      marker(u, ':elite', '#b38a2e', '★', u.quality === 'elite' && u.kind === 'company', 'side');
     }
   }
 
@@ -991,6 +1000,12 @@ const Board = (() => {
   // Until when the fights on the table are still being shown (the page waits for them before the next token)
   let meleeUntil = 0;
   function busyFor() { return Math.max(0, meleeUntil - performance.now()); }
+  // How long until every shot on the table has landed and every fight is shown (Steve: the game's end waits for it)
+  function settledIn() {
+    const untils = Object.values(held).map(h => h.until);
+    const latest = Math.max(meleeUntil, ...untils);
+    return Math.max(0, latest - performance.now());
+  }
 
   function startMelee(f, t0) {
     // When each piece loses each base, from the blows in order
@@ -1086,8 +1101,8 @@ const Board = (() => {
       // A tank or gun turns to face what it fires at, and stays facing it
       const shooter = f.from && st.units.find(u => u.id === f.from.id);
       if (shooter && (Sim.isTank(shooter) || shooter.kind === 'pak')) shooter.aim = Math.atan2(-(f.y - f.from.y), f.x - f.from.x);
-      // A tank waits while it turns onto the target (Steve)
-      const turning = shooter && Sim.isTank(shooter) ? TANK_TURN * 1000 : 0;
+      // A tank (or the PaK) waits while it turns onto the target (Steve)
+      const turning = shooter && (Sim.isTank(shooter) || shooter.kind === 'pak') ? TANK_TURN * 1000 : 0;
       // How many bases fire it: one round each (Steve)
       f.bases = shooter && pieces[shooter.id] ? pieces[shooter.id].userData.bases.filter(b => b.visible).length : 1;
       const t0 = performance.now() + shots.filter(s => performance.now() - s.t0 < 300).length * 180 + turning;
@@ -1162,7 +1177,7 @@ const Board = (() => {
       if (t < 0) continue;
       const add = o => { marks.add(o); s.objs.push(o); return o; };
       if (f.kind === 'melee') { playMelee(f, t, add); continue; }
-      // A rally (Steve): "Rallied!" in green or "Still shaken" in red, rising off the piece
+      // A rally (Steve): "Rallied!" in green (or the captain's "Up and moving"), rising off the piece
       if (f.kind === 'rally') {
         if (t > 1.8 || !pieces[f.to.id]) continue;
         const p = pieceCentre({ id: f.to.id, x: f.x, y: f.y });
@@ -1640,5 +1655,5 @@ const Board = (() => {
     return { x: r.left + (p.x + 1) / 2 * r.width, y: r.top + (1 - p.y) / 2 * r.height };
   }
 
-  return { init, resize, render, fieldAt, pieceAt, pieceUnder, portrait, bounce, bounceGun, busyFor, gunAt, targetAt, screenPoint, pieceScreen, labelBox, clearDice, flyToken, clearToken, returnTokens, canvas: () => renderer.domElement };
+  return { init, resize, render, fieldAt, pieceAt, pieceUnder, portrait, bounce, bounceGun, busyFor, settledIn, gunAt, targetAt, screenPoint, pieceScreen, labelBox, clearDice, flyToken, clearToken, returnTokens, canvas: () => renderer.domElement };
 })();
