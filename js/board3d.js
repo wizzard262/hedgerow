@@ -1012,62 +1012,44 @@ const Board = (() => {
     return bubbleBox(u, anchor, farHalf);
   }
 
-  // Place every target's bubble so it covers no target's cross-hair and no other bubble, and stays on the screen (Steve).
-  // Each target tries spots round it, about two or three fields off (up the board first, or down it in the far half);
-  // the first clear one wins, otherwise the one with the least in the way
+  // Place every target's bubble so neither it nor its arrow covers another target (Steve), no two arrows cross and it
+  // stays on the screen (see Labels). The spots to try ring each target, near first. Worked out once for each set of
+  // targets, not every frame
+  const LABEL_RINGS = [1.1, 1.6, 2.2, 2.9, 3.6];
+  const LABEL_ANGLES = 16;
+  let labelKey = '', labelReport = null;
   function placeLabels(list) {
-    labelPlaces = new Map();
-    if (!list.length) return;
+    if (!list.length) { labelPlaces = new Map(); labelKey = ''; labelReport = null; return; }
     const r = renderer.domElement.getBoundingClientRect();
-    const aims = list.map(u => { const s = reticleSpot(u); return screenPoint(s.x, s.z, s.y); });
-    const placed = [];
-    const overlap = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
-    // Left to right across the screen, so neighbours share the space sensibly
-    const order = list.map((u, i) => i).sort((i, j) => aims[i].x - aims[j].x);
-    for (const i of order) {
-      const u = list[i], p = pieceCentre(u), farHalf0 = u.y < ROWS / 2, way = farHalf0 ? 1 : -1;
-      const tries = [[0, 2.6], [0, 1.9], [1.6, 2.3], [-1.6, 2.3], [0, 3.3], [2.4, 1.4], [-2.4, 1.4], [0, -2.4], [1.6, -2.2], [-1.6, -2.2]];
-      let best = null;
-      for (const [dx, dz] of tries) {
-        const z = p.z + dz * way;
-        if (z < 0.3 || z > ROWS - 0.3) continue;
-        const anchor = new T.Vector3(Math.max(0.3, Math.min(COLS - 0.3, p.x + dx)), 0.3, z);
-        const farHalf = z > p.z;     // the bubble below its target on the screen hangs down from its tail
+    const key = [r.width, r.height, ...list.map(u => { const p = pieceCentre(u); return [u.id, p.x.toFixed(2), p.z.toFixed(2), u.needNow, (u.needWhy || []).join('/')].join(':'); })].join('|');
+    if (key === labelKey) return;
+    labelKey = key;
+    camera.updateMatrixWorld();
+    const right = new T.Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
+    const items = list.map(u => {
+      const p = pieceCentre(u), spot = reticleSpot(u), big = u.kind === 'company' || Sim.isTank(u);
+      const aim = screenPoint(spot.x, spot.z, spot.y);
+      // The target on the page: its cross-hair and the ring round its base, each a circle
+      const across = spot.clone().addScaledVector(right, big ? 0.3 : 0.24), edge = screenPoint(across.x, across.z, across.y);
+      const radius = Math.hypot(edge.x - aim.x, edge.y - aim.y);
+      const base = screenPoint(p.x, p.z, 0);
+      const circles = [{ x: aim.x, y: aim.y, r: radius }, { x: base.x, y: base.y, r: radius }];
+      // The spots round it
+      const options = [];
+      for (const ring of LABEL_RINGS) for (let k = 0; k < LABEL_ANGLES; k++) {
+        const angle = k / LABEL_ANGLES * Math.PI * 2;
+        const anchor = new T.Vector3(Math.max(-0.6, Math.min(COLS + 0.6, p.x + ring * Math.cos(angle))), 0.3, Math.max(-0.9, Math.min(ROWS - 0.2, p.z + ring * Math.sin(angle))));
+        // (a bubble below its target on the screen hangs down from its edge, one above stands on it)
+        const farHalf = anchor.z > p.z;
         const box = bubbleBox(u, anchor, farHalf);
-        const pad = { x: box.x - 14, y: box.y - 14, w: box.w + 28, h: box.h + 28 };
-        let bad = 0;
-        if (box.x < r.left || box.x + box.w > r.right || box.y < r.top || box.y + box.h > r.bottom) bad += 5;
-        for (const a of aims) if (a.x > pad.x && a.x < pad.x + pad.w && a.y > pad.y && a.y < pad.y + pad.h) bad += 3;
-        for (const b of placed) if (overlap(pad, b)) bad += 2;
-        if (!best || bad < best.bad) best = { bad, anchor, farHalf, box };
-        if (bad === 0) break;
+        options.push({ anchor, farHalf, box, mid: { x: box.x + box.w / 2, y: box.y + box.h / 2 } });
       }
-      if (!best) { const z = Math.max(0.4, Math.min(ROWS - 0.4, p.z + 2.6 * way)); best = { anchor: new T.Vector3(p.x, 0.3, z), farHalf: z > p.z, box: { x: 0, y: 0, w: 0, h: 0 } }; }
-      labelPlaces.set(u.id, { anchor: best.anchor, farHalf: best.farHalf });
-      placed.push(best.box);
-    }
-    uncross(list, aims);
-  }
-
-  // Many bubbles (a mortar's targets, say): no two arrows cross (Steve). Where two do, the bubbles swap places, until
-  // none cross (a few goes at most); each then points from about where its neighbours' did
-  function uncross(list, aims) {
-    const centre = u => { const { anchor, farHalf } = labelPlaces.get(u.id); const b = bubbleBox(u, anchor, farHalf); return { x: b.x + b.w / 2, y: b.y + b.h / 2 }; };
-    const side = (a, b, c) => Math.sign((b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x));
-    const crosses = (p1, p2, q1, q2) => side(p1, p2, q1) * side(p1, p2, q2) < 0 && side(q1, q2, p1) * side(q1, q2, p2) < 0;
-    for (let go = 0; go < 12; go++) {
-      let swapped = false;
-      for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) {
-        const a = list[i], b = list[j];
-        if (!crosses(centre(a), aims[i], centre(b), aims[j])) continue;
-        const pa = labelPlaces.get(a.id), pb = labelPlaces.get(b.id);
-        // (a bubble now below its target on the screen hangs down from its edge, one above stands on it)
-        labelPlaces.set(a.id, { anchor: pb.anchor, farHalf: pb.anchor.z > pieceCentre(a).z });
-        labelPlaces.set(b.id, { anchor: pa.anchor, farHalf: pa.anchor.z > pieceCentre(b).z });
-        swapped = true;
-      }
-      if (!swapped) break;
-    }
+      return { id: u.id, aim, circles, options };
+    });
+    const chosen = Labels.place(items, { x: r.left, y: r.top, w: r.width, h: r.height });
+    labelPlaces = new Map();
+    items.forEach((item, i) => { const o = item.options[chosen[i]]; labelPlaces.set(item.id, { anchor: o.anchor, farHalf: o.farHalf }); });
+    labelReport = Labels.problems(items, chosen);
   }
 
   // ---------- Shooting on the table ----------
@@ -1865,5 +1847,5 @@ const Board = (() => {
     return { x: r.left + (p.x + 1) / 2 * r.width, y: r.top + (1 - p.y) / 2 * r.height };
   }
 
-  return { init, resize, render, fieldAt, pieceAt, pieceUnder, portrait, bounce, bounceGun, busyFor, settledIn, gunAt, targetAt, screenPoint, pieceScreen, labelBox, clearDice, flyToken, clearToken, returnTokens, canvas: () => renderer.domElement };
+  return { labelReport: () => labelReport, init, resize, render, fieldAt, pieceAt, pieceUnder, portrait, bounce, bounceGun, busyFor, settledIn, gunAt, targetAt, screenPoint, pieceScreen, labelBox, clearDice, flyToken, clearToken, returnTokens, canvas: () => renderer.domElement };
 })();

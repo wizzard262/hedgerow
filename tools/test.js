@@ -541,6 +541,34 @@ check('past the corner of a village, hamlet or orchard: only from a corner area 
   assert(s && s.placeCorner && s.cover === 1, 'from the corner it did not see past them, with +1');
 });
 
+check('red bubbles: neither a box nor an arrow covers another target, and arrows do not cross', () => {
+  const Labels = require('../js/labels.js');
+  const bounds = { x: 0, y: 0, w: 1600, h: 820 };
+  // Targets clustered as in a village, with a ring of spots round each, boxes 90 by 70
+  const spots = [[700, 400], [760, 410], [720, 460], [800, 470], [660, 470], [900, 300], [500, 520]];
+  const items = spots.map(([x, y], n) => {
+    const options = [];
+    for (const ring of [90, 140, 200, 260, 320]) for (let k = 0; k < 16; k++) {
+      const a = k / 16 * Math.PI * 2, mx = x + ring * Math.cos(a), my = y + ring * Math.sin(a);
+      options.push({ mid: { x: mx, y: my }, box: { x: mx - 45, y: my - 35, w: 90, h: 70 } });
+    }
+    return { id: n, aim: { x, y }, circles: [{ x, y, r: 22 }, { x, y: y + 30, r: 22 }], options };
+  });
+  const chosen = Labels.place(items, bounds);
+  const left = Labels.problems(items, chosen);
+  assert(left.boxOnTarget === 0, `${left.boxOnTarget} boxes on other targets`);
+  assert(left.boxOnBox === 0, `${left.boxOnBox} boxes on each other`);
+  assert(left.arrowCross === 0, `${left.arrowCross} arrows crossing`);
+  assert(left.arrowOnTarget === 0, `${left.arrowOnTarget} arrows over other targets`);
+  // Two cross-hairs overlapping: no bubble can keep that arrow's point off the other, and it is counted as that
+  const close = [[700, 400], [712, 400]].map(([x, y], n) => ({ id: n, aim: { x, y }, circles: [{ x, y, r: 22 }], options: [{ mid: { x, y: y - 120 }, box: { x: x - 45, y: y - 155, w: 90, h: 70 } }] }));
+  assert(Labels.problems(close, [0, 0]).tipInside === 2, 'overlapping cross-hairs were not counted as such');
+  // On its own, a bubble takes a near spot
+  const one = [Object.assign({}, items[5])];
+  const pick = one[0].options[Labels.place(one, bounds)[0]];
+  assert(Math.hypot(pick.mid.x - 900, pick.mid.y - 300) <= 140, 'a lone bubble went a long way from its target');
+});
+
 check('machine guns fire five dice', () => {
   assert(PIECES.mg.soft === 5 && PIECES.mg42.soft === 5, 'an MG team does not fire five dice');
 });
