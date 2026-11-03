@@ -647,9 +647,11 @@ const Sim = (() => {
   // `blast` is set for the other pieces caught in a tank's high-explosive burst (they don't spread it again)
   function fireAt(st, shooter, target, power, withdraw = false, moving = false, blast = false) {
     const f = firepower(st, shooter);
+    const need = needFor(st, shooter, target, moving);
+    // A German piece fired on takes cover when it is wise to (Steve), as you can
+    if (!withdraw && target.side === 'de' && germanTakesCover(st, target, menDice(f) * power, need)) withdraw = true;
     // Taking cover happens before the dice roll: its men are already down
     const pre = withdraw ? takeCover(st, target) : null;
-    const need = needFor(st, shooter, target, moving);
     const faces = [];
     let softHits, hardHits, fullDice = 0;
     if (isTank(target)) {
@@ -688,6 +690,18 @@ const Sim = (() => {
 
   // A piece fired on takes cover (Steve): no moving back, its men get down where they are. One more is needed to hit it
   // for the rest of the German hour, and it misses its move next hour unless the captain gets it up
+  // Does a German piece about to be fired on (dice at it, each needing `need`) take cover? When it is wise (Steve):
+  // a shaken piece, where one more hit kills, as soon as a hit is likely; a weakened one against a fair volley; a
+  // whole one only against a heavy one. Taking cover costs its move this round, so only a piece that still has it
+  function germanTakesCover(st, t, diceAt, need) {
+    if (!canReact(st, t) || isTank(t)) return false;
+    const expected = diceAt * Math.max(0, 7 - Math.min(6, need)) / 6;
+    const whole = t.platoons >= (t.kind === 'company' ? 3 : 1);
+    if (t.shocked) return expected >= 0.5;
+    if (!whole) return expected >= 1;
+    return expected >= 1.8;
+  }
+
   function takeCover(st, u) {
     if (st.tokens && !u.acted) u.acted = true;
     else u.spentNext = true;
@@ -695,11 +709,11 @@ const Sim = (() => {
     return { line: `${u.name} takes cover` };
   }
 
-  // Can this piece react now: an American piece not already down in cover, that hasn't moved this round (Steve: taking
-  // cover uses the move it still has)
+  // Can this piece react now: a piece not already down in cover, that hasn't moved this round (Steve: taking cover
+  // uses the move it still has). You are asked; the Germans decide for themselves (germanTakesCover)
   function canReact(st, u) {
     // Tanks can't take cover (Steve): they just take it
-    return u.side === 'us' && u.x !== null && !isTank(u) && !PIECES[u.kind].fixed && !u.spentNext && !u.down && !u.acted;
+    return u.x !== null && !isTank(u) && !PIECES[u.kind].fixed && !u.spentNext && !u.down && !u.acted;
   }
 
   // The score a shot needs, the Panther's armour included
@@ -927,28 +941,32 @@ const Sim = (() => {
   // Each returns { ok, lines } and spends a command point when it works. A piece acts once an hour
 
   function canAct(st, u) {
-    // The captain can't move or shoot once he has used both his rallies
-    if (u && u.kind === 'captain' && (u.rallied || 0) >= CAPTAIN_RALLIES.still) return false;
     return !!u && u.side === 'us' && u.x !== null && !st.won && !st.lost && !st.de && !u.acted && tokenAllows(st, u);
   }
 
-  // Can the captain rally now (Steve): twice an hour if he doesn't move or shoot, once if he does, before or after
+  // The captain's rallies (Steve): two a round if he stays put or charges, in any order (two then the charge, one
+  // either side of it, or the charge then two); one if he shoots or moves and shoots, before or after it. Not wanting
+  // them all, he uses Skip turn. u.fired: he has shot (or moved and shot) this round
+  const ralliesAllowed = cap => (cap.fired ? CAPTAIN_RALLIES.fired : CAPTAIN_RALLIES.still);
   function canRally(st, cap) {
     if (!cap || cap.kind !== 'captain' || cap.side !== 'us' || cap.x === null || st.won || st.lost || st.de || !tokenAllows(st, cap)) return false;
-    const allowed = cap.acted ? CAPTAIN_RALLIES.moved : CAPTAIN_RALLIES.still;
-    return (cap.rallied || 0) < allowed;
+    if (cap.skipped) return false;
+    return (cap.rallied || 0) < ralliesAllowed(cap);
   }
+  // Can a piece shoot (or move and shoot) now? The captain not after two rallies: then only a charge is left (Steve)
+  const mayFire = u => !(u.kind === 'captain' && (u.rallied || 0) >= CAPTAIN_RALLIES.still);
 
   function actShoot(st, u, target) {
-    if (!canAct(st, u) || !targets(st, u).includes(target)) return { ok: false };
+    if (!canAct(st, u) || !mayFire(u) || !targets(st, u).includes(target)) return { ok: false };
     spend(st, u);
+    u.fired = true;
     return { ok: true, lines: [`🔫 ${u.name} fires on ${target.name}: ` + fireAt(st, u, target, 1).join(', ') + '.'] };
   }
 
   // The routes Move & shoot can take: up to MOVE_SHOOT_MOVES moves, ending only where the piece will have someone to
   // shoot (Steve). Captains don't shoot, and machine guns can't fire on the move (Steve): they set up, then shoot
   function moveShootRoutes(st, u) {
-    if (u.kind === 'mg' || u.kind === 'mg42' || PIECES[u.kind].fixed) return [];
+    if (u.kind === 'mg' || u.kind === 'mg42' || PIECES[u.kind].fixed || !mayFire(u)) return [];
     const home = { x: u.x, y: u.y, at: u.at }, out = [];
     for (const route of routesFor(st, u, reach(u, MOVE_SHOOT_MOVES), false)) {
       // Try it: stand at the goal by each hedge in turn, or in the open; any place with a shot will do
@@ -974,6 +992,7 @@ const Sim = (() => {
     const route = canAct(st, u) && moveShootRoutes(st, u).find(r => r[r.length - 1].x === x && r[r.length - 1].y === y);
     if (!route) return { ok: false };
     spend(st, u);
+    u.fired = true;
     const lines = followRoute(st, u, route);
     // Snagged on wire on the way: it stops there, and fires from there if it can
     if (u.snagged) { u.halfShot = targets(st, u, true).length > 0; return { ok: true, lines: [lines.join(', ') + '.'] }; }
@@ -1177,6 +1196,8 @@ const Sim = (() => {
     const to = freePlace(st, u, u.x, u.y, side);
     if (to === u.at || !lineSides(st, u).includes(to)) return { ok: false };
     spend(st, u);
+    // (a move that may fire after, like a Move & shoot: the captain can still fire only with a rally to spare)
+    if (u.kind === 'captain' && mayFire(u)) u.fired = true;
     standAt(st, u, to);
     u.halfShot = targets(st, u, true).length > 0;
     return { ok: true, lines: [`🌳 ${u.name} moves to ${placeName(u.at)}.`] };
@@ -1262,6 +1283,8 @@ const Sim = (() => {
         if (t.x === null) continue;
         const need = shellNeed(st, t);
         const faces = [];
+        // Your shells on a German piece: it takes cover first if it is wise to (Steve)
+        if (side === 'us' && t.side === 'de' && germanTakesCover(st, t, n, need)) { const pre = takeCover(st, t); lines.push(pre.line); }
         // Against a tank only the anti-tank dice count (its armour is in need); against men every die
         const soft = isTank(t) ? 0 : roll(st, underCover(st, t, n), need, faces), hard = isTank(t) ? roll(st, S.hard || 0, need, faces) : 0;
         // Taking cover: how many dice it would have faced standing (for the tag)
@@ -1534,7 +1557,8 @@ const Sim = (() => {
     const able = canAct(st, u) || (u.kind === 'captain' && canRally(st, u));
     if (!able) return { ok: false };
     spend(st, u);
-    if (u.kind === 'captain') u.rallied = CAPTAIN_RALLIES.still;
+    // The captain skipping gives up any rallies he has left too (Steve: that is how he stops)
+    if (u.kind === 'captain') u.skipped = true;
     return { ok: true, lines: [`⏭️ ${u.name} holds its ground this round.`] };
   }
   // Moved with Move & shoot but not firing after all (Steve: no Pass button): the shot is given up and the token is done
@@ -1738,7 +1762,7 @@ const Sim = (() => {
     for (const u of st.units) {
       if (u.side !== 'us' || u.x === null) continue;
       const missed = !!u.spentNext;
-      u.acted = missed; u.spentNext = false; u.rallied = 0;
+      u.acted = missed; u.spentNext = false; u.rallied = 0; u.fired = false; u.skipped = false;
       // Down in cover: it stays down through the hour it misses, then gets up
       if (!missed) u.down = false;
     }
@@ -1751,7 +1775,7 @@ const Sim = (() => {
     newGame, endTurn, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, moves, chargeSpots,
     rallyTargets, canAct, groupOf, groupName, members, canReact, firepower, teamsOf, canCallFire, holdsObjective, roundText, roomFor,
     startGermanHour, germanStep, answer, finishHour, startRound, drawToken, endGermanToken, activationOver, passToken, usCanMove, endRound, canFire, actSkip, actSkipShot, skipSupport,
-    smallTarget, menDice, armourOf, captainCanRally, fireAt, actShoot, actMoveShoot, moveShootSpots, chargeRoutes, DIRS, needWhy, shellNeed, shellWhy, shellFields, canRally, needFor, canSelfRally, actSelfRally, actHalfShot, actMove, actCharge, actRally, actFire, actBreach, breachSpots, sight, isSmall, cover, wire, lineSides, actLine, atHedge, acrossHedge, SIDE_NAMES, PLACES, placeXY, placeName, lines, sizeOf, footprint, spotXY, occupant, fitsAt, freePlace,
+    smallTarget, menDice, armourOf, mayFire, captainCanRally, fireAt, actShoot, actMoveShoot, moveShootSpots, chargeRoutes, DIRS, needWhy, shellNeed, shellWhy, shellFields, canRally, needFor, canSelfRally, actSelfRally, actHalfShot, actMove, actCharge, actRally, actFire, actBreach, breachSpots, sight, isSmall, cover, wire, lineSides, actLine, atHedge, acrossHedge, SIDE_NAMES, PLACES, placeXY, placeName, lines, sizeOf, footprint, spotXY, occupant, fitsAt, freePlace,
     hasCutters: u => cutter(u),
   };
 })();

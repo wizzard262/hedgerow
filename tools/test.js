@@ -466,6 +466,25 @@ check('a tank in the middle of a hedged field is hidden from pieces not at the h
   assert(Sim.sight(st, t, T1), 'a piece at the hedge could not see the tank in the middle');
 });
 
+check('a German piece takes cover when it is wise: shaken and fired on, if it still has its move', () => {
+  const st = Sim.newGame(4);
+  st.hedges = {}; st.wire = {};
+  const mg = Sim.unitById(st, 'mg1'), de = st.units.find(u => u.side === 'de' && u.kind === 'company');
+  for (const u of st.units) if (u !== mg && u !== de) u.x = u.y = null;
+  mg.x = 0; mg.y = 6; mg.at = null; de.x = 1; de.y = 6; de.at = null;
+  de.shocked = true; de.acted = false;
+  Sim.fireAt(st, mg, de, 1);
+  assert(de.x === null || de.down, 'a shaken German under machine-gun fire did not take cover');
+  // One that has moved can't
+  const st2 = Sim.newGame(4);
+  st2.hedges = {}; st2.wire = {};
+  const mg2 = Sim.unitById(st2, 'mg1'), de2 = st2.units.find(u => u.side === 'de' && u.kind === 'company');
+  for (const u of st2.units) if (u !== mg2 && u !== de2) u.x = u.y = null;
+  mg2.x = 0; mg2.y = 6; mg2.at = null; de2.x = 1; de2.y = 6; de2.at = null; de2.shocked = true; de2.acted = true;
+  Sim.fireAt(st2, mg2, de2, 1);
+  assert(!de2.down, 'a German that had moved took cover');
+});
+
 check('machine guns fire five dice', () => {
   assert(PIECES.mg.soft === 5 && PIECES.mg42.soft === 5, 'an MG team does not fire five dice');
 });
@@ -568,6 +587,8 @@ check('shaken twice kills; bazookas and tanks kill men outright; MGs and tanks r
     const de = st.units.find(u => u.side === 'de' && u.kind === 'company');
     for (const u of st.units) if (![A, bz, mg, T1, de].includes(u)) u.x = u.y = null;
     A.x = 0; A.y = 6; de.x = 1; de.y = 6; de.platoons = 3; de.at = null; A.at = 'e'; A.quality = 'standard';
+    // (it has moved this round, so it can't take cover: every die rolls)
+    de.acted = true;
     bz.x = 0; bz.y = 7; mg.x = 9; mg.y = 0; T1.x = 9; T1.y = 2;
     // Every die a 6, every coin toss tails: only the rules themselves kill
     st.rand = () => 0.99;
@@ -599,7 +620,7 @@ check('shaken twice kills; bazookas and tanks kill men outright; MGs and tanks r
   assert(Sim.needFor(c.st, c.de, c.A) === inOpen + COVER.tank, 'a platoon beside its tank was not in cover');
 });
 
-check('the captain rallies twice if he stays put, once if he moves or shoots', () => {
+check('the captain: two rallies if he stays put or charges, in any order; one if he shoots or moves and shoots; Skip to stop', () => {
   const st = Sim.newGame(3);
   const cap = Sim.unitById(st, 'cap'), A = Sim.unitById(st, 'A'), B = Sim.unitById(st, 'B');
   for (const u of st.units) if (![cap, A, B].includes(u) && u.side === 'us') u.x = u.y = null;
@@ -607,8 +628,10 @@ check('the captain rallies twice if he stays put, once if he moves or shoots', (
   cap.x = 0; cap.y = 6; A.x = 0; A.y = 5; B.x = 1; B.y = 6;
   A.down = true; A.acted = true; B.down = true; B.acted = true;
   assert(Sim.actRally(st, cap, A).ok && Sim.actRally(st, cap, B).ok, 'two rallies refused');
-  assert(!Sim.canAct(st, cap), 'he could still move after two rallies');
-  // Next hour: he charges, then can rally just once
+  // After two rallies he can still charge, but not shoot or move and shoot (Steve)
+  assert(Sim.canAct(st, cap) && Sim.chargeSpots(st, cap).length && !Sim.mayFire(cap) && !Sim.moveShootSpots(st, cap).length, 'after two rallies he could not charge, or could still fire');
+  assert(!Sim.canRally(st, cap), 'a third rally');
+  // He charges, then rallies twice (one either side works the same way)
   const st2 = Sim.newGame(3);
   const c2 = Sim.unitById(st2, 'cap'), A2 = Sim.unitById(st2, 'A'), B2 = Sim.unitById(st2, 'B');
   for (const u of st2.units) if (![c2, A2, B2].includes(u) && u.side === 'us') u.x = u.y = null;
@@ -617,8 +640,21 @@ check('the captain rallies twice if he stays put, once if he moves or shoots', (
   A2.shocked = true; B2.shocked = true;
   const spot = Sim.chargeSpots(st2, c2).find(p => p.x === 1 && p.y === 6) || Sim.chargeSpots(st2, c2)[0];
   assert(Sim.actCharge(st2, c2, spot.x, spot.y).ok, 'the captain could not charge');
-  assert(Sim.canRally(st2, c2) && Sim.actRally(st2, c2, Sim.rallyTargets(st2, c2)[0]).ok, 'no rally after moving');
-  assert(!Sim.canRally(st2, c2), 'a second rally after moving');
+  assert(Sim.canRally(st2, c2) && Sim.actRally(st2, c2, Sim.rallyTargets(st2, c2)[0]).ok, 'no rally after the charge');
+  assert(Sim.canRally(st2, c2) && Sim.actRally(st2, c2, Sim.rallyTargets(st2, c2)[0]).ok, 'no second rally after the charge');
+  assert(!Sim.canRally(st2, c2), 'a third rally after the charge');
+  // Shooting: one rally only
+  const st3 = Sim.newGame(3);
+  const c3 = Sim.unitById(st3, 'cap'), A3 = Sim.unitById(st3, 'A'), B3 = Sim.unitById(st3, 'B');
+  for (const u of st3.units) if (![c3, A3, B3].includes(u) && u.side === 'us') u.x = u.y = null;
+  c3.x = 0; c3.y = 6; A3.x = 0; A3.y = 5; B3.x = 1; B3.y = 6; A3.shocked = true; B3.shocked = true;
+  c3.fired = true; c3.acted = true;
+  assert(Sim.actRally(st3, c3, A3).ok && !Sim.canRally(st3, c3), 'after shooting he rallied more than once');
+  // Skip turn ends his rallies too
+  const st4 = Sim.newGame(3);
+  const c4 = Sim.unitById(st4, 'cap'), A4 = Sim.unitById(st4, 'A');
+  c4.x = 0; c4.y = 6; A4.x = 0; A4.y = 5; A4.shocked = true;
+  assert(Sim.actSkip(st4, c4).ok && !Sim.canRally(st4, c4), 'he could still rally after Skip turn');
 });
 
 check('destroying every German wins, even with no rifle platoons; losing everything loses', () => {

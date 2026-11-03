@@ -394,11 +394,12 @@ const UI = (() => {
     } else if (u.kind === 'captain') {
       // The four actions (Steve): Charge, Move & shoot, Shoot, Rally. The captain does all four
       add('charge', '⚔️ Charge', Sim.chargeSpots(st, u).length > 0, 'Up to three fields, no shooting (climbing a hedge uses one more)');
-      add('moveShoot', '➡️ Move & shoot', Sim.moveShootSpots(st, u).length > 0, 'Up to two fields to where he can fire (the red-hatched fields), then fire needing one more on the dice');
-      add('shoot', '🎯 Shoot', Sim.targets(st, u).length > 0, 'His HQ fires: one die');
-      // Rallying isn't his move: two rallies if he stays put, one if he moves or shoots (before or after)
-      // Only when there is someone in reach to rally, himself included (Steve: no Rally button otherwise)
-      if (Sim.captainCanRally(st, u)) b.push({ mode: 'rally', label: '📣 Rally', ok: true, title: 'Get a piece that took cover up and moving, or steady a shaken one (himself too), up to three fields away. Two rallies a round if he stays put, one if he moves or shoots' });
+      // (after two rallies only a charge is left, Steve)
+      add('moveShoot', '➡️ Move & shoot', Sim.mayFire(u) && Sim.moveShootSpots(st, u).length > 0, 'Up to two fields to where he can fire (the red-hatched fields), then fire needing one more on the dice');
+      add('shoot', '🎯 Shoot', Sim.mayFire(u) && Sim.targets(st, u).length > 0, 'His HQ fires: one die');
+      // Rallying isn't his move (Steve): two rallies if he stays put or charges (before, after or either side of the
+      // charge), one if he shoots or moves and shoots (before or after). Only with someone in reach to rally
+      if (Sim.captainCanRally(st, u)) b.push({ mode: 'rally', label: '📣 Rally', ok: true, title: 'Get a piece that took cover up and moving, or steady a shaken one (himself too), up to three fields away. Two rallies a round if he stays put or charges, one if he shoots or moves and shoots. Skip turn to stop before using them all' });
     } else {
       add('charge', '⚔️ Charge', Sim.chargeSpots(st, u).length > 0, 'Up to three fields, no shooting (climbing a hedge uses one more)');
       // Machine guns can't move and fire: they Charge to a new spot, then Shoot next hour

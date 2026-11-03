@@ -76,7 +76,7 @@ const PLACE_COVER = {
 const WIRE_SNAG = 1 / 3;
 const MEN_A_BASE = 3;             // men on each section's round base (Steve)
 const SMALL_TARGET = 1;          // added to the score needed against a small target: a piece of two men or fewer (Steve: sniper, bazooka, captain; not the MG, three men)
-const CAPTAIN_RALLIES = { still: 2, moved: 1 };   // rallies an hour: two if he neither moves nor shoots, one if he does (before or after)
+const CAPTAIN_RALLIES = { still: 2, fired: 1 };   // rallies a round (Steve): two if he stays put or charges (before, after or either side of the charge), one if he shoots or moves and shoots (before or after)
 const RALLY_RANGE = 3;           // the captain rallies a shaken friendly piece up to this many fields away (Steve)
 // A rally always works, and it is the only thing that clears shaken (Steve): not resting, not a round ending, not a fight
 
