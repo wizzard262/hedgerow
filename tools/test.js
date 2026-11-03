@@ -627,12 +627,34 @@ check('shaken twice kills; bazookas and tanks kill men outright; MGs and tanks r
   r.mg.x = 0; r.mg.y = 5; r.mg.at = null;
   const far2 = { x: 4, y: 5, kind: 'company', side: 'de', at: null };
   assert(!Sim.needWhy(r.st, r.mg, far2).some(w => w.includes('long range')), 'four fields away was long range for a machine gun');
-  // Cover: men beside their own tank
-  const c = setUp();
-  c.T1.x = 1; c.T1.y = 5;
-  const inOpen = Sim.needFor(c.st, c.de, c.A);
-  c.T1.x = 0; c.T1.y = 6;
-  assert(Sim.needFor(c.st, c.de, c.A) === inOpen + COVER.tank, 'a platoon beside its tank was not in cover');
+});
+
+check('tanks block sight through the areas they stand in; past a tank corner only from that corner, +1 both', () => {
+  const st = Sim.newGame(3);
+  st.wire = {}; st.hedges = {};
+  const a = Sim.unitById(st, 'mg1'), b = st.units.find(u => u.side === 'de' && u.kind === 'mg42'), T1 = Sim.unitById(st, 'T1');
+  for (const u of st.units) if (![a, b, T1].includes(u)) u.x = u.y = null;
+  // In a row: a at (8,6) east edge, b at (10,6) west edge; the tank in the middle of (9,6) between them
+  a.x = 8; a.y = 6; a.at = 'e'; b.x = 10; b.y = 6; b.at = 'w';
+  T1.x = 9; T1.y = 6; T1.at = null;
+  assert(!Sim.sight(st, a, b), 'a line straight through the tank was not blocked');
+  // Tank out of the way: seen in the open
+  T1.x = 9; T1.y = 4;
+  assert(Sim.sight(st, a, b) && Sim.sight(st, a, b).cover === 0, 'with the tank gone the line was not clear');
+  // Past the tank's corner: the tank in the north-east block of (10,7); p beside it in the south area looks up-left along
+  // the 45° line past the tank's south-west corner to q in (9,6): seen, and p is right beside the tank, so no cover
+  const st2 = Sim.newGame(3);
+  st2.wire = {}; st2.hedges = {};
+  const p = Sim.unitById(st2, 'mg1'), q = st2.units.find(u => u.side === 'de' && u.kind === 'mg42'), T = Sim.unitById(st2, 'T1');
+  for (const u of st2.units) if (![p, q, T].includes(u)) u.x = u.y = null;
+  T.x = 10; T.y = 7; T.at = 'ne';
+  p.x = 10; p.y = 7; p.at = 's';
+  q.x = 9; q.y = 6; q.at = 'w';
+  const s = Sim.sight(st2, p, q);
+  assert(s && !s.tankCorner, 'past the tank corner from beside it: not seen, or in cover');
+  // The tank in the north-west block instead: the line runs through it
+  T.at = 'nw';
+  assert(!Sim.sight(st2, p, q), 'a line through the tank was not blocked');
 });
 
 check('the captain: two rallies if he stays put or charges, in any order; one if he shoots or moves and shoots; Skip to stop', () => {

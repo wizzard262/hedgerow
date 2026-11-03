@@ -63,7 +63,7 @@ const RANGES = {
   sniper: { sight: 99, long: 99 },  // the sniper: anywhere he can see, no long range, and cover doesn't help the target
 };
 const ON_THE_MOVE = 1;           // added to the score needed when firing after a move (Steve: like range and cover, +1 each)
-const COVER = { hedge: 1, tank: 1 };   // added to the score needed against a target lining a hedge, or men behind or beside a tank (Steve)
+const COVER = { hedge: 1, tankCorner: 1 };   // added to the score needed: a target lining a hedge it is shot across (or past the end of), or a line past a tank's corner (Steve: a tank's edge acts like a hedge)
 // Villages, hamlets and orchards all work the same way (Steve): seen into and out of, never through. They differ only
 // in their cover, added to the score needed against a piece in one: men, a tank, and against mortar or artillery
 // fire. Two enemies inside the same one (its fields joined together) get none from it

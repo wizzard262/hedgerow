@@ -289,7 +289,7 @@ const Sim = (() => {
   // Hedges (Steve): the hedge next to the shooter is seen through only if the shooter lines it; the hedge next to the target
   // only if the target lines it (it is then in cover, one more to hit); with one hedge between them either lining it will do,
   // and the target has cover if it lines it. Any other hedge in between blocks the view. Beyond the next field: one more to hit.
-  // Returns null (can't see) or { cover } added to the score needed, with what it is made of (hedge, behindTank) for the label
+  // Returns null (can't see) or { cover } added to the score needed, with what it is made of (hedge, tankCorner) for the label
   // Is a target at long range for this shooter? Machine guns, tanks and guns reach a field further first (Steve)
   // Which range a piece shoots at: its weapon's (see RANGES)
   function rangeOf(u) {
@@ -316,10 +316,12 @@ const Sim = (() => {
   // the 45° line, villages, hamlets and orchards too); but where a hedge ends at that corner it gets past only if one of
   // the pieces stands in a corner area at that very point (Steve: touching its corner), and then the hedge gives both
   // cover, +1, unless either of them touches the third of it at that corner. Villages, hamlets and orchards in between
-  // block it. A big piece sees, and is seen, from whichever of its areas does best.
+  // block it. A tank blocks every line through the areas it stands in, for everyone (Steve); past a tank's corner only
+  // a piece in an area touching that corner sees, along the 45° line, and both get +1, unless either of them is right
+  // beside that side of the tank (as at a hedge end). A big piece sees, and is seen, from whichever of its areas does best.
   // spotting: only whether it can be seen (to call fire on it), as far as the board goes (Steve), any area of the
   // field; otherwise whether the piece can shoot at it, up to its weapon's reach.
-  // Returns null (can't see) or { cover } added to the score needed, with what it is made of (hedge, behindTank)
+  // Returns null (can't see) or { cover } added to the score needed, with what it is made of (hedge, tankCorner)
   function sight(st, from, target, spotting = false) {
     const dist = Math.hypot(target.x - from.x, target.y - from.y);
     const reach = spotting ? SIGHT_RANGE : rangeOf(from).sight;
@@ -377,7 +379,7 @@ const Sim = (() => {
       if (s > EPS && s < 1 - EPS) hits.push({ s, x: a.x + s * dx, y: k });
     }
     hits.sort((p, q) => p.s - q.s);
-    let hedgeCover = false, behindTank = false;
+    let hedgeCover = false;
     const corners = new Set();
     for (const h of hits) {
       const onX = Math.abs(h.x - Math.round(h.x)) < EPS, onY = Math.abs(h.y - Math.round(h.y)) < EPS;
@@ -402,7 +404,7 @@ const Sim = (() => {
       if (!shooterTouches && !targetTouches) return null;
       if (targetTouches) hedgeCover = true;
     }
-    // The fields it passes through on the way (not its two ends): houses or trees block it; a tank shelters men beyond it
+    // The fields it passes through on the way (not its two ends): houses or trees block it
     const marks = [0, ...hits.map(h => h.s), 1];
     for (let n = 0; n + 1 < marks.length; n++) {
       if (marks[n + 1] - marks[n] < EPS) continue;
@@ -410,9 +412,56 @@ const Sim = (() => {
       const fx = Math.floor(a.x + m * dx), fy = Math.floor(a.y + m * dy);
       if ((fx === from.x && fy === from.y) || (fx === target.x && fy === target.y)) continue;
       if (screens({ x: fx, y: fy })) return null;
-      if (target.kind && !isTank(target) && at(st, fx, fy).some(isTank)) behindTank = true;
     }
-    return { cover: (hedgeCover ? COVER.hedge : 0) + (behindTank ? COVER.tank : 0), hedge: hedgeCover, behindTank };
+    // Tanks in the way (Steve): no line through the areas one stands in; past its corner, see tankInWay
+    const tank = tankInWay(st, from, target, a, b);
+    if (tank === 'blocked') return null;
+    const tankCorner = tank === 'cover';
+    return { cover: (hedgeCover ? COVER.hedge : 0) + (tankCorner ? COVER.tankCorner : 0), hedge: hedgeCover, tankCorner };
+  }
+
+  // One area of a field as a square on the board (a third of a field a side)
+  const cellOf = (f, k) => { const p = areaXY(k); return { x0: f.x + (p.x + 1) / 3, y0: f.y + (p.y + 1) / 3 }; };
+  const THIRD = 1 / 3;
+  // Where a line from a to b meets a square: the part of it inside (s from 0 to 1 along the line), or null
+  function lineInCell(a, b, c) {
+    let s0 = 0, s1 = 1;
+    const d = [b.x - a.x, b.y - a.y], lo = [c.x0 - a.x, c.y0 - a.y], hi = [c.x0 + THIRD - a.x, c.y0 + THIRD - a.y];
+    for (let i = 0; i < 2; i++) {
+      if (Math.abs(d[i]) < 1e-9) { if (lo[i] > 1e-9 || hi[i] < -1e-9) return null; continue; }
+      let t0 = lo[i] / d[i], t1 = hi[i] / d[i];
+      if (t0 > t1) [t0, t1] = [t1, t0];
+      s0 = Math.max(s0, t0); s1 = Math.min(s1, t1);
+      if (s0 > s1 + 1e-9) return null;
+    }
+    return { s0, s1 };
+  }
+  // Does a line pass a tank (not the shooter or the target)? 'blocked' through one of its areas, or past its corner
+  // with neither piece in an area touching that corner; 'cover' past its corner from such an area (both +1) unless
+  // either piece is right beside that side of the tank there; null if no tank is in the way
+  function tankInWay(st, from, target, a, b) {
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    const piecesCells = [from, target].map(u => (u.kind ? standsIn(u).map(k => cellOf(u, k)) : []));
+    let cover = false;
+    for (const t of st.units) {
+      if (t === from || t === target || t.x === null || !isTank(t)) continue;
+      for (const k of standsIn(t)) {
+        const cell = cellOf(t, k);
+        const hit = lineInCell(a, b, cell);
+        if (!hit) continue;
+        // Through the area itself: blocked
+        if ((hit.s1 - hit.s0) * len > 1e-6) return 'blocked';
+        // Only touching a corner of it: from an area at that very corner it sees past, in cover
+        const p = { x: a.x + hit.s0 * (b.x - a.x), y: a.y + hit.s0 * (b.y - a.y) };
+        const cornerOf = c => [[c.x0, c.y0], [c.x0 + THIRD, c.y0], [c.x0, c.y0 + THIRD], [c.x0 + THIRD, c.y0 + THIRD]].some(([x, y]) => Math.abs(x - p.x) < 1e-6 && Math.abs(y - p.y) < 1e-6);
+        const atIt = piecesCells.map(cells => cells.some(cornerOf));
+        if (!atIt[0] && !atIt[1]) return 'blocked';
+        // Right beside that side of the tank (its area shares a side with the tank's, at that corner): no cover
+        const beside = cells => cells.some(c => cornerOf(c) && (Math.abs(c.x0 - cell.x0) < 1e-6 || Math.abs(c.y0 - cell.y0) < 1e-6));
+        if (!piecesCells.some(beside)) cover = true;
+      }
+    }
+    return cover ? 'cover' : null;
   }
 
   // A line through the corner point (vx, vy) where fields meet: 'blocked' if a hedge ends there and neither piece stands
@@ -487,7 +536,6 @@ const Sim = (() => {
     let c = 0;
     if (from) { const s2 = sight(st, from, target); if (s2) c += s2.cover; }
     c += placeCover(st, target, from);
-    if (!isTank(target) && target.side && at(st, target.x, target.y, target.side).some(isTank)) c += COVER.tank;
     return c;
   }
 
@@ -565,9 +613,8 @@ const Sim = (() => {
     const far = isFar(shooter, target);
     // The covers one by one: the hedge it lines, a tank in a field in between, the field it stands in, its own tank beside it
     if (s && s.hedge) why.push(`+${COVER.hedge} hedge`);
-    if (s && s.behindTank) why.push(`+${COVER.tank} behind a tank`);
+    if (s && s.tankCorner) why.push(`+${COVER.tankCorner} tank's corner`);
     why.push(...placeWhy(st, target, shooter));
-    if (!isTank(target) && at(st, target.x, target.y, target.side).some(isTank)) why.push(`+${COVER.tank} beside a tank`);
     if (target.down) why.push('½ dice: taking cover');
     // Two men or fewer (Steve)
     if (smallTarget(target)) why.push(`+${SMALL_TARGET} small target`);
