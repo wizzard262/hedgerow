@@ -701,8 +701,8 @@ check('houses are hard cover: two more to hit anyone in a village or hamlet', ()
   const st = Sim.newGame(3);
   // Nobody else on the board (a tank beside it would give cover too)
   for (const u of st.units) u.x = u.y = null;
-  const t = { x: 10, y: 4, side: 'de', kind: 'company' };
-  assert(Sim.tileType(10, 4) === 'village' && Sim.cover(st, null, t) === 2, 'a piece in the village did not get +2');
+  const t = { x: 7, y: 4, side: 'de', kind: 'company' };
+  assert(Sim.tileType(7, 4) === 'village' && Sim.cover(st, null, t) === 2, 'a piece in the village did not get +2');
 });
 
 check('taking cover halves the dice: an odd one left over is a coin toss', () => {
@@ -840,15 +840,15 @@ check('villages and orchards: never seen through, but pieces in one see out and 
   assert(Sim.tileType(9, 0) === 'orchard', 'the test needs an orchard at 9,0');
   assert(Sim.sight(st, B, de) && Sim.sight(st, de, B), 'a piece in the middle of an orchard could not see out or be seen');
   // In the village with 2nd Platoon at a hedge two fields away: they see each other (Steve)
-  const v = { x: 10, y: 4 };
-  assert(Sim.tileType(v.x, v.y) === 'village', 'the test needs the village at 10,4');
+  const v = { x: 7, y: 4 };
+  assert(Sim.tileType(v.x, v.y) === 'village', 'the test needs the village at 7,4');
   de.x = v.x; de.y = v.y; de.at = null;
-  B.x = 8; B.y = 4; B.at = 'e'; st.hedges['8,4|9,4'] = true;
+  B.x = 5; B.y = 4; B.at = 'e'; st.hedges['5,4|6,4'] = true;
   assert(Sim.sight(st, B, de) && Sim.sight(st, de, B), 'a piece at a hedge and a German in the village could not see each other');
   // Through a village: no (down its column, over two village fields)
-  B.x = 10; B.y = 2; B.at = null; st.hedges = {};
-  de.x = 10; de.y = 5; de.at = null;
-  assert(Sim.tileType(10, 3) === 'village' && Sim.tileType(10, 4) === 'village' && !Sim.sight(st, B, de), 'a piece was seen through the village');
+  B.x = 7; B.y = 2; B.at = null; st.hedges = {};
+  de.x = 7; de.y = 5; de.at = null;
+  assert(Sim.tileType(7, 3) === 'village' && Sim.tileType(7, 4) === 'village' && !Sim.sight(st, B, de), 'a piece was seen through the village');
 });
 
 check('a shaken piece still moves and charges, half as far; it needs one more to hit', () => {

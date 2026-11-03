@@ -6,13 +6,13 @@
 // One unit to a field (Steve); only hand-to-hand fighting brings two sides into the same field.
 // MG and bazooka teams and the captain can also stand in a rifle platoon's field (Steve). Teams are never attached: each moves on its own
 //   =  lane east-west    |  lane north-south    +  crossroads (lanes have no hedges along their length)
-// Twelve fields long (Steve: two more), the villages right at the back of the German end
+// Twelve fields long (Steve: two more); the villages three fields in from the German end (Steve: right at the back was too far)
 const MAP = [
   '..|o.o...o.h',
-  '..|.h...o.vv',
+  '..|.h..vv.o.',
   '..+=========',
-  '.o|.o..h..vv',
-  '.h|...o...vv',
+  '.o|.o..vv.h.',
+  '.h|.o..vv..o',
   '==+=========',
   '..|.oo..h..h',
   'o.|.o.h....o',
@@ -20,8 +20,8 @@ const MAP = [
 const COLS = MAP[0].length, ROWS = MAP.length;
 // The villages; each game one of them is the objective: the field to take and hold, its church in the middle
 const VILLAGES = [
-  { x: 10, y: 4, name: 'Saint-Jean' },
-  { x: 10, y: 1, name: 'La Haye' },
+  { x: 7, y: 4, name: 'Saint-Jean' },
+  { x: 7, y: 1, name: 'La Haye' },
 ];
 // Sharing a field (Steve): a tank stands alone; one rifle platoon at most, with this many smaller pieces (teams,
 // the captain) beside it, or this many smaller pieces on their own
