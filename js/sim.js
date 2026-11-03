@@ -662,23 +662,39 @@ const Sim = (() => {
     return isTank(target) ? cover.tank : cover.men;
   }
 
-  // Are two pieces inside the same village, hamlet or orchard: the same kind of field, joined field to field?
-  function samePlace(a, b) {
-    const kind = tileType(a.x, a.y);
-    if (!PLACE_COVER[kind] || tileType(b.x, b.y) !== kind) return false;
-    // Spread out from a's field over joined fields of the same kind
-    const seen = new Set([a.x + ',' + a.y]), open = [{ x: a.x, y: a.y }];
-    while (open.length) {
-      const p = open.pop();
-      if (p.x === b.x && p.y === b.y) return true;
-      for (const [dx, dy] of NEIGHBOURS) {
-        const q = { x: p.x + dx, y: p.y + dy }, key = q.x + ',' + q.y;
-        if (!inside(q.x, q.y) || seen.has(key) || tileType(q.x, q.y) !== kind) continue;
-        seen.add(key); open.push(q);
+  // Which village, hamlet or orchard a field belongs to: fields of one kind joined side to side are one place (the map
+  // never changes, so this is worked out once). null for any other field
+  let placeIds = null;
+  function placeIdOf(x, y) {
+    if (!placeIds) {
+      placeIds = {};
+      let next = 1;
+      for (let fy = 0; fy < ROWS; fy++) for (let fx = 0; fx < COLS; fx++) {
+        const kind = tileType(fx, fy);
+        if (!PLACE_COVER[kind] || placeIds[fx + ',' + fy]) continue;
+        // Spread out over joined fields of the same kind
+        const open = [[fx, fy]];
+        placeIds[fx + ',' + fy] = next;
+        while (open.length) {
+          const [px, py] = open.pop();
+          for (const [dx, dy] of NEIGHBOURS) {
+            const qx = px + dx, qy = py + dy, key = qx + ',' + qy;
+            if (!inside(qx, qy) || placeIds[key] || tileType(qx, qy) !== kind) continue;
+            placeIds[key] = next;
+            open.push([qx, qy]);
+          }
+        }
+        next++;
       }
     }
-    return false;
+    return placeIds[x + ',' + y] || null;
   }
+  // Are two things inside the same village, hamlet or orchard?
+  function samePlace(a, b) {
+    const id = placeIdOf(a.x, a.y);
+    return id !== null && id === placeIdOf(b.x, b.y);
+  }
+
 
   // Put the score every shot starts from first (Steve: "3+", then "+1 small target"…, then the total), so the sum adds
   // up on the label; a plain 3+ shot needs no reasons at all

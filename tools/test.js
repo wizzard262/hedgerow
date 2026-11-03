@@ -601,6 +601,32 @@ check('the timer ends the round: tokens fly home only from the pieces a token ac
   assert(home.de.from.length === 0 && home.de.kept === st.bag.de, 'German tokens flew home with no German activated');
 });
 
+check('a village field is seen into and out of at any angle or distance, never through; a village beside the line hides what lies behind it', () => {
+  const st = Sim.newGame(3);
+  st.wire = {}; st.hedges = {};
+  const M = Sim.unitById(st, 'mg1'), t = st.units.find(u => u.side === 'de' && u.kind === 'mg42');
+  for (const u of st.units) if (u !== M && u !== t) u.x = u.y = null;
+  assert(Sim.tileType(7, 4) === 'village' && Sim.tileType(8, 4) === 'village' && Sim.tileType(5, 4) === 'field' && Sim.tileType(6, 4) === 'field' && Sim.tileType(8, 5) === 'laneEW', 'the test needs this part of the map');
+  // From two fields off, not at any corner: every area of the village field, both ways
+  M.x = 5; M.y = 4; M.at = null; t.x = 7; t.y = 4;
+  for (const at of ['nw', 'n', 'ne', 'w', null, 'e', 'sw', 's', 'se']) {
+    t.at = at;
+    assert(Sim.sight(st, M, t) && Sim.sight(st, t, M), `the piece at ${at} in the village field was not seen, or could not see out`);
+  }
+  // It keeps its cover from the houses
+  t.at = 'w';
+  assert(Sim.cover(st, M, t) === PLACE_COVER.village.men, 'the piece in the village lost its cover');
+  // Never through it, to the next field
+  t.x = 8; t.y = 4; t.at = 'w';
+  assert(!Sim.sight(st, M, t) && !Sim.sight(st, t, M), 'a piece saw through a village field to the far side');
+  // Steve: at 45 degrees to village X (7,4) with village Y (8,4) next to it: from M at the corner they share, lines that
+  // would pass through Y are hidden; on the 45 degree line and on the open side are seen
+  M.x = 8; M.y = 5; M.at = 'nw'; t.x = 7; t.y = 4;
+  for (const at of ['se', null, 'nw']) { t.at = at; assert(Sim.sight(st, M, t), `on the 45 degree line ${at} was not seen`); }
+  for (const at of ['s', 'sw', 'w']) { t.at = at; assert(Sim.sight(st, M, t), `on the open side ${at} was not seen`); }
+  for (const at of ['e', 'ne', 'n']) { t.at = at; assert(!Sim.sight(st, M, t), `through the village next door ${at} was seen`); }
+});
+
 check('machine guns fire five dice', () => {
   assert(PIECES.mg.soft === 5 && PIECES.mg42.soft === 5, 'an MG team does not fire five dice');
 });
