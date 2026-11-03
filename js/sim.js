@@ -212,8 +212,16 @@ const Sim = (() => {
   // A piece has used its move for the hour
   function spend(st, u) {
     u.acted = true;
-    if (st.tokens) st.activeId = u.id;
+    if (st.tokens) { st.activeId = u.id; activated(st, { side: u.side, id: u.id }); }
     for (const o of st.units) o.halfShot = false;
+  }
+
+  // Note who a token activated this round, once each: a piece ({ side, id }) or a gun ({ side, gun }). At the next round
+  // only their tokens fly back into the bag (Steve: activated, moved or not)
+  function activated(st, who) {
+    st.activated = st.activated || [];
+    const same = a => a.side === who.side && a.id === who.id && a.gun === who.gun;
+    if (!st.activated.some(same)) st.activated.push(who);
   }
 
   // With the bag (the page plays this way): an American piece moves only on an American token, and only one piece a token
@@ -1019,7 +1027,7 @@ const Sim = (() => {
     if (!canRally(st, cap) || !rallyTargets(st, cap).includes(target)) return { ok: false };
     // A rally isn't his move: it counts against his rallies for the hour (and with the bag, it is his token's piece)
     cap.rallied = (cap.rallied || 0) + 1;
-    if (st.tokens) st.activeId = cap.id;
+    if (st.tokens) { st.activeId = cap.id; activated(st, { side: cap.side, id: cap.id }); }
     const lines = [];
     // Down in cover: he gets them up and moving, so they can act this hour after all (Steve)
     if (target.down && target.acted) {
@@ -1085,7 +1093,7 @@ const Sim = (() => {
     if (st.won || st.lost || st.de || st.fired[which] || st.ammo[which] <= 0 || !canCallFire(st, x, y)) return { ok: false };
     // With the bag: on an American token not yet used by a piece; firing uses the token (Steve: the guns are in the bag)
     if (st.tokens && (st.drawn !== 'us' || st.activeId)) return { ok: false };
-    if (st.tokens) st.activeId = 'gun:' + which;
+    if (st.tokens) { st.activeId = 'gun:' + which; activated(st, { side: 'us', gun: which }); }
     st.fired[which] = true;
     st.ammo[which]--;
     const S = which === 'mortars' ? MORTARS : ARTILLERY;
@@ -1332,12 +1340,19 @@ const Sim = (() => {
   function skipSupport(st, which) {
     if (!canFire(st, which)) return { ok: false };
     st.fired[which] = true;
-    if (st.tokens) st.activeId = 'gun:' + which;
+    if (st.tokens) { st.activeId = 'gun:' + which; activated(st, { side: 'us', gun: which }); }
     return { ok: true, lines: [`⏭️ The ${which === 'mortars' ? 'mortars' : 'artillery'} hold fire this round.`] };
   }
 
   function startRound(st) {
     st.tokens = true;
+    // What the last round left for the table (Steve: only the tokens that activated someone fly back into the bag; the
+    // ones never drawn stayed in it). The first round: the whole bag flies in
+    const left = st.leftInBag || (st.bag ? { us: st.bag.us, de: st.bag.de } : { us: 0, de: 0 });
+    st.returning = { first: !st.bag, activated: st.activated || [], left, timerOut: !!st.timerDrawn };
+    st.activated = [];
+    st.leftInBag = null;
+    st.timerDrawn = false;
     // Shaken Germans stay shaken until their captain rallies them (Steve: only a rally clears it)
     for (const u of st.units) u.halfShot = false;
     st.bag = { us: movable(st, 'us'), de: movable(st, 'de'), timer: ROUND_TIMER };
@@ -1371,7 +1386,9 @@ const Sim = (() => {
     const pick = st.rand() * total;
     const side = pick < st.bag.us ? 'us' : pick < st.bag.us + st.bag.de ? 'de' : 'timer';
     if (side === 'timer') {
-      // Time's up: every token left in the bag goes back out, unused
+      // Time's up: every token left in the bag goes unused (it stays in the bag on the table: st.leftInBag)
+      st.leftInBag = { us: st.bag.us, de: st.bag.de };
+      st.timerDrawn = true;
       st.bag = { us: 0, de: 0, timer: 0 };
       st.drawn = null;
       st.activeId = null;
@@ -1387,9 +1404,11 @@ const Sim = (() => {
       const pick = pickGerman(st);
       if (pick.gun) {
         st.deFired[pick.gun] = true;
+        activated(st, { side: 'de', gun: pick.gun });
         st.de = { queue: [], mortar: pick.gun === 'mortars', artillery: pick.gun === 'artillery', rep: st.roundRep, ask: null, move: { gun: pick.gun, what: '' } };
       } else {
         pick.unit.acted = true;
+        activated(st, { side: 'de', id: pick.unit.id });
         st.de = { queue: [pick.unit.id], mortar: false, artillery: false, rep: st.roundRep, ask: null, move: { id: pick.unit.id, what: '' } };
       }
     }

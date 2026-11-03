@@ -4,7 +4,7 @@
 
 Normandy, 11 July 1944. Your American rifle company fights through the bocage, field by field, to take a village and hold it, or to destroy every German on the field. It is a 3D tabletop wargame in the browser, made with Claude Code.
 
-- **The blind bag**: each round, a token for every piece goes in a bag (they fly back in off the table), plus one black timer token. Draw one at a time: on yours, pick a piece and give it its move; on theirs, a German piece moves; the timer ends the round at once
+- **The blind bag**: each round, a token for every piece goes in a bag (the tokens used last round fly back in off the pieces they activated; the ones never drawn stay in), plus one black timer token. Draw one at a time: on yours, pick a piece and give it its move; on theirs, a German piece moves; the timer ends the round at once
 - **Your company**: three rifle platoons, the captain, machine-gun, bazooka and sniper teams, Shermans and Fireflies, with mortars and artillery off the board. Against Fallschirmjäger, MG 42s, a PaK 40, Panzer IVs, Panthers and their own guns
 - **Charge, Move & shoot, Shoot, Rally**: pick a piece and where it can go shows at once. Click where in a field it should stand: a corner, an edge (lining that hedge) or the middle
 - **Dice on the table**: 3+ to hit, one more for cover, a small target, long range, moving or being shaken; two more in houses. Every hit shakes; a hit on a shaken piece kills

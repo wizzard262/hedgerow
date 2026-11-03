@@ -299,6 +299,28 @@ check('every tank unit is one tank, both sides (Steve: not a pair)', () => {
   assert(tanks.every(u => !/pair/i.test(u.name)), 'a tank unit is still called a pair');
 });
 
+check('a new round knows who a token activated and what stayed in the bag (Steve: only those fly back)', () => {
+  const st = Sim.newGame(5);
+  Sim.startRound(st);
+  assert(st.returning.first, 'the first round did not fly the whole bag in');
+  // Two tokens out, then the timer
+  let draws = 0, side;
+  while ((side = Sim.drawToken(st)) && side !== 'timer') {
+    draws++;
+    if (side === 'us') { const u = st.units.find(o => o.side === 'us' && o.x !== null && Sim.canAct(st, o) && o.kind !== 'captain'); Sim.actSkip(st, u); }
+    else { let r = Sim.germanStep(st); while (r && r.ask) { Sim.answer(st, false); r = Sim.germanStep(st); } Sim.endGermanToken(st); }
+    Sim.passToken(st);
+    if (draws >= 2 && side) break;
+  }
+  const activated = (st.activated || []).length;
+  const left = { us: st.bag.us, de: st.bag.de };
+  Sim.endRound(st);
+  Sim.startRound(st);
+  assert(!st.returning.first, 'the second round flew the whole bag in again');
+  assert(st.returning.activated.length === activated && activated > 0, `the round forgot who was activated (${st.returning.activated.length} of ${activated})`);
+  assert(st.returning.left.us === left.us && st.returning.left.de === left.de, 'the round forgot what stayed in the bag');
+});
+
 check('machine guns fire five dice', () => {
   assert(PIECES.mg.soft === 5 && PIECES.mg42.soft === 5, 'an MG team does not fire five dice');
 });

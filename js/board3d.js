@@ -158,8 +158,8 @@ const Board = (() => {
     scene.add(mesh);
     coinFlight = { mesh, from, to, t0: performance.now(), done, leaving: 0 };
   }
-  // A new round (Steve): a small coin, a third the size, flies up off each piece (and each gun with rounds) and back
-  // into the bag in the bar, the same way the drawn token comes out but in reverse; one after another on each side with
+  // A new round (Steve): a small coin, a third the size, flies up off each piece (and gun) a token activated last round
+  // and back into the bag in the bar (the tokens never drawn are still in it; the first round, every piece's flies in), the same way the drawn token comes out but in reverse; one after another on each side with
   // a short overlap, both sides at once, then the timer. landed(side) is called as each one arrives, done after the last
   const HOME_GAP = 110, HOME_TIME = 900;
   let homing = [];                   // { mesh, from, to, t0, side, landed }
@@ -176,10 +176,7 @@ const Board = (() => {
     const now = performance.now();
     let last = now;
     for (const side of ['us', 'de']) {
-      // The pieces that get a token this round, and the guns that still have rounds (as the bag does, see Sim.startRound)
-      const from = st.units.filter(u => u.side === side && u.x !== null && !u.acted).map(u => pieceCentre(u));
-      const ammo = side === 'us' ? st.ammo : { mortars: st.deMortarAmmo, artillery: st.deArtilleryAmmo };
-      for (const which of ['artillery', 'mortars']) if (ammo[which] > 0) from.push(new T.Vector3(GUNS[side][which].x, 0, GUNS[side][which].z));
+      const from = homeFrom(st, side);
       const to = onTable(ends[side]);
       from.forEach((p, i) => {
         const t0 = now + i * HOME_GAP;
@@ -187,14 +184,42 @@ const Board = (() => {
         homing.push(homeCoin(side, new T.Vector3(p.x, 0.1, p.z), to, t0, landed));
       });
     }
-    // The timer last, from between the two sides' artillery
-    if (st.bag && st.bag.timer) {
+    // The timer last, from between the two sides' artillery, if it came out last round (or it's the first)
+    const back = st.returning || { first: true };
+    if (st.bag && st.bag.timer && (back.first || back.timerOut)) {
       const mid = new T.Vector3((GUNS.us.artillery.x + GUNS.de.artillery.x) / 2, 0.1, GUNS.us.artillery.z - 1.15);
       last += HOME_GAP;
       homing.push(homeCoin('timer', mid, onTable(ends.timer), last, landed));
     }
     homingDone = done;
   }
+  // Where a side's coins fly home from this round: as many as its bag gained (its new tokens less those still in it)
+  function homeFrom(st, side) {
+    const back = st.returning || { first: true, activated: [], left: { us: 0, de: 0 } };
+    const live = st.units.filter(u => u.side === side && u.x !== null);
+    const gunAt = which => new T.Vector3(GUNS[side][which].x, 0, GUNS[side][which].z);
+    // The first round: every piece that gets a token, and every gun with rounds (as the bag does, see Sim.startRound)
+    if (back.first) {
+      const from = live.filter(u => !u.acted).map(u => pieceCentre(u));
+      const ammo = side === 'us' ? st.ammo : { mortars: st.deMortarAmmo, artillery: st.deArtilleryAmmo };
+      for (const which of ['artillery', 'mortars']) if (ammo[which] > 0) from.push(gunAt(which));
+      return from;
+    }
+    // How many come home: the new bag less the tokens that stayed in it
+    const stayed = Math.min(back.left[side], st.bag[side]);
+    const count = Math.max(0, st.bag[side] - stayed);
+    // From whoever a token activated last round (still on the table), then, if the bag gained more (a piece that took
+    // cover, say), from the side's other pieces
+    const from = [];
+    for (const a of back.activated.filter(a => a.side === side)) {
+      if (a.gun) { from.push(gunAt(a.gun)); continue; }
+      const u = live.find(o => o.id === a.id);
+      if (u) from.push(pieceCentre(u));
+    }
+    for (const u of live) if (!back.activated.some(a => a.id === u.id)) from.push(pieceCentre(u));
+    return from.slice(0, count);
+  }
+
   // One small coin on its way home, not on the table until it sets off
   function homeCoin(side, from, to, t0, landed) {
     const mesh = Models.coin(side);

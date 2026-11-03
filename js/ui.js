@@ -505,8 +505,10 @@ const UI = (() => {
     de: '<span class="tok de"><svg viewBox="0 0 20 20"><path d="M7 2h6v5h5v6h-5v5H7v-5H2V7h5z" fill="#111" stroke="#eee" stroke-width="1.4"/></svg></span>',
   };
   function bag() {
-    // While the round's tokens fly back in, only those home so far
-    const b = view.bagShown || st.bag || { us: 0, de: 0 };
+    // While the round's tokens fly back in, only those home so far. When the timer has ended the round, the tokens
+    // never drawn are still in the bag (Steve)
+    const left = st.leftInBag ? Object.assign({ timer: 0 }, st.leftInBag) : null;
+    const b = view.bagShown || left || st.bag || { us: 0, de: 0 };
     $('#bag-us').innerHTML = TOKEN.us.repeat(b.us);
     $('#bag-de').innerHTML = TOKEN.de.repeat(b.de);
     // The timer token, between the two sides' tokens (Steve)
@@ -514,10 +516,15 @@ const UI = (() => {
     $('#round').textContent = `ROUND ${st.turn}`;
   }
 
-  // A new round (Steve): a small token flies back from each piece into the bag in the bar; the bar counts them in as they
-  // land. done once the last is home
+  // A new round (Steve): a small token flies back from each piece a token activated into the bag in the bar; the bar
+  // counts them in as they land. done once the last is home
   function returnTokens(done) {
-    view.bagShown = { us: 0, de: 0, timer: 0 };
+    // In the bag before any fly home: the tokens never drawn last round (none in the first), and the timer if it
+    // didn't come out (Steve: only the tokens that activated someone fly back)
+    const back = st.returning || { first: true };
+    const kept = side => back.first ? 0 : Math.min(back.left[side], st.bag[side]);
+    const timerKept = !back.first && !back.timerOut && st.bag.timer ? st.bag.timer : 0;
+    view.bagShown = { us: kept('us'), de: kept('de'), timer: timerKept };
     bag();
     // The middle of each side's place in the bar
     const spot = id => { const r = $(id).getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; };
