@@ -178,6 +178,13 @@ check('your pieces share a field by its nine areas: one area most pieces, two th
   assert(!Sim.roomFor(st, get('A'), 0, 6), 'a platoon fitted in beside a tank');
   for (const id of ['mg1', 'cap', 'bz1', 'sn1']) { assert(Sim.roomFor(st, get(id), 0, 6), `${id} could not join the tank`); put(id, 0, 6); }
   assert(fieldOk(st, 0, 6), 'two pieces on one area');
+  // A big piece in the middle (Steve: to hide): the centre, the four edges kept clear, touching no hedge
+  const s3 = Sim.newGame(2);
+  for (const u of s3.units) u.x = u.y = null;
+  const T2 = Sim.unitById(s3, 'T2'); T2.x = 4; T2.y = 6; T2.at = null;
+  assert(Sim.footprint(T2).length === 5 && !['n', 'e', 's', 'w'].some(d => Sim.lines(T2, d)), 'a tank in the middle lines a hedge or does not keep the edges clear');
+  const tm = Sim.unitById(s3, 'mg1'); tm.x = 4; tm.y = 6; tm.at = null;
+  assert(['ne', 'nw', 'se', 'sw'].includes(Sim.freePlace(s3, tm, 4, 6, 'n')), 'a team beside a tank in the middle was not sent to a corner');
   // A platoon down to one section takes one area
   const B = get('B'); B.platoons = 1;
   assert(Sim.sizeOf(B) === 1 && Sim.roomFor(st, B, 0, 6), 'a one-section platoon could not take the last free area');
@@ -442,6 +449,21 @@ check('seeing round the end of a hedge (Steve): from a corner, along the 45° li
   for (const at of ['w', 'sw', 's']) assert(look(at) && look(at).cover === 0, `W's ${at} area was not seen in the open`);
   // Above the line (the top right three): hidden behind Z
   for (const at of ['n', 'ne', 'e']) assert(!look(at), `W's ${at} area was seen through hedge Z`);
+});
+
+check('a tank in the middle of a hedged field is hidden from pieces not at the hedge; in a corner it is seen', () => {
+  const st = Sim.newGame(3);
+  st.wire = {};
+  st.hedges = { '9,6|10,6': true };
+  const T1 = Sim.unitById(st, 'T1'), t = st.units.find(u => u.side === 'de' && u.kind === 'mg42');
+  for (const u of st.units) if (u !== T1 && u !== t) u.x = u.y = null;
+  T1.x = 9; T1.y = 6; T1.at = null;
+  t.x = 10; t.y = 6; t.at = null;
+  assert(!Sim.sight(st, t, T1) && !Sim.sight(st, T1, t), 'a tank in the middle was seen through the hedge');
+  T1.at = 'ne';
+  assert(Sim.sight(st, t, T1) && Sim.sight(st, t, T1).cover >= 1, 'a tank in a corner block at the hedge was not seen, in cover');
+  t.at = 'w'; T1.at = null;
+  assert(Sim.sight(st, t, T1), 'a piece at the hedge could not see the tank in the middle');
 });
 
 check('machine guns fire five dice', () => {

@@ -27,8 +27,10 @@ const Sim = (() => {
   // Where in its field a piece stands (Steve): every field is nine areas, a 3×3 grid: the middle (null; 'c' in a list
   // of areas), the four edges 'n', 'e', 's', 'w' and the four corners 'ne', 'nw', 'se', 'sw'. Most pieces take one
   // area; the PaK 40 two side by side (u.at 'n+ne'); a tank, or a platoon of two or three sections, four in a 2×2
-  // block: a corner, the two edges beside it and the middle (u.at names its corner). Pieces share a field as long as
-  // their areas don't overlap. A piece lines every hedge one of its areas is against (the eight round the edge)
+  // block: a corner, the two edges beside it and the middle (u.at names its corner), or the middle of the field (u.at
+  // null, Steve: so it can hide): there it stands in the centre only, touching no hedge, but keeps the four edge areas
+  // clear round it (only the corners are left for others). Pieces share a field as long as their areas don't overlap.
+  // A piece lines every hedge one of the areas it stands in is against (the eight round the edge)
   const PLACES = [null, 'n', 'e', 's', 'w', 'ne', 'nw', 'se', 'sw'];
   const CORNERS = ['nw', 'ne', 'sw', 'se'];
   const GRID = ['nw', 'n', 'ne', 'w', 'c', 'e', 'sw', 's', 'se'];
@@ -49,25 +51,29 @@ const Sim = (() => {
     if (isTank(u) || (u.kind === 'company' && u.platoons >= 2)) return 4;
     return 1;
   }
-  // The areas a piece takes, standing at `at` (its corner for a 2×2 block, its pair for the PaK)
+  // The areas a piece takes, standing at `at` (its corner for a 2×2 block, its pair for the PaK; a big piece in the
+  // middle keeps the four edges clear too)
   function footprint(u, at = u.at) {
     const size = sizeOf(u);
     if (size === 4) {
-      // A block always sits in a corner; an edge or the middle asked for gives the corner on that side
-      const corner = CORNERS.includes(at) ? at : { n: 'nw', e: 'ne', s: 'se', w: 'sw' }[at] || 'nw';
+      if (!at || at === 'c') return ['c', 'n', 'e', 's', 'w'];
+      // A block sits in a corner; an edge asked for gives the corner on that side
+      const corner = CORNERS.includes(at) ? at : { n: 'nw', e: 'ne', s: 'se', w: 'sw' }[at];
       return [corner, corner[0], corner[1], 'c'];
     }
     if (size === 2) return at && at.includes('+') ? at.split('+') : PAIRS.find(p => p.split('+').includes(at || 'c')).split('+');
     return [at && !at.includes('+') ? at : 'c'];
   }
+  // The areas a piece is actually in (for seeing and lining hedges): a big piece in the middle only the centre
+  const standsIn = (u, at = u.at) => (sizeOf(u) === 4 && !at ? ['c'] : footprint(u, at));
   // Every place a piece of its size could stand in a field
-  const anchorsFor = u => (sizeOf(u) === 4 ? CORNERS : sizeOf(u) === 2 ? PAIRS : PLACES);
+  const anchorsFor = u => (sizeOf(u) === 4 ? [...CORNERS, null] : sizeOf(u) === 2 ? PAIRS : PLACES);
   // Where a piece is in its field, as one point (the middle of its areas): for the table and for distances
   function spotXY(u, at = u.at) {
-    const areas = footprint(u, at).map(areaXY);
+    const areas = standsIn(u, at).map(areaXY);
     return { x: areas.reduce((n, a) => n + a.x, 0) / areas.length, y: areas.reduce((n, a) => n + a.y, 0) / areas.length };
   }
-  const lines = (u, d) => footprint(u).some(k => k !== 'c' && k.includes(d));
+  const lines = (u, d) => standsIn(u).some(k => k !== 'c' && k.includes(d));
   const placeName = at => {
     const a = at && at.includes('+') ? at.split('+').find(k => k !== 'c') : at;
     return !a || a === 'c' ? 'the middle of the field' : a.length === 2 ? `the ${SIDE_NAMES[a[0]]}-${SIDE_NAMES[a[1]]} corner` : `the ${SIDE_NAMES[a]} side`;
@@ -335,13 +341,13 @@ const Sim = (() => {
 
   // The middle of one area of a field, on the board (a field spans x..x+1, y..y+1)
   const areaPoint = (f, k) => ({ x: f.x + 0.5 + areaXY(k).x / 3, y: f.y + 0.5 + areaXY(k).y / 3 });
-  const areaPoints = u => footprint(u).map(k => areaPoint(u, k));
+  const areaPoints = u => standsIn(u).map(k => areaPoint(u, k));
   // The area of a field against its side d at third i along it (thirds run west to east, or north to south)
   const AREA_AT = { n: ['nw', 'n', 'ne'], s: ['sw', 's', 'se'], w: ['nw', 'w', 'sw'], e: ['ne', 'e', 'se'] };
   // Does a piece stand against side d of field (fx, fy), at any of the thirds given?
   function touches(u, fx, fy, d, thirds) {
     if (!u.kind || u.x !== fx || u.y !== fy) return false;
-    const areas = footprint(u);
+    const areas = standsIn(u);
     return thirds.some(i => areas.includes(AREA_AT[d][i]));
   }
   // Which thirds a point t (0 to 1 along a hedge) is in: two where it is on the line between them
