@@ -312,9 +312,11 @@ const Sim = (() => {
   // Line of sight (Steve): straight lines between the middles of areas (a field is 3×3 areas). Each hedge is three
   // thirds, one against each edge area beside it: a third blocks a line that crosses it, unless the piece at either end
   // stands in an area touching that third (it sees across it; a target touching it is in cover, +1). A line through a
-  // field's corner exactly, where hedges end, isn't blocked, so a 45° line runs corner to corner; a hedge ending there
-  // gives both pieces cover, +1, unless either of them touches the third of it at that corner. Villages, hamlets and
-  // orchards in between block it. A big piece sees, and is seen, from whichever of its areas does best.
+  // field's corner exactly runs on between the fields that meet there (two fields corner to corner see each other along
+  // the 45° line, villages, hamlets and orchards too); but where a hedge ends at that corner it gets past only if one of
+  // the pieces stands in a corner area at that very point (Steve: touching its corner), and then the hedge gives both
+  // cover, +1, unless either of them touches the third of it at that corner. Villages, hamlets and orchards in between
+  // block it. A big piece sees, and is seen, from whichever of its areas does best.
   // spotting: only whether it can be seen (to call fire on it), as far as the board goes (Steve), any area of the
   // field; otherwise whether the piece can shoot at it, up to its weapon's reach.
   // Returns null (can't see) or { cover } added to the score needed, with what it is made of (hedge, behindTank)
@@ -384,7 +386,9 @@ const Sim = (() => {
         const vx = Math.round(h.x), vy = Math.round(h.y), key = vx + ',' + vy;
         if (corners.has(key)) continue;
         corners.add(key);
-        if (cornerHedge(st, from, target, vx, vy)) hedgeCover = true;
+        const atCorner = cornerHedge(st, from, target, vx, vy);
+        if (atCorner === 'blocked') return null;
+        if (atCorner === 'cover') hedgeCover = true;
         continue;
       }
       // Across a line between two fields, side by side (a line x = k) or one above the other (y = k)
@@ -411,20 +415,27 @@ const Sim = (() => {
     return { cover: (hedgeCover ? COVER.hedge : 0) + (behindTank ? COVER.tank : 0), hedge: hedgeCover, behindTank };
   }
 
-  // A line through the corner point (vx, vy): does a hedge ending there give cover? Yes, unless the shooter or the
-  // target stands against the third of that hedge at this corner (Steve)
+  // A line through the corner point (vx, vy) where fields meet: 'blocked' if a hedge ends there and neither piece stands
+  // in a corner area at that point (Steve); 'cover' if one does and the hedge isn't touched at that corner by either of
+  // them (then both get +1); null if nothing stops or covers it
+  // The corner area of each of the four fields round the point that touches it
+  const cornerAreas = (vx, vy) => [[vx - 1, vy - 1, 'se'], [vx, vy - 1, 'sw'], [vx - 1, vy, 'ne'], [vx, vy, 'nw']];
+  const atPoint = (u, vx, vy) => !!u.kind && cornerAreas(vx, vy).some(([fx, fy, k]) => u.x === fx && u.y === fy && standsIn(u).includes(k));
   function cornerHedge(st, from, target, vx, vy) {
     // The four hedges that can end at this point: [field a, field b, a's side, b's side, the third at this end]
     const ends = [
       [vx - 1, vy - 1, vx, vy - 1, 'e', 'w', 2], [vx - 1, vy, vx, vy, 'e', 'w', 0],
       [vx - 1, vy - 1, vx - 1, vy, 's', 'n', 2], [vx, vy - 1, vx, vy, 's', 'n', 0],
     ];
+    let cover = false;
     for (const [ax, ay, bx, by, da, db, third] of ends) {
       if (!inside(ax, ay) || !inside(bx, by) || !hedge(st, ax, ay, bx, by)) continue;
+      // Only from that very corner can it see past a hedge ending there
+      if (!atPoint(from, vx, vy) && !atPoint(target, vx, vy)) return 'blocked';
       const near = u => touches(u, ax, ay, da, [third]) || touches(u, bx, by, db, [third]);
-      if (!near(from) && !near(target)) return true;
+      if (!near(from) && !near(target)) cover = true;
     }
-    return false;
+    return cover ? 'cover' : null;
   }
 
 

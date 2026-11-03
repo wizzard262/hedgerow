@@ -485,6 +485,21 @@ check('a German piece takes cover when it is wise: shaken and fired on, if it st
   assert(!de2.down, 'a German that had moved took cover');
 });
 
+check('two fields corner to corner see each other along the 45° line, but past a hedge ending there only from that corner', () => {
+  const st = Sim.newGame(3);
+  st.wire = {}; st.hedges = {};
+  const a = Sim.unitById(st, 'mg1'), b = st.units.find(u => u.side === 'de' && u.kind === 'mg42');
+  for (const u of st.units) if (u !== a && u !== b) u.x = u.y = null;
+  // (9,6) and (10,7): corner to corner
+  a.x = 9; a.y = 6; a.at = null; b.x = 10; b.y = 7; b.at = null;
+  assert(Sim.sight(st, a, b), 'two fields corner to corner with no hedges could not see each other along the 45° line');
+  // A hedge ending at the shared corner: blocked from the middles, seen from that corner
+  st.hedges = { '10,6|10,7': true };
+  assert(!Sim.sight(st, a, b), 'a line past the end of a hedge was not blocked when neither piece is at that corner');
+  a.at = 'se';
+  assert(Sim.sight(st, a, b), 'from the corner the piece could not see past the end of the hedge');
+});
+
 check('machine guns fire five dice', () => {
   assert(PIECES.mg.soft === 5 && PIECES.mg42.soft === 5, 'an MG team does not fire five dice');
 });
