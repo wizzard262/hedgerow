@@ -422,6 +422,28 @@ check('a piece moves to another area of its own field: its move, and it may stil
   assert(r.ok && mg.at === 's' && mg.acted, 'the move from north to south in the field did not happen');
 });
 
+check('seeing round the end of a hedge (Steve): from a corner, along the 45° line and below it, not above', () => {
+  const st = Sim.newGame(3);
+  st.wire = {};
+  // X (9,6) and Y (10,6) side by side, W (10,7) below Y; the only hedge is Z, between Y and W
+  st.hedges = { '10,6|10,7': true };
+  const M = Sim.unitById(st, 'mg1'), t = st.units.find(u => u.side === 'de' && u.kind === 'mg42');
+  for (const u of st.units) if (u !== M && u !== t) u.x = u.y = null;
+  M.x = 9; M.y = 6; M.at = 'se';
+  t.x = 10; t.y = 7;
+  const look = at => { t.at = at; return Sim.sight(st, M, t); };
+  const back = at => { t.at = at; return Sim.sight(st, t, M); };
+  // W's top-left area, touching Z: they see each other, no cover either way
+  assert(look('nw') && look('nw').cover === 0 && back('nw') && back('nw').cover === 0, 'M and the piece touching Z at the corner did not see each other freely');
+  // On the 45° line: seen both ways, Z gives both +1
+  assert(look(null) && look(null).cover === 1 && back(null) && back(null).cover === 1, 'on the 45° line the hedge end did not give cover');
+  assert(look('se') && look('se').cover === 1, 'the far end of the 45° line was not seen with cover');
+  // Below the line: seen, no cover from Z
+  for (const at of ['w', 'sw', 's']) assert(look(at) && look(at).cover === 0, `W's ${at} area was not seen in the open`);
+  // Above the line (the top right three): hidden behind Z
+  for (const at of ['n', 'ne', 'e']) assert(!look(at), `W's ${at} area was seen through hedge Z`);
+});
+
 check('machine guns fire five dice', () => {
   assert(PIECES.mg.soft === 5 && PIECES.mg42.soft === 5, 'an MG team does not fire five dice');
 });

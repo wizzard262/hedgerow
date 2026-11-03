@@ -276,20 +276,7 @@ const Sim = (() => {
 
   // ---------- Seeing ----------
 
-  // The fields a line from the middle of one field to the middle of another passes through, in order
-  function fieldsAlong(a, b) {
-    const out = [{ x: a.x, y: a.y }];
-    let x = a.x, y = a.y;
-    const dx = b.x - a.x, dy = b.y - a.y, sx = Math.sign(dx), sy = Math.sign(dy);
-    // Distance along the line to the next vertical and horizontal field edges
-    let tx = dx ? 0.5 / Math.abs(dx) : Infinity, ty = dy ? 0.5 / Math.abs(dy) : Infinity;
-    const stepX = dx ? 1 / Math.abs(dx) : Infinity, stepY = dy ? 1 / Math.abs(dy) : Infinity;
-    while (x !== b.x || y !== b.y) {
-      if (tx <= ty) { x += sx; tx += stepX; } else { y += sy; ty += stepY; }
-      out.push({ x, y });
-    }
-    return out;
-  }
+
 
   // Can one piece see another to shoot it, and how hard is the target to hit?
   // As far as its weapon reaches (RANGES) over open fields and lanes; villages, hamlets and orchards in between block the view.
@@ -316,33 +303,124 @@ const Sim = (() => {
 
   // spotting: only whether it can be seen (to call fire on it), as far as the board goes (Steve); otherwise whether
   // the piece can shoot at it, up to its weapon's reach
+  // Line of sight (Steve): straight lines between the middles of areas (a field is 3×3 areas). Each hedge is three
+  // thirds, one against each edge area beside it: a third blocks a line that crosses it, unless the piece at either end
+  // stands in an area touching that third (it sees across it; a target touching it is in cover, +1). A line through a
+  // field's corner exactly, where hedges end, isn't blocked, so a 45° line runs corner to corner; a hedge ending there
+  // gives both pieces cover, +1, unless either of them touches the third of it at that corner. Villages, hamlets and
+  // orchards in between block it. A big piece sees, and is seen, from whichever of its areas does best.
+  // spotting: only whether it can be seen (to call fire on it), as far as the board goes (Steve), any area of the
+  // field; otherwise whether the piece can shoot at it, up to its weapon's reach.
+  // Returns null (can't see) or { cover } added to the score needed, with what it is made of (hedge, behindTank)
   function sight(st, from, target, spotting = false) {
     const dist = Math.hypot(target.x - from.x, target.y - from.y);
     const reach = spotting ? SIGHT_RANGE : rangeOf(from).sight;
     if (dist === 0 || dist > reach + 0.01) return null;
-    const path = fieldsAlong(from, target);
-    let c = isFar(from, target) ? LONG_RANGE : 0;
-    let behindTank = false, behindHedge = false;
-    for (let i = 0; i + 1 < path.length; i++) {
-      const p = path[i], q = path[i + 1];
-      // A field in between that blocks the view: houses or trees can't be seen through (Steve)
-      if (i > 0 && screens(p)) return null;
-      // A tank in a field in between: men beyond it shelter behind it (Steve: tanks are cover for infantry)
-      if (i > 0 && target.kind && !isTank(target) && at(st, p.x, p.y).some(isTank)) behindTank = true;
-      // A hedge between two fields is seen through only by a piece at it (along that side or in a corner of it), and a
-      // piece at it can be seen; otherwise it blocks the view (Steve). The houses and trees of a village, hamlet or
-      // orchard only block the view across them: pieces in one see out and are seen, wherever they stand in it (Steve)
-      const hedged = hedge(st, p.x, p.y, q.x, q.y);
-      if (!hedged) continue;
-      const first = i === 0, last = i + 1 === path.length - 1;
-      const shooterLines = first && lines(from, dirTo(p, q));
-      const targetLines = last && lines(target, dirTo(q, p));
-      if (!shooterLines && !targetLines) return null;
-      if (targetLines) { c += COVER.hedge; behindHedge = true; }
+    // The best line between any of the shooter's areas and any of the target's
+    const fromPoints = areaPoints(from);
+    const toPoints = target.kind ? areaPoints(target) : GRID.map(k => areaPoint(target, k));
+    let best = null;
+    for (const a of fromPoints) {
+      for (const b of toPoints) {
+        const line = lineOfSight(st, from, target, a, b);
+        if (line && (!best || line.cover < best.cover)) best = line;
+        if (best && best.cover === 0) break;
+      }
+      if (best && best.cover === 0) break;
     }
-    if (behindTank) c += COVER.tank;
-    return { cover: c, hedge: behindHedge, behindTank };
+    if (!best) return null;
+    best.cover += isFar(from, target) ? LONG_RANGE : 0;
+    return best;
   }
+
+  // The middle of one area of a field, on the board (a field spans x..x+1, y..y+1)
+  const areaPoint = (f, k) => ({ x: f.x + 0.5 + areaXY(k).x / 3, y: f.y + 0.5 + areaXY(k).y / 3 });
+  const areaPoints = u => footprint(u).map(k => areaPoint(u, k));
+  // The area of a field against its side d at third i along it (thirds run west to east, or north to south)
+  const AREA_AT = { n: ['nw', 'n', 'ne'], s: ['sw', 's', 'se'], w: ['nw', 'w', 'sw'], e: ['ne', 'e', 'se'] };
+  // Does a piece stand against side d of field (fx, fy), at any of the thirds given?
+  function touches(u, fx, fy, d, thirds) {
+    if (!u.kind || u.x !== fx || u.y !== fy) return false;
+    const areas = footprint(u);
+    return thirds.some(i => areas.includes(AREA_AT[d][i]));
+  }
+  // Which thirds a point t (0 to 1 along a hedge) is in: two where it is on the line between them
+  const thirdsAt = t => {
+    const out = [];
+    if (t < 1 / 3 + 1e-6) out.push(0);
+    if (t > 1 / 3 - 1e-6 && t < 2 / 3 + 1e-6) out.push(1);
+    if (t > 2 / 3 - 1e-6) out.push(2);
+    return out;
+  };
+
+  // One straight line from point a (an area of from) to point b (an area of target, or of a field)
+  function lineOfSight(st, from, target, a, b) {
+    const EPS = 1e-6, dx = b.x - a.x, dy = b.y - a.y;
+    // Every place the line crosses a line between fields: s is how far along it, 0 to 1
+    const hits = [];
+    for (let k = Math.ceil(Math.min(a.x, b.x)); k <= Math.floor(Math.max(a.x, b.x)); k++) {
+      if (Math.abs(dx) < EPS) break;
+      const s = (k - a.x) / dx;
+      if (s > EPS && s < 1 - EPS) hits.push({ s, x: k, y: a.y + s * dy });
+    }
+    for (let k = Math.ceil(Math.min(a.y, b.y)); k <= Math.floor(Math.max(a.y, b.y)); k++) {
+      if (Math.abs(dy) < EPS) break;
+      const s = (k - a.y) / dy;
+      if (s > EPS && s < 1 - EPS) hits.push({ s, x: a.x + s * dx, y: k });
+    }
+    hits.sort((p, q) => p.s - q.s);
+    let hedgeCover = false, behindTank = false;
+    const corners = new Set();
+    for (const h of hits) {
+      const onX = Math.abs(h.x - Math.round(h.x)) < EPS, onY = Math.abs(h.y - Math.round(h.y)) < EPS;
+      // Exactly through a field's corner: not blocked; a hedge ending there is cover for both (see above)
+      if (onX && onY) {
+        const vx = Math.round(h.x), vy = Math.round(h.y), key = vx + ',' + vy;
+        if (corners.has(key)) continue;
+        corners.add(key);
+        if (cornerHedge(st, from, target, vx, vy)) hedgeCover = true;
+        continue;
+      }
+      // Across a line between two fields, side by side (a line x = k) or one above the other (y = k)
+      const across = onX ? { ax: Math.round(h.x) - 1, ay: Math.floor(h.y), bx: Math.round(h.x), by: Math.floor(h.y), t: h.y - Math.floor(h.y), da: 'e', db: 'w' }
+        : { ax: Math.floor(h.x), ay: Math.round(h.y) - 1, bx: Math.floor(h.x), by: Math.round(h.y), t: h.x - Math.floor(h.x), da: 's', db: 'n' };
+      if (!inside(across.ax, across.ay) || !inside(across.bx, across.by) || !hedge(st, across.ax, across.ay, across.bx, across.by)) continue;
+      // A hedge: blocked, unless one of them stands against this third of it
+      const thirds = thirdsAt(across.t);
+      const touching = u => touches(u, across.ax, across.ay, across.da, thirds) || touches(u, across.bx, across.by, across.db, thirds);
+      const shooterTouches = touching(from), targetTouches = touching(target);
+      if (!shooterTouches && !targetTouches) return null;
+      if (targetTouches) hedgeCover = true;
+    }
+    // The fields it passes through on the way (not its two ends): houses or trees block it; a tank shelters men beyond it
+    const marks = [0, ...hits.map(h => h.s), 1];
+    for (let n = 0; n + 1 < marks.length; n++) {
+      if (marks[n + 1] - marks[n] < EPS) continue;
+      const m = (marks[n] + marks[n + 1]) / 2;
+      const fx = Math.floor(a.x + m * dx), fy = Math.floor(a.y + m * dy);
+      if ((fx === from.x && fy === from.y) || (fx === target.x && fy === target.y)) continue;
+      if (screens({ x: fx, y: fy })) return null;
+      if (target.kind && !isTank(target) && at(st, fx, fy).some(isTank)) behindTank = true;
+    }
+    return { cover: (hedgeCover ? COVER.hedge : 0) + (behindTank ? COVER.tank : 0), hedge: hedgeCover, behindTank };
+  }
+
+  // A line through the corner point (vx, vy): does a hedge ending there give cover? Yes, unless the shooter or the
+  // target stands against the third of that hedge at this corner (Steve)
+  function cornerHedge(st, from, target, vx, vy) {
+    // The four hedges that can end at this point: [field a, field b, a's side, b's side, the third at this end]
+    const ends = [
+      [vx - 1, vy - 1, vx, vy - 1, 'e', 'w', 2], [vx - 1, vy, vx, vy, 'e', 'w', 0],
+      [vx - 1, vy - 1, vx - 1, vy, 's', 'n', 2], [vx, vy - 1, vx, vy, 's', 'n', 0],
+    ];
+    for (const [ax, ay, bx, by, da, db, third] of ends) {
+      if (!inside(ax, ay) || !inside(bx, by) || !hedge(st, ax, ay, bx, by)) continue;
+      const near = u => touches(u, ax, ay, da, [third]) || touches(u, bx, by, db, [third]);
+      if (!near(from) && !near(target)) return true;
+    }
+    return false;
+  }
+
 
   // Can a side see this field (to call fire on it)? Any of its pieces next to it, or with a line of sight to it, however
   // far (Steve: the whole board), moved this round or not
