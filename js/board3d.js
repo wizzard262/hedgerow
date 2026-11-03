@@ -1137,7 +1137,7 @@ const Board = (() => {
   const MELEE_LAND = 0.45;           // when in its blow the hits land
   // Until when the fights on the table are still being shown (the page waits for them before the next token)
   let meleeUntil = 0;
-  function busyFor() { return Math.max(0, meleeUntil - performance.now()); }
+  function busyFor() { return settledIn(); }
   // How long until every shot on the table has landed and every fight is shown (Steve: the game's end waits for it)
   function settledIn() {
     const untils = Object.values(held).map(h => h.until);
@@ -1519,10 +1519,11 @@ const Board = (() => {
   const DICE_STACK = 3;                // rolls shown a side
   const DICE_OUT = 0.45;               // how far out past the artillery (away from the board) the dice sit
   let diceDue = null;                  // when the dice of the latest attack go on the table
+  let diceComing = [];                 // those rolls, kept as they were (the next token clears the attacks list)
   let rollLog = [], rollSeen = new Set();   // the rolls in the corner now, oldest first; every roll already shown
-  function showDice(st) {
+  function showDice(st, coming = rollsOf(st)) {
     // Add the rolls not seen before (each roll's faces are its own list)
-    for (const r of rollsOf(st)) if (!rollSeen.has(r.faces)) { rollSeen.add(r.faces); rollLog.push(r); }
+    for (const r of coming) if (!rollSeen.has(r.faces)) { rollSeen.add(r.faces); rollLog.push(r); }
     for (const d of dice) scene.remove(d);
     dice = [];
     const rolls = rollLog;
@@ -1620,8 +1621,9 @@ const Board = (() => {
       : f.support === 'artillery' ? 'Our artillery' : 'Our mortars';
     const need = f.need >= 6 ? 'needs 6' : `needs ${f.need}+`;
     const hits = f.faces.filter(r => r.hit).length;
-    // Taking cover (Steve: the tag says so, with the dice it really rolled)
-    const cover = f.fullDice ? `taking cover: ${f.faces.length} of ${f.fullDice} dice · ` : '';
+    // Taking cover (Steve: the tag says so; its +2 is in the score needed)
+    const target = f.to && st.units.find(u => u.id === f.to.id);
+    const cover = target && target.down ? 'taking cover · ' : '';
     return [who, `${cover}${need} · ${hits} hit${hits === 1 ? '' : 's'}`];
   }
 
@@ -1718,8 +1720,13 @@ const Board = (() => {
     updateSupport(st);
     buildHedges(st);
     // New attacks: they play out, and their dice go in the corner once they have landed (Steve)
-    if (st.fxShown !== st.fx || st.fxCount !== st.fx.length) { startShots(st); st.fxShown = st.fx; st.fxCount = st.fx.length; diceDue = now + settledIn(); }
-    if (diceDue !== null && now >= diceDue) { diceDue = null; showDice(st); }
+    // (the rolls are kept now: a tank's shot lands late, and the next token may have cleared the attacks by then)
+    if (st.fxShown !== st.fx || st.fxCount !== st.fx.length) {
+      startShots(st); st.fxShown = st.fx; st.fxCount = st.fx.length;
+      const fresh = rollsOf(st).filter(r => !rollSeen.has(r.faces));
+      if (fresh.length) { diceComing = diceComing.concat(fresh); diceDue = now + settledIn(); }
+    }
+    if (diceDue !== null && now >= diceDue) { diceDue = null; showDice(st, diceComing); diceComing = []; }
     updatePieces(st);
     while (marks.children.length) marks.remove(marks.children[0]);
     if (view.hover) mark(view.hover.x, view.hover.y, 'hover', 0.02);

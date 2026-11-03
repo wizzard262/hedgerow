@@ -36,10 +36,9 @@ const START_HOUR = 6;
 const START_DATE = 'Tue 11 July 1944';
 
 // Every piece moves (acts) once an hour (Steve: no tokens to activate)
-// Reacting in the Germans' hour (Steve): a piece fired on can take cover. Its men get down where they are: every shot at
-// it rolls half the dice for the rest of the round (an odd die left over is a coin toss), but it misses its move unless
-// the captain gets it up
-const TAKE_COVER = 0.5;          // the share of the dice that still roll against a piece taking cover
+// Reacting (Steve): a piece fired on can take cover. Its men get down where they are: every shot or shell at it needs
+// two more for the rest of the round, but it misses its move unless the captain gets it up
+const TAKE_COVER = 2;            // added to the score needed against a piece that has taken cover, from every weapon (Steve: +2)
 
 // Shooting: each point of firepower rolls one six-sided die, which hits on TO_HIT or more.
 // Cover adds to the score needed, elite troops take one off; a shot needing more than MAX_NEED can't be taken

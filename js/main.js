@@ -126,6 +126,9 @@ window.Game = (() => {
   function drawNext() {
     // One side wiped out: the game stops at once (Steve: the round isn't finished)
     if (st.won || st.lost) return showResult();
+    // Shots still flying (a tank turns before it fires): the next token waits until they land, so their dice show
+    const flying = Board.busyFor();
+    if (flying > 0) { setTimeout(drawNext, flying + 150); return; }
     const side = Sim.drawToken(st);
     if (!side) return nextRound();
     changed();

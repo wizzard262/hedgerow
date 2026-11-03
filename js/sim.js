@@ -594,8 +594,10 @@ const Sim = (() => {
     // The sniper: no cover, no long range (Steve)
     // A small target needs one more, whoever shoots (Steve)
     const small = smallTarget(target) ? SMALL_TARGET : 0;
+    // Taking cover: two more from every weapon (Steve), but not the sniper (no cover helps against him)
+    const down = target.down ? TAKE_COVER : 0;
     if (PIECES[shooter.kind].sniper) return TO_HIT + small + (moving ? ON_THE_MOVE : 0) + (shooter.shocked ? SHAKEN_SHOOT : 0) - QUALITY[shooter.quality || 'standard'].shoot;
-    return TO_HIT + cover(st, shooter, target) + small + (moving ? ON_THE_MOVE : 0) + (shooter.shocked ? SHAKEN_SHOOT : 0) - QUALITY[shooter.quality || 'standard'].shoot;
+    return TO_HIT + cover(st, shooter, target) + small + down + (moving ? ON_THE_MOVE : 0) + (shooter.shocked ? SHAKEN_SHOOT : 0) - QUALITY[shooter.quality || 'standard'].shoot;
   }
 
   // Why a shot needs what it needs, for the label on the target (Steve): each thing that makes it harder (−) or easier (+),
@@ -615,7 +617,7 @@ const Sim = (() => {
     if (s && s.hedge) why.push(`+${COVER.hedge} hedge`);
     if (s && s.tankCorner) why.push(`+${COVER.tankCorner} tank's corner`);
     why.push(...placeWhy(st, target, shooter));
-    if (target.down) why.push('½ dice: taking cover');
+    if (target.down) why.push(`+${TAKE_COVER} take cover`);
     // Two men or fewer (Steve)
     if (smallTarget(target)) why.push(`+${SMALL_TARGET} small target`);
     if (far) why.push(`+${LONG_RANGE} long range`);
@@ -668,11 +670,11 @@ const Sim = (() => {
   }
 
   // The score mortar and artillery dice need against a piece: a village, hamlet or orchard gives cover from shells, and
-  // a tank its armour (men down in cover roll against half the dice instead, see underCover)
+  // a tank its armour, and men who have taken cover two more (Steve)
   function shellNeed(st, t) {
     // Cover from shells: a village, hamlet or orchard (Steve: +1 against mortars and artillery)
     const place = placeCover(st, t, null, true);
-    return TO_HIT + place + armourOf(t);
+    return TO_HIT + place + armourOf(t) + (t.down ? TAKE_COVER : 0);
   }
 
   // A tank's armour (Steve: shown on the label and the panel): added to what anti-tank dice need; 0 for anyone else
@@ -680,16 +682,7 @@ const Sim = (() => {
     return isTank(t) ? PIECES[t.kind].armour || 0 : 0;
   }
 
-  // Dice against a piece taking cover (Steve): half of them, and an odd one left over is a coin toss
-  function underCover(st, t, n) {
-    // Not down: every die rolls
-    if (!t.down) return n;
-    const half = Math.floor(n * TAKE_COVER);
-    const odd = n - half * 2 > 0;
-    // The odd die: heads it rolls too
-    const extra = odd && st.rand() < 0.5 ? 1 : 0;
-    return half + extra;
-  }
+
 
   // Why mortar and artillery dice need what they need, for the label on the target
   function shellWhy(st, t) {
@@ -697,31 +690,29 @@ const Sim = (() => {
     // Only the village counts against shells
     why.push(...placeWhy(st, t, null, true));
     if (armourOf(t)) why.push(`+${armourOf(t)} armour`);
-    // Men already down in cover: half the dice
-    if (t.down) why.push('½ dice: taking cover');
+    // Men already down in cover: two more
+    if (t.down) why.push(`+${TAKE_COVER} take cover`);
     return withStart(why);
   }
 
   // `blast` is set for the other pieces caught in a tank's high-explosive burst (they don't spread it again)
   function fireAt(st, shooter, target, power, withdraw = false, moving = false, blast = false) {
     const f = firepower(st, shooter);
-    const need = needFor(st, shooter, target, moving);
     // A German piece fired on takes cover when it is wise to (Steve), as you can
-    if (!withdraw && target.side === 'de' && germanTakesCover(st, target, menDice(f) * power, need)) withdraw = true;
-    // Taking cover happens before the dice roll: its men are already down
+    if (!withdraw && target.side === 'de' && germanTakesCover(st, target, menDice(f) * power, needFor(st, shooter, target, moving))) withdraw = true;
+    // Taking cover happens before the dice roll: its men are already down (and two more are needed)
     const pre = withdraw ? takeCover(st, target) : null;
+    const need = needFor(st, shooter, target, moving);
     const faces = [];
-    let softHits, hardHits, fullDice = 0;
+    let softHits, hardHits;
     if (isTank(target)) {
       hardHits = roll(st, dice(st, f.hard * power), need + armourOf(target), faces);
       softHits = roll(st, dice(st, f.soft * power), need, []);
     } else {
-      // Anti-tank weapons are poor against men in a hedge: half value. Men taking cover face half the dice (Steve)
+      // Anti-tank weapons are poor against men in a hedge: half value
       const full = dice(st, menDice(f) * power);
-      softHits = roll(st, underCover(st, target, full), need, faces);
+      softHits = roll(st, full, need, faces);
       hardHits = 0;
-      // Taking cover: how many dice it would have rolled standing (for the tag on the table)
-      if (target.down) fullDice = full;
     }
     // Where the target stood, so its dice still land there if it is wiped out
     const stood = { x: target.x, y: target.y };
@@ -735,7 +726,7 @@ const Sim = (() => {
       : target.shocked && !before.shocked ? 'Shaken' : softHits + hardHits ? 'No effect' : 'Missed';
     // What the table shows: the weapon's muzzle flash and tracers from the shooter, and what lands on the target
     const weapon = isTank(shooter) || shooter.kind === 'pak' ? 'gun' : shooter.kind === 'mg' || shooter.kind === 'mg42' ? 'mg' : shooter.kind === 'bazooka' || shooter.kind === 'schreck' ? 'rocket' : 'rifle';
-    st.fx.push({ from: { id: shooter.id, x: shooter.x, y: shooter.y }, to: { id: target.id }, weapon, armour: isTank(target), x: target.x === null ? stood.x : target.x, y: target.x === null ? stood.y : target.y, kind: softHits + hardHits ? 'hit' : 'miss', faces, need: Math.min(6, need + armourOf(target)), side: shooter.side, result, tookCover: !!pre, fullDice });
+    st.fx.push({ from: { id: shooter.id, x: shooter.x, y: shooter.y }, to: { id: target.id }, weapon, armour: isTank(target), x: target.x === null ? stood.x : target.x, y: target.x === null ? stood.y : target.y, kind: softHits + hardHits ? 'hit' : 'miss', faces, need: Math.min(6, need + armourOf(target)), side: shooter.side, result, tookCover: !!pre });
     // A tank firing high explosive at men hits the whole field, like a mortar: every other piece on foot in it rolls too
     if (isTank(shooter) && !isTank(target) && !blast) {
       for (const other of at(st, stood.x, stood.y, target.side)) {
@@ -1352,20 +1343,18 @@ const Sim = (() => {
       const caught = splash ? at(st, fx, fy) : at(st, fx, fy, enemyOf(side));
       for (const t of caught) {
         if (t.x === null) continue;
+        // Your shells on a German piece: it takes cover first if it is wise to (Steve); then what each die needs
+        if (side === 'us' && t.side === 'de' && germanTakesCover(st, t, n, shellNeed(st, t))) { const pre = takeCover(st, t); lines.push(pre.line); }
         const need = shellNeed(st, t);
         const faces = [];
-        // Your shells on a German piece: it takes cover first if it is wise to (Steve)
-        if (side === 'us' && t.side === 'de' && germanTakesCover(st, t, n, need)) { const pre = takeCover(st, t); lines.push(pre.line); }
         // Against a tank only the anti-tank dice count (its armour is in need); against men every die
-        const soft = isTank(t) ? 0 : roll(st, underCover(st, t, n), need, faces), hard = isTank(t) ? roll(st, S.hard || 0, need, faces) : 0;
-        // Taking cover: how many dice it would have faced standing (for the tag)
-        const fullDice = t.down && !isTank(t) ? n : 0;
+        const soft = isTank(t) ? 0 : roll(st, n, need, faces), hard = isTank(t) ? roll(st, S.hard || 0, need, faces) : 0;
         const before = t.platoons, wasShocked = t.shocked;
         const hurt = damage(st, t, soft, hard);
         lines.push(...(t.side === side ? hurt.map(l => `⚠️ friendly fire: ${l}`) : hurt));
         const lost = before - (t.x === null ? 0 : t.platoons);
         const result = t.x === null ? 'Wiped out' : lost ? (isTank(t) ? 'Tank knocked out' : 'Section lost') : t.shocked && !wasShocked ? 'Shaken' : soft + hard ? 'No effect' : 'Missed';
-        st.fx.push({ x: fx, y: fy, kind: 'shell', faces, need, side, to: { id: t.id }, result, support: which, fullDice });
+        st.fx.push({ x: fx, y: fy, kind: 'shell', faces, need, side, to: { id: t.id }, result, support: which });
       }
       // An empty field still gets its shell, flying from the side that fired (Steve: never from both sides' guns)
       if (!at(st, fx, fy, enemyOf(side)).length) st.fx.push({ x: fx, y: fy, kind: 'shell', support: which, side });
@@ -1531,8 +1520,8 @@ const Sim = (() => {
       const pre = withdraw ? takeCover(st, t) : null;
       const need = shellNeed(st, t);
       const faces = [];
-      const hits = roll(st, underCover(st, t, DE_MORTAR.dice), need, faces);
-      fx.faces = faces; fx.need = need; fx.side = 'de'; fx.tookCover = !!pre; fx.fullDice = t.down ? DE_MORTAR.dice : 0;
+      const hits = roll(st, DE_MORTAR.dice, need, faces);
+      fx.faces = faces; fx.need = need; fx.side = 'de'; fx.tookCover = !!pre;
       const lines = (pre ? [pre.line] : []).concat(damage(st, t, hits, 0));
       st.fx.push(fx);
       st.de.rep.push(`🔺 German mortars on ${t.name}: ${lines.length ? lines.join(', ') : 'no hits'}.`);
@@ -1744,6 +1733,10 @@ const Sim = (() => {
 
   // Pass on an American token, or finish with it
   function passToken(st) {
+    // The token's piece has had its go this round, whatever it did (Steve: a captain who only rallied looked as if he
+    // could still act, and could take a second token): it is done, and shows so on the table
+    const done = st.activeId && !st.activeId.startsWith('gun:') ? unitById(st, st.activeId) : null;
+    if (done && done.x !== null) { done.acted = true; if (done.kind === 'captain') done.skipped = true; }
     st.drawn = null;
     st.activeId = null;
     for (const u of st.units) u.halfShot = false;

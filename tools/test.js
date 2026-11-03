@@ -208,7 +208,7 @@ check('dice: every face is 1 to 6 and hits are the ones at or over the score nee
   }
 });
 
-check('taking cover: no moving, half the dice, misses the next move unless the captain gets it up', () => {
+check('taking cover: no moving, +2 to hit, misses the next move unless the captain gets it up', () => {
   const st = Sim.newGame(9);
   let checked = 0;
   for (let h = 0; h < 8 && !st.won && !st.lost; h++) {
@@ -229,11 +229,11 @@ check('taking cover: no moving, half the dice, misses the next move unless the c
   A.down = true; A.acted = true; cap.x = A.x; cap.y = A.y === 0 ? 1 : A.y - 1;
   assert(Sim.rallyTargets(st2, cap).includes(A), 'the captain could not reach a piece down in cover');
   assert(Sim.actRally(st2, cap, A).ok && !A.acted && !A.down, 'the captain did not get it up and moving');
-  // Down in cover, the score needed is the same but its label says half the dice (Steve)
+  // Down in cover: two more needed, and the label says so (Steve)
   const de = st2.units.find(u => u.side === 'de' && u.kind === 'company');
   const before = Sim.needFor(st2, de, A); A.down = true;
-  assert(Sim.needFor(st2, de, A) === before, 'taking cover changed the score needed');
-  assert(Sim.needWhy(st2, de, A).includes('½ dice: taking cover'), 'the label did not say half the dice');
+  assert(Sim.needFor(st2, de, A) === before + TAKE_COVER, 'taking cover did not add two to the score needed');
+  assert(Sim.needWhy(st2, de, A).includes('+2 take cover'), 'the label did not say +2 take cover');
 });
 
 check('the mortars and the guns fire once an hour each', () => {
@@ -513,6 +513,18 @@ check('Move & shoot: only the areas of a field it could fire from are offered (S
     }
   }
   assert(checked > 0, 'no Move & shoot fields to check');
+});
+
+check('a captain who only rallies is done once his token passes: no second token, shown as moved', () => {
+  const st = Sim.newGame(3);
+  Sim.startRound(st);
+  st.drawn = 'us'; st.activeId = null;
+  const cap = Sim.unitById(st, 'cap'), A = Sim.unitById(st, 'A');
+  A.x = cap.x; A.y = cap.y === 0 ? 1 : cap.y - 1; A.shocked = true;
+  assert(Sim.actRally(st, cap, A).ok, 'the rally failed');
+  Sim.passToken(st);
+  st.drawn = 'us';
+  assert(!Sim.canAct(st, cap) && !Sim.canRally(st, cap) && cap.acted, 'the captain could act again on a second token');
 });
 
 check('machine guns fire five dice', () => {
@@ -919,7 +931,7 @@ check('a shot label adds up: the 3+ start, then each cover named on its own, to 
   assert(checked > 20, `only ${checked} labelled shots were checked`);
 });
 
-check('mortars land on the one field, artillery on it and the four next to it; men down in cover face half the dice', () => {
+check('mortars land on the one field, artillery on it and the four next to it; men down in cover need +2', () => {
   const st = Sim.newGame(3);
   assert(Sim.shellFields('mortars', 4, 4).length === 1, 'mortars reached past the target field');
   const guns = Sim.shellFields('artillery', 4, 4);
@@ -929,7 +941,7 @@ check('mortars land on the one field, artillery on it and the four next to it; m
   t.down = false;
   assert(Sim.shellNeed(st, t) === TO_HIT && !Sim.shellWhy(st, t).length, 'shells on men in the open needed more than the start');
   t.down = true;
-  assert(Sim.shellNeed(st, t) === TO_HIT && Sim.shellWhy(st, t).includes('½ dice: taking cover'), 'shells ignored men down in cover');
+  assert(Sim.shellNeed(st, t) === TO_HIT + TAKE_COVER && Sim.shellWhy(st, t).includes('+2 take cover'), 'shells ignored men down in cover');
 });
 
 check('tanks cannot take cover', () => {
@@ -982,7 +994,7 @@ check('houses are hard cover: two more to hit anyone in a village or hamlet', ()
   assert(Sim.tileType(7, 4) === 'village' && Sim.cover(st, null, t) === 2, 'a piece in the village did not get +2');
 });
 
-check('taking cover halves the dice: an odd one left over is a coin toss', () => {
+check('taking cover no longer halves the dice: every die rolls, needing two more', () => {
   let rolled = 0, shots = 0;
   for (let seed = 1; seed <= 40; seed++) {
     const st = Sim.newGame(seed);
@@ -994,9 +1006,9 @@ check('taking cover halves the dice: an odd one left over is a coin toss', () =>
     Sim.fireAt(st, mg, A, 1);
     rolled += st.fx[0].faces.length; shots++;
   }
-  // Five dice, halved: two or three each time, about two and a half on average
+  // Five dice every time
   const mean = rolled / shots;
-  assert(mean > 2.1 && mean < 2.9, `an MG at men taking cover rolled ${mean.toFixed(2)} dice on average, not about 2.5`);
+  assert(mean === 5, `an MG at men taking cover rolled ${mean.toFixed(2)} dice on average, not 5`);
 });
 
 check('the game stops at once when one side has no pieces left, without finishing the round', () => {

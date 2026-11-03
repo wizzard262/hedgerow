@@ -236,8 +236,9 @@ const UI = (() => {
     for (const u of pieces) {
       const state = u.down && u.acted ? '<span class="pill bad">Taking cover</span>' : u.shocked ? '<span class="pill bad">Shaken</span>' : u.acted ? '<span class="pill done">✓ Moved this round</span>' : '<span class="pill ready">Ready</span>';
       menu.append(el('div', 'mhead', `<b>${u.name}${u.quality === 'elite' ? ' ★' : ''}</b><span>${state}</span>`));
-      // Charge, Move & shoot and Shoot are done by clicking the lit fields and red targets, so the menu leaves them out (Steve)
-      const acts = actionButtons(u).filter(a => !['charge', 'moveShoot', 'shoot'].includes(a.mode));
+      // Moving and shooting are done by clicking the lit areas and red targets, so the menu only ever has Skip and Rally
+      // (Steve: never Move & shoot, not even its shot after the move)
+      const acts = actionButtons(u).filter(a => ['skip', 'skipShot', 'rally', 'selfRally'].includes(a.mode));
       for (const a of acts) {
         const b = el('button', '', a.label);
         b.disabled = !a.ok; b.title = a.title || '';
@@ -487,7 +488,7 @@ const UI = (() => {
     const dice = `🎲 ${Math.round(Sim.menDice(f) * 10) / 10} dice vs men${f.hard ? `, ${Math.round(f.hard * 10) / 10} vs tanks` : ''}`;
     // A tank's armour (Steve): what it adds to the score anti-tank dice need
     const armour = Sim.isTank(u) ? `🛡️ Armour +${Sim.armourOf(u)}` : '';
-    const status = u.down && u.acted ? '<span class="pill bad">Taking cover: the captain can get it up</span>' : u.shocked ? '<span class="pill bad">Shaken: +1 to hit, half moves</span>' : u.acted ? '<span class="pill done">✓ Moved this round</span>' : '<span class="pill ready">Ready</span>';
+    const status = u.down && u.acted ? '<span class="pill bad">Taking cover: +2 cover; the captain can get it up</span>' : u.shocked ? '<span class="pill bad">Shaken: +1 to hit, half moves</span>' : u.acted ? '<span class="pill done">✓ Moved this round</span>' : '<span class="pill ready">Ready</span>';
     box.append(el('div', 'name', `${u.name}${u.quality === 'elite' ? ' ★' : ''}`));
     // Elite troops say so (Steve): Rangers or Fallschirmjäger, one less needed to hit
     const elite = u.quality === 'elite' ? ` · <b class="elite">Elite</b> (${u.side === 'us' ? 'Rangers' : 'Fallschirmjäger'}: −1 to hit)` : '';
