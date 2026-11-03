@@ -1211,10 +1211,11 @@ const Board = (() => {
       const wait = (t0 - performance.now()) / 1000;
       if (f.from) {
         const flight = f.weapon === 'gun' ? 0.25 : f.weapon === 'rocket' ? 0.45 : 0.35;
-        // Each tank's gun is heard in turn, and each shell landing; other weapons once
+        // Each tank's gun is heard in turn, and each shell landing; rifles a shot from each base, an MG its five rounds
+        // (Steve: as many as the table shows); other weapons once
         const heard = f.weapon === 'gun' ? roundsOf(f) : 1;
         for (let k = 0; k < heard; k++) {
-          Sound.play(f.weapon === 'mg' && f.side === 'de' ? 'mg42' : f.weapon, wait + k * TANK_GAP);
+          Sound.play(f.weapon === 'mg' && f.side === 'de' ? 'mg42' : f.weapon, wait + k * TANK_GAP, false, roundsOf(f));
           Sound.play(f.armour && f.weapon === 'gun' ? 'clang' : f.weapon === 'gun' || f.weapon === 'rocket' ? 'he' : 'bullets', wait + k * TANK_GAP + flight);
         }
       } else if (f.kind === 'shell') {
@@ -1457,47 +1458,106 @@ const Board = (() => {
   }
 
   // ---------- Dice on the table ----------
-  // The last three shots leave their dice in the target's field, six to a row along its near edge (a second shot at the
-  // same field lines up behind the first). Hits are bright, misses dark, and a tag says who fired, what each die
-  // needed and how many hit
-  const DIE_SIZE = 4, DIE_GAP = 0.14;
+  // The dice of every attack (Steve: shots, shells and hand to hand, both sides) sit in the top corner of the table above
+  // the attacking side's artillery, not on the board: the red dice, six to a row, each with a tag over it saying who
+  // rolled, what each die needed and how many hit. The newest at the bottom, up to three a side stacked above it. Hits
+  // are outlined in yellow on a glow; misses are dimmed. They appear once the attack has landed on the table, and stay
+  // until the next piece is chosen (Steve)
+  const DIE_SIZE = 6.5, DIE_GAP = 0.22;
+  const DICE_STACK = 3;                // rolls shown a side
+  const DICE_OUT = 0.45;               // how far out past the artillery (away from the board) the dice sit
+  let diceDue = null;                  // when the dice of the latest attack go on the table
+  let rollLog = [], rollSeen = new Set();   // the rolls in the corner now, oldest first; every roll already shown
   function showDice(st) {
+    // Add the rolls not seen before (each roll's faces are its own list)
+    for (const r of rollsOf(st)) if (!rollSeen.has(r.faces)) { rollSeen.add(r.faces); rollLog.push(r); }
     for (const d of dice) scene.remove(d);
     dice = [];
-    const cursor = {};                                     // for each field, how far back the next shot's dice go
-    for (const f of st.fx.filter(f => f.faces && f.faces.length).slice(-3)) {
-      const key = f.x + ',' + f.y;
-      let z = cursor[key] !== undefined ? cursor[key] : f.y + 0.9;
-      // The dice, row by row
-      f.faces.forEach((r, i) => {
-        const d = Models.die(r.face); d.scale.setScalar(DIE_SIZE);
-        at(d, f.x + 0.15 + (i % 6) * DIE_GAP, 0, z - Math.floor(i / 6) * DIE_GAP, 0, (i * 1.7) % 0.6 - 0.3, 0);
-        // Misses are dimmed so the hits stand out
-        if (!r.hit) d.traverse(c => { if (c.isMesh && c.material === Models.M.die) { c.material = c.material.clone(); c.material.color.multiplyScalar(0.4); } });
-        scene.add(d); dice.push(d);
-      });
-      // The tag: a long word bubble a little up the board, with a pointed arrow to the middle of the dice (Steve)
-      const rows = Math.ceil(f.faces.length / 6);
-      const diceMid = new T.Vector3(f.x + 0.15 + (Math.min(6, f.faces.length) - 1) * DIE_GAP / 2, 0.03, z - (rows - 1) * DIE_GAP / 2);
-      let tagZ = z - (rows - 1) * DIE_GAP - 0.55;
-      let anchor = new T.Vector3(diceMid.x, 0.22, tagZ);
-      // Near the top of the screen: the tag hangs below the dice instead, so it isn't cut off (Steve)
-      const below = offTop(anchor);
-      if (below) { tagZ = z + DIE_GAP + 0.35; anchor = new T.Vector3(diceMid.x, 0.05, tagZ); }
-      const tag = diceTag(shotTagText(st, f), f.side, below);
-      tag.position.copy(anchor); tag.renderOrder = 6;
-      scene.add(tag); dice.push(tag);
-      const arrow = wedge(anchor, diceMid, 0.16, f.side === 'de' ? 0x46484a : 0x1e3e6e);
-      scene.add(arrow); dice.push(arrow);
-      // The next shot's dice in this field go on beyond this tag (down the board when it hangs below)
-      cursor[key] = below ? tagZ + 0.3 : tagZ - 0.3;
+    const rolls = rollLog;
+    for (const side of ['us', 'de']) {
+      const gun = GUNS[side].artillery;
+      const cx = gun.x + (side === 'us' ? -DICE_OUT : DICE_OUT);
+      // Newest first, from just above the drawn token's spot upwards
+      let z = 0.62;
+      for (const r of rolls.filter(o => o.side === side).slice(-DICE_STACK).reverse()) {
+        const rows = Math.ceil(r.faces.length / 6), across = Math.min(6, r.faces.length);
+        const left = cx - (across - 1) * DIE_GAP / 2;
+        r.faces.forEach((d, i) => {
+          const x = left + (i % 6) * DIE_GAP, dz = z - Math.floor(i / 6) * DIE_GAP;
+          const die = Models.die(d.face); die.scale.setScalar(DIE_SIZE);
+          at(die, x, 0, dz, 0, (i * 1.7) % 0.4 - 0.2, 0);
+          // Misses dimmed; hits on a yellow glow (Steve)
+          if (!d.hit) die.traverse(c => { if (c.isMesh && c.material === Models.M.die) { c.material = c.material.clone(); c.material.color.multiplyScalar(0.35); } });
+          scene.add(die); dice.push(die);
+          if (d.hit) {
+            const glow = hitGlow(); at(glow, x, 0.002, dz, -Math.PI / 2, 0, 0); scene.add(glow); dice.push(glow);
+            // A yellow outline round the die itself: a slightly bigger box, only its inside faces drawn
+            die.add(at(new T.Mesh(new T.BoxGeometry(0.037, 0.037, 0.037), HIT_EDGE), 0, 0.015, 0));
+          }
+        });
+        // The tag just above the dice
+        const top = z - (rows - 1) * DIE_GAP - 0.15;
+        // (the Germans' tag runs in from the right edge of their dice, so it stays on the screen)
+        const edge = (across - 1) * DIE_GAP / 2 + 0.1;
+        const anchor = new T.Vector3(side === 'us' ? cx - edge : cx + edge, 0.05, top);
+        // No room left at the top of the screen: the older rolls are left off
+        if (offTop(anchor)) break;
+        const tag = diceTag(r.text, side, false);
+        tag.scale.multiplyScalar(1.35);
+        tag.center.x = side === 'us' ? 0 : 1;
+        tag.position.copy(anchor); tag.renderOrder = 6;
+        scene.add(tag); dice.push(tag);
+        z = top - 0.55;
+      }
     }
   }
 
-  // Clear the dice and their tags off the table (when the next piece is picked); they come back with the next shot
-  function clearDice() {
+  const HIT_EDGE = new T.MeshBasicMaterial({ color: 0xffd23f, side: T.BackSide });
+  // A soft yellow square under a die that hit (Steve: a yellow glow border round each hitting die)
+  let dieGlowTex = null;
+  function hitGlow() {
+    if (!dieGlowTex) {
+      const c = document.createElement('canvas'); c.width = c.height = 64;
+      const g = c.getContext('2d');
+      const grad = g.createRadialGradient(32, 32, 10, 32, 32, 32);
+      grad.addColorStop(0, 'rgba(255,214,64,1)'); grad.addColorStop(0.6, 'rgba(255,200,40,.85)'); grad.addColorStop(1, 'rgba(255,190,30,0)');
+      g.fillStyle = grad; g.fillRect(0, 0, 64, 64);
+      dieGlowTex = new T.CanvasTexture(c);
+    }
+    // A crisp yellow square just bigger than the die (the border), on a soft glow round it
+    const g = new T.Group();
+    g.add(new T.Mesh(new T.PlaneGeometry(0.36, 0.36), new T.MeshBasicMaterial({ map: dieGlowTex, transparent: true, depthWrite: false })));
+    const edge = new T.Mesh(new T.PlaneGeometry(0.175, 0.175), new T.MeshBasicMaterial({ color: 0xffd23f }));
+    edge.position.z = 0.001;
+    g.add(edge);
+    return g;
+  }
+
+  // Every roll in the attacks on the table now, in order: { side, faces, text } for each shot or shell, and for each
+  // side's blow in a hand-to-hand fight
+  function rollsOf(st) {
+    const out = [];
+    for (const f of st.fx) {
+      if (f.kind === 'melee') {
+        for (const b of f.strikes) {
+          if (!b.faces.length) continue;
+          const names = b.strikers.map(id => (st.units.find(u => u.id === id) || { name: '' }).name).filter(Boolean);
+          const hits = b.faces.filter(d => d.hit).length;
+          out.push({ side: b.side, faces: b.faces, text: [names.join(' and ') || 'Hand to hand', `hand to hand · ${hits} hit${hits === 1 ? '' : 's'}`] });
+        }
+        continue;
+      }
+      if (f.faces && f.faces.length) out.push({ side: f.side, faces: f.faces, text: shotTagText(st, f) });
+    }
+    return out;
+  }
+
+  // The next piece is chosen (or a new game): the corners are empty again
+  function clearDice(newGame = false) {
     for (const d of dice) scene.remove(d);
     dice = [];
+    rollLog = [];
+    if (newGame) rollSeen = new Set();
   }
 
   // ["1st Platoon", "needs 5+ · 2 hits"]: who fired, then the score each die needed and the hits
@@ -1602,10 +1662,12 @@ const Board = (() => {
   function render(st, view = {}) {
     const now = performance.now(), dt = lastT ? Math.min(0.1, (now - lastT) / 1000) : 0.016;
     lastT = now;
-    if (!built || built.userData.seed !== st.seed) { for (const id in pieces) scene.remove(pieces[id]); for (const id in tokens) scene.remove(tokens[id]); pieces = {}; tokens = {}; build(st); buildSupport(); built.userData.seed = st.seed; }
+    if (!built || built.userData.seed !== st.seed) { clearDice(true); for (const id in pieces) scene.remove(pieces[id]); for (const id in tokens) scene.remove(tokens[id]); pieces = {}; tokens = {}; build(st); buildSupport(); built.userData.seed = st.seed; }
     updateSupport(st);
     buildHedges(st);
-    if (st.fxShown !== st.fx || st.fxCount !== st.fx.length) { showDice(st); startShots(st); st.fxShown = st.fx; st.fxCount = st.fx.length; }
+    // New attacks: they play out, and their dice go in the corner once they have landed (Steve)
+    if (st.fxShown !== st.fx || st.fxCount !== st.fx.length) { startShots(st); st.fxShown = st.fx; st.fxCount = st.fx.length; diceDue = now + settledIn(); }
+    if (diceDue !== null && now >= diceDue) { diceDue = null; showDice(st); }
     updatePieces(st);
     while (marks.children.length) marks.remove(marks.children[0]);
     if (view.hover) mark(view.hover.x, view.hover.y, 'hover', 0.02);
@@ -1684,8 +1746,9 @@ const Board = (() => {
   // and a little above. which: 'mortars' or 'artillery' for the guns off the board. Made once for each side and kind
   const portraits = {};
   let studio = null;
-  function portrait(side, kind) {
-    const key = side + ':' + kind;
+  // elite: as the piece looks on the table (Steve: Rangers, Fallschirmjäger, the gold band)
+  function portrait(side, kind, elite = false) {
+    const key = side + ':' + kind + (elite ? ':elite' : '');
     if (portraits[key]) return portraits[key];
     // One small renderer, scene and camera for every picture
     if (!studio) {
@@ -1705,8 +1768,9 @@ const Board = (() => {
       const m = kind === 'artillery' ? Models.howitzer(side) : Models.mortar(side);
       m.scale.setScalar(kind === 'artillery' ? TANKS * 1.7 : MEN * 1.3);
       bases = [m];
-    } else bases = buildBases(side, kind);
-    const spots = kind === 'company' ? [[-0.11, -0.09], [0.11, -0.07], [0, 0.11]] : PIECES[kind] && PIECES[kind].tank ? [[0, -0.19], [0, 0.19]] : [[0, 0]];
+    } else bases = buildBases(side, kind, elite);
+    if (elite) for (const b of bases) Models.eliteBand(b);
+    const spots = kind === 'company' ? [[-0.11, -0.09], [0.11, -0.07], [0, 0.11]] : [[0, 0]];
     bases.forEach((b, i) => { b.position.set(spots[i][0], 0, spots[i][1]); g.add(b); });
     sc.add(g);
     // Framed: the camera off the front corner, a little above, backed off to fit it all
@@ -1738,16 +1802,10 @@ const Board = (() => {
     return screenPoint(p.x, p.z, 0.15);
   }
 
-  // The top corner of the table above a side's artillery, on the page: where its last roll shows (Steve)
-  function rollSpot(side) {
-    const gun = GUNS[side].artillery;
-    return screenPoint(gun.x, 0.35, 0);
-  }
-
   function screenPoint(x, y, h = 0) {
     const p = new T.Vector3(x, h, y).project(camera), r = renderer.domElement.getBoundingClientRect();
     return { x: r.left + (p.x + 1) / 2 * r.width, y: r.top + (1 - p.y) / 2 * r.height };
   }
 
-  return { init, resize, render, fieldAt, pieceAt, pieceUnder, portrait, bounce, bounceGun, busyFor, settledIn, gunAt, targetAt, screenPoint, rollSpot, shotTagText, pieceScreen, labelBox, clearDice, flyToken, clearToken, returnTokens, canvas: () => renderer.domElement };
+  return { init, resize, render, fieldAt, pieceAt, pieceUnder, portrait, bounce, bounceGun, busyFor, settledIn, gunAt, targetAt, screenPoint, pieceScreen, labelBox, clearDice, flyToken, clearToken, returnTokens, canvas: () => renderer.domElement };
 })();

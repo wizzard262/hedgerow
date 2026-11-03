@@ -73,10 +73,15 @@ const Models = (() => {
     M.usTrousers = mat('#5e5b3d', 0.85);
     M.usHelmet = mat('#4f5434', 0.6);
     M.usWebbing = mat('#9a8f62', 0.9);
-    M.deUniform = mat('#5f6a5a', 0.85);        // the Fallschirmjäger's grey-green jump smock (Steve: they look like paratroopers)
-    M.deTrousers = mat('#56605a', 0.85);       // field grey trousers
-    M.deHelmet = mat('#141414', 0.5);          // black helmets (Steve)
+    M.deUniform = mat('#5d6862', 0.85);        // field grey
+    M.deTrousers = mat('#56605a', 0.85);
+    M.deHelmet = mat('#4a524f', 0.55);
     M.deHelmet.side = T.DoubleSide;           // the Stahlhelm is a lathed shell: both faces show
+    M.fjHelmet = mat('#141414', 0.5);          // the Fallschirmjäger's helmet: black (Steve)
+    M.fjHelmet.side = T.DoubleSide;
+    M.rangerJacket = mat('#6b5236', 0.85);     // the Rangers' brown jacket (Steve: noticeably different)
+    M.rangerTrousers = mat('#5a4a33', 0.85);
+    M.rangerDiamond = mat('#e07a1f', 0.6);     // the orange Ranger diamond on the back of the helmet
     M.deWebbing = mat('#2e2a25', 0.7);
     M.olive = mat('#4f5432', 0.65, 0.15);      // olive drab paint
     M.dunkelgelb = mat('#a8975f', 0.65, 0.15); // German dark yellow
@@ -112,12 +117,13 @@ const Models = (() => {
   // ---------- Men ----------
   // A painted figure, on its own round base or (base = false) standing on a shared one. A man is about 0.11 tall
   // before the game scales the men up (they are bigger models than the tanks: 1:54 against 1:76)
-  // elite (Steve): in a camouflage outfit, both sides
+  // elite (Steve): the Americans are Rangers in brown, with the orange diamond on the helmet; the Germans are
+  // Fallschirmjäger in a camouflage jump smock and the black rimless helmet
   function soldier(side, pose = 0, base = true, elite = false) {
     const us = side === 'us', g = new T.Group();
-    const plain = us ? M.usUniform : M.deUniform;
-    const uni = elite ? camoCloth(side) : plain;
-    const legs = elite ? uni : us ? M.usTrousers : M.deTrousers, web = us ? M.usWebbing : M.deWebbing;
+    const fj = !us && elite, ranger = us && elite;
+    const uni = fj ? camoCloth('de') : ranger ? M.rangerJacket : us ? M.usUniform : M.deUniform;
+    const legs = ranger ? M.rangerTrousers : us ? M.usTrousers : M.deTrousers, web = us ? M.usWebbing : M.deWebbing;
     // Base: a black disc with a bevel
     if (base) g.add(at(cyl(0.032, 0.034, 0.008, M.base, 24), 0, 0.004, 0));
     // Legs apart, boots (US leggings are paler)
@@ -125,10 +131,10 @@ const Models = (() => {
       g.add(at(cyl(0.0065, 0.0055, 0.045, legs, 8), 0.004 * s + pose * 0.004 * s, 0.032, 0.007 * s, 0, 0, 0.12 * s * pose));
       g.add(at(box(0.012, 0.008, 0.009, us ? M.usWebbing : M.boot), 0.006 * s, 0.012, 0.007 * s));
     }
-    // Body: jacket, belt with pouches, and (German) the bread bag and mess tin. The German jump smock is longer, down
-    // over the hips
+    // Body: jacket, belt with pouches, and (German) the bread bag and mess tin. The paratrooper's jump smock is longer,
+    // down over the hips
     g.add(at(box(0.026, 0.038, 0.016, uni), 0, 0.075, 0));
-    if (!us) g.add(at(box(0.028, 0.014, 0.018, uni), 0, 0.052, 0));
+    if (fj) g.add(at(box(0.028, 0.014, 0.018, uni), 0, 0.052, 0));
     g.add(at(box(0.027, 0.006, 0.017, web), 0, 0.058, 0));
     for (const s of [-1, 1]) g.add(at(box(0.007, 0.008, 0.004, web), 0.008 * s, 0.059, 0.009));
     g.add(at(box(0.004, 0.036, 0.018, web), 0.0, 0.077, 0.0, 0, 0, 0.5));
@@ -146,16 +152,22 @@ const Models = (() => {
     if (us) {
       const h = sphere(0.0125, M.usHelmet, 16, 10); h.scale.set(1, 0.72, 1.05); g.add(at(h, 0, 0.11, 0));
       g.add(at(cyl(0.0135, 0.0135, 0.002, M.usHelmet, 16), 0, 0.106, 0));
-    } else {
+      // Rangers: the orange diamond on the back of the helmet
+      if (ranger) g.add(at(box(0.001, 0.006, 0.006, M.rangerDiamond), -0.0128, 0.111, 0, Math.PI / 4, 0, 0));
+    } else if (fj) {
       // The paratrooper's helmet (Steve): round, close to the head, no flared brim, in black
       const lathe = new T.LatheGeometry([[0, 0.0125], [0.008, 0.0115], [0.0118, 0.006], [0.0128, 0.0], [0.0132, -0.003], [0.0128, -0.0035]].map(([x, y]) => new T.Vector2(x, y)), 16);
+      g.add(at(new T.Mesh(lathe, M.fjHelmet), 0, 0.108, 0));
+    } else {
+      // The Stahlhelm, with its flared brim
+      const lathe = new T.LatheGeometry([[0, 0.012], [0.008, 0.011], [0.0115, 0.006], [0.0125, 0.0], [0.0155, -0.004], [0.0158, -0.0045]].map(([x, y]) => new T.Vector2(x, y)), 16);
       g.add(at(new T.Mesh(lathe, M.deHelmet), 0, 0.108, 0));
     }
     return castAll(g);
   }
 
-  // Camouflage cloth for elite troops (Steve), made once a side: the American two-tone green and brown spots, the German
-  // paratroopers' splinter pattern of green and brown slashes on tan
+  // Camouflage cloth, made once a side: the American two-tone green and brown spots (not used now: the Rangers wear
+  // brown), the German paratroopers' splinter pattern of green and brown slashes on tan
   const camo = {};
   function camoCloth(side) {
     if (camo[side]) return camo[side];
@@ -175,17 +187,18 @@ const Models = (() => {
     return camo[side];
   }
 
-  // A platoon: three figures together on one small flocked base (Steve: three a base), as wargamers base a section.
-  // Elite ones in camouflage. Built facing +x (east)
+  // A platoon: three figures together on one small round flocked base (Steve: round, three a base), as wargamers base
+  // a section. Elite: Rangers or Fallschirmjäger. Built facing +x (east)
   function squad(side, elite = false) {
     const g = new T.Group();
     // A small oval base, its top flocked like the table, its edge painted dark
-    const b = new T.Mesh(new T.CylinderGeometry(0.05, 0.052, 0.008, 32), [mat('#3b3326', 0.8), baseTop(side), M.base]);
-    b.scale.set(1.15, 1, 1.5); g.add(at(b, 0, 0.004, 0));
+    const b = new T.Mesh(new T.CylinderGeometry(0.062, 0.064, 0.008, 32), [mat('#3b3326', 0.8), baseTop(side), M.base]);
+    g.add(at(b, 0, 0.004, 0));
     // A little flock on the base, as on a finished model
     const tuft = mat(side === 'de' ? '#6e5a3a' : '#5d6b3c', 1);
-    for (const [x, z] of [[-0.03, 0.05], [0.035, -0.045], [0.02, 0.06]]) g.add(at(sphere(0.007, tuft, 6, 4), x, 0.009, z));
-    [[-0.018, -0.045, 0], [0.022, 0.0, 1], [-0.014, 0.046, -1]].forEach(([x, z, p], i) => {
+    for (const [x, z] of [[-0.04, 0.03], [0.035, -0.04], [0.03, 0.04]]) g.add(at(sphere(0.007, tuft, 6, 4), x, 0.009, z));
+    // Three men in a triangle on the round base
+    [[0.024, 0.0, 1], [-0.018, -0.028, 0], [-0.018, 0.028, -1]].forEach(([x, z, p], i) => {
       const s = soldier(side, p, false, elite); at(s, x, 0.008, z, 0, (i - 1) * 0.2, 0); g.add(s);
     });
     return castAll(g);

@@ -13,9 +13,6 @@ window.Game = (() => {
   function start(seed) {
     st = Sim.newGame(seed);
     G.state = st;
-    // A new game: no rolls to show yet
-    lastRoll.us = lastRoll.de = null;
-    showRolls();
     UI.closeMenu();
     UI.setState(st);
     Sim.startRound(st);
@@ -55,41 +52,6 @@ window.Game = (() => {
     return [];
   }
 
-  // Each side's last roll (Steve): in the top corner of the table above its artillery, once the shot has landed. Every
-  // die with its number; the hits ringed with a yellow glow
-  const PIPS = { 1: [[10, 10]], 2: [[5, 5], [15, 15]], 3: [[5, 5], [10, 10], [15, 15]], 4: [[5, 5], [15, 5], [5, 15], [15, 15]], 5: [[5, 5], [15, 5], [10, 10], [5, 15], [15, 15]], 6: [[5, 5], [15, 5], [5, 10], [15, 10], [5, 15], [15, 15]] };
-  const lastRoll = { us: null, de: null };
-  let rollsSeen = null, rollsCount = 0;
-  function noteRolls() {
-    // Only when the shots on the table have changed
-    if (st.fx === rollsSeen && st.fx.length === rollsCount) return;
-    rollsSeen = st.fx; rollsCount = st.fx.length;
-    const rolls = st.fx.filter(f => f.faces && f.faces.length);
-    if (!rolls.length) return;
-    // The last roll each side made in these shots
-    const latest = { us: null, de: null };
-    for (const f of rolls) latest[f.side] = f;
-    // Shown once the shot has landed on the table
-    setTimeout(() => {
-      for (const side of ['us', 'de']) if (latest[side]) lastRoll[side] = latest[side];
-      showRolls();
-    }, Board.settledIn());
-  }
-  function showRolls() {
-    const r = board.getBoundingClientRect();
-    for (const side of ['us', 'de']) {
-      const f = lastRoll[side], box = $('#roll-' + side);
-      if (!f) { box.hidden = true; continue; }
-      const [who, line] = Board.shotTagText(st, f);
-      const target = f.to && Sim.unitById(st, f.to.id);
-      const dice = f.faces.map(d => `<span class="die${d.hit ? ' hit' : ''}" title="${d.face}"><svg viewBox="0 0 20 20">${PIPS[d.face].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="2.1" fill="#1a1a1a"/>`).join('')}</svg></span>`).join('');
-      box.innerHTML = `<div class="who">${who}${target ? ' → ' + target.name : ''}</div><div class="need">${line}</div><div class="dice">${dice}</div>`;
-      box.hidden = false;
-      const p = Board.rollSpot(side);
-      Object.assign(box.style, { left: p.x - r.left + 'px', top: p.y - r.top + 'px' });
-    }
-  }
-
   // Draw the table whenever something changed or pieces are still gliding; place the hamlet's name over it
   function frame() {
     if (dirty) {
@@ -106,6 +68,8 @@ window.Game = (() => {
       // During the German move, show who is aiming at whom (Steve): the shooter's field, a line of fire to the target,
       // its red cross-hair with the score needed. German mortars: the line comes from their mortar off the board.
       // Aiming (before it fires): every target it could hit, with its score and why, as yours show (Steve)
+      // A German piece just picked: where it could go, as yours show (Steve)
+      if (germanPicked && st.de) spots.push(...UI.moveSpotsFor(Sim.unitById(st, germanPicked)));
       const planned = st.de && (st.de.ask || st.de.aim);
       let others = [];
       if (planned) {
@@ -146,7 +110,6 @@ window.Game = (() => {
       const p = Board.screenPoint(st.objective.x + 0.5, st.objective.y, 0.35), r = board.getBoundingClientRect();
       Object.assign($('#label').style, { left: p.x - r.left + 'px', top: p.y - r.top + 'px' });
       $('#label').textContent = `🎯 ${st.objective.name}`;
-      noteRolls();
     }
     requestAnimationFrame(frame);
   }
@@ -155,8 +118,6 @@ window.Game = (() => {
     const r = board.getBoundingClientRect();
     Board.resize(Math.max(200, r.width), Math.max(200, r.height));
     dirty = true;
-    // The roll panels follow the table
-    showRolls();
   }
 
   // ---------- The bag ----------
@@ -206,12 +167,16 @@ window.Game = (() => {
 
   // The computer picks its German piece as you would (Steve): the pick-up sound and the ring round it, then a moment
   // later it moves (its moving sounds are the same as yours: men running, tanks driving)
-  const GERMAN_PICK_PAUSE = 650;
+  // (and, as yours show when picked, where it could go: Steve)
+  const GERMAN_PICK_PAUSE = 1300;
+  let germanPicked = null;           // the German piece picked, until it moves: its moves show on the table
   function chooseGerman() {
     const move = st.de && st.de.move;
     // A piece, or their mortars or artillery off the board
-    if (move && move.id) { Sound.play('select'); Board.bounce(Sim.unitById(st, move.id)); }
+    if (move && move.id) { Sound.play('select'); Board.bounce(Sim.unitById(st, move.id)); germanPicked = move.id; }
     if (move && move.gun) { Sound.play('select'); Board.bounceGun('de', move.gun); }
+    // The dice of the last attack go once the next piece is chosen (Steve), theirs as yours
+    Board.clearDice();
     changed();
     setTimeout(runGermans, GERMAN_PICK_PAUSE);
   }
@@ -220,6 +185,7 @@ window.Game = (() => {
   // could take cover, ask first
   const GERMAN_AIM_SHOWN = 1400;
   function runGermans() {
+    germanPicked = null;
     const r = Sim.germanStep(st, true);
     if (r.aim) { changed(); setTimeout(runGermans, GERMAN_AIM_SHOWN + Board.busyFor()); return; }
     if (r.ask) return ask(r.ask);
@@ -301,7 +267,7 @@ window.Game = (() => {
     const under = Board.pieceUnder(st, e.clientX, e.clientY);
     const foeField = !Sim.at(st, f.x, f.y, 'us').length && Sim.at(st, f.x, f.y, 'de').length;
     const foe = under && under.side === 'de' ? under : !under && foeField ? Board.pieceAt(st, e.clientX, e.clientY, 'de') : null;
-    if (foe && !UI.actsOn(f.x, f.y)) { Sound.play('select'); Board.bounce(foe); Board.clearDice(); UI.inspect(foe); changed(); return; }
+    if (foe && !UI.actsOn(f.x, f.y)) { Sound.play('select'); Board.bounce(foe); UI.inspect(foe); changed(); return; }
     // The one piece under the pointer (the nearest in the field if the click misses the models)
     const mine = UI.clickField(f.x, f.y, Board.pieceAt(st, e.clientX, e.clientY), f.side);
     changed();
@@ -342,7 +308,9 @@ window.Game = (() => {
     const here = Sim.at(st, f.x, f.y);
     const lines = here.map(u => `${u.side === 'us' ? 'US' : 'German'} · ${u.name}${u.kind === 'company' ? ` · ${u.platoons} sections` : ''}${u.shocked ? ' · shaken' : ''}`);
     const t = Sim.tileType(f.x, f.y);
-    const cover = t === 'village' || t === 'hamlet' ? `Houses: hard cover, ${COVER.village} more needed on the dice to hit anyone here` : t === 'river' ? 'Nothing can cross except at a bridge' : t === 'orchard' ? 'Trees: they block the view across' : '';
+    // Houses and trees: their cover (see PLACE_COVER), and the view
+    const place = PLACE_COVER[t];
+    const cover = place ? `${t === 'orchard' ? 'Trees' : 'Houses'}: +${place.men} to hit men here, +${place.tank} a tank, +${place.shells} with mortars or artillery; none for an enemy inside it too. Seen into and out of, never through` : t === 'river' ? 'Nothing can cross except at a bridge' : '';
     // A village field takes the name of the nearest village
     const village = t === 'village' ? VILLAGES.slice().sort((a, b) => (Math.abs(a.x - f.x) + Math.abs(a.y - f.y)) - (Math.abs(b.x - f.x) + Math.abs(b.y - f.y)))[0].name : null;
     tip.innerHTML = `<b>${village || NAMES[t]}</b>${cover ? `<br><span style="color:var(--muted)">${cover}</span>` : ''}${lines.length ? '<br>' + lines.join('<br>') : ''}`;

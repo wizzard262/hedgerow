@@ -312,6 +312,12 @@ const Sim = (() => {
     return { soft, hard };
   }
 
+  // The dice a piece rolls against men: its own, and half its anti-tank weapons' (Steve asked why a bazooka showed 0:
+  // it rolls one die at men, half its two anti-tank dice)
+  function menDice(f) {
+    return f.soft + f.hard * 0.5;
+  }
+
   // Whole dice from a firepower: the fraction is a chance of one more
   const dice = (st, f) => Math.floor(f) + (st.rand() < f - Math.floor(f) ? 1 : 0);
 
@@ -338,10 +344,7 @@ const Sim = (() => {
   function cover(st, from, target) {
     let c = 0;
     if (from) { const s2 = sight(st, from, target); if (s2) c += s2.cover; }
-    const t = tileType(target.x, target.y);
-    if (t === 'village') c += COVER.village;
-    if (t === 'hamlet') c += COVER.hamlet;
-    if (t === 'orchard') c += COVER.orchard;
+    c += placeCover(st, target, from);
     if (!isTank(target) && target.side && at(st, target.x, target.y, target.side).some(isTank)) c += COVER.tank;
     return c;
   }
@@ -421,7 +424,7 @@ const Sim = (() => {
     // The covers one by one: the hedge it lines, a tank in a field in between, the field it stands in, its own tank beside it
     if (s && s.hedge) why.push(`+${COVER.hedge} hedge`);
     if (s && s.behindTank) why.push(`+${COVER.tank} behind a tank`);
-    why.push(...placeWhy(target));
+    why.push(...placeWhy(st, target, shooter));
     if (!isTank(target) && at(st, target.x, target.y, target.side).some(isTank)) why.push(`+${COVER.tank} beside a tank`);
     if (target.down) why.push('½ dice: taking cover');
     // Two men or fewer (Steve)
@@ -435,12 +438,37 @@ const Sim = (() => {
   }
 
   // Cover from the field a target stands in: a village, a hamlet or an orchard
-  function placeWhy(target) {
-    // What the target's field is
-    const t = tileType(target.x, target.y);
-    // Open fields and lanes give no cover
-    if (!['village', 'hamlet', 'orchard'].includes(t)) return [];
-    return [`+${COVER[t]} ${t}`];
+  function placeWhy(st, target, from, shells = false) {
+    const n = placeCover(st, target, from, shells);
+    return n ? [`+${n} ${tileType(target.x, target.y)}`] : [];
+  }
+
+  // The cover a village, hamlet or orchard gives a piece in it (see PLACE_COVER): men, a tank, or against shells; none
+  // at all against an enemy inside the same one (Steve). Open fields and lanes give none
+  function placeCover(st, target, from, shells = false) {
+    const cover = PLACE_COVER[tileType(target.x, target.y)];
+    if (!cover) return 0;
+    if (from && samePlace(from, target)) return 0;
+    if (shells) return cover.shells;
+    return isTank(target) ? cover.tank : cover.men;
+  }
+
+  // Are two pieces inside the same village, hamlet or orchard: the same kind of field, joined field to field?
+  function samePlace(a, b) {
+    const kind = tileType(a.x, a.y);
+    if (!PLACE_COVER[kind] || tileType(b.x, b.y) !== kind) return false;
+    // Spread out from a's field over joined fields of the same kind
+    const seen = new Set([a.x + ',' + a.y]), open = [{ x: a.x, y: a.y }];
+    while (open.length) {
+      const p = open.pop();
+      if (p.x === b.x && p.y === b.y) return true;
+      for (const [dx, dy] of NEIGHBOURS) {
+        const q = { x: p.x + dx, y: p.y + dy }, key = q.x + ',' + q.y;
+        if (!inside(q.x, q.y) || seen.has(key) || tileType(q.x, q.y) !== kind) continue;
+        seen.add(key); open.push(q);
+      }
+    }
+    return false;
   }
 
   // Put the score every shot starts from first (Steve: "3+", then "+1 small target"…, then the total), so the sum adds
@@ -453,9 +481,8 @@ const Sim = (() => {
   // The score mortar and artillery dice need against a piece: only a village gives cover from shells (men down in cover
   // roll against half the dice instead, see underCover)
   function shellNeed(st, t) {
-    // Cover from shells: the village's houses
-    const village = tileType(t.x, t.y) === 'village' ? COVER.village : 0;
-    return TO_HIT + village;
+    // Cover from shells: a village, hamlet or orchard (Steve: +1 against mortars and artillery)
+    return TO_HIT + placeCover(st, t, null, true);
   }
 
   // Dice against a piece taking cover (Steve): half of them, and an odd one left over is a coin toss
@@ -473,7 +500,7 @@ const Sim = (() => {
   function shellWhy(st, t) {
     const why = [];
     // Only the village counts against shells
-    if (tileType(t.x, t.y) === 'village') why.push(`+${COVER.village} village`);
+    why.push(...placeWhy(st, t, null, true));
     // Men already down in cover: half the dice
     if (t.down) why.push('½ dice: taking cover');
     return withStart(why);
@@ -492,7 +519,7 @@ const Sim = (() => {
       softHits = roll(st, dice(st, f.soft * power), need, []);
     } else {
       // Anti-tank weapons are poor against men in a hedge: half value. Men taking cover face half the dice (Steve)
-      const full = dice(st, (f.soft + f.hard * 0.5) * power);
+      const full = dice(st, menDice(f) * power);
       softHits = roll(st, underCover(st, target, full), need, faces);
       hardHits = 0;
       // Taking cover: how many dice it would have rolled standing (for the tag on the table)
@@ -810,6 +837,8 @@ const Sim = (() => {
     if (!route) return { ok: false };
     spend(st, u);
     const lines = followRoute(st, u, route);
+    // Snagged on wire on the way: it stops there, and fires from there if it can
+    if (u.snagged) { u.halfShot = targets(st, u, true).length > 0; return { ok: true, lines: [lines.join(', ') + '.'] }; }
     const how = step(st, u, x, y);
     // Where it stands: where it was sent, or (none given) the first place in the field with a shot
     const place = side !== undefined ? side : [u.at, ...PLACES].find(p => { if (freePlace(st, u, x, y, p) !== p) return false; u.at = p; return targets(st, u, true).length; });
@@ -830,6 +859,7 @@ const Sim = (() => {
     if (how === 'cut') return `🚜 ${u.name} smashes through the hedge, leaving a gap.`;
     if (how === 'climbed') return `🧗 ${u.name} struggles over the hedge bank.`;
     if (how === 'flattened') return `🚜 ${u.name} flattens the barbed wire.`;
+    if (how === 'snagged') return `🚜 ${u.name} flattens the barbed wire but gets snagged in it and stops.`;
     if (how === 'wirecut') return `✂️ ${u.name} cuts through the wire.`;
     return `➡️ ${u.name} moves up.`;
   }
@@ -918,11 +948,19 @@ const Sim = (() => {
   }
 
   // Go along a route's fields up to (not into) its goal, cutting, flattening or climbing on the way. Returns the lines to report
+  // A tank that flattens barbed wire on the way can get snagged (Steve: WIRE_SNAG): it stops in that field (unless it
+  // is a field of friends it can only pass through), u.snagged says so, and its move goes no further
   function followRoute(st, u, route) {
     const lines = [];
-    for (const p of route.slice(0, -1)) {
-      const how = step(st, u, p.x, p.y);
+    u.snagged = false;
+    const way = route.slice(0, -1);
+    for (let i = 0; i < way.length; i++) {
+      const p = way[i];
+      let how = step(st, u, p.x, p.y);
+      if (how === 'flattened' && !p.pass && st.rand() < WIRE_SNAG) { how = 'snagged'; u.snagged = true; }
       if (how) lines.push(moveLine(u, how).replace(/\.$/, ''));
+      // Snagged: here it stops, and the table shows the way it came this far
+      if (u.snagged) { setTrail(st, u, route.slice(0, i + 1)); break; }
     }
     return lines;
   }
@@ -956,6 +994,8 @@ const Sim = (() => {
     // The fields before the goal are crossed on the way
     const home = { x: u.x, y: u.y, at: u.at };
     lines.push(...followRoute(st, u, route));
+    // Snagged on wire on the way: it gets no further
+    if (u.snagged) return { ok: true, lines: [lines.join(', ') + '.'] };
     lines.push(...charge(st, u, x, y));
     // Arrived (not beaten back): it stands where it was sent, and the table shows the way it came
     if (u.x === x && u.y === y) { standAt(st, u, side); setTrail(st, u, route); }
@@ -1118,7 +1158,7 @@ const Sim = (() => {
     const ts = targets(st, u);
     if (!ts.length) return null;
     const f = firepower(st, u);
-    const score = t => (isTank(t) ? f.hard * 2 : f.soft + f.hard * 0.5) * (7 - TO_HIT - cover(st, u, t)) / 2 + (t.shocked ? 1 : 0) - t.platoons * 0.1;
+    const score = t => (isTank(t) ? f.hard * 2 : menDice(f)) * (7 - TO_HIT - cover(st, u, t)) / 2 + (t.shocked ? 1 : 0) - t.platoons * 0.1;
     return ts.sort((a, b) => score(b) - score(a))[0];
   }
 
@@ -1214,6 +1254,7 @@ const Sim = (() => {
   // a gap; the table shows the way it went
   function germanMove(st, u, route) {
     followRoute(st, u, route);
+    if (u.snagged) return;
     const goal = route[route.length - 1];
     step(st, u, goal.x, goal.y);
     setTrail(st, u, route);
@@ -1568,7 +1609,7 @@ const Sim = (() => {
     newGame, endTurn, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, moves, chargeSpots,
     rallyTargets, canAct, groupOf, groupName, members, canReact, firepower, teamsOf, canCallFire, holdsObjective, roundText, roomFor,
     startGermanHour, germanStep, answer, finishHour, startRound, drawToken, endGermanToken, activationOver, passToken, usCanMove, endRound, canFire, actSkip, actSkipShot, skipSupport,
-    smallTarget, captainCanRally, fireAt, actShoot, actMoveShoot, moveShootSpots, chargeRoutes, DIRS, needWhy, shellNeed, shellWhy, shellFields, canRally, needFor, canSelfRally, actSelfRally, actHalfShot, actMove, actCharge, actRally, actFire, actBreach, breachSpots, sight, isSmall, cover, wire, lineSides, actLine, atHedge, acrossHedge, SIDE_NAMES, PLACES, placeXY, placeName, lines,
+    smallTarget, menDice, captainCanRally, fireAt, actShoot, actMoveShoot, moveShootSpots, chargeRoutes, DIRS, needWhy, shellNeed, shellWhy, shellFields, canRally, needFor, canSelfRally, actSelfRally, actHalfShot, actMove, actCharge, actRally, actFire, actBreach, breachSpots, sight, isSmall, cover, wire, lineSides, actLine, atHedge, acrossHedge, SIDE_NAMES, PLACES, placeXY, placeName, lines,
     hasCutters: u => cutter(u),
   };
 })();

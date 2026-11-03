@@ -8,8 +8,8 @@ const UI = (() => {
   // What the player has chosen: a piece, and an action waiting for a field to be clicked
   const view = { sel: null, mode: null, log: [] };
 
-  const KIND = { company: 'Rifle platoon', captain: 'Captain', sherman: 'Sherman section', firefly: 'Firefly section', mg: 'Machine-gun team', bazooka: 'Bazooka team', sniper: 'Sniper team',
-                 pz4: 'Panzer IV section', panther: 'Panther section', mg42: 'MG 42 team', schreck: 'Panzerschreck team', pak: 'PaK 40 anti-tank gun' };
+  const KIND = { company: 'Rifle platoon', captain: 'Captain', sherman: 'Sherman', firefly: 'Firefly', mg: '.50 cal team', bazooka: 'Bazooka team', sniper: 'Sniper team',
+                 pz4: 'Panzer IV', panther: 'Panther', mg42: 'MG 42 team', schreck: 'Panzerschreck team', pak: 'PaK 40 anti-tank gun' };
 
   function setState(s) { st = s; view.sel = null; view.mode = null; view.log = []; view.support = null; }
 
@@ -70,6 +70,16 @@ const UI = (() => {
       for (const p of marked) if (p.x === st.objective.x && p.y === st.objective.y && p.kind !== 'line') p.kind = 'goal';
     }
     return marked;
+  }
+
+  // Where a piece could go (Steve: the Germans show the same as yours): red hatching for Move & shoot (fields it could
+  // fire from), the rest a Charge; into the enemy's field, a fight
+  function moveSpotsFor(u) {
+    const enemy = u.side === 'us' ? 'de' : 'us';
+    const shootAfter = Sim.moveShootSpots(st, u).map(p => ({ x: p.x, y: p.y, kind: 'hatch' }));
+    const charges = Sim.chargeSpots(st, u).filter(p => !shootAfter.some(q => q.x === p.x && q.y === p.y))
+      .map(p => ({ x: p.x, y: p.y, kind: Sim.at(st, p.x, p.y, enemy).length ? 'assault' : 'charge' }));
+    return shootAfter.concat(charges);
   }
 
   // The pieces the chosen piece could shoot now, to mark with red targets: while choosing Shoot, or the shot of a Move & shoot.
@@ -402,10 +412,10 @@ const UI = (() => {
   }
 
   // The piece's picture at the left of the panel (Steve)
-  function picture(box, side, kind) {
+  function picture(box, side, kind, elite = false) {
     box.className = 'with-pic';
     const img = el('img', 'pic');
-    img.src = Board.portrait(side, kind);
+    img.src = Board.portrait(side, kind, elite);
     img.alt = '';
     box.append(img);
   }
@@ -455,13 +465,16 @@ const UI = (() => {
       return;
     }
     // Its picture on the left (Steve), for your pieces and the Germans'
-    picture(box, u.side, u.kind);
-    const strength = u.kind === 'company' ? `${u.platoons} section${u.platoons > 1 ? 's' : ''} (${u.platoons * 4} men)` : Sim.isTank(u) ? `${u.platoons} tank${u.platoons > 1 ? 's' : ''}` : PIECES[u.kind].men ? `${PIECES[u.kind].men} men` : '';
+    picture(box, u.side, u.kind, u.quality === 'elite');
+    const strength = u.kind === 'company' ? `${u.platoons} section${u.platoons > 1 ? 's' : ''} (${u.platoons * MEN_A_BASE} men)` : Sim.isTank(u) ? `${u.platoons} tank${u.platoons > 1 ? 's' : ''}` : PIECES[u.kind].men ? `${PIECES[u.kind].men} men` : '';
     const f = Sim.firepower(st, u);
-    const dice = `🎲 ${Math.round(f.soft * 10) / 10} dice vs men${f.hard ? `, ${Math.round(f.hard * 10) / 10} vs tanks` : ''}`;
+    // Against men: its own dice and half its anti-tank ones (see Sim.menDice)
+    const dice = `🎲 ${Math.round(Sim.menDice(f) * 10) / 10} dice vs men${f.hard ? `, ${Math.round(f.hard * 10) / 10} vs tanks` : ''}`;
     const status = u.down && u.acted ? '<span class="pill bad">Taking cover: the captain can get it up</span>' : u.shocked ? '<span class="pill bad">Shaken: +1 to hit, half moves</span>' : u.acted ? '<span class="pill done">✓ Moved this round</span>' : '<span class="pill ready">Ready</span>';
     box.append(el('div', 'name', `${u.name}${u.quality === 'elite' ? ' ★' : ''}`));
-    box.append(el('div', 'sub', `${u.side === 'de' ? 'German · ' : ''}${KIND[u.kind]}${Sim.hasCutters(u) ? ' · hedge cutters' : ''}`));
+    // Elite troops say so (Steve): Rangers or Fallschirmjäger, one less needed to hit
+    const elite = u.quality === 'elite' ? ` · <b class="elite">Elite</b> (${u.side === 'us' ? 'Rangers' : 'Fallschirmjäger'}: −1 to hit)` : '';
+    box.append(el('div', 'sub', `${u.side === 'de' ? 'German · ' : ''}${KIND[u.kind]}${elite}${Sim.hasCutters(u) ? ' · hedge cutters' : ''}`));
     const where = u.kind === 'pak' ? '' : `📍 At ${Sim.placeName(u.at)}`;
     box.append(el('div', 'stats', [strength, dice, where, status].filter(Boolean).map(s => `<span>${s}</span>`).join('')));
     // A German piece: just what it is (Steve), no actions
@@ -547,5 +560,5 @@ const UI = (() => {
     refresh = onChange;
   }
 
-  return { init, setState, update, clickField, openMenu, openGunMenu, openAsk, closeMenu, inspect, actsOn, spots, targets, shootTarget, rallies, rallyTarget, view, selected, selectSupport, supportState, flyToken, returnTokens, KIND };
+  return { init, setState, update, clickField, openMenu, openGunMenu, openAsk, closeMenu, inspect, actsOn, spots, moveSpotsFor, targets, shootTarget, rallies, rallyTarget, view, selected, selectSupport, supportState, flyToken, returnTokens, KIND };
 })();

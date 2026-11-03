@@ -177,16 +177,18 @@ const Sound = (() => {
   const SOUNDS = {
     bombers,
     // Riflemen: single shots, a few men firing at their own pace
-    rifle(t) {
-      for (let k = 0; k < 5; k++) {
+    // A shot from each base that fires (Steve)
+    rifle(t, big, rounds = 3) {
+      for (let k = 0; k < rounds; k++) {
         const w = t + k * 0.16 + Math.random() * 0.15;
         if (!playFile('rifle', w, 0.5 + Math.random() * 0.3, 0.92 + Math.random() * 0.16)) shot(w, 0.8 + Math.random() * 0.2);
       }
     },
     // The American .50 cal (Steve): a steady chug, about ten rounds a second
-    mg(t) { if (!playFile('mg30', t, 0.85, 0.9)) burst(t, 11, 0.115, 0.9); },
+    // (Steve: five rounds, as the table shows five tracers)
+    mg(t, big, rounds = 5) { burst(t, rounds, 0.115, 0.9); },
     // The German MG 42: a ripping tear, twenty rounds a second
-    mg42(t) { if (!playFile('mg42', t, 0.85, 0.85)) { burst(t, 14, 0.05, 0.85); burst(t + 0.95, 12, 0.05, 0.8); } },
+    mg42(t, big, rounds = 5) { burst(t, rounds, 0.05, 0.85); },
     // A bazooka or Panzerschreck: the bang of the launch and the rocket's roar away
     // (Steve: a roar as it flies) a longer, louder rush under the launch
     rocket(t) { noise(t, 0.05, 2500, 0.5, 0.8, 'highpass'); noise(t, 0.9, 700, 0.6, 0.9, 'bandpass'); noise(t + 0.05, 0.6, 250, 0.4, 0.8, 'lowpass'); tone(t, 0.6, 300, 900, 0.12, 'sawtooth'); },
@@ -304,11 +306,12 @@ const Sound = (() => {
     bomberTimer = setTimeout(flights, 6000 + Math.random() * 6000);
   }
 
-  function play(name, delay = 0, big = false) {
+  // rounds: how many rounds a rifle or MG shot sends (one a base, five from an MG), so the sound matches the tracers
+  function play(name, delay = 0, big = false, rounds) {
     if (!on || !ctx || ctx.state !== 'running') return;
     const when = ctx.currentTime + Math.max(0, delay);
     if (name === 'select') return playFile('select', when, 0.8, 1, ctx.destination);
-    if (SOUNDS[name]) SOUNDS[name](when, big);
+    if (SOUNDS[name]) SOUNDS[name](when, big, rounds);
   }
 
   function toggle() {

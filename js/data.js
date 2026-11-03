@@ -64,7 +64,18 @@ const RANGES = {
   sniper: { sight: 99, long: 99 },  // the sniper: anywhere he can see, no long range, and cover doesn't help the target
 };
 const ON_THE_MOVE = 1;           // added to the score needed when firing after a move (Steve: like range and cover, +1 each)
-const COVER = { hedge: 1, village: 2, hamlet: 2, orchard: 1, tank: 1 };   // tank: infantry sheltering behind or beside a tank (Steve)   // added to the score needed against a target behind a hedge, in the village, a hamlet or an orchard (Steve: houses are hard cover, +2)
+const COVER = { hedge: 1, tank: 1 };   // added to the score needed against a target lining a hedge, or men behind or beside a tank (Steve)
+// Villages, hamlets and orchards all work the same way (Steve): seen into and out of, never through. They differ only
+// in their cover, added to the score needed against a piece in one: men, a tank, and against mortar or artillery
+// fire. Two enemies inside the same one (its fields joined together) get none from it
+const PLACE_COVER = {
+  village: { men: 2, tank: 1, shells: 1 },
+  hamlet: { men: 2, tank: 1, shells: 1 },
+  orchard: { men: 1, tank: 1, shells: 1 },
+};
+// A tank driving over barbed wire (Steve): this chance it gets snagged and stops there (the wire is flattened either way)
+const WIRE_SNAG = 1 / 3;
+const MEN_A_BASE = 3;             // men on each section's round base (Steve)
 const SMALL_TARGET = 1;          // added to the score needed against a small target: a piece of two men or fewer (Steve: sniper, bazooka, captain; not the MG, three men)
 const CAPTAIN_RALLIES = { still: 2, moved: 1 };   // rallies an hour: two if he neither moves nor shoots, one if he does (before or after)
 const RALLY_RANGE = 3;           // the captain rallies a shaken friendly piece up to this many fields away (Steve)

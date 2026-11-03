@@ -23,6 +23,13 @@ function fieldOk(st, x, y) {
   return true;
 }
 
+check('every script on the page parses (a slip in one stops the whole game loading)', () => {
+  for (const f of fs.readdirSync(path.join(__dirname, '..', 'js')).filter(n => n.endsWith('.js'))) {
+    try { new vm.Script(fs.readFileSync(path.join(__dirname, '..', 'js', f), 'utf8'), { filename: f }); }
+    catch (e) { throw new Error(`${f}: ${e.message}`); }
+  }
+});
+
 check('the same seed plays the same game', () => {
   const a = play(7, true), b = play(7, true);
   assert(JSON.stringify(a.units) === JSON.stringify(b.units) && a.turn === b.turn, 'two games with seed 7 ended differently');
@@ -345,6 +352,42 @@ check('seeing reaches the whole board (to call fire); shooting only the weapon\'
   const far = { x: COLS - 1, y: 5, at: null };
   assert(Sim.sees(st, 'us', far.x, far.y), 'a piece could not see the far end of an open lane (moved this round, too)');
   assert(!Sim.sight(st, B, far), 'a rifle platoon could shoot the whole length of the board');
+});
+
+check('a German piece has moves to show, as yours do (Move & shoot and Charge fields)', () => {
+  let shown = 0;
+  for (let seed = 1; seed <= 10; seed++) {
+    const st = Sim.newGame(seed);
+    const de = st.units.find(u => u.side === 'de' && u.kind === 'company' && !u.garrison);
+    if (Sim.chargeSpots(st, de).length) shown++;
+  }
+  assert(shown >= 8, `only ${shown} of 10 German platoons had anywhere to go`);
+});
+
+check('a tank over barbed wire on its way gets snagged a third of the time and stops there; the wire is gone', () => {
+  let snagged = 0, runs = 0;
+  for (let seed = 1; seed <= 90; seed++) {
+    const st = Sim.newGame(seed);
+    st.hedges = {}; st.wire = {};
+    const T1 = Sim.unitById(st, 'T1');
+    for (const u of st.units) if (u !== T1) u.x = u.y = null;
+    T1.x = 3; T1.y = 6; T1.at = null; T1.acted = false;
+    // Wire between the first and second field of its way east
+    st.wire['4,6|5,6'] = true; st.wire['5,6|4,6'] = true;
+    const r = Sim.actCharge(st, T1, 6, 6);
+    if (!r.ok) continue;
+    runs++;
+    assert(!Sim.wire(st, 4, 6, 5, 6), `seed ${seed}: the wire is still there`);
+    if (T1.x === 5) snagged++;
+    else assert(T1.x === 6, `seed ${seed}: the tank stopped at ${T1.x}`);
+  }
+  assert(runs > 50 && snagged > runs * 0.2 && snagged < runs * 0.47, `snagged ${snagged} of ${runs}`);
+});
+
+check('a bazooka rolls one die at men (half its two anti-tank dice); a rifle platoon three', () => {
+  const st = Sim.newGame(2);
+  assert(Sim.menDice(Sim.firepower(st, Sim.unitById(st, 'bz1'))) === 1, 'a bazooka does not roll one die at men');
+  assert(Sim.menDice(Sim.firepower(st, Sim.unitById(st, 'A'))) === 3, 'a rifle platoon does not roll three dice at men');
 });
 
 check('machine guns fire five dice', () => {
@@ -744,8 +787,20 @@ check('a small target (two men or fewer) needs one more; an MG team (three men) 
   assert(Sim.smallTarget({ kind: 'sniper' }) && Sim.smallTarget({ kind: 'bazooka' }) && Sim.smallTarget({ kind: 'captain' }), 'the sniper, bazooka or captain is not a small target');
 });
 
+check('villages, hamlets and orchards: +2 or +1 for men, +1 a tank, +1 against shells, none inside the same one', () => {
+  assert(PLACE_COVER.village.men === 2 && PLACE_COVER.hamlet.men === 2 && PLACE_COVER.orchard.men === 1, 'men in houses are not +2, in trees +1');
+  for (const k of ['village', 'hamlet', 'orchard']) assert(PLACE_COVER[k].tank === 1 && PLACE_COVER[k].shells === 1, `${k}: a tank or shells are not +1`);
+  const st0 = Sim.newGame(3);
+  for (const u of st0.units) u.x = u.y = null;
+  // Two enemies in the same village (fields joined together): no cover from it; one outside: full cover
+  const inside = { x: 7, y: 3, side: 'us', kind: 'company' }, target = { x: 7, y: 4, side: 'de', kind: 'company' };
+  assert(Sim.tileType(7, 3) === 'village' && Sim.cover(st0, inside, target) - (Sim.sight(st0, inside, target) || { cover: 0 }).cover === 0, 'an enemy inside the same village still got cover from it');
+  assert(Sim.shellNeed(st0, target) === TO_HIT + 1, 'shells on the village needed more than +1');
+  const tank = { x: 7, y: 4, side: 'de', kind: 'pz4' };
+  assert(Sim.cover(st0, null, tank) === 1, 'a tank in the village did not get +1');
+});
+
 check('houses are hard cover: two more to hit anyone in a village or hamlet', () => {
-  assert(COVER.village === 2 && COVER.hamlet === 2, 'houses are not +2');
   const st = Sim.newGame(3);
   // Nobody else on the board (a tank beside it would give cover too)
   for (const u of st.units) u.x = u.y = null;
