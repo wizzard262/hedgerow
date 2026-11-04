@@ -10,7 +10,17 @@ window.Game = (() => {
   const $ = s => document.querySelector(s);
   const board = $('#board');
 
+  // Timers for the game in play: a new game drops those of the last one (they drew a second chain of tokens)
+  let gameNumber = 0;
+  function later(fn, ms) {
+    const game = gameNumber;
+    setTimeout(() => { if (game === gameNumber) fn(); }, ms);
+  }
+
   function start(seed) {
+    gameNumber++;
+    drawing = false; germanPicked = null; shownMove = null; resultWaiting = false;
+    Board.reset();
     st = Sim.newGame(seed);
     G.state = st;
     UI.closeMenu();
@@ -18,7 +28,7 @@ window.Game = (() => {
     Sim.startRound(st);
     changed();
     // The first round's tokens fly into the bag once the pieces are on the table
-    setTimeout(() => UI.returnTokens(() => setTimeout(drawNext, 400)), 700);
+    later(() => UI.returnTokens(() => later(drawNext, 400)), 700);
   }
 
   // Something changed: the panel now, the table on the next frame. If that was the American token's piece finishing its
@@ -27,6 +37,7 @@ window.Game = (() => {
   function changed() {
     UI.update();
     dirty = true;
+    viewStale = true;
     if (!drawing && Sim.activationOver(st)) {
       drawing = true;
       Sim.passToken(st);
@@ -34,7 +45,7 @@ window.Game = (() => {
       UI.update();
       Board.clearToken();
       // (a hand-to-hand fight still being shown on the table is seen to the end first)
-      setTimeout(() => { drawing = false; drawNext(); }, 700 + Board.busyFor());
+      later(() => { drawing = false; drawNext(); }, 700 + Board.busyFor());
     }
   }
 
@@ -53,10 +64,13 @@ window.Game = (() => {
   }
 
   // Draw the table whenever something changed or pieces are still gliding; place the hamlet's name over it
+  let viewStale = true, shownSpots = [], shownTargets = [];
   function frame() {
     if (dirty) {
-      const spots = UI.spots();
-      let targets = UI.targets();
+      // (they take some working out, and only change when the game does: not every frame)
+      if (viewStale) { shownSpots = UI.spots(); shownTargets = UI.targets(); viewStale = false; }
+      const spots = shownSpots.slice();
+      let targets = shownTargets;
       // The shooter, for the lines of sight to its targets
       // (just picked, a piece that can shoot from where it stands shows its targets too)
       const aiming = ['shoot', 'halfShot'].includes(UI.view.mode) || (UI.view.mode === 'go' && targets.length > 0);
@@ -100,7 +114,7 @@ window.Game = (() => {
         // The one it picked stands out, as the target under your pointer does
         if (st.de.aim && others.length) aimedAt = t;
       }
-      // Green rings under pieces that can still act this hour, grey under those that have
+      // Green rings under pieces that can still act this round, grey under those that have
       const ready = st.de || st.won || st.lost ? null : u => Sim.canAct(st, u) || Sim.captainCanRally(st, u);
       const guns = st.de || st.won || st.lost ? null : UI.supportState();
       // Something done during the draw (a token landing starts the Germans' move) asks for another draw: keep that
@@ -126,21 +140,22 @@ window.Game = (() => {
   function drawNext() {
     // One side wiped out: the game stops at once (Steve: the round isn't finished)
     if (st.won || st.lost) return showResult();
-    // Shots still flying (a tank turns before it fires): the next token waits until they land, so their dice show
-    const flying = Board.busyFor();
-    if (flying > 0) { setTimeout(drawNext, flying + 150); return; }
+    // Shots still flying (a tank turns before it fires), or their dice only just down: the next token waits, so every
+    // roll can be read
+    const flying = Math.max(Board.busyFor(), Board.diceLeft());
+    if (flying > 0) { later(drawNext, flying + 150); return; }
     const side = Sim.drawToken(st);
     if (!side) return nextRound();
     changed();
     // The timer token (Steve): it lands on the table, and the round ends at once
     if (side === 'timer') {
-      UI.flyToken(side, () => setTimeout(() => { Board.clearToken(); nextRound(); }, 900));
+      UI.flyToken(side, () => later(() => { Board.clearToken(); nextRound(); }, 900));
       return;
     }
     UI.flyToken(side, () => {
       if (side === 'de') return chooseGerman();
       // No American piece able to move on it: the token is used up
-      if (!Sim.usCanMove(st)) { Sim.passToken(st); Board.clearToken(); changed(); setTimeout(drawNext, 600); return; }
+      if (!Sim.usCanMove(st)) { Sim.passToken(st); Board.clearToken(); changed(); later(drawNext, 600); return; }
       changed();
     });
   }
@@ -154,7 +169,7 @@ window.Game = (() => {
     Sim.startRound(st);
     changed();
     // Every piece's token flies back into the bag (Steve), then the first is drawn
-    UI.returnTokens(() => setTimeout(drawNext, 400));
+    UI.returnTokens(() => later(drawNext, 400));
   }
 
   // Pass on an American token (no button for it now, Steve: each piece has Skip turn; the screenshot tool still uses it)
@@ -165,7 +180,7 @@ window.Game = (() => {
     Sim.passToken(st);
     Board.clearToken();
     changed();
-    setTimeout(drawNext, 400);
+    later(drawNext, 400);
   }
 
   // The computer picks its German piece as you would (Steve): the pick-up sound and the ring round it, then a moment
@@ -181,7 +196,7 @@ window.Game = (() => {
     // The dice of the last attack go once the next piece is chosen (Steve), theirs as yours
     Board.clearDice();
     changed();
-    setTimeout(runGermans, GERMAN_PICK_PAUSE);
+    later(runGermans, GERMAN_PICK_PAUSE);
   }
 
   // The German piece moves; before it fires, its targets show as yours do (Steve), then if it fires on a piece that
@@ -190,7 +205,7 @@ window.Game = (() => {
   function runGermans() {
     germanPicked = null;
     const r = Sim.germanStep(st, true);
-    if (r.aim) { changed(); setTimeout(runGermans, GERMAN_AIM_SHOWN + Board.busyFor()); return; }
+    if (r.aim) { changed(); later(runGermans, GERMAN_AIM_SHOWN + Board.busyFor()); return; }
     if (r.ask) return ask(r.ask);
     // Keep what it did on the table a moment after the token ends, so you can see it (Steve)
     shownMove = st.de && st.de.move;
@@ -198,7 +213,7 @@ window.Game = (() => {
     changed();
     // The Germans' move wiped one side out: the game is over
     if (st.won || st.lost) return showResult();
-    setTimeout(() => { shownMove = null; dirty = true; Board.clearToken(); setTimeout(drawNext, 400); }, GERMAN_MOVE_SHOWN + Board.busyFor());
+    later(() => { shownMove = null; dirty = true; Board.clearToken(); later(drawNext, 400); }, GERMAN_MOVE_SHOWN + Board.busyFor());
   }
 
   // A piece of yours under fire: Stand fast or Take cover, in a word bubble by it (Steve: no dialog)
@@ -214,7 +229,7 @@ window.Game = (() => {
     Sim.answer(st, pull);
     changed();
     // A moment to see the dice before the Germans carry on
-    setTimeout(runGermans, 350);
+    later(runGermans, 350);
   }
 
   // The game is over: the message waits until the table has shown the last shot landing (Steve: it came up before the
@@ -226,7 +241,7 @@ window.Game = (() => {
     if (resultWaiting) return;
     resultWaiting = true;
     // Two frames, so the table has started showing the shots, then until they land
-    requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(openResult, Board.settledIn() + RESULT_PAUSE)));
+    requestAnimationFrame(() => requestAnimationFrame(() => later(openResult, Board.settledIn() + RESULT_PAUSE)));
   }
 
   function openResult() {

@@ -31,11 +31,9 @@ const WIRE = 0.5;                // chance a gap between two fields is closed by
 // The blind bag: as well as a token for each piece, black timer tokens (a white sand-glass); drawing one ends the round
 // there and then, whoever has still to move (Steve)
 const ROUND_TIMER = 1;
-const TURNS = 0;                 // hours allowed (0: no limit for now, Steve); one turn is an hour from 06:00
-const START_HOUR = 6;
+const TURNS = 0;                 // rounds allowed (0: no limit for now, Steve)
 const START_DATE = 'Tue 11 July 1944';
 
-// Every piece moves (acts) once an hour (Steve: no tokens to activate)
 // Reacting (Steve): a piece fired on can take cover. Its men get down where they are: every shot or shell at it needs
 // two more for the rest of the round, but it misses its move unless the captain gets it up
 const TAKE_COVER = 2;            // added to the score needed against a piece that has taken cover, from every weapon (Steve: +2)

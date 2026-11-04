@@ -150,9 +150,9 @@ check('every tank drives through hedges; only tanks get through wire; men climb 
   assert(Sim.actCharge(st, sher, 1, 0).ok && sher.x === 1, 'the Sherman could not drive through the hedge');
   assert(!st.hedges[k1], 'the Sherman left the hedge standing');
   const k2 = setUp(ff, 6); st.hedges[k2] = true;
-  assert(Sim.chargeSpots(st, ff).some(p => p.x === 1 && p.y === 6) && !Sim.breachSpots(st, ff).length, 'the Firefly should drive through hedges with no separate Break through');
+  assert(Sim.chargeSpots(st, ff).some(p => p.x === 1 && p.y === 6) && 'the Firefly should drive through hedges with no separate Break through');
   const k3 = setUp(co, 3); st.wire[k3] = true;
-  assert(!Sim.chargeSpots(st, co).some(p => p.x === 1 && p.y === 3) && !Sim.actBreach(st, co, 1, 3).ok, 'men got through barbed wire');
+  assert(!Sim.chargeSpots(st, co).some(p => p.x === 1 && p.y === 3), 'men got through barbed wire');
   // Men climb a hedge as part of a charge, using one more move: the hedge stays, and they get one field less far
   const k4 = setUp(co, 5); co.acted = false; st.hedges[k4] = true;
   assert(Sim.chargeSpots(st, co).some(p => p.x === 1 && p.y === 5), 'men could not climb the hedge in a charge');
@@ -625,6 +625,86 @@ check('a village field is seen into and out of at any angle or distance, never t
   for (const at of ['se', null, 'nw']) { t.at = at; assert(Sim.sight(st, M, t), `on the 45 degree line ${at} was not seen`); }
   for (const at of ['s', 'sw', 'w']) { t.at = at; assert(Sim.sight(st, M, t), `on the open side ${at} was not seen`); }
   for (const at of ['e', 'ne', 'n']) { t.at = at; assert(!Sim.sight(st, M, t), `through the village next door ${at} was seen`); }
+});
+
+check('a German who took cover gets up the next round, as yours do', () => {
+  const st = Sim.newGame(4);
+  Sim.startRound(st);
+  const de = st.units.find(u => u.side === 'de' && u.kind === 'company'), A = Sim.unitById(st, 'A');
+  de.down = true; de.acted = true; A.down = true; A.acted = true;
+  Sim.endRound(st);
+  Sim.startRound(st);
+  assert(!de.down && !de.acted, 'the German stayed down, or could not act');
+  assert(!A.down && !A.acted, 'your piece stayed down, or could not act');
+});
+
+check('a piece the captain gets up has its token back, so nobody else loses theirs', () => {
+  const st = Sim.newGame(3);
+  Sim.startRound(st);
+  const cap = Sim.unitById(st, 'cap'), A = Sim.unitById(st, 'A');
+  A.x = cap.x; A.y = cap.y === 0 ? 1 : cap.y - 1;
+  st.bag.us = 2; st.drawn = 'us'; st.activeId = null;
+  A.down = true; A.acted = true;
+  assert(Sim.actRally(st, cap, A).ok && !A.acted, 'the captain did not get it up');
+  assert(st.bag.us === 3, `the bag holds ${st.bag.us} tokens, not 3`);
+});
+
+check('taking cover that puts the score past 6 stops the shot: no dice, nothing lost', () => {
+  const st = Sim.newGame(4);
+  st.hedges = {}; st.wire = {};
+  const A = Sim.unitById(st, 'A'), mg = st.units.find(u => u.side === 'de' && u.kind === 'mg42');
+  for (const u of st.units) if (u !== A && u !== mg) u.x = u.y = null;
+  // A German MG at long range on a platoon lining a hedge: 3 + 1 long + 1 hedge = 5; taking cover makes it 7
+  mg.x = 7; mg.y = 5; mg.at = null; mg.quality = 'standard';
+  A.x = 2; A.y = 5; A.at = 'e'; A.quality = 'standard';
+  st.hedges['2,5|3,5'] = true;
+  const need = Sim.needFor(st, mg, A);
+  assert(need === 5, `the shot needs ${need}, not 5`);
+  st.rand = () => 0.999;
+  const before = A.platoons;
+  st.fx = [];
+  Sim.fireAt(st, mg, A, 1, true);
+  assert(A.down, 'it did not take cover');
+  assert(A.platoons === before && !A.shocked, 'it was hurt by a shot at 7');
+  assert(st.fx[0].faces.length === 0, 'dice were rolled for a shot at 7');
+  // Standing fast, the same shot rolls
+  const st2 = Sim.newGame(4);
+  st2.hedges = { '2,5|3,5': true }; st2.wire = {};
+  const A2 = Sim.unitById(st2, 'A'), mg2 = st2.units.find(u => u.side === 'de' && u.kind === 'mg42');
+  for (const u of st2.units) if (u !== A2 && u !== mg2) u.x = u.y = null;
+  mg2.x = 7; mg2.y = 5; mg2.at = null; A2.x = 2; A2.y = 5; A2.at = 'e'; A2.quality = 'standard';
+  st2.fx = [];
+  Sim.fireAt(st2, mg2, A2, 1, false);
+  assert(st2.fx[0].faces.length === 5, 'standing fast, the MG did not roll five dice');
+});
+
+check('a piece that took cover cannot act this round, and the cover wears off next round, on a token or not', () => {
+  const st = Sim.newGame(3);
+  Sim.startRound(st);
+  const A = Sim.unitById(st, 'A'), mg = st.units.find(u => u.side === 'de' && u.kind === 'mg42');
+  st.drawn = 'us'; st.activeId = null;
+  Sim.fireAt(st, mg, A, 1, true);
+  st.drawn = 'us'; st.activeId = null;
+  assert(A.x === null || (A.down && !Sim.canAct(st, A)), 'a piece in cover could still act');
+  Sim.endRound(st);
+  Sim.startRound(st);
+  st.drawn = 'us'; st.activeId = null;
+  assert(A.x === null || (!A.down && Sim.canAct(st, A)), 'the cover did not wear off, or the piece could not act next round');
+});
+
+check('a German mortar bomb says who it is at, so the piece stays on the table until it lands', () => {
+  const st = Sim.newGame(3);
+  st.drawn = 'de'; st.activeId = null;
+  const A = Sim.unitById(st, 'A');
+  st.de = { queue: [], mortar: true, artillery: false, rep: [], ask: null, move: { gun: 'mortars', what: '' } };
+  st.rand = () => 0.999;
+  A.platoons = 1; A.shocked = true;
+  st.fx = [];
+  st.de.ask = { mortar: true, target: A.id };
+  Sim.answer(st, false);
+  const f = st.fx.find(o => o.kind === 'shell');
+  assert(f && f.to && f.to.id === A.id && f.result === 'Wiped out', 'the bomb did not name its target and what it did');
+  assert(f.x !== null && f.faces.length > 0, 'the bomb has no dice, or no place on the table');
 });
 
 check('machine guns fire five dice', () => {

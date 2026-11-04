@@ -14,7 +14,7 @@ const UI = (() => {
   function setState(s) { st = s; view.sel = null; view.mode = null; view.log = []; view.support = null; }
 
   // ---------- Your mortars and artillery, off the board ----------
-  // Clicking one chooses it like a piece (Steve): its targets show at once if it can fire this hour
+  // Clicking one chooses it like a piece (Steve): its targets show at once if it can fire this round
   const canFire = which => Sim.canFire(st, which);
   function selectSupport(which) {
     view.sel = null;
@@ -35,7 +35,7 @@ const UI = (() => {
     const u = selected();
     if (view.mode && view.mode.startsWith('fire:')) {
       const out = [];
-      for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) if (Sim.canCallFire(st, x, y) && Sim.at(st, x, y, 'de').length) out.push({ x, y, kind: 'fire' });
+      for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) if (Sim.canCallFire(st, x, y) && Sim.at(st, x, y, 'de').some(t => view.mode !== 'fire:mortars' || !Sim.isTank(t))) out.push({ x, y, kind: 'fire' });
       return out;
     }
     if (!u || !view.mode) return [];
@@ -57,13 +57,12 @@ const UI = (() => {
     }
     const fields = list => list.map(p => ({ x: p.x, y: p.y }));
     const uniq = list => list.filter((p, i) => list.findIndex(q => q.x === p.x && q.y === p.y) === i);
-    const kind = { charge: 'charge', moveShoot: 'hatch', shoot: 'shoot', halfShot: 'shoot', rally: 'rally', breach: 'breach' }[view.mode];
+    const kind = { charge: 'charge', moveShoot: 'hatch', shoot: 'shoot', halfShot: 'shoot', rally: 'rally' }[view.mode];
     let list = [];
     if (view.mode === 'charge') list = Sim.chargeSpots(st, u);
     if (view.mode === 'moveShoot') list = Sim.moveShootSpots(st, u);
     if (view.mode === 'shoot' || view.mode === 'halfShot') list = fields(Sim.targets(st, u, view.mode === 'halfShot'));
     if (view.mode === 'rally') list = fields(Sim.rallyTargets(st, u));
-    if (view.mode === 'breach') list = Sim.breachSpots(st, u);
     // A charge into a field the Germans hold is a hand-to-hand fight: marked differently
     const marked = uniq(list).map(p => Object.assign(p, { kind: view.mode === 'charge' && Sim.at(st, p.x, p.y, 'de').length ? 'assault' : kind }));
     // Move & shoot: only the areas it could fire from are hatched (Steve)
@@ -94,7 +93,9 @@ const UI = (() => {
   function targets() {
     // Mortars or guns chosen: every German piece in a field they can be called on to, with the score their dice need
     if (view.mode && view.mode.startsWith('fire:')) {
-      const inReach = st.units.filter(t => t.side === 'de' && t.x !== null && Sim.canCallFire(st, t.x, t.y));
+      // (mortars have no anti-tank dice: no target on a tank, as nothing would be rolled)
+      const hurts = t => view.mode !== 'fire:mortars' || !Sim.isTank(t);
+      const inReach = st.units.filter(t => t.side === 'de' && t.x !== null && hurts(t) && Sim.canCallFire(st, t.x, t.y));
       return inReach.map(t => {
         t.needNow = Sim.shellNeed(st, t);
         t.needWhy = Sim.shellWhy(st, t);
@@ -204,7 +205,6 @@ const UI = (() => {
       else if (how === 'line' || (how === 'charge' && spot.kind === 'line')) r = Sim.actLine(st, u, side);
       else if (how === 'charge') r = Sim.actCharge(st, u, x, y, side);
       else if (how === 'moveShoot') r = Sim.actMoveShoot(st, u, x, y, side);
-      else if (view.mode === 'breach') r = Sim.actBreach(st, u, x, y);
       else if (view.mode === 'shoot') r = Sim.actShoot(st, u, pickTarget(u, x, y));
       else if (view.mode === 'halfShot') r = Sim.actHalfShot(st, u, pickTarget(u, x, y));
       else if (view.mode === 'rally') r = Sim.actRally(st, u, Sim.rallyTargets(st, u).find(t => t.x === x && t.y === y));
@@ -265,7 +265,7 @@ const UI = (() => {
   function openGunMenu(which, left, top, box) {
     const menu = document.querySelector('#menu');
     menu.innerHTML = '';
-    // Its state: ready, out of rounds, or already fired this hour
+    // Its state: ready, out of rounds, or already fired this round
     const state = canFire(which) ? '<span class="pill ready">Ready</span>' : st.ammo[which] <= 0 ? '<span class="pill bad">No rounds</span>' : '<span class="pill done">✓ Fired this round</span>';
     menu.append(el('div', 'mhead', `<b>${which === 'mortars' ? '💥 US mortars' : '💣 US artillery'}</b><span>${state}</span>`));
     // Skip turn: hold fire this round, using the token
@@ -413,7 +413,7 @@ const UI = (() => {
       if (Sim.captainCanRally(st, u)) b.push({ mode: 'rally', label: '📣 Rally', ok: true, title: 'Get a piece that took cover up and moving, or steady a shaken one (himself too), up to three fields away. Two rallies a round if he stays put or charges, one if he shoots or moves and shoots. Skip turn to stop before using them all' });
     } else {
       add('charge', '⚔️ Charge', Sim.chargeSpots(st, u).length > 0, 'Up to three fields, no shooting (climbing a hedge uses one more)');
-      // Machine guns can't move and fire: they Charge to a new spot, then Shoot next hour
+      // Machine guns can't move and fire: they Charge to a new spot, then Shoot next round
       if (u.kind !== 'mg' && u.kind !== 'mg42') add('moveShoot', '➡️ Move & shoot', Sim.moveShootSpots(st, u).length > 0, 'Up to two fields to where it can fire (the red-hatched fields), then fire needing one more on the dice');
       add('shoot', '🎯 Shoot', Sim.targets(st, u).length > 0, 'Fire with every die');
     }
@@ -451,7 +451,7 @@ const UI = (() => {
   function card() {
     const u = selected(), box = $('#card');
     box.innerHTML = '';
-    // A gun chosen: what it is, rounds left, whether it can fire this hour, and its Fire button
+    // A gun chosen: what it is, rounds left, whether it can fire this round, and its Fire button
     if (!u && view.support) {
       const which = view.support, S = which === 'mortars' ? MORTARS : ARTILLERY;
       picture(box, 'us', which);

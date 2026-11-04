@@ -7,7 +7,7 @@ Local repo `C:\DEV\Repositories\GitHub\hedgerow`, on GitHub as wizzard262/hedger
 - After each change to the game, save a numbered screenshot in `screenshots/` (`06-short-name.png`, …), taken in a visible browser, then add it to `screenshots/list.json`
   - Serve the game with `python -m http.server 8768` in this folder, then `node tools/shot.js <name> [hours to play]`. It borrows Playwright from `..\harrier-carrier-playwright-tests`
 - Run `node tools/test.js` before every commit (headless checks of the rules)
-- After a rules change, run `node tools/sweep.js ""` (150 games with a simple attacking bot): with no time limit the bot plays up to 20 hours: note its win rate and average hours; doing nothing must never win
+- After a rules change, run `node tools/sweep.js ""` (150 games with a simple attacking bot, token by token as the page plays; about 4 minutes): with no time limit it plays up to 20 rounds: note its win rate and average rounds; doing nothing must never win
 - Plain JavaScript, classic scripts loaded in order (no modules); three.js r128 from cdnjs
   - `js/data.js` the map and every number to tune; `js/sim.js` the rules (no DOM); `js/sound.js` the battle sounds (Web Audio, no files); `js/models.js` the 3D models; `js/labels.js` where the red score bubbles go (no DOM); `js/board3d.js` the table, camera and picking; `js/ui.js` the left-hand panel; `js/main.js` start-up, input and the German hour
 - The version number (`#ver` in `index.html`) goes up by 1 with every commit to the game: `git rev-list --count HEAD` + 1. Put the same number on every script link (`js/ui.js?v=2`)

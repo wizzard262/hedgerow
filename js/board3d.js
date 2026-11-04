@@ -1500,7 +1500,8 @@ const Board = (() => {
   function showDice(st, coming = rollsOf(st)) {
     // Add the rolls not seen before (each roll's faces are its own list)
     for (const r of coming) if (!rollSeen.has(r.faces)) { rollSeen.add(r.faces); rollLog.push(r); }
-    for (const d of dice) scene.remove(d);
+    diceShownAt = performance.now();
+    for (const d of dice) { scene.remove(d); freeObject(d); }
     dice = [];
     const rolls = rollLog;
     for (const side of ['us', 'de']) {
@@ -1582,9 +1583,17 @@ const Board = (() => {
     return out;
   }
 
+  // How long until the last dice have been on the table long enough to read (the next token waits for that)
+  const DICE_READ = 2500;
+  let diceShownAt = 0;
+  function diceLeft() {
+    if (diceDue !== null) return DICE_READ;
+    return dice.length ? Math.max(0, diceShownAt + DICE_READ - performance.now()) : 0;
+  }
+
   // The next piece is chosen (or a new game): the corners are empty again
   function clearDice(newGame = false) {
-    for (const d of dice) scene.remove(d);
+    for (const d of dice) { scene.remove(d); freeObject(d); }
     dice = [];
     rollLog = [];
     if (newGame) rollSeen = new Set();
@@ -1689,6 +1698,28 @@ const Board = (() => {
   // view: { spots: [{ x, y, kind }], selected: piece, hover: { x, y }, blast: [{ x, y, main }], deMove: { id | gun, what } }. dt: seconds since the last frame.
   // Returns true while pieces are still gliding, so the page keeps drawing
   let lastT = 0;
+  // Free what an object made for itself (geometry, materials), not what it shares: textures, sprites' common shape, the
+  // models' own materials
+  function freeObject(o) {
+    o.traverse(c => {
+      if (c.geometry && !c.isSprite) c.geometry.dispose();
+      for (const m of [].concat(c.material || [])) if (!Object.values(Models.M).includes(m) && m !== HIT_EDGE) m.dispose();
+    });
+  }
+
+  // A new game: nothing left over from the last one still flying, falling or waiting
+  function reset() {
+    for (const c of homing) scene.remove(c.mesh);
+    homing = []; homingDone = null;
+    clearTokenNow();
+    shots = [];
+    for (const id in held) delete held[id];
+    meleeUntil = 0;
+    diceDue = null; diceComing = [];
+    labelKey = ''; reticleNudges = new Map();
+    clearDice(true);
+  }
+
   function render(st, view = {}) {
     const now = performance.now(), dt = lastT ? Math.min(0.1, (now - lastT) / 1000) : 0.016;
     lastT = now;
@@ -1704,7 +1735,7 @@ const Board = (() => {
     }
     if (diceDue !== null && now >= diceDue) { diceDue = null; showDice(st, diceComing); diceComing = []; }
     updatePieces(st);
-    while (marks.children.length) marks.remove(marks.children[0]);
+    while (marks.children.length) { const o = marks.children[0]; marks.remove(o); freeObject(o); }
     if (view.hover) mark(view.hover.x, view.hover.y, 'hover', 0.02);
     for (const s of view.spots || []) mark(s.x, s.y, s.kind, 0.05, s);
     // Where a shot that hits several pieces would land (Steve): the target's field bright, the fields its blast reaches paler
@@ -1739,7 +1770,8 @@ const Board = (() => {
     const firing = playShots(now);
     const flying = moveCoin(now) | moveHoming(now);
     renderer.render(scene, camera);
-    if (firing || flying) return true;
+    // (dice still to come: keep drawing until they are on the table, or they only appear at the next redraw)
+    if (firing || flying || diceDue !== null) return true;
     // Targets pulse, so keep drawing while they show
     return moving || hopping || !!(view.targets && view.targets.length);
   }
@@ -1842,5 +1874,5 @@ const Board = (() => {
     return { x: r.left + (p.x + 1) / 2 * r.width, y: r.top + (1 - p.y) / 2 * r.height };
   }
 
-  return { labelReport: () => labelReport, init, resize, render, fieldAt, pieceAt, pieceUnder, portrait, bounce, bounceGun, busyFor, settledIn, gunAt, targetAt, screenPoint, pieceScreen, labelBox, clearDice, flyToken, clearToken, returnTokens, canvas: () => renderer.domElement };
+  return { reset, diceLeft, labelReport: () => labelReport, init, resize, render, fieldAt, pieceAt, pieceUnder, portrait, bounce, bounceGun, busyFor, settledIn, gunAt, targetAt, screenPoint, pieceScreen, labelBox, clearDice, flyToken, clearToken, returnTokens, canvas: () => renderer.domElement };
 })();

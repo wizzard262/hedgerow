@@ -131,7 +131,7 @@ const Sim = (() => {
   function makeUnit(def, side) {
     const kind = def.kind;
     // at: the hedge the piece lines (n, e, s or w), or null out in the open. Both sides start lining the hedge towards the enemy
-    const u = Object.assign({ side, shocked: false, hit: false, acted: false, attachedTo: null, at: side === 'us' ? 'e' : 'w' }, def);
+    const u = Object.assign({ side, shocked: false, acted: false, at: side === 'us' ? 'e' : 'w' }, def);
     if (kind === 'company') u.platoons = 3;
     // A team, the captain, a gun, or a tank (Steve: one tank to a unit, not a pair)
     else u.platoons = 1;
@@ -140,7 +140,6 @@ const Sim = (() => {
   }
 
   const unitById = (st, id) => st.units.find(u => u.id === id);
-  const alive = st => st.units.filter(u => u.x !== null);
   const at = (st, x, y, side) => st.units.filter(u => u.x === x && u.y === y && (!side || u.side === side));
   const isTank = u => !!PIECES[u.kind].tank;
   const isTeam = u => !!PIECES[u.kind].team;
@@ -149,16 +148,14 @@ const Sim = (() => {
   const smallTarget = u => !!u.kind && (PIECES[u.kind].men || 99) <= 2;
   const enemyOf = side => (side === 'us' ? 'de' : 'us');
   const adjacent = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y) === 1;
-  const teamsOf = (st, company) => st.units.filter(t => t.attachedTo === company.id && t.x !== null);
 
   // Is there room for a unit in a field? (Steve: the nine areas decide, see footprint.) Never with the enemy, except in
   // a hand-to-hand fight
   function roomFor(st, unit, x, y, leaving = []) {
-    const here = at(st, x, y).filter(u => !leaving.includes(u) && u !== unit && u.attachedTo !== unit.id);
+    const here = at(st, x, y).filter(u => !leaving.includes(u) && u !== unit);
     if (!here.length) return true;
     if (here.some(u => u.side !== unit.side)) return false;
-    const gone = leaving.concat(st.units.filter(u => u.attachedTo === unit.id));
-    return anchorsFor(unit).some(a => fitsAt(st, unit, x, y, a, gone));
+    return anchorsFor(unit).some(a => fitsAt(st, unit, x, y, a, leaving));
   }
 
 
@@ -192,7 +189,7 @@ const Sim = (() => {
   }
 
   // Each side starts spread at random over its own end of the board (DEPLOY of the width), in cover where it can be:
-  // a field with a hedge facing the enemy, an orchard or the village. Captains and attached teams start with their company
+  // a field with a hedge facing the enemy, an orchard or the village. Captains and teams start with a platoon
   function deploy(st, side) {
     const cols = Math.max(1, Math.round(COLS * DEPLOY));
     const xs = side === 'us' ? [...Array(cols).keys()] : [...Array(cols).keys()].map(i => COLS - 1 - i);
@@ -205,7 +202,7 @@ const Sim = (() => {
       const hedged = inside(f.x + front, f.y) && hedge(st, f.x, f.y, f.x + front, f.y);
       return (hedged ? 2 : 0) + (t === 'village' || t === 'hamlet' ? 2 : t === 'orchard' ? 1 : 0) + st.rand() * 2.5;
     };
-    const leaders = st.units.filter(u => u.side === side && !u.attachedTo);
+    const leaders = st.units.filter(u => u.side === side);
     // German posts round the objective; the garrison is already in them
     if (side === 'de') {
       const taken = [];
@@ -245,22 +242,6 @@ const Sim = (() => {
   const roundText = turn => `round ${turn}`;
 
   // ---------- Who commands whom ----------
-
-  // The group a piece is listed under: its rifle platoon, the tanks, or company HQ (the captain and the teams)
-  function groupOf(u) {
-    if (u.side !== 'us') return null;
-    if (u.kind === 'company') return u.id;
-    if (u.kind === 'captain') return 'bn';
-    if (isTank(u)) return 'T';
-    if (isTeam(u)) return 'bn';
-    return null;
-  }
-
-  const GROUP_NAMES = { T: 'Tanks', bn: 'Company HQ' };
-  function groupName(st, g) { return GROUP_NAMES[g] || (unitById(st, g) || {}).name || g; }
-
-  // The pieces in a group
-  function members(st, g) { return st.units.filter(u => u.side === 'us' && u.x !== null && groupOf(u) === g); }
 
   // A piece has used its move for the hour
   function spend(st, u) {
@@ -590,15 +571,12 @@ const Sim = (() => {
     return out;
   }
 
-  // A piece leaves the board. A company's attached teams carry on alone
+  // A piece leaves the board
   function remove(st, u) {
     u.x = null; u.y = null; u.shocked = false;
     // The last piece of a side gone: the game stops there and then, without finishing the round (Steve)
     wipedOut(st);
     if (u.kind === 'company') {
-      for (const t of st.units) {
-        if (t.attachedTo === u.id) t.attachedTo = null;
-      }
       return [`💀 ${u.name} destroyed`];
     }
     return [];
@@ -701,6 +679,8 @@ const Sim = (() => {
   }
 
   // `blast` is set for the other pieces caught in a tank's high-explosive burst (they don't spread it again)
+  const weaponOf = u => (isTank(u) || u.kind === 'pak' ? 'gun' : u.kind === 'mg' || u.kind === 'mg42' ? 'mg' : u.kind === 'bazooka' || u.kind === 'schreck' ? 'rocket' : 'rifle');
+
   function fireAt(st, shooter, target, power, withdraw = false, moving = false, blast = false) {
     const f = firepower(st, shooter);
     // A German piece fired on takes cover when it is wise to (Steve), as you can
@@ -708,6 +688,11 @@ const Sim = (() => {
     // Taking cover happens before the dice roll: its men are already down (and two more are needed)
     const pre = withdraw ? takeCover(st, target) : null;
     const need = needFor(st, shooter, target, moving);
+    // Taking cover has put the score past what can be shot at (Steve: 7 or more, no shot): no dice, nothing can hit
+    if (pre && need + armourOf(target) > MAX_NEED) {
+      st.fx.push({ from: { id: shooter.id, x: shooter.x, y: shooter.y }, to: { id: target.id }, weapon: weaponOf(shooter), armour: isTank(target), x: target.x, y: target.y, kind: 'miss', faces: [], need: MAX_NEED, side: shooter.side, result: 'Too well covered', tookCover: true });
+      return [pre.line, `${shooter.name} has no shot at it now`];
+    }
     const faces = [];
     let softHits, hardHits;
     if (isTank(target)) {
@@ -730,8 +715,7 @@ const Sim = (() => {
       : lost ? (isTank(target) ? `Tank knocked out` : lost > 1 ? `${lost} sections lost` : 'Section lost')
       : target.shocked && !before.shocked ? 'Shaken' : softHits + hardHits ? 'No effect' : 'Missed';
     // What the table shows: the weapon's muzzle flash and tracers from the shooter, and what lands on the target
-    const weapon = isTank(shooter) || shooter.kind === 'pak' ? 'gun' : shooter.kind === 'mg' || shooter.kind === 'mg42' ? 'mg' : shooter.kind === 'bazooka' || shooter.kind === 'schreck' ? 'rocket' : 'rifle';
-    st.fx.push({ from: { id: shooter.id, x: shooter.x, y: shooter.y }, to: { id: target.id }, weapon, armour: isTank(target), x: target.x === null ? stood.x : target.x, y: target.x === null ? stood.y : target.y, kind: softHits + hardHits ? 'hit' : 'miss', faces, need: Math.min(6, need + armourOf(target)), side: shooter.side, result, tookCover: !!pre });
+    st.fx.push({ from: { id: shooter.id, x: shooter.x, y: shooter.y }, to: { id: target.id }, weapon: weaponOf(shooter), armour: isTank(target), x: target.x === null ? stood.x : target.x, y: target.x === null ? stood.y : target.y, kind: softHits + hardHits ? 'hit' : 'miss', faces, need: Math.min(6, need + armourOf(target)), side: shooter.side, result, tookCover: !!pre });
     // A tank firing high explosive at men hits the whole field, like a mortar: every other piece on foot in it rolls too
     if (isTank(shooter) && !isTank(target) && !blast) {
       for (const other of at(st, stood.x, stood.y, target.side)) {
@@ -803,7 +787,7 @@ const Sim = (() => {
     return roomFor(st, u, x, y, leaving);
   }
 
-  // Move a piece, and the teams attached to it. A tank with hedge cutters going through a hedge leaves a gap.
+  // Move a piece. A tank with hedge cutters going through a hedge leaves a gap.
   // Returns what happened to the hedge: 'cut' (driven through), 'climbed' (men clambered over) or ''
   function step(st, u, x, y, assault = false) {
     let how = '';
@@ -812,12 +796,10 @@ const Sim = (() => {
     if (hedge(st, u.x, u.y, x, y)) {
       if (cutter(u)) { delete st.hedges[edgeKey(u.x, u.y, x, y)]; how = 'cut'; } else how = 'climbed';
     }
-    const teams = u.kind === 'company' ? teamsOf(st, u) : [];
     const heading = dirTo(u, { x, y });
     u.x = x; u.y = y; u.at = freePlace(st, u, x, y, heading);
     // The way it is facing, for the table (tanks turn to fire, and turn again when they move)
     u.aim = { e: 0, n: Math.PI / 2, w: Math.PI, s: -Math.PI / 2 }[heading];
-    for (const t of teams) { t.x = x; t.y = y; t.at = freePlace(st, t, x, y, heading); }
     // A tank stops facing the nearest enemy it can see (Steve)
     if (isTank(u)) faceEnemy(st, u);
     return how;
@@ -838,16 +820,6 @@ const Sim = (() => {
     const closest = seen.filter(e => Math.abs(far(e) - nearest) < 0.01);
     const e = closest[Math.floor(st.rand() * closest.length)];
     u.aim = Math.atan2(-(e.y - u.y), e.x - u.x);
-  }
-
-  // Fields a piece could move into (plain move or move and shoot)
-  function moves(st, u) {
-    const out = [];
-    for (const [dx, dy] of NEIGHBOURS) {
-      const x = u.x + dx, y = u.y + dy;
-      if (canStep(st, u, x, y)) out.push({ x, y });
-    }
-    return out;
   }
 
   // ---------- Close assault ----------
@@ -1017,7 +989,7 @@ const Sim = (() => {
     return { ok: true, lines: [`🔫 ${u.name} fires on ${target.name}: ` + fireAt(st, u, target, 1).join(', ') + '.'] };
   }
 
-  // The routes Move & shoot can take: up to MOVE_SHOOT_MOVES moves, ending only where the piece will have someone to
+  // The routes Move & shoot can take: up to MOVE_SHOOT_MOVES ending only where the piece will have someone to
   // shoot (Steve). Captains don't shoot, and machine guns can't fire on the move (Steve): they set up, then shoot
   function moveShootRoutes(st, u) {
     if (u.kind === 'mg' || u.kind === 'mg42' || PIECES[u.kind].fixed || !mayFire(u)) return [];
@@ -1088,15 +1060,6 @@ const Sim = (() => {
     return `➡️ ${u.name} moves up.`;
   }
 
-  // Captains and teams just move. A team that walks away from its company leaves it
-  function actMove(st, u, x, y) {
-    if (!canAct(st, u) || !canStep(st, u, x, y)) return { ok: false };
-    spend(st, u);
-    const how = step(st, u, x, y);
-    if (isTeam(u) && u.attachedTo) u.attachedTo = null;
-    return { ok: true, lines: [moveLine(u, how)] };
-  }
-
   // Only rifle platoons charge into hand to hand (Steve: tanks can't fight hand to hand)
   const fightsHandToHand = u => u.kind === 'company';
 
@@ -1110,7 +1073,7 @@ const Sim = (() => {
     return hedge(st, fx, fy, x, y) ? 1 + CLIMB : 1;
   }
 
-  // Every field a piece can reach with `budget` moves, each with the cheapest way there: a list of the fields it passes
+  // Every field a piece can reach with `budget` each with the cheapest way there: a list of the fields it passes
   // through, the last one its goal. It can pass through a field of friends (Steve) but not stop there, can end in a
   // village or hamlet but not go on through one (no charging through houses), and when charging, a field the enemy holds
   // ends the route in a hand-to-hand fight (rifle platoons and tanks only, and not against tanks alone unless it can hurt them)
@@ -1156,7 +1119,7 @@ const Sim = (() => {
     return Object.values(routeTo);
   }
 
-  // A charge: up to CHARGE_MOVES moves, without shooting, ending in a hand-to-hand fight if it reaches the enemy.
+  // A charge: up to CHARGE_MOVES without shooting, ending in a hand-to-hand fight if it reaches the enemy.
   // Every piece but a dug-in gun can charge; captains and teams only into empty fields. A shaken piece charges half as
   // far (Steve)
   function chargeRoutes(st, u) {
@@ -1197,7 +1160,6 @@ const Sim = (() => {
   function setTrail(st, u, route) {
     const trail = route.slice(0, -1).map(p => ({ x: p.x, y: p.y }));
     u.trail = trail;
-    for (const t of u.kind === 'company' ? teamsOf(st, u) : []) t.trail = trail;
   }
 
   // Where in its field a piece stands after a move (Steve: where the click was, if no other piece is there); its teams
@@ -1205,7 +1167,6 @@ const Sim = (() => {
   function standAt(st, u, side) {
     if (side === undefined) return;
     u.at = freePlace(st, u, u.x, u.y, side);
-    for (const t of u.kind === 'company' ? teamsOf(st, u) : []) t.at = freePlace(st, t, t.x, t.y, u.at);
     // Where it stands decides what it can see past the hedges: a tank faces the nearest enemy from there (Steve)
     if (isTank(u)) faceEnemy(st, u);
   }
@@ -1226,28 +1187,8 @@ const Sim = (() => {
     // Beaten back into a field of friends it passed through: it can't stay there, so it ends back where it started
     if (route.some(p => p.pass && p.x === u.x && p.y === u.y)) {
       u.x = home.x; u.y = home.y; u.at = home.at;
-      for (const t of u.kind === 'company' ? teamsOf(st, u) : []) { t.x = home.x; t.y = home.y; t.at = home.at; }
     }
     return { ok: true, lines: [lines.join(', ') + '.'] };
-  }
-
-  // Breaking through a hedge (or cutting barbed wire): any piece without hedge cutters can push through into the next
-  // (empty) field, leaving a gap. It is its move for the hour, with no shooting. Tanks with cutters just drive through
-  function breachSpots(st, u) {
-    if (PIECES[u.kind].fixed || cutter(u)) return [];
-    return NEIGHBOURS.map(([dx, dy]) => ({ x: u.x + dx, y: u.y + dy })).filter(p => inside(p.x, p.y) && tileType(p.x, p.y) !== 'river'
-      && hedge(st, u.x, u.y, p.x, p.y) && !wire(st, u.x, u.y, p.x, p.y) && roomFor(st, u, p.x, p.y));
-  }
-
-  function actBreach(st, u, x, y) {
-    if (!canAct(st, u) || !breachSpots(st, u).some(p => p.x === x && p.y === y)) return { ok: false };
-    spend(st, u);
-    const key = edgeKey(u.x, u.y, x, y), wasWire = !st.hedges[key];
-    delete st.hedges[key]; delete st.wire[key];
-    st.fx.push({ x: u.x, y: u.y, kind: 'miss' });
-    step(st, u, x, y);
-    if (isTeam(u) && u.attachedTo && !(unitById(st, u.attachedTo).x === x && unitById(st, u.attachedTo).y === y)) u.attachedTo = null;
-    return { ok: true, lines: [wasWire ? `✂️ ${u.name} cuts through the wire and pushes on.` : `⛏️ ${u.name} breaks through the hedge into the next field.`] };
   }
 
   // The other places in its own field a piece could move to (not where it is; where it fits among the others)
@@ -1302,14 +1243,16 @@ const Sim = (() => {
 
   function actRally(st, cap, target) {
     if (!canRally(st, cap) || !rallyTargets(st, cap).includes(target)) return { ok: false };
-    // A rally isn't his move: it counts against his rallies for the hour (and with the bag, it is his token's piece)
+    // A rally isn't his move: it counts against his rallies for the round (and with the bag, it is his token's piece)
     cap.rallied = (cap.rallied || 0) + 1;
     if (st.tokens) { st.activeId = cap.id; activated(st, { side: cap.side, id: cap.id }); }
     const lines = [];
-    // Down in cover: he gets them up and moving, so they can act this hour after all (Steve)
+    // Down in cover: he gets them up and moving, so they can act this round after all (Steve)
     if (target.down && target.acted) {
       target.down = false;
       target.acted = false;
+      // It can act again, so its token goes back in the bag if taking cover took it out
+      if (st.tokens && st.bag) st.bag[target.side] = Math.min(st.bag[target.side] + 1, movable(st, target.side));
       lines.push(`📣 ${cap.name} gets ${target.name} up and moving.`);
       if (!target.shocked) st.fx.push({ kind: 'rally', x: target.x, y: target.y, to: { id: target.id }, result: 'Up and moving', ok: true });
     }
@@ -1450,14 +1393,13 @@ const Sim = (() => {
     if (t) { deSays(st, `Fires on ${t.name}`); return { shooter: u.id, target: t.id }; }
     // Americans just across a hedge it isn't lining: go to that hedge
     const across = st.units.find(o => o.side === 'us' && o.x !== null && acrossHedge(st, u, o) && !atHedge(u, o));
-    if (across && !PIECES[u.kind].fixed && !(isTeam(u) && u.attachedTo)) {
+    if (across && !PIECES[u.kind].fixed) {
       deSays(st, `Lines the hedge facing ${across.name}`);
       u.at = freePlace(st, u, u.x, u.y, dirTo(u, across));
-      for (const tm of u.kind === 'company' ? teamsOf(st, u) : []) tm.at = freePlace(st, tm, tm.x, tm.y, u.at);
       return null;
     }
     // On the way to its post: march there and dig in
-    if (u.post && !u.reserve && (u.x !== u.post.x || u.y !== u.post.y) && !(isTeam(u) && u.attachedTo)) {
+    if (u.post && !u.reserve && (u.x !== u.post.x || u.y !== u.post.y)) {
       const route = routeToward(st, u, u.post);
       if (route) { deSays(st, 'Marches to its post'); germanMove(st, u, route); }
       return null;
@@ -1520,14 +1462,18 @@ const Sim = (() => {
     }
     if (shot.mortar) {
       st.deMortarAmmo--;
-      const fx = { x: t.x, y: t.y, kind: 'shell', support: 'mortars' };
+      // (who it is at: the table keeps that piece on show until the bomb lands, Steve)
+      const fx = { x: t.x, y: t.y, kind: 'shell', support: 'mortars', to: { id: t.id } };
       // Taking cover from the mortar: its men get down before the bombs land
       const pre = withdraw ? takeCover(st, t) : null;
       const need = shellNeed(st, t);
       const faces = [];
       const hits = roll(st, DE_MORTAR.dice, need, faces);
       fx.faces = faces; fx.need = need; fx.side = 'de'; fx.tookCover = !!pre;
+      const before = t.platoons, wasShaken = t.shocked;
       const lines = (pre ? [pre.line] : []).concat(damage(st, t, hits, 0));
+      const lost = before - (t.x === null ? 0 : t.platoons);
+      fx.result = t.x === null ? 'Wiped out' : lost ? 'Section lost' : t.shocked && !wasShaken ? 'Shaken' : hits ? 'No effect' : 'Missed';
       st.fx.push(fx);
       st.de.rep.push(`🔺 German mortars on ${t.name}: ${lines.length ? lines.join(', ') : 'no hits'}.`);
       return;
@@ -1849,23 +1795,23 @@ const Sim = (() => {
   // A new hour (shaken stays: only a rally clears it, Steve): a fresh move for every piece (except those that took cover), fire support (no more ammo: it never comes back, Steve) and reinforcements
   function newTurn(st, rep) {
     st.turn++;
+    // Both sides alike (a German who took cover used to stay down for the rest of the game)
     for (const u of st.units) {
-      if (u.side !== 'us' || u.x === null) continue;
+      if (u.x === null) continue;
       const missed = !!u.spentNext;
       u.acted = missed; u.spentNext = false; u.rallied = 0; u.fired = false; u.skipped = false;
       // Down in cover: it stays down through the hour it misses, then gets up
       if (!missed) u.down = false;
     }
-    for (const u of st.units) if (u.side === 'de') u.acted = false;
     st.fired = {};
     reinforcements(st, rep);
   }
 
   return {
-    newGame, endTurn, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, moves, chargeSpots,
-    rallyTargets, canAct, groupOf, groupName, members, canReact, firepower, teamsOf, canCallFire, holdsObjective, roundText, roomFor,
+    newGame, endTurn, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, chargeSpots,
+    rallyTargets, canAct, canReact, firepower, canCallFire, holdsObjective, roundText, roomFor,
     startGermanHour, germanStep, answer, finishHour, startRound, drawToken, endGermanToken, activationOver, passToken, usCanMove, endRound, canFire, actSkip, actSkipShot, skipSupport,
-    smallTarget, menDice, armourOf, mayFire, shootCells, tokensHome, captainCanRally, fireAt, actShoot, actMoveShoot, moveShootSpots, chargeRoutes, DIRS, needWhy, shellNeed, shellWhy, shellFields, canRally, needFor, canSelfRally, actSelfRally, actHalfShot, actMove, actCharge, actRally, actFire, actBreach, breachSpots, sight, isSmall, cover, wire, lineSides, actLine, atHedge, acrossHedge, SIDE_NAMES, PLACES, placeXY, placeName, lines, sizeOf, footprint, spotXY, occupant, fitsAt, freePlace,
+    smallTarget, menDice, armourOf, mayFire, shootCells, tokensHome, captainCanRally, fireAt, actShoot, actMoveShoot, moveShootSpots, chargeRoutes, DIRS, needWhy, shellNeed, shellWhy, shellFields, canRally, needFor, canSelfRally, actSelfRally, actHalfShot, actCharge, actRally, actFire, sight, isSmall, cover, wire, lineSides, actLine, atHedge, acrossHedge, SIDE_NAMES, PLACES, placeXY, placeName, lines, sizeOf, footprint, spotXY, occupant, fitsAt, freePlace,
     hasCutters: u => cutter(u),
   };
 })();
