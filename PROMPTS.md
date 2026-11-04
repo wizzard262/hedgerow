@@ -1087,6 +1087,21 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - (Assumed: a hit on a piece already shaken also stops it; shaken in a field of friends it can only pass through, it stops at the next field it can, as for a wire snag; a stopped charge gets no fight; a piece it can't hurt doesn't set it off, nor a shot needing 7 or more, and it keeps waiting; driven out by a tank it stops waiting; the captain gives up his rallies, as when he skips; the Germans lie in wait when they have no shot and nowhere to go; Ambush is in the pop-up menu only, as the panel has no room for a fifth button)
 - Balance: the test player, which never uses ambush itself, wins 32% in about 11.2 rounds; doing nothing wins 0%
 
+## 192. Could the player be the Germans, or two players? (question, nothing built)
+
+- Steve asked how much work it would be, hoping both sides work the same, then asked for it to go on the to-do list
+- Found: shooting, moving, cover, hand to hand and ambush are shared. The player's moves only work for the Americans, the Germans run on separate computer logic, and a player's shot fires at once while only the German computer's shots stop to ask the target
+- Found as well: mortars (US 4 dice on the whole field, 6 rounds; German 3 dice on one piece, 8 rounds), artillery rounds (3 v 2), Bazooka v Panzerschreck (2 v 2.5), no Move & shoot for the German computer, and the Germans win only by wiping out the company
+- Estimate: two players on one screen about 2–3 h; playing the Germans about 2–3 h more; online about 3–5 h more, with a small relay service
+
+## 193. The rules as tables (no change)
+
+- Steve: list the basic rules in tables. Given in the chat from js/data.js and How to play
+
+## 194. How to play catches up (v109)
+
+- Steve: do these two apply: the bomber's token in the bag, and the PaK killing men outright? Yes, both were already in the rules; How to play now says so. No change to the rules
+
 ## Sessions
 
 | # | Date | Length | What we did |
