@@ -202,7 +202,9 @@ check('dice: every face is 1 to 6 and hits are the ones at or over the score nee
       Sim.endTurn(st);
       for (const f of st.fx) for (const r of f.faces || []) {
         assert(r.face >= 1 && r.face <= 6, `face ${r.face}`);
-        assert(r.hit === (r.face >= f.need), `face ${r.face} needing ${f.need} marked ${r.hit ? 'hit' : 'miss'}`);
+        // (a Hail Mary: only a 6 thrown after a first 6 hits)
+        if (f.need > MAX_NEED) assert(!r.hit || r.face === 6, `a Hail Mary die ${r.face} marked as a hit`);
+        else assert(r.hit === (r.face >= f.need), `face ${r.face} needing ${f.need} marked ${r.hit ? 'hit' : 'miss'}`);
       }
     }
   }
@@ -649,7 +651,7 @@ check('a piece the captain gets up has its token back, so nobody else loses thei
   assert(st.bag.us === 3, `the bag holds ${st.bag.us} tokens, not 3`);
 });
 
-check('taking cover that puts the score past 6 stops the shot: no dice, nothing lost', () => {
+check('a target ducking after the shot is committed makes it a Hail Mary: the shot still happens', () => {
   const st = Sim.newGame(4);
   st.hedges = {}; st.wire = {};
   const A = Sim.unitById(st, 'A'), mg = st.units.find(u => u.side === 'de' && u.kind === 'mg42');
@@ -660,13 +662,14 @@ check('taking cover that puts the score past 6 stops the shot: no dice, nothing 
   st.hedges['2,5|3,5'] = true;
   const need = Sim.needFor(st, mg, A);
   assert(need === 5, `the shot needs ${need}, not 5`);
-  st.rand = () => 0.999;
+  // No 6s: nothing happens to it
+  st.rand = () => 0.5;
   const before = A.platoons;
   st.fx = [];
   Sim.fireAt(st, mg, A, 1, true);
   assert(A.down, 'it did not take cover');
-  assert(A.platoons === before && !A.shocked, 'it was hurt by a shot at 7');
-  assert(st.fx[0].faces.length === 0, 'dice were rolled for a shot at 7');
+  assert(st.fx[0].need === 7 && st.fx[0].faces.length === 5, `the shot did not roll at 7: ${st.fx[0].need}, ${st.fx[0].faces.length} dice`);
+  assert(A.platoons === before && !A.shocked, 'it was hurt without a 6 then a 6');
   // Standing fast, the same shot rolls
   const st2 = Sim.newGame(4);
   st2.hedges = { '2,5|3,5': true }; st2.wire = {};
@@ -960,20 +963,47 @@ check('artillery can hit your own pieces round the target', () => {
   assert(st.fx.filter(f => f.kind === 'shell').every(f => f.side === 'us'), 'a shell from our artillery came from the German guns');
 });
 
-check('a shot that would need 7 or more cannot be taken', () => {
+check('a shot that would need 7 or more is a Hail Mary: it can be taken, and needs a 6 then a 6', () => {
   const st = Sim.newGame(3);
   st.hedges = {}; st.wire = {};
   const B = Sim.unitById(st, 'B'), de = st.units.find(u => u.side === 'de' && u.kind === 'company');
   for (const u of st.units) if (u !== B && u !== de) u.x = u.y = null;
   // A German in the orchard three fields off (cover and long range), the shooter shaken: 3 + 1 + 1 + 1 = 6
   B.x = 6; B.y = 0; B.at = null; B.quality = 'standard'; B.shocked = true;
-  // (at the orchard's west edge, so it can be seen: trees block the view of anyone in the middle)
   de.x = 9; de.y = 0; de.at = 'w';
   assert(Sim.tileType(9, 0) === 'orchard', 'the test needs an orchard at 9,0');
-  assert(Sim.targets(st, B).includes(de), 'a 6+ shot was refused');
-  // A small target (two men or fewer) makes it 7: no shot
+  assert(Sim.targets(st, B).includes(de) && Sim.needFor(st, B, de) === 6, 'a 6+ shot was refused');
+  // A small target (two men or fewer) makes it 7: still a target
   de.kind = 'schreck';
-  assert(!Sim.targets(st, B).includes(de), 'a 7+ shot was allowed');
+  assert(Sim.targets(st, B).includes(de) && Sim.needFor(st, B, de) === 7, 'a 7+ shot was refused');
+  // A 6, then a 6, about one die in 36; a plain 6+ one in 6
+  const count = need => {
+    const s = Sim.newGame(1);
+    let hits = 0;
+    for (let k = 0; k < 40000; k++) hits += Sim.roll(s, 1, need, []);
+    return hits / 40000;
+  };
+  const six = count(6), hail = count(7), eight = count(8);
+  assert(Math.abs(six - 1 / 6) < 0.01, `6+ hit ${six}`);
+  assert(Math.abs(hail - 1 / 36) < 0.005 && Math.abs(eight - 1 / 36) < 0.005, `Hail Marys hit ${hail} and ${eight}`);
+  // The dice show both throws
+  const s2 = Sim.newGame(2), faces = [];
+  s2.rand = () => 0.999;
+  assert(Sim.roll(s2, 1, 7, faces) === 1 && faces.length === 2 && faces[0].lead && !faces[0].hit && faces[1].hit, 'a Hail Mary did not show a 6 then a 6');
+});
+
+check('the Germans take a Hail Mary only when they have nothing better to do', () => {
+  const st = Sim.newGame(3);
+  st.hedges = {}; st.wire = {};
+  const mg = st.units.find(u => u.side === 'de' && u.kind === 'mg42'), A = Sim.unitById(st, 'A');
+  for (const u of st.units) if (u !== mg && u !== A) u.x = u.y = null;
+  // A piece in a village, taking cover: 3 + 2 + 2 = 7. The MG has no post, and nothing else to do
+  mg.post = null; mg.reserve = false; mg.x = 5; mg.y = 4; mg.at = null;
+  A.x = 7; A.y = 4; A.at = 'w'; A.down = true; A.acted = true;
+  Sim.startGermanHour(st);
+  st.de.queue = [mg.id]; st.de.mortar = false; st.de.artillery = false;
+  const r = Sim.germanStep(st);
+  assert(A.x === null || st.fx.some(f => f.need > MAX_NEED), `the MG did not fire its Hail Mary: ${JSON.stringify(r)}`);
 });
 
 check('ranges: rifles 4, machine guns and tanks 6; the sniper the whole board, ignoring cover and range', () => {

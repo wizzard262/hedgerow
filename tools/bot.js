@@ -10,7 +10,8 @@ const toGoal = (st, p) => Math.abs(p.x - st.objective.x) + Math.abs(p.y - st.obj
 // One piece's go: true if it did something
 function actPiece(st, u) {
   if (!Sim.canAct(st, u)) return false;
-  const ts = Sim.mayFire(u) ? Sim.targets(st, u) : [];
+  // (proper shots only: no Hail Marys while it can move up instead)
+  const ts = Sim.mayFire(u) ? Sim.targets(st, u).filter(t => Sim.shotNeed(st, u, t) <= MAX_NEED) : [];
   const weak = Sim.chargeSpots(st, u).find(p => Sim.at(st, p.x, p.y, 'de').some(g => g.shocked) && u.kind === 'company' && u.platoons >= 2);
   if (weak) return Sim.actCharge(st, u, weak.x, weak.y).ok;
   if (ts.length) return Sim.actShoot(st, u, ts[0]).ok;
@@ -29,7 +30,7 @@ function actPiece(st, u) {
   const m = Sim.moveShootSpots(st, u).sort((a, b) => toGoal(st, a) - toGoal(st, b))[0];
   if (m && closer(m)) {
     if (!Sim.actMoveShoot(st, u, m.x, m.y).ok) return false;
-    const t = Sim.targets(st, u, true)[0];
+    const t = Sim.targets(st, u, true).sort((a, b) => Sim.shotNeed(st, u, a, true) - Sim.shotNeed(st, u, b, true))[0];
     if (t) Sim.actHalfShot(st, u, t);
     return true;
   }

@@ -39,14 +39,14 @@ const START_DATE = 'Tue 11 July 1944';
 const TAKE_COVER = 2;            // added to the score needed against a piece that has taken cover, from every weapon (Steve: +2)
 
 // Shooting: each point of firepower rolls one six-sided die, which hits on TO_HIT or more.
-// Cover adds to the score needed, elite troops take one off; a shot needing more than MAX_NEED can't be taken
+// Cover adds to the score needed, elite troops take one off; a shot needing more than MAX_NEED is a Hail Mary
 const TO_HIT = 3;                // a die needs this or more to hit, before cover, range and moving (Steve: 3+)
 const MOVE_SHOOT_MOVES = 2;      // fields a Move & shoot can cover (Steve: one more than before)
 const CHARGE_MOVES = 3;          // fields a charge can cover
 const CLIMB = 1;                 // extra moves it costs men to climb a hedge bank (tanks drive through; wire stops men)
 const SHAKEN_SHOOT = 1;          // a shaken piece needs one more to hit
 const SHAKEN_MOVE = 0.5;         // a shaken piece still moves and charges, but only half as far (rounded down, at least one field)
-const MAX_NEED = 6;              // a shot that would need more than this can't be taken (Steve: no shooting at 7+)
+const MAX_NEED = 6;              // past this a shot is a Hail Mary (Steve): throw a 6, then throw another 6 to hit, about 3%
 const WOUND_CHANCE = 0.5;        // each hit is a coin toss: heads it wounds (a section, a team or a tank lost); every hit shakes
 const QUALITY = { elite: { name: 'Elite', shoot: 1, assault: 1.3 }, standard: { name: 'Standard', shoot: 0, assault: 1 } };
 const SIGHT_RANGE = 99;          // how far any piece sees (Steve: the whole board; hedges, villages and orchards block the view). Shooting: RANGES

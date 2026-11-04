@@ -112,7 +112,7 @@ const UI = (() => {
     if (!['shoot', 'halfShot'].includes(view.mode) && !shootFromHere) return [];
     const moving = view.mode === 'halfShot';
     return Sim.targets(st, u, moving).map(t => {
-      t.needNow = Math.min(6, Sim.needFor(st, u, t, moving) + Sim.armourOf(t));
+      t.needNow = Sim.needFor(st, u, t, moving) + Sim.armourOf(t);
       t.needWhy = Sim.needWhy(st, u, t, moving);
       return t;
     });

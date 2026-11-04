@@ -852,7 +852,12 @@ const Board = (() => {
       // (no tail of its own, Steve: the long arrow to the target comes out from behind the bubble)
       const tail = 0, row = 36, big = 64, boxH = big + why.length * row + (why.length ? 10 : 0);
       const widest = Math.max(0, ...why.map(w => g.measureText(w).width));
-      c.width = Math.max(128, Math.ceil(widest) + 36); c.height = boxH + tail + 8;
+      // Past 6: a Hail Mary (Steve), in words instead of a score
+      const hailMary = n > MAX_NEED, scoreText = hailMary ? 'HAIL MARY' : n + '+', scoreFont = hailMary ? 'bold 36px Georgia, serif' : 'bold 48px Georgia, serif';
+      g.font = scoreFont;
+      const scoreWide = g.measureText(scoreText).width;
+      g.font = 'bold 30px Georgia, serif';
+      c.width = Math.max(128, Math.ceil(Math.max(widest, scoreWide)) + 36); c.height = boxH + tail + 8;
       const top = tailDown ? 4 : tail + 4, mid = c.width / 2;
       // The bubble and its tail in one shape, with a pale outline
       g.beginPath();
@@ -866,8 +871,8 @@ const Board = (() => {
       // A line under them, then the score in big figures
       const scoreY = top + (why.length ? 10 + why.length * row : 0) + big / 2;
       if (why.length) { g.fillStyle = 'rgba(255,230,200,.6)'; g.fillRect(16, scoreY - big / 2 - 2, c.width - 32, 2); }
-      g.fillStyle = '#fff4e8'; g.font = 'bold 48px Georgia, serif';
-      g.fillText(n >= 6 ? '6' : n + '+', mid, scoreY);
+      g.fillStyle = '#fff4e8'; g.font = scoreFont;
+      g.fillText(scoreText, mid, scoreY);
       labelTex[key] = { map: new T.CanvasTexture(c), w: c.width, h: c.height };
     }
     const t = labelTex[key];
@@ -1376,7 +1381,7 @@ const Board = (() => {
         f.faces.slice(0, n).forEach((r, k) => {
           const wt = lt - k * 0.14;
           if (wt < 0 || wt > 1.1) return;
-          const w = add(word(r.hit ? 'Hit!' : 'Miss', r.hit ? '#ffcf6a' : '#cfcac0', false));
+          const w = add(word(r.hit ? 'Hit!' : r.lead ? '6! Again' : 'Miss', r.hit || r.lead ? '#ffcf6a' : '#cfcac0', false));
           w.material.opacity = Math.min(1, 2.5 * (1.1 - wt));
           w.position.set(to.x + ((k % 3) - 1) * 0.3, 0.38 + wt * 0.4 + Math.floor(k / 3) * 0.12, to.z);
         });
@@ -1518,7 +1523,8 @@ const Board = (() => {
           const die = Models.die(d.face); die.scale.setScalar(DIE_SIZE);
           at(die, x, 0, dz, 0, (i * 1.7) % 0.4 - 0.2, 0);
           // Misses dimmed; hits on a yellow glow (Steve)
-          if (!d.hit) die.traverse(c => { if (c.isMesh && c.material === Models.M.die) { c.material = c.material.clone(); c.material.color.multiplyScalar(0.35); } });
+          // (a Hail Mary's first 6 stays bright: it has earned its second throw)
+          if (!d.hit && !d.lead) die.traverse(c => { if (c.isMesh && c.material === Models.M.die) { c.material = c.material.clone(); c.material.color.multiplyScalar(0.35); } });
           scene.add(die); dice.push(die);
           if (d.hit) {
             const glow = hitGlow(); at(glow, x, 0.002, dz, -Math.PI / 2, 0, 0); scene.add(glow); dice.push(glow);
@@ -1603,7 +1609,7 @@ const Board = (() => {
   function shotTagText(st, f) {
     const shooter = f.from ? st.units.find(u => u.id === f.from.id) : null;
     const who = shooter ? shooter.name : `${f.side === 'de' ? 'German' : 'Our'} ${f.support === 'artillery' ? 'artillery' : 'mortars'}`;
-    const need = f.need >= 6 ? 'needs 6' : `needs ${f.need}+`;
+    const need = f.need > MAX_NEED ? 'HAIL MARY: 6, then 6' : `needs ${f.need}+`;
     const hits = f.faces.filter(r => r.hit).length;
     // Taking cover (Steve: the tag says so; its +2 is in the score needed)
     const target = f.to && st.units.find(u => u.id === f.to.id);

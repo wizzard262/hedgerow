@@ -510,13 +510,20 @@ const Sim = (() => {
   // Whole dice from a firepower: the fraction is a chance of one more
   const dice = (st, f) => Math.floor(f) + (st.rand() < f - Math.floor(f) ? 1 : 0);
 
-  // Roll n six-sided dice needing `need` or more (shots needing 7+ aren't allowed, see targets). The faces go into `faces` for the dice on the table
+  // Roll n six-sided dice needing `need` or more. Past MAX_NEED it is a Hail Mary (Steve): a die that throws a 6 throws
+  // again, and only a second 6 hits (lead: the first 6; the second die follows it). The faces go into `faces` for the dice on the table
   function roll(st, n, need, faces = []) {
     let hits = 0;
-    const score = Math.min(6, need);
+    const hailMary = need > MAX_NEED;
     for (let i = 0; i < n; i++) {
       const face = 1 + Math.floor(st.rand() * 6);
-      const hit = face >= score;
+      if (hailMary && face === 6) {
+        const again = 1 + Math.floor(st.rand() * 6);
+        faces.push({ face, hit: false, lead: true }, { face: again, hit: again === 6 });
+        if (again === 6) hits++;
+        continue;
+      }
+      const hit = !hailMary && face >= need;
       faces.push({ face, hit });
       if (hit) hits++;
     }
@@ -611,7 +618,7 @@ const Sim = (() => {
     // The covers one by one: the hedge it lines, a tank in a field in between, the field it stands in, its own tank beside it
     if (s && s.hedge) why.push(`+${COVER.hedge} hedge`);
     if (s && s.tankCorner) why.push(`+${COVER.tankCorner} tank's corner`);
-    if (s && s.placeCorner) why.push(`+${COVER.placeCorner} corner`);
+    if (s && s.placeCorner) why.push(`+${COVER.placeCorner} cover`);
     why.push(...placeWhy(st, target, shooter));
     if (target.down) why.push(`+${TAKE_COVER} take cover`);
     // Two men or fewer (Steve)
@@ -689,11 +696,6 @@ const Sim = (() => {
     // Taking cover happens before the dice roll: its men are already down (and two more are needed)
     const pre = withdraw ? takeCover(st, target) : null;
     const need = needFor(st, shooter, target, moving);
-    // Taking cover has put the score past what can be shot at (Steve: 7 or more, no shot): no dice, nothing can hit
-    if (pre && need + armourOf(target) > MAX_NEED) {
-      st.fx.push({ from: { id: shooter.id, x: shooter.x, y: shooter.y }, to: { id: target.id }, weapon: weaponOf(shooter), armour: isTank(target), x: target.x, y: target.y, kind: 'miss', faces: [], need: MAX_NEED, side: shooter.side, result: 'Too well covered', tookCover: true });
-      return [pre.line, `${shooter.name} has no shot at it now`];
-    }
     const faces = [];
     let softHits, hardHits;
     if (isTank(target)) {
@@ -716,11 +718,11 @@ const Sim = (() => {
       : lost ? (isTank(target) ? `Tank knocked out` : lost > 1 ? `${lost} sections lost` : 'Section lost')
       : target.shocked && !before.shocked ? 'Shaken' : softHits + hardHits ? 'No effect' : 'Missed';
     // What the table shows: the weapon's muzzle flash and tracers from the shooter, and what lands on the target
-    st.fx.push({ from: { id: shooter.id, x: shooter.x, y: shooter.y }, to: { id: target.id }, weapon: weaponOf(shooter), armour: isTank(target), x: target.x === null ? stood.x : target.x, y: target.x === null ? stood.y : target.y, kind: softHits + hardHits ? 'hit' : 'miss', faces, need: Math.min(6, need + armourOf(target)), side: shooter.side, result, tookCover: !!pre });
+    st.fx.push({ from: { id: shooter.id, x: shooter.x, y: shooter.y }, to: { id: target.id }, weapon: weaponOf(shooter), armour: isTank(target), x: target.x === null ? stood.x : target.x, y: target.x === null ? stood.y : target.y, kind: softHits + hardHits ? 'hit' : 'miss', faces, need: need + armourOf(target), side: shooter.side, result, tookCover: !!pre });
     // A tank firing high explosive at men hits the whole field, like a mortar: every other piece on foot in it rolls too
     if (isTank(shooter) && !isTank(target) && !blast) {
       for (const other of at(st, stood.x, stood.y, target.side)) {
-        if (other === target || isTank(other) || shotNeed(st, shooter, other, moving) > MAX_NEED) continue;
+        if (other === target || isTank(other)) continue;
         out.push(...fireAt(st, shooter, other, power, false, moving, true));
       }
     }
@@ -729,12 +731,15 @@ const Sim = (() => {
 
   // A piece fired on takes cover (Steve): no moving back, its men get down where they are. One more is needed to hit it
   // for the rest of the German hour, and it misses its move next hour unless the captain gets it up
+  // The chance of one die hitting, given the score it needs
+  const hitChance = need => (need > MAX_NEED ? 1 / 36 : Math.max(0, 7 - need) / 6);
+
   // Does a German piece about to be fired on (dice at it, each needing `need`) take cover? When it is wise (Steve):
   // a shaken piece, where one more hit kills, as soon as a hit is likely; a weakened one against a fair volley; a
   // whole one only against a heavy one. Taking cover costs its move this round, so only a piece that still has it
   function germanTakesCover(st, t, diceAt, need) {
     if (!canReact(st, t) || isTank(t)) return false;
-    const expected = diceAt * Math.max(0, 7 - Math.min(6, need)) / 6;
+    const expected = diceAt * hitChance(need);
     const whole = t.platoons >= (t.kind === 'company' ? 3 : 1);
     if (t.shocked) return expected >= 0.5;
     if (!whole) return expected >= 1;
@@ -761,7 +766,7 @@ const Sim = (() => {
   }
 
   // Pieces a shooter could fire at (moving: firing on the move): enemies it can see, that its weapons can hurt, and
-  // that need 6 or less on the dice. A shot that would need 7 or more can't be taken (Steve)
+  // that need 6 or less on the dice. A shot needing 7 or more is a Hail Mary (Steve, see roll)
   function targets(st, shooter, moving = false) {
     // Anything without weapons shoots at nobody
     const f = firepower(st, shooter);
@@ -769,7 +774,7 @@ const Sim = (() => {
     // Tanks only to those with anti-tank weapons: rifles and machine guns can't hurt them
     // Captains too (Steve: he dies like all the others)
     return st.units.filter(t => t.side !== shooter.side && t.x !== null && (!isTank(t) || f.hard > 0)
-      && !!sight(st, shooter, t) && shotNeed(st, shooter, t, moving) <= MAX_NEED);
+      && !!sight(st, shooter, t));
   }
 
   // ---------- Moving ----------
@@ -1330,8 +1335,9 @@ const Sim = (() => {
   // ---------- The Germans ----------
 
   // What a German piece would most like to shoot: tanks for anti-tank weapons, otherwise the weakest infantry
+  // (only proper shots: a Hail Mary is for when it has nothing better to do, see germanAct)
   function bestTarget(st, u) {
-    const ts = targets(st, u);
+    const ts = targets(st, u).filter(t => shotNeed(st, u, t) <= MAX_NEED);
     if (!ts.length) return null;
     const f = firepower(st, u);
     const score = t => (isTank(t) ? f.hard * 2 : menDice(f)) * (7 - TO_HIT - cover(st, u, t)) / 2 + (t.shocked ? 1 : 0) - t.platoons * 0.1;
@@ -1404,19 +1410,22 @@ const Sim = (() => {
     // On the way to its post: march there and dig in
     if (u.post && !u.reserve && (u.x !== u.post.x || u.y !== u.post.y)) {
       const route = routeToward(st, u, u.post);
-      if (route) { deSays(st, 'Marches to its post'); germanMove(st, u, route); }
-      return null;
+      if (route) { deSays(st, 'Marches to its post'); germanMove(st, u, route); return null; }
     }
     // Reserves: a company goes to hold the hamlet if nobody does; the rest move up towards the nearest Americans
     if (u.reserve) {
-      if (u.x === st.objective.x && u.y === st.objective.y && u.kind === 'company') { deSays(st, `Holds ${st.objective.name}`); return null; }
+      const holding = u.x === st.objective.x && u.y === st.objective.y && u.kind === 'company';
+      if (holding) deSays(st, `Holds ${st.objective.name}`);
       const garrison = at(st, st.objective.x, st.objective.y, 'de').some(g => g.kind === 'company');
       const us = st.units.filter(o => o.side === 'us' && o.x !== null);
       const near = us.sort((a, b) => (Math.abs(a.x - u.x) + Math.abs(a.y - u.y)) - (Math.abs(b.x - u.x) + Math.abs(b.y - u.y)))[0];
       const goal = (!garrison && u.kind === 'company') || !near ? st.objective : near;
-      const route = routeToward(st, u, goal);
-      if (route) { deSays(st, goal === st.objective ? `Moves up to hold ${st.objective.name}` : `Moves up towards ${near.name}`); germanMove(st, u, route); }
+      const route = holding ? null : routeToward(st, u, goal);
+      if (route) { deSays(st, goal === st.objective ? `Moves up to hold ${st.objective.name}` : `Moves up towards ${near.name}`); germanMove(st, u, route); return null; }
     }
+    // Nothing better to do: a Hail Mary, if it has anyone in reach
+    const longShot = targets(st, u)[0];
+    if (longShot) { deSays(st, `Hail Mary at ${longShot.name}`); return { shooter: u.id, target: longShot.id }; }
     return null;
   }
 
@@ -1811,10 +1820,10 @@ const Sim = (() => {
   }
 
   return {
-    newGame, endTurn, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, chargeSpots,
+    newGame, roll, endTurn, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, chargeSpots,
     rallyTargets, canAct, canReact, firepower, canCallFire, holdsObjective, roundText, roomFor,
     startGermanHour, germanStep, answer, finishHour, startRound, drawToken, endGermanToken, activationOver, passToken, usCanMove, endRound, canFire, actSkip, actSkipShot, skipSupport,
-    smallTarget, menDice, armourOf, mayFire, shootCells, tokensHome, captainCanRally, fireAt, actShoot, actMoveShoot, moveShootSpots, chargeRoutes, DIRS, needWhy, shellNeed, shellWhy, shellFields, canRally, needFor, canSelfRally, actSelfRally, actHalfShot, actCharge, actRally, actFire, sight, isSmall, cover, wire, lineSides, actLine, atHedge, acrossHedge, SIDE_NAMES, PLACES, placeXY, placeName, lines, sizeOf, footprint, spotXY, occupant, fitsAt, freePlace,
+    smallTarget, menDice, armourOf, shotNeed, mayFire, shootCells, tokensHome, captainCanRally, fireAt, actShoot, actMoveShoot, moveShootSpots, chargeRoutes, DIRS, needWhy, shellNeed, shellWhy, shellFields, canRally, needFor, canSelfRally, actSelfRally, actHalfShot, actCharge, actRally, actFire, sight, isSmall, cover, wire, lineSides, actLine, atHedge, acrossHedge, SIDE_NAMES, PLACES, placeXY, placeName, lines, sizeOf, footprint, spotXY, occupant, fitsAt, freePlace,
     hasCutters: u => cutter(u),
   };
 })();
