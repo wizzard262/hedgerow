@@ -611,7 +611,7 @@ const Sim = (() => {
     // The covers one by one: the hedge it lines, a tank in a field in between, the field it stands in, its own tank beside it
     if (s && s.hedge) why.push(`+${COVER.hedge} hedge`);
     if (s && s.tankCorner) why.push(`+${COVER.tankCorner} tank's corner`);
-    if (s && s.placeCorner) why.push(`+${COVER.placeCorner} ${s.placeCorner}'s corner`);
+    if (s && s.placeCorner) why.push(`+${COVER.placeCorner} corner`);
     why.push(...placeWhy(st, target, shooter));
     if (target.down) why.push(`+${TAKE_COVER} take cover`);
     // Two men or fewer (Steve)
@@ -627,7 +627,8 @@ const Sim = (() => {
   // Cover from the field a target stands in: a village, a hamlet or an orchard
   function placeWhy(st, target, from, shells = false) {
     const n = placeCover(st, target, from, shells);
-    return n ? [`+${n} ${tileType(target.x, target.y)}`] : [];
+    // (Steve: just "cover", not which kind of place)
+    return n ? [`+${n} cover`] : [];
   }
 
   // The cover a village, hamlet or orchard gives a piece in it (see PLACE_COVER): men, a tank, or against shells; none

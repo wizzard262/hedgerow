@@ -726,6 +726,17 @@ check('nobody down in cover moves on their own, either side, in whole games', ()
   assert(downSeen > 0, 'no German took cover in 8 games');
 });
 
+check('the label says +2 cover in a village, +1 in an orchard, not the kind of place', () => {
+  const st = Sim.newGame(3);
+  st.wire = {}; st.hedges = {};
+  const M = Sim.unitById(st, 'mg1'), t = st.units.find(u => u.side === 'de' && u.kind === 'mg42');
+  for (const u of st.units) if (u !== M && u !== t) u.x = u.y = null;
+  M.x = 5; M.y = 4; M.at = null; t.x = 7; t.y = 4; t.at = 'w';
+  assert(Sim.needWhy(st, M, t).includes('+2 cover'), `the label says ${Sim.needWhy(st, M, t).join(', ')}`);
+  assert(Sim.shellWhy(st, t).includes('+1 cover'), `the shell label says ${Sim.shellWhy(st, t).join(', ')}`);
+  assert(!Sim.needWhy(st, M, t).some(w => /village|hamlet|orchard/.test(w)), 'the label names the place');
+});
+
 check('machine guns fire five dice', () => {
   assert(PIECES.mg.soft === 5 && PIECES.mg42.soft === 5, 'an MG team does not fire five dice');
 });
@@ -1101,7 +1112,7 @@ check('out of rounds, a gun leaves the bag; any piece can skip its turn', () => 
   }
 });
 
-check('a shot label adds up: the 3+ start, then each cover named on its own, to the score the dice need', () => {
+check('a shot label adds up: the 3+ start, then each reason on its own, to the score the dice need', () => {
   // The score a label's reasons add up to: the start, plus each − reason, less each + reason
   const labelSum = why => why.reduce((n, w) => {
     const m = /^([−+])(\d+) /.exec(w);
@@ -1119,7 +1130,6 @@ check('a shot label adds up: the 3+ start, then each cover named on its own, to 
       for (const t of Sim.targets(st, u)) {
         const why = Sim.needWhy(st, u, t);
         const need = Sim.needFor(st, u, t) + (Sim.isTank(t) ? PIECES[t.kind].armour : 0);
-        assert(!why.some(w => /^[+−]\d+ cover$/.test(w)), `seed ${seed}: a lumped "cover" reason: ${why.join(', ')}`);
         if (!why.length) { assert(need === TO_HIT, `seed ${seed}: ${u.name} → ${t.name} needs ${need}+ with no reasons`); continue; }
         assert(why[0] === `${TO_HIT}+`, `seed ${seed}: the label does not start from ${TO_HIT}+: ${why.join(', ')}`);
         if (!PIECES[u.kind].sniper) assert(labelSum(why) === need, `seed ${seed}: ${u.name} → ${t.name} needs ${need}+ but the label says ${why.join(', ')}`);
