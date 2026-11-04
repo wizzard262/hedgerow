@@ -846,6 +846,8 @@ const Sim = (() => {
       const spot = fallBackSpot(st, d, from);
       if (spot) {
         step(st, d, spot.x, spot.y);
+        // (driven out by a tank it is up and running, no longer down in cover)
+        d.down = false;
         out.push(`${d.name} falls back`);
         st.fx.push({ kind: 'rally', x: d.x, y: d.y, to: { id: d.id }, result: 'Falls back', ok: false });
       } else {

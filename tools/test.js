@@ -707,6 +707,25 @@ check('a German mortar bomb says who it is at, so the piece stays on the table u
   assert(f.x !== null && f.faces.length > 0, 'the bomb has no dice, or no place on the table');
 });
 
+check('nobody down in cover moves on their own, either side, in whole games', () => {
+  const { playRound } = require('./bot.js');
+  let downSeen = 0;
+  for (let seed = 1; seed <= 8; seed++) {
+    const st = Sim.newGame(seed);
+    // Watch every German move: a piece down in cover before its go must not have one
+    const drawToken = Sim.drawToken;
+    Sim.drawToken = s => {
+      const down = s.units.filter(u => u.side === 'de' && u.x !== null && u.down);
+      downSeen += down.length;
+      const side = drawToken(s);
+      if (side === 'de' && s.de.move && s.de.move.id) assert(!down.some(u => u.id === s.de.move.id), `seed ${seed}: ${s.de.move.id} was given a move while down in cover`);
+      return side;
+    };
+    try { while (!st.won && !st.lost && st.turn <= 12) playRound(st, true); } finally { Sim.drawToken = drawToken; }
+  }
+  assert(downSeen > 0, 'no German took cover in 8 games');
+});
+
 check('machine guns fire five dice', () => {
   assert(PIECES.mg.soft === 5 && PIECES.mg42.soft === 5, 'an MG team does not fire five dice');
 });
