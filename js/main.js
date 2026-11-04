@@ -4,6 +4,9 @@
 window.Game = (() => {
   const G = {};
   let st, hover = null, hotTarget = null, dirty = true;
+  // viewChanged: what is marked on the table has changed, not just the cross-hairs' pulse. gameChanged: the game itself has
+  let viewChanged = true, gameChanged = true;
+  function redraw() { dirty = true; viewChanged = true; }
   // The German move just made ({ id or gun, what }), kept on the table for GERMAN_MOVE_SHOWN ms after its token ends
   let shownMove = null;
   const GERMAN_MOVE_SHOWN = 2200;
@@ -36,7 +39,8 @@ window.Game = (() => {
   let drawing = false;
   function changed() {
     UI.update();
-    dirty = true;
+    redraw();
+    gameChanged = true;
     viewStale = true;
     if (!drawing && Sim.activationOver(st)) {
       drawing = true;
@@ -119,7 +123,9 @@ window.Game = (() => {
       const guns = st.de || st.won || st.lost ? null : UI.supportState();
       // Something done during the draw (a token landing starts the Germans' move) asks for another draw: keep that
       dirty = false;
-      const more = Board.render(st, { spots, selected: UI.selected(), hover, targets, hotTarget: aimedAt || hotTarget, ready, shooter, mortarAim, aimWhich, guns, blast, rallies: UI.rallies(), deMove: (st.de && st.de.move) || shownMove, fireFrom: (UI.view.mode || '').startsWith('fire:') ? UI.view.mode.slice(5) : null });
+      const same = !viewChanged, stateChanged = gameChanged;
+      viewChanged = false; gameChanged = false;
+      const more = Board.render(st, { same, stateChanged, spots, selected: UI.selected(), hover, targets, hotTarget: aimedAt || hotTarget, ready, shooter, mortarAim, aimWhich, guns, blast, rallies: UI.rallies(), deMove: (st.de && st.de.move) || shownMove, fireFrom: (UI.view.mode || '').startsWith('fire:') ? UI.view.mode.slice(5) : null });
       if (more) dirty = true;
       const p = Board.screenPoint(st.objective.x + 0.5, st.objective.y, 0.35), r = board.getBoundingClientRect();
       Object.assign($('#label').style, { left: p.x - r.left + 'px', top: p.y - r.top + 'px' });
@@ -131,7 +137,7 @@ window.Game = (() => {
   function fit() {
     const r = board.getBoundingClientRect();
     Board.resize(Math.max(200, r.width), Math.max(200, r.height));
-    dirty = true;
+    redraw();
   }
 
   // ---------- The bag ----------
@@ -213,7 +219,7 @@ window.Game = (() => {
     changed();
     // The Germans' move wiped one side out: the game is over
     if (st.won || st.lost) return showResult();
-    later(() => { shownMove = null; dirty = true; Board.clearToken(); later(drawNext, 400); }, GERMAN_MOVE_SHOWN + Board.busyFor());
+    later(() => { shownMove = null; redraw(); Board.clearToken(); later(drawNext, 400); }, GERMAN_MOVE_SHOWN + Board.busyFor());
   }
 
   // A piece of yours under fire: Stand fast or Take cover, in a word bubble by it (Steve: no dialog)
@@ -308,15 +314,15 @@ window.Game = (() => {
   }
   board.addEventListener('mousemove', e => {
     // The cross-hair under the pointer grows, so it is clear which target a click will fire on
-    const hot = Board.targetAt(UI.targets(), e.clientX, e.clientY);
-    if ((hot && hot.id) !== (hotTarget && hotTarget.id)) { hotTarget = hot; dirty = true; }
+    const hot = Board.targetAt(viewStale ? UI.targets() : shownTargets, e.clientX, e.clientY);
+    if ((hot && hot.id) !== (hotTarget && hotTarget.id)) { hotTarget = hot; redraw(); }
     const f = Board.fieldAt(e.clientX, e.clientY);
     const sameField = f && hover && f.x === hover.x && f.y === hover.y;
     if ((sameField && f.side === hover.side) || (!f && !hover)) return;
-    hover = f; dirty = true;
+    hover = f; redraw();
     if (!sameField && $('#menu').hidden) tooltip(e, f);
   });
-  board.addEventListener('mouseleave', () => { hover = null; dirty = true; $('#tip').style.display = 'none'; });
+  board.addEventListener('mouseleave', () => { hover = null; redraw(); $('#tip').style.display = 'none'; });
 
   // What is in a field, on hover
   function tooltip(e, f) {

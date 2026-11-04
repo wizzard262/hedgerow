@@ -53,11 +53,58 @@ const Models = (() => {
 
   // ---------- Materials ----------
   // Colours are given as they look on screen, so they are turned into the renderer's linear light first
+  // (one material for each look, shared, so that parts can be merged and drawn together)
+  const matCache = {};
   const mat = (color, rough = 0.85, metal = 0, extra = {}) => {
+    const key = Object.keys(extra).length ? null : [color, rough, metal].join();
+    if (key && matCache[key]) return matCache[key];
     const m = new T.MeshStandardMaterial(Object.assign({ roughness: rough, metalness: metal }, extra));
     m.color.set(color).convertSRGBToLinear();
+    if (key) matCache[key] = m;
     return m;
   };
+
+  // Merge a model's many small parts into one mesh for each material, so the graphics card draws a piece in a few goes
+  // instead of dozens. Parts with several materials (the flocked bases) and instanced meshes stay as they are
+  function mergeParts(model) {
+    model.updateMatrixWorld(true);
+    const toModel = new T.Matrix4().copy(model.matrixWorld).invert();
+    const buckets = new Map();
+    model.traverse(c => {
+      if (!c.isMesh || c.isInstancedMesh || Array.isArray(c.material) || c.userData.keep) return;
+      const key = c.material.uuid + (c.castShadow ? 'c' : '') + (c.receiveShadow ? 'r' : '');
+      if (!buckets.has(key)) buckets.set(key, []);
+      buckets.get(key).push(c);
+    });
+    for (const parts of buckets.values()) {
+      if (parts.length < 2) continue;
+      const pieces = parts.map(c => {
+        const g = c.geometry.index ? c.geometry.toNonIndexed() : c.geometry.clone();
+        g.applyMatrix4(new T.Matrix4().multiplyMatrices(toModel, c.matrixWorld));
+        return g;
+      });
+      const total = pieces.reduce((n, g) => n + g.attributes.position.count, 0);
+      const position = new Float32Array(total * 3), normal = new Float32Array(total * 3), uv = new Float32Array(total * 2);
+      let at3 = 0, at2 = 0;
+      for (const g of pieces) {
+        position.set(g.attributes.position.array, at3);
+        if (g.attributes.normal) normal.set(g.attributes.normal.array, at3);
+        if (g.attributes.uv) uv.set(g.attributes.uv.array, at2);
+        at3 += g.attributes.position.count * 3;
+        at2 += g.attributes.position.count * 2;
+        g.dispose();
+      }
+      const merged = new T.BufferGeometry();
+      merged.setAttribute('position', new T.BufferAttribute(position, 3));
+      merged.setAttribute('normal', new T.BufferAttribute(normal, 3));
+      merged.setAttribute('uv', new T.BufferAttribute(uv, 2));
+      const mesh = new T.Mesh(merged, parts[0].material);
+      mesh.castShadow = parts[0].castShadow; mesh.receiveShadow = parts[0].receiveShadow;
+      for (const c of parts) { c.parent.remove(c); c.geometry.dispose(); }
+      model.add(mesh);
+    }
+    return model;
+  }
   const M = {};
   function materials() {
     M.base = mat('#1d1c1a', 0.55);
@@ -684,10 +731,12 @@ const Models = (() => {
 
   // One field of the mat: flock for grass, wheat or the village yard; lanes painted on top
   const texCache = {};
+  const fieldMats = {};
   function field(type, wheat, seed) {
     const key = type === 'village' ? 'v' : type === 'orchard' ? 'o' : wheat ? 'w' : 'g' + (seed % 3);
     if (!texCache[key]) texCache[key] = key === 'o' ? orchardGrass() : key === 'v' ? flockTex('#7c7465', ['#6e675a', '#8a8272', '#5f584c', '#99907e'], 11) : key === 'w' ? flockTex('#9c8b55', WHEAT, 12) : flockTex(['#5f6d3c', '#647140', '#5a6838'][seed % 3], GRASS, 13 + seed % 3);
-    const m = new T.Mesh(new T.PlaneGeometry(1, 1), new T.MeshStandardMaterial({ map: texCache[key], roughness: 1 }));
+    if (!fieldMats[key]) fieldMats[key] = new T.MeshStandardMaterial({ map: texCache[key], roughness: 1 });
+    const m = new T.Mesh(new T.PlaneGeometry(1, 1), fieldMats[key]);
     m.rotation.x = -Math.PI / 2; m.receiveShadow = true;
     return m;
   }
@@ -739,5 +788,5 @@ const Models = (() => {
     return castAll(g);
   }
 
-  return { materials, M, eliteBand, water, bridge, soldier, squad, team, captain, pak, mortar, howitzer, round, coin, token, sherman, panther, panzer4, hedge, tree, house, die, table, field, lane, at };
+  return { materials, M, mergeParts, eliteBand, water, bridge, soldier, squad, team, captain, pak, mortar, howitzer, round, coin, token, sherman, panther, panzer4, hedge, tree, house, die, table, field, lane, at };
 })();

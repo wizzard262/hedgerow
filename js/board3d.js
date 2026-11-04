@@ -5,14 +5,17 @@ const Board = (() => {
   const T = THREE, { at } = Models;
   const MEN = 2.45;     // the men are 1:54 models...
   const TANKS = 1.6;    // ...the tanks 1:76, so the men look big beside them, as on a real table
+  let fxMarks, marksReady = false, shadowStale = true, wasBusy = true, pulsers = [];
   let renderer, scene, camera, el, hedgeGroup = null, hedgeKey = '', marks, pieces = {}, tokens = {}, dice = [], built = null;
   const ray = new T.Raycaster(), table = new T.Plane(new T.Vector3(0, 1, 0), 0);
 
   function init(container) {
     el = container;
     Models.materials();
-    renderer = new T.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+    renderer = new T.WebGLRenderer({ antialias: true });
     renderer.shadowMap.enabled = true; renderer.shadowMap.type = T.PCFSoftShadowMap;
+    // Shadows are only worked out again when something on the table has moved (see render)
+    renderer.shadowMap.autoUpdate = false;
     renderer.outputEncoding = T.sRGBEncoding; renderer.toneMapping = T.ACESFilmicToneMapping; renderer.toneMappingExposure = 0.95;
     el.appendChild(renderer.domElement);
     scene = new T.Scene();
@@ -27,11 +30,12 @@ const Board = (() => {
     const fill = new T.DirectionalLight(0xcfe0ff, 0.2); fill.position.set(COLS + 6, 5, ROWS + 6); scene.add(fill);
     camera = new T.PerspectiveCamera(34, 16 / 9, 0.1, 80);
     marks = new T.Group(); scene.add(marks);
+    fxMarks = new T.Group(); scene.add(fxMarks);
   }
 
   // Fit the whole table in the box: the camera keeps its slant and backs off until every corner shows
   function resize(w, h) {
-    renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+    renderer.setPixelRatio(Math.min(1.5, window.devicePixelRatio || 1));
     renderer.setSize(w, h);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
@@ -84,7 +88,7 @@ const Board = (() => {
       support[side] = {};
       for (const which of ['artillery', 'mortars']) {
         const spot = GUNS[side][which];
-        const model = which === 'artillery' ? Models.howitzer(side) : Models.mortar(side);
+        const model = Models.mergeParts(which === 'artillery' ? Models.howitzer(side) : Models.mortar(side));
         model.scale.setScalar(which === 'artillery' ? TANKS * 1.7 : MEN * 1.3);
         built.add(at(model, spot.x, 0, spot.z, 0, gunFacing(side), 0));
         // The pile of rounds beside it: shells standing in rows of three, mortar bombs lying in rows of four
@@ -278,7 +282,7 @@ const Board = (() => {
   }
 
   function build(st) {
-    if (built) scene.remove(built);
+    if (built) { scene.remove(built); freeObject(built); }
     built = new T.Group();
     built.add(Models.table(COLS, ROWS));
     for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
@@ -296,7 +300,10 @@ const Board = (() => {
       if (t === 'orchard') for (const [ox, oz] of orchardTrees(seed)) built.add(at(Models.tree(seed + ox * 10 + oz * 3, 0.68 + ((ox * 31 + oz * 17) % 1) * 0.15), x + ox, 0, y + oz));
       if (t === 'village' || t === 'hamlet') addHouses(x, y, seed);
     }
+    // Fields, houses and trees never move: merged, they are drawn in a few goes
+    Models.mergeParts(built);
     scene.add(built);
+    shadowStale = true;
     hedgeKey = '';
   }
 
@@ -342,6 +349,7 @@ const Board = (() => {
     const key = Object.keys(st.hedges).sort().join(';') + '/' + Object.keys(st.wire).sort().join(';');
     if (key === hedgeKey) return;
     if (hedgeGroup) scene.remove(hedgeGroup);
+    shadowStale = true;
     hedgeGroup = new T.Group();
     const runs = [];
     for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
@@ -423,13 +431,13 @@ const Board = (() => {
   function buildBases(side, kind, elite = false) {
     if (kind === 'company') {
       // One base a section; the bases are shown or hidden as sections are lost. Elite: in camouflage (Steve)
-      return [0, 1, 2].map(() => { const s = Models.squad(side, elite); markerSpots(s); s.scale.setScalar(MEN); return s; });
+      return [0, 1, 2].map(() => { const s = Models.mergeParts(Models.squad(side, elite)); markerSpots(s); s.scale.setScalar(MEN); return s; });
     }
     if (PIECES[kind].tank) {
       const make = { sherman: () => Models.sherman(Models.M.olive), firefly: () => Models.sherman(Models.M.olive, true), pz4: Models.panzer4, panther: Models.panther }[kind];
-      return [0].map(() => { const m = make(); markerSpots(m); m.scale.setScalar(TANKS); m.userData.slowTurn = true; return m; });
+      return [0].map(() => { const m = Models.mergeParts(make()); markerSpots(m); m.scale.setScalar(TANKS); m.userData.slowTurn = true; return m; });
     }
-    const m = kind === 'captain' ? Models.captain(side) : kind === 'pak' ? Models.pak() : Models.team(side, kind);
+    const m = Models.mergeParts(kind === 'captain' ? Models.captain(side) : kind === 'pak' ? Models.pak() : Models.team(side, kind));
     markerSpots(m);
     m.scale.setScalar(kind === 'pak' ? TANKS * 1.3 : MEN);
     // The PaK swings round onto its target before it fires, as a tank does (Steve)
@@ -951,6 +959,7 @@ const Board = (() => {
       at(ring, p.x, 0.008, p.z, -Math.PI / 2, 0, 0); marks.add(ring);
       // The cross-hair, bigger under the pointer
       const r = reticle(); r.scale.setScalar((big ? 0.62 : 0.5) * pulse * (lit ? 1.45 : 1)); r.position.copy(reticleSpot(u)); marks.add(r);
+      pulsers.push({ sprite: r, size: (big ? 0.62 : 0.5) * (lit ? 1.45 : 1) });
       // Nudged off its piece: a thin red line back down to it, so it is clear whose it is
       if (reticleNudges.has(u.id)) marks.add(new T.Line(new T.BufferGeometry().setFromPoints([reticleSpot(u), new T.Vector3(p.x, 0.02, p.z)]), new T.LineBasicMaterial({ color: 0xe8352a, transparent: true, opacity: 0.8, depthTest: false })));
       // The score and why in a word bubble about three fields away (Steve), so it hides nothing near the target: up the
@@ -1290,13 +1299,13 @@ const Board = (() => {
   }
 
   function playShots(now) {
-    for (const s of shots) { for (const o of s.objs) marks.remove(o); s.objs = []; }
+    while (fxMarks.children.length) { const o = fxMarks.children[0]; fxMarks.remove(o); freeObject(o); }
     // (a hand-to-hand fight stays as long as its blows take)
     shots = shots.filter(s => now - s.t0 < (s.f.kind === 'melee' ? (s.f.strikes.length * MELEE_BLOW + 2) * 1000 : 5000));
     for (const s of shots) {
       const f = s.f, t = (now - s.t0) / 1000;
       if (t < 0) continue;
-      const add = o => { marks.add(o); s.objs.push(o); return o; };
+      const add = o => { fxMarks.add(o); return o; };
       if (f.kind === 'melee') { playMelee(f, t, add); continue; }
       // A rally (Steve): "Rallied!" in green (or the captain's "Up and moving"), rising off the piece
       if (f.kind === 'rally') {
@@ -1506,6 +1515,7 @@ const Board = (() => {
     // Add the rolls not seen before (each roll's faces are its own list)
     for (const r of coming) if (!rollSeen.has(r.faces)) { rollSeen.add(r.faces); rollLog.push(r); }
     diceShownAt = performance.now();
+    shadowStale = true;
     for (const d of dice) { scene.remove(d); freeObject(d); }
     dice = [];
     const rolls = rollLog;
@@ -1599,6 +1609,7 @@ const Board = (() => {
 
   // The next piece is chosen (or a new game): the corners are empty again
   function clearDice(newGame = false) {
+    if (dice.length) shadowStale = true;
     for (const d of dice) { scene.remove(d); freeObject(d); }
     dice = [];
     rollLog = [];
@@ -1723,13 +1734,14 @@ const Board = (() => {
     meleeUntil = 0;
     diceDue = null; diceComing = [];
     labelKey = ''; reticleNudges = new Map();
+    marksReady = false; shadowStale = true;
     clearDice(true);
   }
 
   function render(st, view = {}) {
     const now = performance.now(), dt = lastT ? Math.min(0.1, (now - lastT) / 1000) : 0.016;
     lastT = now;
-    if (!built || built.userData.seed !== st.seed) { clearDice(true); for (const id in pieces) scene.remove(pieces[id]); for (const id in tokens) scene.remove(tokens[id]); pieces = {}; tokens = {}; build(st); buildSupport(); built.userData.seed = st.seed; }
+    if (!built || built.userData.seed !== st.seed) { clearDice(true); for (const id in pieces) { scene.remove(pieces[id]); freeObject(pieces[id]); } for (const id in tokens) scene.remove(tokens[id]); pieces = {}; tokens = {}; build(st); buildSupport(); built.userData.seed = st.seed; }
     updateSupport(st);
     buildHedges(st);
     // New attacks: they play out, and their dice go in the corner once they have landed (Steve)
@@ -1741,6 +1753,33 @@ const Board = (() => {
     }
     if (diceDue !== null && now >= diceDue) { diceDue = null; showDice(st, diceComing); diceComing = []; }
     updatePieces(st);
+    // The marks on the table: built again only when something has changed. Between times just the cross-hairs pulse
+    if (view.same && marksReady) {
+      const pulse = 1 + 0.08 * Math.sin(now / 180);
+      for (const p of pulsers) p.sprite.scale.setScalar(p.size * pulse);
+    } else {
+      buildMarks(st, view);
+      marksReady = true;
+    }
+    if (view.stateChanged) shadowStale = true;
+    const moving = glide(dt);
+    const hopping = moveHop(now);
+    const firing = playShots(now);
+    const flying = moveCoin(now) | moveHoming(now);
+    // Shadows: worked out again only while something moves, and once more after it stops
+    const busy = moving || hopping || firing || flying || shadowStale;
+    renderer.shadowMap.needsUpdate = busy || wasBusy;
+    wasBusy = busy; shadowStale = false;
+    renderer.render(scene, camera);
+    // (dice still to come: keep drawing until they are on the table, or they only appear at the next redraw)
+    if (firing || flying || diceDue !== null) return true;
+    // Targets pulse, so keep drawing while they show
+    return moving || hopping || !!(view.targets && view.targets.length);
+  }
+
+  // Everything marked on the table for this view: lit fields, rings, targets and their bubbles, lines of fire
+  function buildMarks(st, view) {
+    pulsers = [];
     while (marks.children.length) { const o = marks.children[0]; marks.remove(o); freeObject(o); }
     if (view.hover) mark(view.hover.x, view.hover.y, 'hover', 0.02);
     for (const s of view.spots || []) mark(s.x, s.y, s.kind, 0.05, s);
@@ -1771,15 +1810,6 @@ const Board = (() => {
       const ring = new T.Mesh(new T.RingGeometry(big ? 0.3 : 0.17, big ? 0.335 : 0.195, 48), new T.MeshBasicMaterial({ color: can ? 0x7fd06a : 0x77776f, transparent: true, opacity: can ? 0.8 : 0.6, depthWrite: false }));
       at(ring, p.x, 0.006, p.z, -Math.PI / 2, 0, 0); marks.add(ring);
     }
-    const moving = glide(dt);
-    const hopping = moveHop(now);
-    const firing = playShots(now);
-    const flying = moveCoin(now) | moveHoming(now);
-    renderer.render(scene, camera);
-    // (dice still to come: keep drawing until they are on the table, or they only appear at the next redraw)
-    if (firing || flying || diceDue !== null) return true;
-    // Targets pulse, so keep drawing while they show
-    return moving || hopping || !!(view.targets && view.targets.length);
   }
 
   // Which field is under a point on the page (by casting a ray onto the table)
