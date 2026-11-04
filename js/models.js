@@ -358,6 +358,60 @@ const Models = (() => {
     return castAll(g);
   }
 
+  // A bomber (Steve), nose towards +x: the Americans' four-engined B-17 in olive drab with white stars, the Germans'
+  // twin-engined Ju 88 in grey-green with crosses
+  function bomber(side) {
+    const g = new T.Group(), us = side === 'us';
+    const paint = us ? mat('#5f6240', 0.6, 0.2) : mat('#57675a', 0.6, 0.2);
+    const glass = mat('#a9cfdd', 0.2, 0.3);
+    const blur = mat('#2c2c2a', 0.5, 0.2, { transparent: true, opacity: 0.35 });
+    const length = us ? 0.86 : 0.7, radius = us ? 0.056 : 0.052, span = us ? 1.16 : 0.8;
+    // The fuselage, narrowing to the tail, and the glazed nose
+    g.add(at(cyl(radius, radius * 0.45, length, paint), 0, 0, 0, 0, 0, -Math.PI / 2));
+    const nose = new T.Mesh(new T.SphereGeometry(radius, 14, 10), glass);
+    nose.scale.x = us ? 1.3 : 1.7;
+    g.add(at(nose, length / 2, 0, 0));
+    // The cockpit: glass on top, further back on the B-17
+    g.add(at(box(0.09, 0.03, radius * 1.1, glass), us ? length * 0.3 : length * 0.36, radius * 0.9, 0));
+    // The wings: wide by the fuselage, narrower at the tips
+    g.add(at(box(0.17, 0.012, span * 0.55, paint), length * 0.06, 0, 0));
+    for (const s of [-1, 1]) g.add(at(box(0.11, 0.01, span * 0.24, paint), length * 0.07, 0, s * span * 0.38));
+    // The tailplane and the fin (the B-17's tall)
+    g.add(at(box(0.08, 0.009, span * 0.34, paint), -length * 0.44, 0.01, 0));
+    g.add(at(box(0.1, us ? 0.17 : 0.12, 0.012, paint), -length * 0.44, us ? 0.09 : 0.07, 0));
+    // The engines, each with its propeller a blur in front
+    const engines = us ? [0.18, 0.34] : [0.17];
+    for (const s of [-1, 1]) for (const out of engines) {
+      g.add(at(cyl(0.024, 0.018, 0.12, M.steel, 10), length * 0.14, -0.004, s * out, 0, 0, -Math.PI / 2));
+      g.add(at(cyl(0.07, 0.07, 0.003, blur, 20), length * 0.14 + 0.065, -0.004, s * out, 0, 0, -Math.PI / 2));
+    }
+    // The markings on the wings
+    for (const s of [-1, 1]) {
+      if (us) {
+        g.add(at(cyl(0.042, 0.042, 0.002, mat('#1d2c56', 0.7), 20), length * 0.07, 0.007, s * span * 0.38));
+        g.add(at(cyl(0.024, 0.024, 0.002, M.white, 5), length * 0.07, 0.009, s * span * 0.38));
+      } else {
+        const white = M.white, black = mat('#141414', 0.7);
+        g.add(at(box(0.07, 0.002, 0.024, white), length * 0.07, 0.007, s * span * 0.38));
+        g.add(at(box(0.024, 0.002, 0.07, white), length * 0.07, 0.007, s * span * 0.38));
+        g.add(at(box(0.056, 0.002, 0.012, black), length * 0.07, 0.009, s * span * 0.38));
+        g.add(at(box(0.012, 0.002, 0.056, black), length * 0.07, 0.009, s * span * 0.38));
+      }
+    }
+    return castAll(g);
+  }
+
+  // The bomber waiting off the board: smaller, on a wargamer's flying stand
+  function bomberOnStand(side) {
+    const g = new T.Group();
+    g.add(at(cyl(0.11, 0.115, 0.012, M.base, 24), 0, 0.006, 0));
+    g.add(at(cyl(0.005, 0.005, 0.27, M.steel, 8), 0, 0.14, 0));
+    const plane = bomber(side);
+    plane.scale.setScalar(0.5);
+    g.add(at(plane, 0, 0.28, 0));
+    return castAll(g);
+  }
+
   // A field howitzer: two big wheels, the split trail behind, a small shield, the barrel raised. The American 105 mm
   // M2A1 in olive drab, the German 10.5 cm leFH 18 in dark yellow with green and brown, with a muzzle brake. Front +x
   function howitzer(side) {
@@ -788,5 +842,5 @@ const Models = (() => {
     return castAll(g);
   }
 
-  return { materials, M, mergeParts, eliteBand, water, bridge, soldier, squad, team, captain, pak, mortar, howitzer, round, coin, token, sherman, panther, panzer4, hedge, tree, house, die, table, field, lane, at };
+  return { materials, M, mergeParts, eliteBand, water, bridge, soldier, squad, team, captain, pak, mortar, bomber, bomberOnStand, howitzer, round, coin, token, sherman, panther, panzer4, hedge, tree, house, die, table, field, lane, at };
 })();

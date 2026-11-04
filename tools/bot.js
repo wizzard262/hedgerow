@@ -42,6 +42,11 @@ function actPiece(st, u) {
 // One American token: guns first, then the captain's rallies, then the first piece that can do something
 function usToken(st) {
   const us = st.units.filter(u => u.side === 'us' && u.x !== null);
+  // The bomber, when its compass gives a line worth flying
+  if (Sim.canFire(st, 'bomber')) {
+    const run = Sim.bestBomberRun(st, 'us');
+    if (run && Sim.actFire(st, 'bomber', run.x, run.y).ok) return;
+  }
   for (const which of ['artillery', 'mortars']) {
     if (!Sim.canFire(st, which)) continue;
     const seen = st.units.filter(g => g.side === 'de' && g.x !== null && (which === 'artillery' || !Sim.isTank(g)) && Sim.canCallFire(st, g.x, g.y));

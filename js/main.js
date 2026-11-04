@@ -56,6 +56,13 @@ window.Game = (() => {
   // The fields your shot at the target under the pointer would land on, when it can hit more than one piece:
   // mortars the whole field, artillery the field and the four next to it, a tank's high explosive at men the whole field
   function blastFor(shooter, target) {
+    // The bomber: its line through the edge field under the pointer
+    if (UI.view.mode === 'fire:bomber') {
+      const onEdge = hover && Sim.bomberEdges().some(f => f.x === hover.x && f.y === hover.y);
+      if (!onEdge) return [];
+      const line = Sim.bomberLine(hover.x, hover.y, Sim.bomberHeading(st, 'us'));
+      return line.map(f => ({ x: f.x, y: f.y, main: true }));
+    }
     // Nothing under the pointer, or it has left the table
     if (!target || target.x === null) return [];
     const mode = UI.view.mode || '';
@@ -65,6 +72,24 @@ window.Game = (() => {
     if (shooter && Sim.isTank(shooter) && !Sim.isTank(target)) return [{ x: target.x, y: target.y, main: true }];
     // Every other weapon hits only the one piece
     return [];
+  }
+
+  // The compass to show now, and which way it points: your bomber being aimed, or theirs on its token; null if neither
+  function compassNow() {
+    if (UI.view.mode === 'fire:bomber') return Sim.bomberHeading(st, 'us');
+    const move = st.de && st.de.move;
+    if (move && move.gun === 'bomber') return Sim.bomberHeading(st, 'de');
+    return null;
+  }
+
+  // The bomber's line to draw on the table: under your pointer while you aim, or the one theirs has chosen
+  function flightLineNow() {
+    if (UI.view.mode === 'fire:bomber') {
+      const onEdge = hover && Sim.bomberEdges().some(f => f.x === hover.x && f.y === hover.y);
+      return onEdge ? { x: hover.x, y: hover.y, heading: Sim.bomberHeading(st, 'us') } : null;
+    }
+    const run = st.de && st.de.run;
+    return run ? { x: run.x, y: run.y, heading: Sim.bomberHeading(st, 'de') } : null;
   }
 
   // Draw the table whenever something changed or pieces are still gliding; place the hamlet's name over it
@@ -90,7 +115,21 @@ window.Game = (() => {
       if (germanPicked && st.de) spots.push(...UI.moveSpotsFor(Sim.unitById(st, germanPicked)));
       const planned = st.de && (st.de.ask || st.de.aim);
       let others = [];
-      if (planned) {
+      // Their bomber: the edge fields while it chooses (as yours show), then its line, and any piece of yours asked
+      const bombing = planned && (planned.bomber || planned.bombed);
+      const deBomber = st.de && st.de.move && st.de.move.gun === 'bomber';
+      if (deBomber && !st.de.run && !st.de.ask && !st.de.aim) spots.push(...Sim.bomberEdges().map(f => ({ x: f.x, y: f.y, kind: 'fire' })));
+      if (bombing && st.de.run) {
+        const line = Sim.bomberLine(st.de.run.x, st.de.run.y, Sim.bomberHeading(st, 'de'));
+        blast = line.map(f => ({ x: f.x, y: f.y, main: true }));
+        if (planned.bombed) {
+          const t = Sim.unitById(st, planned.target);
+          t.needNow = Sim.bombNeed(st, t);
+          t.needWhy = Sim.bombWhy(st, t);
+          targets = [t];
+        }
+      }
+      if (planned && !bombing) {
         const shot = planned, t = Sim.unitById(st, shot.target), s = shot.shooter && Sim.unitById(st, shot.shooter);
         if (s) spots.push({ x: s.x, y: s.y, kind: 'charge' });
         spots.push({ x: t.x, y: t.y, kind: 'shoot' });
@@ -125,7 +164,7 @@ window.Game = (() => {
       dirty = false;
       const same = !viewChanged, stateChanged = gameChanged;
       viewChanged = false; gameChanged = false;
-      const more = Board.render(st, { same, stateChanged, spots, selected: UI.selected(), hover, targets, hotTarget: aimedAt || hotTarget, ready, shooter, mortarAim, aimWhich, guns, blast, rallies: UI.rallies(), deMove: (st.de && st.de.move) || shownMove, fireFrom: (UI.view.mode || '').startsWith('fire:') ? UI.view.mode.slice(5) : null });
+      const more = Board.render(st, { same, stateChanged, spots, selected: UI.selected(), hover, targets, hotTarget: aimedAt || hotTarget, ready, shooter, mortarAim, aimWhich, guns, blast, rallies: UI.rallies(), deMove: (st.de && st.de.move) || shownMove, fireFrom: (UI.view.mode || '').startsWith('fire:') ? UI.view.mode.slice(5) : null, compass: compassNow(), flightLine: flightLineNow() });
       if (more) dirty = true;
       const p = Board.screenPoint(st.objective.x + 0.5, st.objective.y, 0.35), r = board.getBoundingClientRect();
       Object.assign($('#label').style, { left: p.x - r.left + 'px', top: p.y - r.top + 'px' });
@@ -278,7 +317,10 @@ window.Game = (() => {
     // Your mortars or artillery off the board: choose them like a piece
     const gun = !st.de && Board.gunAt(e.clientX, e.clientY);
     if (gun) {
-      Sound.play('select'); Board.bounceGun('us', gun); Board.clearDice(); UI.selectSupport(gun); changed();
+      Sound.play('select'); Board.bounceGun('us', gun); Board.clearDice(); UI.selectSupport(gun);
+      // Picked again: the compass spins again, to the same direction (Steve)
+      if (gun === 'bomber') Board.respinCompass();
+      changed();
       // Its menu by the click, with Skip turn (Steve)
       const r = board.getBoundingClientRect();
       UI.openGunMenu(gun, e.clientX - r.left, e.clientY - r.top, r);

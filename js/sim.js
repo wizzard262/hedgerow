@@ -165,8 +165,9 @@ const Sim = (() => {
     const st = {
       seed, turn: 1, hedges: {}, wire: {}, units: [], report: [], fx: [],
       fired: {},          // fire support used this hour (the mortars and the guns each fire once an hour)
-      ammo: { mortars: MORTARS.ammo, artillery: ARTILLERY.ammo },
-      deMortarAmmo: DE_MORTAR.ammo, deArtilleryAmmo: DE_ARTILLERY.ammo, won: false, lost: false,
+      ammo: { mortars: MORTARS.ammo, artillery: ARTILLERY.ammo, bomber: BOMBER.ammo },
+      deMortarAmmo: DE_MORTAR.ammo, deArtilleryAmmo: DE_ARTILLERY.ammo, deBomberAmmo: BOMBER.ammo, won: false, lost: false,
+      spin: {},           // the bomber's compass this round, each side: picked again, it spins to the same direction (Steve)
     };
     // This game's objective: one of the villages
     st.objective = VILLAGES[Math.floor(R() * VILLAGES.length)];
@@ -1326,6 +1327,8 @@ const Sim = (() => {
   }
 
   function actFire(st, which, x, y) {
+    // The bomber has its own way of going in
+    if (which === 'bomber') return actBomb(st, x, y);
     if (st.won || st.lost || st.de || st.fired[which] || st.ammo[which] <= 0 || !canCallFire(st, x, y)) return { ok: false };
     // With the bag: on an American token not yet used by a piece; firing uses the token (Steve: the guns are in the bag)
     if (st.tokens && (st.drawn !== 'us' || st.activeId)) return { ok: false };
@@ -1335,6 +1338,128 @@ const Sim = (() => {
     const S = which === 'mortars' ? MORTARS : ARTILLERY;
     const lines = fireMission(st, which, x, y);
     return { ok: true, lines: [`💥 ${S.name} fire on the field: ${lines.length ? lines.join(', ') : 'no hits'}.`] };
+  }
+
+  // ---------- The bomber (Steve) ----------
+
+  // Which way a side's bomber flies this round: spun the first time it is picked, the same every time after that
+  function bomberHeading(st, side) {
+    // Not spun yet this round: spin now
+    if (st.spin[side] === undefined) st.spin[side] = Math.floor(st.rand() * BOMBER.directions);
+    return st.spin[side];
+  }
+
+  // Every field round the edge of the board: the bomber can be sent through any of them
+  function bomberEdges() {
+    const edges = [];
+    for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
+      const onEdge = x === 0 || y === 0 || x === COLS - 1 || y === ROWS - 1;
+      if (onEdge) edges.push({ x, y });
+    }
+    return edges;
+  }
+
+  // How far along a straight line a field lies: where the line goes in and comes out, or null if it misses the field.
+  // (px, py) is a point on the line, (dx, dy) its direction
+  function lineThrough(fx, fy, px, py, dx, dy) {
+    let enter = -Infinity, leave = Infinity;
+    for (const [low, point, step] of [[fx, px, dx], [fy, py, dy]]) {
+      // Flying level with this side: the line stays inside the field's width or never touches it
+      if (Math.abs(step) < 1e-9) {
+        if (point <= low || point >= low + 1) return null;
+        continue;
+      }
+      const a = (low - point) / step, b = (low + 1 - point) / step;
+      enter = Math.max(enter, Math.min(a, b));
+      leave = Math.min(leave, Math.max(a, b));
+    }
+    // Only touching a corner doesn't count; clipping a corner does (Steve: every field it passes over)
+    return leave - enter > 1e-9 ? { enter, leave } : null;
+  }
+
+  // The fields under the bomber, in the order it flies over them: a straight line through the middle of the chosen field.
+  // t: how far each one is along the line from the chosen field
+  function bomberLine(x, y, heading) {
+    // The compass: 0 is north (up the board), going clockwise
+    const angle = heading * 2 * Math.PI / BOMBER.directions;
+    const dx = Math.sin(angle), dy = -Math.cos(angle);
+    const fields = [];
+    for (let fy = 0; fy < ROWS; fy++) for (let fx = 0; fx < COLS; fx++) {
+      const through = lineThrough(fx, fy, x + 0.5, y + 0.5, dx, dy);
+      if (through) fields.push({ x: fx, y: fy, t: (through.enter + through.leave) / 2 });
+    }
+    fields.sort((a, b) => a.t - b.t);
+    return fields;
+  }
+
+  // The score a bomb needs: the bomber's own, then the same cover and armour as against shells
+  function bombNeed(st, t) {
+    const place = placeCover(st, t, null, true);
+    return BOMBER.need + place + armourOf(t) + (t.down ? TAKE_COVER : 0);
+  }
+  // Why it needs that, for the label on the piece
+  function bombWhy(st, t) {
+    const extras = shellWhy(st, t).slice(1);
+    return [`${BOMBER.need}+`, ...extras];
+  }
+
+  // The bomber flies: one bomb on every piece in every field under it, friend or foe. Returns the lines to report
+  function dropBombs(st, side, x, y) {
+    const heading = bomberHeading(st, side);
+    const line = bomberLine(x, y, heading);
+    const lines = [];
+    // The plane itself, for the table
+    st.fx.push({ kind: 'flyover', side, x, y, heading, line });
+    for (const field of line) {
+      for (const t of at(st, field.x, field.y)) {
+        // Your bomb on a German piece: it takes cover first if it is wise to, as under shells
+        const ducks = side === 'us' && t.side === 'de' && germanTakesCover(st, t, BOMBER.dice, bombNeed(st, t));
+        if (ducks) lines.push(takeCover(st, t).line);
+        // The score it needs, after any taking cover
+        const need = bombNeed(st, t);
+        const faces = [];
+        const hits = roll(st, BOMBER.dice, need, faces);
+        // A hit works like a mortar's (Steve): it shakes, a coin toss says if it wounds; on a tank, as an anti-tank die
+        const soft = isTank(t) ? 0 : hits;
+        const hard = isTank(t) ? hits : 0;
+        const before = t.platoons, wasShaken = t.shocked;
+        const hurt = damage(st, t, soft, hard);
+        lines.push(...(t.side === side ? hurt.map(l => `⚠️ friendly fire: ${l}`) : hurt));
+        // What it did, for the words on the table
+        const lost = before - (t.x === null ? 0 : t.platoons);
+        const result = t.x === null ? 'Wiped out' : lost ? (isTank(t) ? 'Tank knocked out' : 'Section lost') : t.shocked && !wasShaken ? 'Shaken' : hits ? 'No effect' : 'Missed';
+        st.fx.push({ kind: 'bomb', x: field.x, y: field.y, faces, need, side, to: { id: t.id }, result, support: 'bomber', along: field.t, tookCover: ducks });
+      }
+    }
+    return lines;
+  }
+
+  // The best line for a side's bomber this round, by its compass: the chosen field and what the line is worth; null if
+  // no line is worth flying (it would catch too few of the enemy, or too many of its own)
+  function bestBomberRun(st, side) {
+    const heading = bomberHeading(st, side);
+    let best = null;
+    for (const edge of bomberEdges()) {
+      let worth = 0;
+      for (const field of bomberLine(edge.x, edge.y, heading)) {
+        for (const t of at(st, field.x, field.y)) worth += t.side === side ? -1.5 : 1;
+      }
+      if (!best || worth > best.worth) best = { x: edge.x, y: edge.y, worth };
+    }
+    return best && best.worth >= BOMBER.worth ? best : null;
+  }
+
+  // Your bomber sent through a field on the edge of the board
+  function actBomb(st, x, y) {
+    const onEdge = bomberEdges().some(f => f.x === x && f.y === y);
+    if (st.won || st.lost || st.de || st.fired.bomber || st.ammo.bomber <= 0 || !onEdge) return { ok: false };
+    // With the bag: on an American token not yet used by a piece; flying uses the token
+    if (st.tokens && (st.drawn !== 'us' || st.activeId)) return { ok: false };
+    if (st.tokens) { st.activeId = 'gun:bomber'; activated(st, { side: 'us', gun: 'bomber' }); }
+    st.fired.bomber = true;
+    st.ammo.bomber--;
+    const lines = dropBombs(st, 'us', x, y);
+    return { ok: true, lines: [`✈️ The ${BOMBER_NAMES.us} flies over: ${lines.length ? lines.join(', ') : 'no hits'}.`] };
   }
 
   // ---------- The Germans ----------
@@ -1470,6 +1595,11 @@ const Sim = (() => {
   function resolveShot(st, shot, withdraw) {
     const t = unitById(st, shot.target);
     if (t.x === null) return;
+    // A piece under the German bomber's line: it only chooses whether to get down; the bombs fall once all have chosen
+    if (shot.bombed) {
+      if (withdraw) takeCover(st, t);
+      return;
+    }
     if (shot.artillery) {
       st.deArtilleryAmmo--;
       if (withdraw) takeCover(st, t);
@@ -1510,8 +1640,11 @@ const Sim = (() => {
     if (st.de.aim) {
       const shot = st.de.aim;
       st.de.aim = null;
-      if (canReact(st, unitById(st, shot.target))) { st.de.ask = shot; return { ask: shot }; }
-      resolveShot(st, shot, false);
+      // (the bomber's line has been shown: its run carries on below)
+      if (!shot.bomber) {
+        if (canReact(st, unitById(st, shot.target))) { st.de.ask = shot; return { ask: shot }; }
+        resolveShot(st, shot, false);
+      }
     }
     // Aim it (shown first on the page), or straight on to firing it
     const plan = shot => {
@@ -1549,6 +1682,32 @@ const Sim = (() => {
         if (r) return r;
       }
     }
+    // Their bomber picked: the best line by its compass, or it stays away this round
+    if (st.de.bomber) {
+      st.de.bomber = false;
+      const run = bestBomberRun(st, 'de');
+      deSays(st, run ? 'Flies in' : 'Stays away: nothing worth bombing');
+      if (run) {
+        // Your pieces under the line are each asked before it arrives (Steve); its own men aren't, as under your bomber
+        const under = bomberLine(run.x, run.y, bomberHeading(st, 'de')).flatMap(f => at(st, f.x, f.y, 'us'));
+        st.de.run = { x: run.x, y: run.y, asks: under.map(u => u.id) };
+        // On the page, the line shows first
+        if (showAim) { st.de.aim = { bomber: true }; return { aim: st.de.aim }; }
+      }
+    }
+    if (st.de.run) {
+      const run = st.de.run;
+      // Each piece of yours under the line that can still get down
+      while (run.asks.length) {
+        const id = run.asks.shift();
+        if (canReact(st, unitById(st, id))) { st.de.ask = { bombed: true, target: id }; return { ask: st.de.ask }; }
+      }
+      // All have chosen: it flies
+      st.de.run = null;
+      st.deBomberAmmo--;
+      const lines = dropBombs(st, 'de', run.x, run.y);
+      st.de.rep.push(`🔺 The ${BOMBER_NAMES.de} flies over: ${lines.length ? lines.join(', ') : 'no hits'}.`);
+    }
     return { done: true };
   }
 
@@ -1565,13 +1724,17 @@ const Sim = (() => {
   // the Germans. One is drawn at a time and that side moves one piece; then the next is drawn. A piece destroyed, or one
   // that loses its move (taking cover), takes a token out with it. When the bag is empty, the round (the hour) ends
 
+  // Everything of a side's off the board, and what each has left
+  const SUPPORT = ['artillery', 'mortars', 'bomber'];
+  const ammoOf = (st, side) => (side === 'us' ? st.ammo : { mortars: st.deMortarAmmo, artillery: st.deArtilleryAmmo, bomber: st.deBomberAmmo });
+
   // Pieces of a side that can still move this round, and its mortars and artillery that still have rounds and haven't
   // fired (Steve: out of rounds, they come out of the bag)
   function movable(st, side) {
     const pieces = st.units.filter(u => u.side === side && u.x !== null && !u.acted).length;
-    const ammo = side === 'us' ? st.ammo : { mortars: st.deMortarAmmo, artillery: st.deArtilleryAmmo };
+    const ammo = ammoOf(st, side);
     const fired = side === 'us' ? st.fired : (st.deFired || {});
-    const guns = ['mortars', 'artillery'].filter(w => ammo[w] > 0 && !fired[w]).length;
+    const guns = SUPPORT.filter(w => ammo[w] > 0 && !fired[w]).length;
     return pieces + guns;
   }
 
@@ -1600,6 +1763,7 @@ const Sim = (() => {
     if (!canFire(st, which)) return { ok: false };
     st.fired[which] = true;
     if (st.tokens) { st.activeId = 'gun:' + which; activated(st, { side: 'us', gun: which }); }
+    if (which === 'bomber') return { ok: true, lines: [`⏭️ The ${BOMBER_NAMES.us} stays away this round.`] };
     return { ok: true, lines: [`⏭️ The ${which === 'mortars' ? 'mortars' : 'artillery'} hold fire this round.`] };
   }
 
@@ -1630,13 +1794,13 @@ const Sim = (() => {
     const back = st.returning || { first: true, activated: [] };
     const out = {};
     for (const side of ['us', 'de']) {
-      const ammo = side === 'us' ? st.ammo : { mortars: st.deMortarAmmo, artillery: st.deArtilleryAmmo };
+      const ammo = ammoOf(st, side);
       // Who has a token in the new bag at all
       const hasToken = w => (w.gun ? ammo[w.gun] > 0 : (u => !!u && u.x !== null && !u.acted)(unitById(st, w.id)));
       let from;
       if (back.first) {
         from = st.units.filter(u => u.side === side && u.x !== null && !u.acted).map(u => ({ id: u.id }));
-        for (const gun of ['artillery', 'mortars']) if (ammo[gun] > 0) from.push({ gun });
+        for (const gun of SUPPORT) if (ammo[gun] > 0) from.push({ gun });
       } else from = back.activated.filter(a => a.side === side && hasToken(a));
       from = from.slice(0, st.bag[side]);
       out[side] = { from, kept: st.bag[side] - from.length };
@@ -1685,11 +1849,11 @@ const Sim = (() => {
       if (pick.gun) {
         st.deFired[pick.gun] = true;
         activated(st, { side: 'de', gun: pick.gun });
-        st.de = { queue: [], mortar: pick.gun === 'mortars', artillery: pick.gun === 'artillery', rep: st.roundRep, ask: null, move: { gun: pick.gun, what: '' } };
+        st.de = { queue: [], mortar: pick.gun === 'mortars', artillery: pick.gun === 'artillery', bomber: pick.gun === 'bomber', rep: st.roundRep, ask: null, move: { gun: pick.gun, what: '' } };
       } else {
         pick.unit.acted = true;
         activated(st, { side: 'de', id: pick.unit.id });
-        st.de = { queue: [pick.unit.id], mortar: false, artillery: false, rep: st.roundRep, ask: null, move: { id: pick.unit.id, what: '' } };
+        st.de = { queue: [pick.unit.id], mortar: false, artillery: false, bomber: false, rep: st.roundRep, ask: null, move: { id: pick.unit.id, what: '' } };
       }
     }
     return side;
@@ -1700,6 +1864,7 @@ const Sim = (() => {
     const options = st.units.filter(u => u.side === 'de' && u.x !== null && !u.acted).map(u => ({ unit: u, score: (bestTarget(st, u) ? 2 : 0) + st.rand() }));
     if (st.deMortarAmmo > 0 && !st.deFired.mortars) options.push({ gun: 'mortars', score: (germanMortarTarget(st) ? 2.5 : -1) + st.rand() });
     if (st.deArtilleryAmmo > 0 && !st.deFired.artillery) options.push({ gun: 'artillery', score: (germanArtilleryTarget(st) ? 2.5 : -1) + st.rand() });
+    if (st.deBomberAmmo > 0 && !st.deFired.bomber) options.push({ gun: 'bomber', score: (bestBomberRun(st, 'de') ? 2.5 : -1) + st.rand() });
     return options.sort((a, b) => b.score - a.score)[0];
   }
 
@@ -1732,7 +1897,7 @@ const Sim = (() => {
   }
 
   // Can any American piece move on this token?
-  const usCanMove = st => canFire(st, 'mortars') || canFire(st, 'artillery') || st.units.some(u => u.side === 'us' && u.x !== null && (canAct(st, u) || canSelfRally(st, u) || (u.kind === 'captain' && captainCanRally(st, u))));
+  const usCanMove = st => SUPPORT.some(w => canFire(st, w)) || st.units.some(u => u.side === 'us' && u.x !== null && (canAct(st, u) || canSelfRally(st, u) || (u.kind === 'captain' && captainCanRally(st, u))));
 
   // The bag is empty: the round (the hour) ends: has the village fallen, are the Germans gone? Then the next round
   function endRound(st) {
@@ -1821,10 +1986,13 @@ const Sim = (() => {
       if (!missed) u.down = false;
     }
     st.fired = {};
+    // A new round: the bombers' compasses spin afresh
+    st.spin = {};
     reinforcements(st, rep);
   }
 
   return {
+    bomberHeading, bomberEdges, bomberLine, bombNeed, bombWhy, bestBomberRun,
     newGame, roll, endTurn, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, chargeSpots,
     rallyTargets, canAct, canReact, firepower, canCallFire, holdsObjective, roundText, roomFor,
     startGermanHour, germanStep, answer, finishHour, startRound, drawToken, endGermanToken, activationOver, passToken, usCanMove, endRound, canFire, actSkip, actSkipShot, skipSupport,

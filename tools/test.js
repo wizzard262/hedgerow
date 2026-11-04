@@ -770,6 +770,131 @@ check('bazooka and Panzerschreck teams go one field further on a Move & shoot an
   assert(!reaches(Sim.moveShootSpots(st, team), 3, 5), 'a captain moves three fields and shoots');
 });
 
+// The table with only these pieces on it, for the bomber's checks: { id: [x, y] }
+function bomberTable(places, seed = 3) {
+  const st = Sim.newGame(seed);
+  st.wire = {}; st.hedges = {};
+  for (const u of st.units) if (!(u.id in places)) u.x = u.y = null;
+  for (const id in places) { const u = Sim.unitById(st, id); u.x = places[id][0]; u.y = places[id][1]; u.at = null; }
+  return st;
+}
+
+check('the bomber flies a straight line: every field it crosses, in order, through the chosen field', () => {
+  // All the way up one column, along one row, and corner to corner on a 45° line (touching a corner is not crossing)
+  const north = Sim.bomberLine(3, 7, 0), east = Sim.bomberLine(0, 2, 4), slant = Sim.bomberLine(0, 7, 2);
+  assert(north.length === ROWS && north.every(f => f.x === 3), 'north did not fly up one column');
+  assert(north[0].y === 7 && north[ROWS - 1].y === 0, 'north did not fly in order');
+  assert(east.length === COLS && east.every(f => f.y === 2), 'east did not fly along one row');
+  assert(slant.length === 8 && slant.every(f => f.x + f.y === 7), `the 45° line crossed ${slant.length} fields`);
+  // Every one of the sixteen headings through every edge field: unbroken, and through the chosen field
+  for (let heading = 0; heading < BOMBER.directions; heading++) for (const e of Sim.bomberEdges()) {
+    const line = Sim.bomberLine(e.x, e.y, heading);
+    assert(line.some(f => f.x === e.x && f.y === e.y), `heading ${heading} missed its field`);
+    for (let k = 1; k < line.length; k++) {
+      const step = Math.abs(line[k].x - line[k - 1].x) + Math.abs(line[k].y - line[k - 1].y);
+      assert(step >= 1 && step <= 2, `heading ${heading} from ${e.x},${e.y} jumped ${step}`);
+    }
+  }
+  assert(Sim.bomberEdges().length === 2 * COLS + 2 * ROWS - 4, 'not every edge field can be chosen');
+  assert(COMPASS_POINTS.length === BOMBER.directions, 'the compass does not have sixteen names');
+});
+
+check('the bomber: picked again it spins to the same direction; a new round spins afresh; a side spins its own', () => {
+  const st = Sim.newGame(5);
+  const first = Sim.bomberHeading(st, 'us');
+  for (let k = 0; k < 20; k++) assert(Sim.bomberHeading(st, 'us') === first, 'the compass changed in the round');
+  assert(st.spin.us === first && st.spin.de === undefined, 'one side spinning spun the other');
+  let changed = false;
+  for (let k = 0; k < 30 && !changed; k++) { Sim.endRound(st); changed = Sim.bomberHeading(st, 'us') !== first; }
+  assert(changed, 'the compass never spun again in a new round');
+});
+
+check('the bomber: a bomb at 5+ on every piece under the line, either side, plus cover; one run only', () => {
+  const st = bomberTable({ A: [3, 7], T1: [3, 6], d1: [3, 1], mg1: [6, 6] });
+  st.spin.us = 0;
+  const r = Sim.actFire(st, 'bomber', 3, 7);
+  assert(r.ok, 'the bomber could not fly');
+  const bombs = st.fx.filter(f => f.kind === 'bomb');
+  assert(st.fx[0].kind === 'flyover' && st.fx[0].side === 'us', 'the plane is not on the table');
+  // One die each for the three under the line, none for the MG off it
+  assert(bombs.length === 3 && bombs.every(f => f.faces.length === 1), `${bombs.length} bombs fell`);
+  assert(!bombs.some(f => f.to.id === 'mg1'), 'a piece off the line was bombed');
+  assert(st.ammo.bomber === 0, 'the run was not used');
+  assert(!Sim.actFire(st, 'bomber', 3, 7).ok, 'it flew twice');
+  // Out of runs: no token next round
+  const pieces = st.units.filter(u => u.side === 'us' && u.x !== null && !u.acted).length;
+  st.fired = {};
+  Sim.startRound(st);
+  assert(st.bag.us === pieces + 2, 'a bomber with no run left still has a token');
+});
+
+check('the bomber only goes through an edge field, on your token; the score adds cover and take cover', () => {
+  const st = bomberTable({ A: [7, 4] });
+  assert(!Sim.actFire(st, 'bomber', 5, 4).ok, 'it flew through a field in the middle of the board');
+  const men = Sim.unitById(st, 'A');
+  // Saint-Jean's fields are houses: +1 against bombs as against shells
+  assert(Sim.bombNeed(st, men) === BOMBER.need + 1, `men in a village need ${Sim.bombNeed(st, men)}`);
+  assert(Sim.bombWhy(st, men)[0] === '5+' && Sim.bombWhy(st, men).includes('+1 cover'), Sim.bombWhy(st, men).join(', '));
+  men.x = 0; men.y = 6;
+  assert(Sim.bombNeed(st, men) === BOMBER.need, 'men in the open do not need 5+');
+  men.down = true;
+  assert(Sim.bombNeed(st, men) === BOMBER.need + TAKE_COVER, 'taking cover does not add two');
+  // With the bag: not on a German token
+  const bag = bomberTable({ A: [0, 6] });
+  Sim.startRound(bag);
+  bag.drawn = 'de';
+  assert(!Sim.actFire(bag, 'bomber', 0, 6).ok, 'it flew on a German token');
+});
+
+check('the bomber can stay away: the token is used, the run is kept, and it is back in the bag', () => {
+  const st = bomberTable({ A: [0, 6], d1: [9, 1] });
+  Sim.startRound(st);
+  st.drawn = 'us'; st.activeId = null;
+  assert(Sim.skipSupport(st, 'bomber').ok, 'it could not stay away');
+  assert(st.ammo.bomber === 1 && st.fired.bomber && st.activeId === 'gun:bomber', 'staying away used the run or kept the token');
+  Sim.endRound(st);
+  Sim.startRound(st);
+  assert(Sim.tokensHome(st).us.from.some(w => w.gun === 'bomber') && st.bag.us === 1 + 3, 'it did not get a token next round');
+});
+
+check('the German bomber: your pieces under the line are each asked, then it flies once; its line is worth flying', () => {
+  const st = bomberTable({ A: [3, 7], B: [3, 5], C: [3, 3], d1: [9, 1] });
+  Sim.startRound(st);
+  st.spin.de = 0;
+  st.deFired = {};
+  st.drawn = 'de';
+  st.de = { queue: [], mortar: false, artillery: false, bomber: true, rep: [], ask: null, move: { gun: 'bomber', what: '' } };
+  const asked = [];
+  let r = Sim.germanStep(st);
+  while (r.ask) {
+    assert(r.ask.bombed, 'it asked about something else');
+    assert(st.deBomberAmmo === 1, 'the bombs fell before everyone was asked');
+    asked.push(r.ask.target);
+    Sim.answer(st, r.ask.target === 'B');
+    r = Sim.germanStep(st);
+  }
+  assert(r.done, 'the run did not end');
+  assert(asked.length === 3 && asked.includes('A') && asked.includes('B') && asked.includes('C'), `asked ${asked.join(', ')}`);
+  assert(st.deBomberAmmo === 0, 'the run was not used');
+  const bombs = st.fx.filter(f => f.kind === 'bomb' && f.side === 'de');
+  assert(bombs.length === 3, `${bombs.length} bombs fell`);
+  assert(bombs.find(f => f.to.id === 'B').need === BOMBER.need + TAKE_COVER, 'taking cover did not count');
+  assert(Sim.unitById(st, 'B').down, 'B did not get down');
+  // Nothing worth bombing: it stays away and keeps its run
+  const quiet = bomberTable({ A: [3, 7], d1: [9, 1] });
+  Sim.startRound(quiet);
+  quiet.spin.de = 0;
+  quiet.de = { queue: [], mortar: false, artillery: false, bomber: true, rep: [], ask: null, move: { gun: 'bomber', what: '' } };
+  assert(Sim.germanStep(quiet).done && quiet.deBomberAmmo === 1, 'it flew for one piece');
+});
+
+check('the computer never flies a line that catches more of its own than the enemy', () => {
+  const st = bomberTable({ A: [3, 7], B: [3, 5], C: [3, 3], d1: [3, 6], d2: [3, 4], d3: [3, 1] });
+  st.spin.de = 0;
+  const run = Sim.bestBomberRun(st, 'de');
+  assert(!run || run.x !== 3, 'it flew up the column with its own men in');
+});
+
 check('machine guns fire five dice', () => {
   assert(PIECES.mg.soft === 5 && PIECES.mg42.soft === 5, 'an MG team does not fire five dice');
 });
@@ -1127,7 +1252,7 @@ check('the blind bag: a token for each piece, one piece a token, the round ends 
   Sim.startRound(st);
   const us = st.units.filter(u => u.side === 'us' && u.x !== null).length, de = st.units.filter(u => u.side === 'de' && u.x !== null).length;
   // A token for every piece, and for each side's mortars and artillery while they have rounds
-  const usGuns = ['mortars', 'artillery'].filter(w => st.ammo[w] > 0).length, deGuns = (st.deMortarAmmo > 0) + (st.deArtilleryAmmo > 0);
+  const usGuns = ['mortars', 'artillery', 'bomber'].filter(w => st.ammo[w] > 0).length, deGuns = (st.deMortarAmmo > 0) + (st.deArtilleryAmmo > 0) + (st.deBomberAmmo > 0);
   assert(st.bag.us === us + usGuns && st.bag.de === de + deGuns, `the bag holds ${st.bag.us}+${st.bag.de}, not ${us + usGuns}+${de + deGuns}`);
   const turn = st.turn;
   let draws = 0;
@@ -1160,7 +1285,7 @@ check('out of rounds, a gun leaves the bag; any piece can skip its turn', () => 
   st.ammo.mortars = 0;
   Sim.startRound(st);
   const pieces = st.units.filter(u => u.side === 'us' && u.x !== null).length;
-  assert(st.bag.us === pieces + 1, 'the mortars with no rounds still had a token');
+  assert(st.bag.us === pieces + 2, 'the mortars with no rounds still had a token');
   // Draw until an American token, then skip with a piece: the token is used and the piece has given up its move
   for (let side = Sim.drawToken(st); side && side !== 'us'; side = Sim.drawToken(st)) {
     for (let r = Sim.germanStep(st); !r.done; r = Sim.germanStep(st)) Sim.answer(st, false);

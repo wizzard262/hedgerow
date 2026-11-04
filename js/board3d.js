@@ -71,10 +71,11 @@ const Board = (() => {
   // The mortars and artillery of each side, off the board behind its own back line, near the top (Steve): the Americans
   // left of the board, the Germans right. Where each stands, and where its pile of rounds goes (behind it)
   const GUNS = {
-    us: { artillery: { x: -0.7, z: 2.55, pileX: -1.45, pileZ: 2.3 }, mortars: { x: -0.7, z: 4.05, pileX: -1.45, pileZ: 3.85 } },
-    de: { artillery: { x: COLS + 0.7, z: 2.55, pileX: COLS + 1.25, pileZ: 2.3 }, mortars: { x: COLS + 0.7, z: 4.05, pileX: COLS + 1.25, pileZ: 3.85 } },
+    us: { artillery: { x: -0.7, z: 2.55, pileX: -1.45, pileZ: 2.3 }, mortars: { x: -0.7, z: 4.05, pileX: -1.45, pileZ: 3.85 }, bomber: { x: -0.6, z: 5.5 } },
+    de: { artillery: { x: COLS + 0.7, z: 2.55, pileX: COLS + 1.25, pileZ: 2.3 }, mortars: { x: COLS + 0.7, z: 4.05, pileX: COLS + 1.25, pileZ: 3.85 }, bomber: { x: COLS + 0.5, z: 5.5 } },
   };
-  const GUN_NAMES = { us: { artillery: 'US artillery', mortars: 'US mortars' }, de: { artillery: 'German artillery', mortars: 'German mortars' } };
+  const GUN_NAMES = { us: { artillery: 'US artillery', mortars: 'US mortars', bomber: `US ${BOMBER_NAMES.us}` }, de: { artillery: 'German artillery', mortars: 'German mortars', bomber: `German ${BOMBER_NAMES.de}` } };
+  const SUPPORT = ['artillery', 'mortars', 'bomber'];
   const PILE_MAX = 12;
   let support = null;           // side → which → { model, rounds: [] }
 
@@ -86,14 +87,17 @@ const Board = (() => {
     support = {};
     for (const side of ['us', 'de']) {
       support[side] = {};
-      for (const which of ['artillery', 'mortars']) {
+      for (const which of SUPPORT) {
         const spot = GUNS[side][which];
-        const model = Models.mergeParts(which === 'artillery' ? Models.howitzer(side) : Models.mortar(side));
-        model.scale.setScalar(which === 'artillery' ? TANKS * 1.7 : MEN * 1.3);
+        const makers = { artillery: Models.howitzer, mortars: Models.mortar, bomber: Models.bomberOnStand };
+        const model = Models.mergeParts(makers[which](side));
+        const sizes = { artillery: TANKS * 1.7, mortars: MEN * 1.3, bomber: 1 };
+        model.scale.setScalar(sizes[which]);
         built.add(at(model, spot.x, 0, spot.z, 0, gunFacing(side), 0));
         // The pile of rounds beside it: shells standing in rows of three, mortar bombs lying in rows of four
+        // (the bomber carries its own)
         const rounds = [];
-        for (let k = 0; k < PILE_MAX; k++) {
+        for (let k = 0; k < PILE_MAX && which !== 'bomber'; k++) {
           const r = Models.round(which === 'artillery' ? 'shell' : 'bomb');
           r.scale.setScalar(which === 'artillery' ? TANKS * 1.7 : MEN * 1.3);
           const perRow = which === 'artillery' ? 3 : 4, gap = which === 'artillery' ? 0.07 : 0.075;
@@ -104,7 +108,9 @@ const Board = (() => {
         const name = word(GUN_NAMES[side][which], '#efe6d2', false);
         name.scale.multiplyScalar(1.5);
         name.material.depthTest = true;
-        name.position.set(spot.x + (side === 'us' ? -0.2 : 0.2), 0.05, spot.z + 0.55);
+        // (the plane stands near the edge of the screen: its name goes in towards the board)
+        const nameOut = which === 'bomber' ? 0 : 0.2;
+        name.position.set(spot.x + (side === 'us' ? -nameOut : nameOut), 0.05, spot.z + 0.55);
         built.add(name);
         support[side][which] = { model, rounds, name };
       }
@@ -116,10 +122,10 @@ const Board = (() => {
     if (!support) return null;
     const r = renderer.domElement.getBoundingClientRect();
     ray.setFromCamera(new T.Vector2((clientX - r.left) / r.width * 2 - 1, -(clientY - r.top) / r.height * 2 + 1), camera);
-    for (const which of ['artillery', 'mortars']) if (support.us[which].model.visible && ray.intersectObject(support.us[which].model, true).length) return which;
+    for (const which of SUPPORT) if (support.us[which].model.visible && ray.intersectObject(support.us[which].model, true).length) return which;
     const p = new T.Vector3();
     if (!ray.ray.intersectPlane(table, p)) return null;
-    for (const which of ['artillery', 'mortars']) {
+    for (const which of SUPPORT) {
       const spot = GUNS.us[which];
       if (support.us[which].model.visible && Math.hypot(p.x - spot.x, p.z - spot.z) < 0.45) return which;
     }
@@ -129,7 +135,7 @@ const Board = (() => {
   // A ring under each of your guns, like the pieces: green if it can still fire this hour, grey if not, white if chosen
   function gunRings(state) {
     if (!state) return;
-    for (const which of ['artillery', 'mortars']) {
+    for (const which of SUPPORT) {
       const spot = GUNS.us[which], s = state[which];
       if (!s.present) continue;
       const colour = s.chosen ? 0xfff6dc : s.ready ? 0x7fd06a : 0x77776f;
@@ -260,10 +266,10 @@ const Board = (() => {
   // Show as many rounds beside each gun as it has shots left
   function updateSupport(st) {
     if (!support) return;
-    const left = { us: { artillery: st.ammo.artillery, mortars: st.ammo.mortars }, de: { artillery: st.deArtilleryAmmo || 0, mortars: st.deMortarAmmo || 0 } };
+    const left = { us: st.ammo, de: { artillery: st.deArtilleryAmmo || 0, mortars: st.deMortarAmmo || 0, bomber: st.deBomberAmmo || 0 } };
     // Which guns have fired this hour, each side
     const fired = { us: st.fired || {}, de: st.deFired || {} };
-    for (const side of ['us', 'de']) for (const which of ['artillery', 'mortars']) {
+    for (const side of ['us', 'de']) for (const which of SUPPORT) {
       const gun = support[side][which], n = left[side][which];
       gun.rounds.forEach((r, k) => { r.visible = k < n; });
       // Out of rounds: the gun isn't on the table this hour (Steve); it comes back when more arrive
@@ -509,6 +515,124 @@ const Board = (() => {
       }
       aim(g, x, y, 0);
     }
+  }
+
+  // The bomber's compass (Steve): sixteen points on a card lying on the table above the board, its needle spinning round
+  // and stopping on the way the bomber will fly. The card lies flat, so the needle points that way across the board too
+  const COMPASS = { x: COLS / 2, z: -0.95, radius: 0.8, spin: 1700, turns: 3 };
+  let compass = null;                // { group, needle, t0, to }: built the first time it is needed
+  let compassShown = false;
+  function compassCard() {
+    const c = document.createElement('canvas');
+    c.width = c.height = 512;
+    const g = c.getContext('2d');
+    // The card
+    g.fillStyle = '#efe6d2';
+    g.beginPath(); g.arc(256, 256, 250, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = '#2a2017'; g.lineWidth = 8; g.stroke();
+    // A tick for each of the points: long on the four main ones, shorter on the rest
+    for (let k = 0; k < BOMBER.directions; k++) {
+      const a = k * 2 * Math.PI / BOMBER.directions, main = k % 4 === 0, half = k % 2 === 0;
+      const inner = main ? 150 : half ? 180 : 200;
+      g.lineWidth = main ? 9 : half ? 6 : 4;
+      g.beginPath();
+      g.moveTo(256 + Math.sin(a) * inner, 256 - Math.cos(a) * inner);
+      g.lineTo(256 + Math.sin(a) * 236, 256 - Math.cos(a) * 236);
+      g.stroke();
+    }
+    // The four main letters
+    g.fillStyle = '#2a2017'; g.font = 'bold 56px Georgia, serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    [['N', 0], ['E', 1], ['S', 2], ['W', 3]].forEach(([letter, k]) => {
+      const a = k * Math.PI / 2;
+      g.fillText(letter, 256 + Math.sin(a) * 112, 256 - Math.cos(a) * 112);
+    });
+    return new T.CanvasTexture(c);
+  }
+  function buildCompass() {
+    const group = new T.Group();
+    const card = new T.Mesh(new T.CircleGeometry(COMPASS.radius, 48), new T.MeshBasicMaterial({ map: compassCard() }));
+    group.add(at(card, 0, 0, 0, -Math.PI / 2, 0, 0));
+    // The needle: a long red arrow, its point on the way it flies
+    const r = COMPASS.radius;
+    const shape = new T.Shape();
+    shape.moveTo(0, r * 0.82); shape.lineTo(r * 0.11, -r * 0.28); shape.lineTo(0, -r * 0.14); shape.lineTo(-r * 0.11, -r * 0.28); shape.closePath();
+    const arrow = new T.Mesh(new T.ShapeGeometry(shape), new T.MeshBasicMaterial({ color: 0xc8261c }));
+    const needle = new T.Group();
+    needle.add(at(arrow, 0, 0, 0, -Math.PI / 2, 0, 0));
+    needle.position.y = 0.01;
+    group.add(needle);
+    group.position.set(COMPASS.x, 0.03, COMPASS.z);
+    scene.add(group);
+    compass = { group, needle, t0: 0, to: 0 };
+  }
+  // Show the compass while heading is a number, hide it when null. Each time it comes up it spins
+  function setCompass(heading) {
+    if (heading === null || heading === undefined) {
+      compassShown = false;
+      if (compass) compass.group.visible = false;
+      return;
+    }
+    if (compassShown) return;
+    compassShown = true;
+    if (!compass) buildCompass();
+    compass.group.visible = true;
+    compass.t0 = performance.now();
+    compass.to = -heading * 2 * Math.PI / BOMBER.directions;
+  }
+  // Picked again while showing: it spins again next time the marks are built
+  function respinCompass() { compassShown = false; }
+  // One frame of the spin: fast, slowing to a stop on the way. Returns true while it is still turning
+  function moveCompass(now) {
+    if (!compass || !compass.group.visible) return false;
+    const p = Math.min(1, (now - compass.t0) / COMPASS.spin);
+    const slowing = 1 - Math.pow(1 - p, 3);
+    compass.needle.rotation.y = compass.to + (1 - slowing) * COMPASS.turns * 2 * Math.PI;
+    return p < 1;
+  }
+
+  // The bomber's line on the table: a red strip along it, across the whole board
+  function markFlightLine(run) {
+    const line = Sim.bomberLine(run.x, run.y, run.heading);
+    const angle = run.heading * 2 * Math.PI / BOMBER.directions;
+    const dir = { x: Math.sin(angle), z: -Math.cos(angle) };
+    const from = line[0].t - 0.5, to = line[line.length - 1].t + 0.5;
+    const middle = (from + to) / 2;
+    const strip = new T.Mesh(new T.PlaneGeometry(to - from, 0.05), new T.MeshBasicMaterial({ color: 0xe8352a, transparent: true, opacity: 0.8, depthWrite: false }));
+    at(strip, run.x + 0.5 + dir.x * middle, 0.012, run.y + 0.5 + dir.z * middle, -Math.PI / 2, 0, Math.atan2(-dir.z, dir.x));
+    marks.add(strip);
+  }
+
+  // The bomber in the air (Steve): in from off the screen, straight along its line and off the screen the other side
+  const FLIGHT = { speed: 6.5, lead: 8, height: 0.8, fall: 0.5, size: 1.25 };
+  let flight = null;                 // { model, from, dir, length, t0, start }
+  let flightUntil = 0;               // when it has gone: the page waits for that before the next token
+  function endFlight() {
+    if (flight) { scene.remove(flight.model); freeObject(flight.model); }
+    flight = null;
+  }
+  function startFlight(f) {
+    endFlight();
+    const angle = f.heading * 2 * Math.PI / BOMBER.directions;
+    const dir = { x: Math.sin(angle), z: -Math.cos(angle) };
+    // From before the first field under it to after the last, measured from the chosen field
+    const start = f.line[0].t - FLIGHT.lead, end = f.line[f.line.length - 1].t + FLIGHT.lead;
+    const model = Models.mergeParts(Models.bomber(f.side));
+    model.rotation.y = -Math.atan2(dir.z, dir.x);
+    model.scale.setScalar(FLIGHT.size);
+    scene.add(model);
+    const length = (end - start) / FLIGHT.speed;
+    flight = { model, centre: { x: f.x + 0.5, z: f.y + 0.5 }, dir, length, start, t0: performance.now() };
+    flightUntil = flight.t0 + length * 1000;
+    f.length = length;
+    Sound.play('bomberPass', 0, false, length);
+    moveFlight(0);
+  }
+  // Where it is t seconds into its flight; off the far side it has gone
+  function moveFlight(t) {
+    if (!flight) return;
+    if (t > flight.length) { endFlight(); return; }
+    const along = flight.start + t * FLIGHT.speed;
+    flight.model.position.set(flight.centre.x + flight.dir.x * along, FLIGHT.height, flight.centre.z + flight.dir.z * along);
   }
 
   // A piece picked hops up a little and drops back down (Steve), yours or the Germans', and so do the mortars and
@@ -1132,7 +1256,7 @@ const Board = (() => {
   // How long until every shot on the table has landed and every fight is shown (Steve: the game's end waits for it)
   function settledIn() {
     const untils = Object.values(held).map(h => h.until);
-    const latest = Math.max(meleeUntil, ...untils);
+    const latest = Math.max(meleeUntil, flightUntil, ...untils);
     return Math.max(0, latest - performance.now());
   }
 
@@ -1220,6 +1344,10 @@ const Board = (() => {
       seenFx.add(f);
       // A rally: its words float up off the piece
       if (f.kind === 'rally') { shots.push({ f, t0: performance.now(), objs: [] }); continue; }
+      // The bomber itself
+      if (f.kind === 'flyover') { startFlight(f); shots.push({ f, t0: performance.now(), objs: [] }); continue; }
+      // A bomb falls as the plane passes over its field
+      if (f.kind === 'bomb' && flight) f.fall = (f.along - flight.start) / FLIGHT.speed + FLIGHT.fall;
       // Hand to hand: its own show, blow by blow
       if (f.kind === 'melee') {
         const t0 = performance.now() + shots.filter(s => performance.now() - s.t0 < 300).length * 180;
@@ -1234,14 +1362,15 @@ const Board = (() => {
       const turning = shooter && (Sim.isTank(shooter) || shooter.kind === 'pak') ? TANK_TURN * 1000 : 0;
       // How many bases fire it: one round each (Steve)
       f.bases = shooter && pieces[shooter.id] ? pieces[shooter.id].userData.bases.filter(b => b.visible).length : 1;
-      const t0 = performance.now() + shots.filter(s => performance.now() - s.t0 < 300).length * 180 + turning;
+      // (bombs keep to the plane's own time)
+      const t0 = f.kind === 'bomb' ? performance.now() : performance.now() + shots.filter(s => performance.now() - s.t0 < 300).length * 180 + turning;
       shots.push({ f, t0, objs: [] });
       // The target keeps its bases (or stays on the table) until this shot lands
       const target = f.to && pieces[f.to.id];
       if (target) {
         // (the last of a tank pair's shells lands a moment after the first)
         const lastRound = f.weapon === 'gun' ? (roundsOf(f) - 1) * TANK_GAP : 0;
-        const land = f.from ? (f.weapon === 'gun' ? 0.25 : f.weapon === 'rocket' ? 0.45 : 0.35) + lastRound : f.kind === 'shell' ? shellFlight(f) : 0;
+        const land = f.from ? (f.weapon === 'gun' ? 0.25 : f.weapon === 'rocket' ? 0.45 : 0.35) + lastRound : f.kind === 'shell' || f.kind === 'bomb' ? shellFlight(f) : 0;
         const until = t0 + (land + 0.15) * 1000;
         const before = held[f.to.id];
         held[f.to.id] = {
@@ -1270,12 +1399,15 @@ const Board = (() => {
           Sound.play('incoming', wait + 0.25, flight - 0.25);
         }
         if (sameMission <= 4) Sound.play('he', wait + flight, f.support === 'artillery');
+      } else if (f.kind === 'bomb') {
+        // Each bomb bursting as it lands
+        Sound.play('he', wait + shellFlight(f), true);
       }
     }
   }
 
   // How long a mortar bomb or an artillery shell is in the air, seen arcing in
-  const shellFlight = f => (f.support === 'artillery' ? 1.6 : 1.3);
+  const shellFlight = f => (f.kind === 'bomb' ? f.fall || 0 : f.support === 'artillery' ? 1.6 : 1.3);
 
   // Where a round is on its way, p from 0 (leaving the mortar or gun off the board) to 1 (landing): mortar bombs go up
   // high and drop steeply, artillery shells on a long arc
@@ -1301,12 +1433,15 @@ const Board = (() => {
   function playShots(now) {
     while (fxMarks.children.length) { const o = fxMarks.children[0]; fxMarks.remove(o); freeObject(o); }
     // (a hand-to-hand fight stays as long as its blows take)
-    shots = shots.filter(s => now - s.t0 < (s.f.kind === 'melee' ? (s.f.strikes.length * MELEE_BLOW + 2) * 1000 : 5000));
+    // (the bomber stays until it has flown off, a bomb until its words have faded)
+    const lasts = f => (f.kind === 'melee' ? (f.strikes.length * MELEE_BLOW + 2) * 1000 : f.kind === 'flyover' ? f.length * 1000 + 200 : f.kind === 'bomb' ? ((f.fall || 0) + 3) * 1000 : 5000);
+    shots = shots.filter(s => now - s.t0 < lasts(s.f));
     for (const s of shots) {
       const f = s.f, t = (now - s.t0) / 1000;
       if (t < 0) continue;
       const add = o => { fxMarks.add(o); return o; };
       if (f.kind === 'melee') { playMelee(f, t, add); continue; }
+      if (f.kind === 'flyover') { moveFlight(t); continue; }
       // A rally (Steve): "Rallied!" in green (or the captain's "Up and moving"), rising off the piece
       if (f.kind === 'rally') {
         if (t > 1.8 || !pieces[f.to.id]) continue;
@@ -1364,7 +1499,13 @@ const Board = (() => {
         }
       }
       // A mortar bomb or shell arcing in: a glowing round with a trail of smoke behind it
-      const land = from ? flight : f.kind === 'shell' ? shellFlight(f) : 0, lt = t - land;
+      const land = from ? flight : f.kind === 'shell' || f.kind === 'bomb' ? shellFlight(f) : 0, lt = t - land;
+      // A bomb on its way down from the plane
+      if (f.kind === 'bomb' && lt < 0 && lt > -FLIGHT.fall) {
+        const b = add(glow('rgba(40,36,30,1)'));
+        b.scale.setScalar(0.09);
+        b.position.set(to.x, FLIGHT.height * (-lt / FLIGHT.fall), to.z);
+      }
       if (!from && f.kind === 'shell' && lt < 0) {
         const p = t / land;
         // The flash and smoke as it fires, at the mortar or gun off the board
@@ -1401,7 +1542,7 @@ const Board = (() => {
           w.position.set(to.x, 0.75 + rt * 0.15, to.z);
         }
       }
-      const big = f.kind === 'shell' || (f.weapon === 'gun' && !f.armour) || f.weapon === 'rocket';
+      const big = f.kind === 'shell' || f.kind === 'bomb' || (f.weapon === 'gun' && !f.armour) || f.weapon === 'rocket';
       // A tank pair's shells land one after the other: each its own burst (the first lands at lt = 0)
       const bursts = f.weapon === 'gun' ? roundsOf(f) : 1;
       if (big) for (let k = 0; k < bursts; k++) { const bt = lt - k * TANK_GAP; if (bt >= 0) explosion(add, f, to, bt); }
@@ -1461,7 +1602,7 @@ const Board = (() => {
 
   // High explosive going off: how big depends on what it was (artillery biggest, then mortars, a tank's shell, a rocket)
   function explosion(add, f, to, lt) {
-    const size = f.support === 'artillery' ? 1 : f.kind === 'shell' ? 0.8 : f.weapon === 'gun' ? 0.75 : 0.55;
+    const size = f.support === 'bomber' ? 1.15 : f.support === 'artillery' ? 1 : f.kind === 'shell' ? 0.8 : f.weapon === 'gun' ? 0.75 : 0.55;
     // The flash
     if (lt < 0.12) { const b = add(glow('rgba(255,250,220,1)')); b.material.depthTest = false; b.scale.setScalar(1.3 * size); b.position.set(to.x, 0.15, to.z); }
     // The ball of fire, swelling and dying
@@ -1619,7 +1760,8 @@ const Board = (() => {
   // ["1st Platoon", "needs 5+ · 2 hits"]: who fired, then the score each die needed and the hits
   function shotTagText(st, f) {
     const shooter = f.from ? st.units.find(u => u.id === f.from.id) : null;
-    const who = shooter ? shooter.name : `${f.side === 'de' ? 'German' : 'Our'} ${f.support === 'artillery' ? 'artillery' : 'mortars'}`;
+    const gunName = f.support === 'bomber' ? BOMBER_NAMES[f.side] : f.support === 'artillery' ? 'artillery' : 'mortars';
+    const who = shooter ? shooter.name : `${f.side === 'de' ? 'German' : 'Our'} ${gunName}`;
     const need = f.need > MAX_NEED ? 'HAIL MARY: 6, then 6' : `needs ${f.need}+`;
     const hits = f.faces.filter(r => r.hit).length;
     // Taking cover (Steve: the tag says so; its +2 is in the score needed)
@@ -1732,6 +1874,8 @@ const Board = (() => {
     shots = [];
     for (const id in held) delete held[id];
     meleeUntil = 0;
+    endFlight(); flightUntil = 0;
+    setCompass(null);
     diceDue = null; diceComing = [];
     labelKey = ''; reticleNudges = new Map();
     marksReady = false; shadowStale = true;
@@ -1765,7 +1909,7 @@ const Board = (() => {
     const moving = glide(dt);
     const hopping = moveHop(now);
     const firing = playShots(now);
-    const flying = moveCoin(now) | moveHoming(now);
+    const flying = moveCoin(now) | moveHoming(now) | moveCompass(now);
     // Shadows: worked out again only while something moves, and once more after it stops
     const busy = moving || hopping || firing || flying || shadowStale;
     renderer.shadowMap.needsUpdate = busy || wasBusy;
@@ -1781,10 +1925,12 @@ const Board = (() => {
   function buildMarks(st, view) {
     pulsers = [];
     while (marks.children.length) { const o = marks.children[0]; marks.remove(o); freeObject(o); }
+    setCompass(view.compass);
     if (view.hover) mark(view.hover.x, view.hover.y, 'hover', 0.02);
     for (const s of view.spots || []) mark(s.x, s.y, s.kind, 0.05, s);
     // Where a shot that hits several pieces would land (Steve): the target's field bright, the fields its blast reaches paler
     for (const b of view.blast || []) mark(b.x, b.y, b.main ? 'blast' : 'splash', 0.03);
+    if (view.flightLine) markFlightLine(view.flightLine);
     showStand(st, view);
     gunRings(view.guns);
     if (view.selected && view.selected.x !== null && pieces[view.selected.id]) {
@@ -1867,7 +2013,8 @@ const Board = (() => {
     // The models, laid out as on the table: a platoon's bases in a loose triangle, tanks side by side
     const g = new T.Group();
     let bases;
-    if (kind === 'mortars' || kind === 'artillery') {
+    if (kind === 'bomber') bases = [Models.bomberOnStand(side)];
+    else if (kind === 'mortars' || kind === 'artillery') {
       const m = kind === 'artillery' ? Models.howitzer(side) : Models.mortar(side);
       m.scale.setScalar(kind === 'artillery' ? TANKS * 1.7 : MEN * 1.3);
       bases = [m];
@@ -1910,5 +2057,5 @@ const Board = (() => {
     return { x: r.left + (p.x + 1) / 2 * r.width, y: r.top + (1 - p.y) / 2 * r.height };
   }
 
-  return { reset, diceLeft, labelReport: () => labelReport, init, resize, render, fieldAt, pieceAt, pieceUnder, portrait, bounce, bounceGun, busyFor, settledIn, gunAt, targetAt, screenPoint, pieceScreen, labelBox, clearDice, flyToken, clearToken, returnTokens, canvas: () => renderer.domElement };
+  return { reset, diceLeft, labelReport: () => labelReport, init, resize, render, fieldAt, pieceAt, pieceUnder, portrait, bounce, bounceGun, busyFor, settledIn, gunAt, targetAt, screenPoint, pieceScreen, labelBox, clearDice, respinCompass, flyToken, clearToken, returnTokens, canvas: () => renderer.domElement };
 })();

@@ -108,6 +108,13 @@ const MORTARS = { name: '81 mm mortars', dice: 4, splash: 0, ammo: 6 };
 const ARTILLERY = { name: '105 mm battery', dice: 6, splash: 1, ammo: 3, hard: 1 };
 const DE_MORTAR = { dice: 3, ammo: 8 };   // the Germans' own mortar, one mission a turn while ammo lasts
 const DE_ARTILLERY = { name: '10.5 cm battery', dice: 6, splash: 1, ammo: 2, hard: 1 };   // the Germans' guns: like ours, fewer rounds
+// The bomber (Steve): the same for both sides. One run a game; a compass spin says which way it flies; it goes straight
+// through a field chosen on the edge of the board and drops one bomb on every piece in every field under it, friend or foe.
+// need: the score a bomb needs before cover. worth: how many more enemy pieces than a side's own (each of those counts
+// one and a half) a line must catch before the computer flies it
+const BOMBER = { need: 5, dice: 1, ammo: 1, directions: 16, worth: 2 };
+const BOMBER_NAMES = { us: 'B-17', de: 'Ju 88' };
+const COMPASS_POINTS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
 
 // Who starts on each side. Each side is spread at random over its own end of the board: this share of its width,
 // in cover where possible (the x, y below are only where they would stand without that)

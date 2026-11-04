@@ -130,15 +130,17 @@ const Sound = (() => {
   // Bombers going over (Steve): a flight of heavy four-engined aircraft droning past high up, from one side of the sky
   // to the other. Each engine a low buzzing note, all beating against each other, with a rumble of air under them;
   // swelling as they come over and fading away, the pitch dropping a little as they pass
-  function bombers(t) {
-    const dur = 16 + Math.random() * 6;
+  // close: the one on the table flying right over (Steve), loud and clear, its pitch falling hard as it goes past, for
+  // `length` seconds
+  function bombers(t, close = false, length = 0) {
+    const dur = close ? length : 16 + Math.random() * 6;
     // Everything goes through one filter (far off: only the low drone carries) and one swell
     const out = ctx.createGain();
     out.gain.setValueAtTime(0.0001, t);
     out.gain.exponentialRampToValueAtTime(1, t + dur * 0.45);
     out.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     // (high enough that the engines' growl carries on small speakers, not just the deep hum)
-    const far = ctx.createBiquadFilter(); far.type = 'lowpass'; far.frequency.value = 750;
+    const far = ctx.createBiquadFilter(); far.type = 'lowpass'; far.frequency.value = close ? 2200 : 750;
     far.connect(out);
     // Across the sky, left to right or right to left
     const pan = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
@@ -152,9 +154,9 @@ const Sound = (() => {
     for (let e = 0; e < 16; e++) {
       const o = ctx.createOscillator(); o.type = 'sawtooth';
       const note = 56 + Math.random() * 16;
-      o.frequency.setValueAtTime(note * 1.03, t);
-      o.frequency.linearRampToValueAtTime(note * 0.97, t + dur);
-      const g = ctx.createGain(); g.gain.value = BOMBER_LOUDNESS / 16;
+      o.frequency.setValueAtTime(note * (close ? 1.14 : 1.03), t);
+      o.frequency.linearRampToValueAtTime(note * (close ? 0.88 : 0.97), t + dur);
+      const g = ctx.createGain(); g.gain.value = (close ? BOMBER_CLOSE : BOMBER_LOUDNESS) / 16;
       o.connect(g); g.connect(far);
       o.start(t); o.stop(t + dur + 0.1);
     }
@@ -172,10 +174,13 @@ const Sound = (() => {
     growl.start(t); growl.stop(t + dur + 0.1);
   }
   const BOMBER_LOUDNESS = 0.35;
+  const BOMBER_CLOSE = 1.1;
 
   // Each sound, starting at time t
   const SOUNDS = {
     bombers,
+    // The bomber on the table going over: `seconds` long
+    bomberPass: (t, big, seconds) => bombers(t, true, seconds),
     // Riflemen: single shots, a few men firing at their own pace
     // A shot from each base that fires (Steve)
     rifle(t, big, rounds = 3) {

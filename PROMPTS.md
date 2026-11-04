@@ -1071,6 +1071,14 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - Move & shoot three fields, Charge four. Shaken, half of that, as for everyone. (Assumed: the Panzerschreck too, as both sides behave the same)
 - Balance: the test player wins 38% in about 10.8 rounds; doing nothing wins 0%
 
+## 190. The bomber (v107)
+
+- Steve picked: not pushing yet; 6+ stays a plain 6; build the bomber with a hit that works like a mortar's
+- Each side has one, a B-17 or a Ju 88 on a flying stand below its mortars, with its own token and one run a game. Picked, a 16-point compass spins above the board (picked again it spins to the same direction; a new round spins afresh). Every edge field lights up; pointing at one draws the line; clicking sends it in from off the screen, straight through that field and off the other side, with its own loud engine sound
+- One bomb, one die, on every piece in every field the line crosses (a clipped corner counts, a touched corner doesn't), either side: 5+, plus the same cover, armour and take cover as against shells. A hit shakes, a coin toss says if it wounds; on a tank, it counts as an anti-tank die
+- Skip turn uses the token and keeps the run. Your pieces under a German bomber's line are each asked Stand fast or Take cover before it arrives. (Assumed: a side's own men under its own bomber aren't asked, as under its own artillery; the computer flies only a line catching at least 2 more enemies than its own, each of those counting 1.5)
+- Played in a visible browser, both bombers, by real clicks: no errors. Balance: the test player wins 35% in about 10.9 rounds; doing nothing wins 0%
+
 ## Sessions
 
 | # | Date | Length | What we did |

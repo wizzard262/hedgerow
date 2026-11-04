@@ -24,15 +24,32 @@ const UI = (() => {
   // For the rings under the guns
   function supportState() {
     const out = {};
-    for (const which of ['mortars', 'artillery']) out[which] = { ready: canFire(which), chosen: view.support === which, present: st.ammo[which] > 0 };
+    for (const which of ['mortars', 'artillery', 'bomber']) out[which] = { ready: canFire(which), chosen: view.support === which, present: st.ammo[which] > 0 };
     return out;
   }
   const selected = () => (view.sel ? Sim.unitById(st, view.sel) : null);
+  // A gun's name and its state, for its menu and its card
+  const GUN_TITLES = { mortars: '💥 US mortars', artillery: '💣 US artillery', bomber: `✈️ ${BOMBER_NAMES.us} bomber` };
+  function gunState(which) {
+    if (canFire(which)) return '<span class="pill ready">Ready</span>';
+    if (st.ammo[which] <= 0) return `<span class="pill bad">${which === 'bomber' ? 'Flown' : 'No rounds'}</span>`;
+    return `<span class="pill done">✓ ${which === 'bomber' ? 'Stayed away' : 'Fired'} this round</span>`;
+  }
+  // What the bomber does, one fact a line
+  function bomberFacts() {
+    const facts = [`${st.ammo.bomber} run left`];
+    // The compass only spins when it can fly
+    if (canFire('bomber')) facts.push(`🧭 Flies ${COMPASS_POINTS[Sim.bomberHeading(st, 'us')]}`);
+    facts.push(`💣 ${BOMBER.need}+ on each piece under it, yours too`);
+    return facts;
+  }
 
   // ---------- Which fields an action can use ----------
 
   function spots() {
     const u = selected();
+    // The bomber: every field round the edge of the board
+    if (view.mode === 'fire:bomber') return Sim.bomberEdges().map(f => ({ x: f.x, y: f.y, kind: 'fire' }));
     if (view.mode && view.mode.startsWith('fire:')) {
       const out = [];
       for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) if (Sim.canCallFire(st, x, y) && Sim.at(st, x, y, 'de').some(t => view.mode !== 'fire:mortars' || !Sim.isTank(t))) out.push({ x, y, kind: 'fire' });
@@ -91,6 +108,8 @@ const UI = (() => {
   // The pieces the chosen piece could shoot now, to mark with red targets: while choosing Shoot, or the shot of a Move & shoot.
   // Each with the score its dice need (shown on the target)
   function targets() {
+    // The bomber aims at a field on the edge, not at a piece
+    if (view.mode === 'fire:bomber') return [];
     // Mortars or guns chosen: every German piece in a field they can be called on to, with the score their dice need
     if (view.mode && view.mode.startsWith('fire:')) {
       // (mortars have no anti-tank dice: no target on a tank, as nothing would be rolled)
@@ -266,15 +285,14 @@ const UI = (() => {
     const menu = document.querySelector('#menu');
     menu.innerHTML = '';
     // Its state: ready, out of rounds, or already fired this round
-    const state = canFire(which) ? '<span class="pill ready">Ready</span>' : st.ammo[which] <= 0 ? '<span class="pill bad">No rounds</span>' : '<span class="pill done">✓ Fired this round</span>';
-    menu.append(el('div', 'mhead', `<b>${which === 'mortars' ? '💥 US mortars' : '💣 US artillery'}</b><span>${state}</span>`));
+    menu.append(el('div', 'mhead', `<b>${GUN_TITLES[which]}</b><span>${gunState(which)}</span>`));
     // Skip turn: hold fire this round, using the token
     const skip = el('button', '', '⏭️ Skip turn');
     skip.disabled = !canFire(which);
     skip.onclick = ev => { ev.stopPropagation(); skipGun(which); closeMenu(); };
     menu.append(skip);
     // Ready: say how to fire
-    if (canFire(which)) menu.append(el('div', 'mnote', 'Click a red target to fire'));
+    if (canFire(which)) menu.append(el('div', 'mnote', which === 'bomber' ? 'Click a lit field on the edge of the board' : 'Click a red target to fire'));
     menu.hidden = false;
     placeMenu(menu, left, top, box);
   }
@@ -459,13 +477,12 @@ const UI = (() => {
     if (!u && view.support) {
       const which = view.support, S = which === 'mortars' ? MORTARS : ARTILLERY;
       picture(box, 'us', which);
-      const status = canFire(which) ? '<span class="pill ready">Ready</span>' : st.ammo[which] <= 0 ? '<span class="pill bad">No rounds</span>' : '<span class="pill done">✓ Fired this round</span>';
-      box.append(el('div', 'name', which === 'mortars' ? '💥 US mortars' : '💣 US artillery'));
-      box.append(el('div', 'sub', `${S.name}, off the board`));
+      box.append(el('div', 'name', GUN_TITLES[which]));
+      box.append(el('div', 'sub', which === 'bomber' ? 'Off the board' : `${S.name}, off the board`));
       // What a mission does, one fact a line (Steve): where it can fire, the dice on the field, and the blast round it
-      const does = [`${st.ammo[which]} rounds left`, '🎯 Fires on a field your troops can see', `🎲 ${S.dice} dice on each German piece there`];
-      if (S.splash) does.push(`💥 ${S.splash} die on every piece in the 4 fields next to it, including your own`);
-      box.append(el('div', 'stats', [...does, status].map(s => `<span>${s}</span>`).join('')));
+      const does = which === 'bomber' ? bomberFacts() : [`${st.ammo[which]} rounds left`, '🎯 Fires on a field your troops can see', `🎲 ${S.dice} dice on each German piece there`];
+      if (which !== 'bomber' && S.splash) does.push(`💥 ${S.splash} die on every piece in the 4 fields next to it, including your own`);
+      box.append(el('div', 'stats', [...does, gunState(which)].map(s => `<span>${s}</span>`).join('')));
       const acts = el('div'); acts.id = 'actions';
       const fire = el('button', view.mode === 'fire:' + which ? 'on' : '', '🎯 Fire');
       fire.disabled = !canFire(which);
@@ -514,6 +531,7 @@ const UI = (() => {
   function hint() {
     const u = selected();
     const text = !view.mode ? (st.drawn === 'de' ? 'German token: a German piece moves…' : st.drawn === 'us' ? (st.activeId ? 'Finish its move (or Skip in its menu).' : 'Your token: pick one piece and give it its move (or Skip turn in its menu).') : 'Drawing a token…')
+      : view.mode === 'fire:bomber' ? 'Point at a lit field on the edge of the board to see the line; click it to send the bomber through.'
       : view.mode.startsWith('fire:') ? 'Click a red target, or a field with Germans your troops can see.'
       : view.mode === 'halfShot' ? 'Moved. Click a red target to fire on it (one more needed on the move), or Esc to hold fire.'
       : view.mode === 'shoot' ? 'Click a red target to fire on it. Esc cancels.'
