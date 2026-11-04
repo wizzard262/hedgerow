@@ -153,7 +153,9 @@ window.Game = (() => {
           mortarAim = t;
           aimWhich = shot.artillery ? 'artillery' : 'mortars';
           // German guns: the field and the four round it. Their mortar drops on the one piece only
-          blast = shot.artillery ? Sim.shellFields('artillery', t.x, t.y, 'de') : [];
+          // (a piece asked may not be the target: they fall round the target)
+          const centre = st.de.shelling || t;
+          blast = shot.artillery ? Sim.shellFields('artillery', centre.x, centre.y, 'de') : [];
         }
         targets = [t, ...others];
         // The one it picked stands out, as the target under your pointer does
@@ -305,7 +307,7 @@ window.Game = (() => {
     const usLeft = st.units.some(u => u.side === 'us' && u.x !== null);
     const winTitle = germansLeft ? `🏆 ${st.objective.name} is ours` : '🏆 The Germans are wiped out';
     const loseTitle = usLeft ? '⌛ The attack has failed' : '💀 The company is wiped out';
-    $('#result-title').textContent = st.won ? winTitle : loseTitle;
+    $('#result-title').textContent = st.draw ? '🤝 A draw' : st.won ? winTitle : loseTitle;
     $('#result-text').textContent = st.report[0];
     $('#result').hidden = false;
   }

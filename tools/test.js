@@ -1011,6 +1011,133 @@ check('ambush: it ends with the round; the Germans lie in wait with nothing bett
   assert(!d1.ambush && !d1.acted, 'the ambush carried over to the next round');
 });
 
+check('the Germans: their men do not charge across barbed wire', () => {
+  // A wired edge between two fields on a real board
+  const board = Sim.newGame(3);
+  let edge = null;
+  for (let y = 0; y < ROWS && !edge; y++) for (let x = 0; x < COLS - 1 && !edge; x++) if (Sim.wire(board, x, y, x + 1, y)) edge = [x, y];
+  assert(edge, 'no wire on this board');
+  for (let seed = 1; seed <= 40; seed++) {
+    const st = Sim.newGame(3);
+    for (const u of st.units) u.x = u.y = null;
+    const A = Sim.unitById(st, 'A'), d2 = Sim.unitById(st, 'd2');
+    A.x = edge[0]; A.y = edge[1]; A.at = null; A.shocked = true;
+    d2.x = edge[0] + 1; d2.y = edge[1]; d2.at = null; d2.post = { x: d2.x, y: d2.y }; d2.acted = true;
+    st.objective = { x: edge[0], y: edge[1], name: 'Here' };
+    st.rand = (s => () => (s = (s * 16807) % 2147483647) / 2147483647)(seed * 7919 + 1);
+    st.de = { queue: ['d2'], mortar: false, artillery: false, bomber: false, rep: [], ask: null, move: { id: 'd2', what: '' } };
+    for (let r = Sim.germanStep(st); !r.done; r = Sim.germanStep(st)) Sim.answer(st, false);
+    assert(!st.fx.some(f => f.kind === 'melee'), `seed ${seed}: they charged across the wire`);
+  }
+});
+
+check('the Germans: every American under their artillery is asked, then it fires once', () => {
+  const st = tableWith({ A: [3, 5], B: [3, 4], C: [0, 0], d2: [9, 5], dcap: [11, 7] });
+  const before = st.deArtilleryAmmo;
+  st.de = { queue: [], mortar: false, artillery: true, bomber: false, rep: [], ask: null, move: { gun: 'artillery', what: '' } };
+  const asked = [];
+  for (let r = Sim.germanStep(st); !r.done; r = Sim.germanStep(st)) {
+    assert(st.deArtilleryAmmo === before, 'it fired before everyone was asked');
+    asked.push(r.ask.target);
+    Sim.answer(st, r.ask.target !== asked[0]);
+  }
+  assert(asked.length === 2 && asked.includes('A') && asked.includes('B'), `asked ${asked.join(', ')}`);
+  assert(st.deArtilleryAmmo === before - 1, 'it did not fire once');
+  // The one that got down needs two more; the one that stood fast doesn't
+  const down = asked[1], stood = asked[0];
+  const need = id => st.fx.find(f => f.kind === 'shell' && f.to && f.to.id === id).need;
+  assert(Sim.unitById(st, down).down && need(down) === need(stood) + TAKE_COVER, 'taking cover did not count');
+});
+
+check('the Germans: a shaken piece rallies itself, unless it has a shot and its captain is near', () => {
+  const run = (st, id) => {
+    Sim.unitById(st, id).acted = true;
+    st.de = { queue: [id], mortar: false, artillery: false, bomber: false, rep: [], ask: null, move: { id, what: '' } };
+    for (let r = Sim.germanStep(st); !r.done; r = Sim.germanStep(st)) Sim.answer(st, false);
+  };
+  // No captain: it rallies, even with a shot
+  const alone = tableWith({ A: [5, 5], d2: [7, 5] });
+  const d = Sim.unitById(alone, 'd2');
+  d.post = { x: 7, y: 5 }; d.shocked = true;
+  run(alone, 'd2');
+  assert(!d.shocked && !alone.fx.some(f => f.from && f.from.id === 'd2'), 'with no captain it did not rally instead of firing');
+  // Captain near and a shot: it fires, and he can rally it
+  const near = tableWith({ A: [5, 5], d2: [7, 5], dcap: [8, 5] });
+  const e = Sim.unitById(near, 'd2');
+  e.post = { x: 7, y: 5 }; e.shocked = true;
+  run(near, 'd2');
+  assert(e.shocked && near.fx.some(f => f.from && f.from.id === 'd2'), 'with its captain near it did not fire');
+  // Captain near and no shot: it rallies
+  const quiet = tableWith({ A: [0, 0], d2: [11, 5], dcap: [10, 5] });
+  const q = Sim.unitById(quiet, 'd2');
+  q.post = { x: 11, y: 5 }; q.shocked = true;
+  run(quiet, 'd2');
+  assert(!q.shocked, 'with no shot it did not rally');
+});
+
+check('moving inside its field: a machine gun or a captain with no shot left cannot fire after; a rifle platoon can', () => {
+  const st = tableWith({ mg1: [5, 5], d2: [7, 5] });
+  const mg = Sim.unitById(st, 'mg1');
+  assert(Sim.actLine(st, mg, Sim.lineSides(st, mg)[0]).ok && !mg.halfShot, 'the machine gun can fire after moving');
+  const capped = tableWith({ cap: [5, 5], A: [5, 4], B: [4, 5], d2: [7, 5] });
+  const cap = Sim.unitById(capped, 'cap');
+  Sim.unitById(capped, 'A').shocked = true; Sim.unitById(capped, 'B').shocked = true;
+  Sim.actRally(capped, cap, Sim.unitById(capped, 'A')); Sim.actRally(capped, cap, Sim.unitById(capped, 'B'));
+  assert(Sim.actLine(capped, cap, Sim.lineSides(capped, cap)[0]).ok && !cap.halfShot, 'the captain has a shot after two rallies');
+  const rifles = tableWith({ A: [5, 5], d2: [7, 5] });
+  const A = Sim.unitById(rifles, 'A');
+  assert(Sim.actLine(rifles, A, Sim.lineSides(rifles, A)[0]).ok && A.halfShot, 'a rifle platoon lost its shot');
+});
+
+check('ambush: one firing sets off an enemy ambush that can see it, each once', () => {
+  const { st, d1 } = ambushOnLane({ A: [2, 5], mg1: [1, 5] }, 6);
+  const mg = Sim.unitById(st, 'mg1');
+  mg.ambush = true; mg.acted = true;
+  assert(Sim.targets(st, mg).includes(d1), 'the machine gun cannot see the ambusher');
+  st.rand = LOW;
+  assert(Sim.actCharge(st, Sim.unitById(st, 'A'), 3, 5).ok, 'the charge was refused');
+  const from = id => st.fx.filter(f => f.from && f.from.id === id).length;
+  assert(from('d1') === 1 && from('mg1') === 1, `shots: ${from('d1')} and ${from('mg1')}`);
+  assert(!d1.ambush && !mg.ambush, 'an ambush is still waiting');
+});
+
+check('endings: one bomb on the last of both sides is a draw, whoever it hits first', () => {
+  for (const [us, de] of [[[3, 7], [3, 5]], [[3, 5], [3, 7]]]) {
+    const st = tableWith({ A: us, d1: de });
+    Sim.unitById(st, 'A').platoons = 1; Sim.unitById(st, 'A').shocked = true;
+    Sim.unitById(st, 'd1').platoons = 1; Sim.unitById(st, 'd1').shocked = true;
+    st.spin.us = 0; st.rand = HIGH;
+    assert(Sim.actFire(st, 'bomber', 3, 7).ok, 'the bomber could not fly');
+    assert(st.draw && !st.won, `won ${st.won}, draw ${st.draw}`);
+  }
+});
+
+check('endings: no rifle platoon and nothing to hurt the German tanks loses at the end of the round; otherwise it goes on', () => {
+  const noAmmo = st => { st.ammo.mortars = 0; st.ammo.artillery = 0; st.ammo.bomber = 0; };
+  // A sniper against a tank, nothing left off the board: lost
+  const lost = tableWith({ sn1: [0, 0], dt1: [11, 7] });
+  noAmmo(lost);
+  Sim.endRound(lost);
+  assert(lost.lost && !lost.draw, 'it played on with no way to win');
+  // A round of mortars left, a bazooka, a rifle platoon, or no German tanks: it goes on
+  const rounds = tableWith({ sn1: [0, 0], dt1: [11, 7] });
+  noAmmo(rounds); rounds.ammo.mortars = 1;
+  Sim.endRound(rounds);
+  assert(!rounds.lost, 'lost with a mortar round left');
+  const zook = tableWith({ bz1: [0, 0], dt1: [11, 7] });
+  noAmmo(zook);
+  Sim.endRound(zook);
+  assert(!zook.lost, 'lost with a bazooka left');
+  const rifles = tableWith({ A: [0, 0], dt1: [11, 7] });
+  noAmmo(rifles);
+  Sim.endRound(rifles);
+  assert(!rifles.lost, 'lost with a rifle platoon left');
+  const men = tableWith({ sn1: [0, 0], d2: [11, 7] });
+  noAmmo(men);
+  Sim.endRound(men);
+  assert(!men.lost, 'lost with only German men left, whom a sniper can kill');
+});
+
 check('machine guns fire five dice', () => {
   assert(PIECES.mg.soft === 5 && PIECES.mg42.soft === 5, 'an MG team does not fire five dice');
 });

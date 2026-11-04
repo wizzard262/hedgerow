@@ -582,6 +582,28 @@ const Sim = (() => {
   }
 
   // A piece leaves the board
+  // One mission or bomb wiped out the last of both sides: a draw, whoever it hit first (Steve)
+  function checkDraw(st) {
+    const left = side => st.units.some(u => u.side === side && u.x !== null);
+    if (left('us') || left('de')) return;
+    st.draw = true;
+    st.won = false;
+    st.lost = true;
+    st.report = ['🤝 The last of both sides went down together. A draw.'];
+  }
+
+  // Can the company no longer win: no rifle platoon left to take the village, and German tanks it has nothing left to
+  // hurt with, so it can't destroy every German either (Steve)
+  function cannotWin(st) {
+    const us = st.units.filter(u => u.side === 'us' && u.x !== null);
+    if (us.some(u => u.kind === 'company')) return false;
+    const tanksLeft = st.units.some(u => u.side === 'de' && u.x !== null && isTank(u));
+    if (!tanksLeft) return false;
+    // Anything still able to hurt a tank: a piece with anti-tank weapons, or fire support with rounds or a run left
+    if (us.some(u => firepower(st, u).hard > 0)) return false;
+    return st.ammo.mortars <= 0 && st.ammo.artillery <= 0 && st.ammo.bomber <= 0;
+  }
+
   function remove(st, u) {
     u.x = null; u.y = null; u.shocked = false;
     // The last piece of a side gone: the game stops there and then, without finishing the round (Steve)
@@ -1006,8 +1028,11 @@ const Sim = (() => {
 
   // The routes Move & shoot can take: up to MOVE_SHOOT_MOVES ending only where the piece will have someone to
   // shoot (Steve). Captains don't shoot, and machine guns can't fire on the move (Steve): they set up, then shoot
+  // Can it fire after moving: not a machine gun or a dug-in gun, nor a captain with no shot left (Steve)
+  const firesOnTheMove = u => u.kind !== 'mg' && u.kind !== 'mg42' && !PIECES[u.kind].fixed && mayFire(u);
+
   function moveShootRoutes(st, u) {
-    if (u.kind === 'mg' || u.kind === 'mg42' || PIECES[u.kind].fixed || !mayFire(u)) return [];
+    if (!firesOnTheMove(u)) return [];
     const home = { x: u.x, y: u.y, at: u.at }, out = [];
     for (const route of routesFor(st, u, reach(u, MOVE_SHOOT_MOVES), false)) {
       // Try it: stand at the goal by each hedge in turn, or in the open; any place with a shot will do
@@ -1197,6 +1222,8 @@ const Sim = (() => {
     for (const a of waiting) {
       // Already dead: nothing left to fire on
       if (mover.x === null) break;
+      // Fired or killed already, in a chain of ambushes
+      if (!a.ambush || a.x === null) continue;
       // Only what it can see, and hurt, and hit on 6 or less: otherwise it keeps waiting
       if (!targets(st, a).includes(mover) || shotNeed(st, a, mover) > MAX_NEED) continue;
       a.ambush = false;
@@ -1205,6 +1232,9 @@ const Sim = (() => {
       // These shots land where it is now, not where it is going (the table)
       for (let k = shotsBefore; k < st.fx.length; k++) st.fx[k].midMove = true;
       if (mover.x === null || mover.platoons < strength || (mover.shocked && !wasShaken)) stopped = true;
+      // Firing gives it away in turn, to any ambush of the other side that can see it (Steve: shooting sets one off).
+      // Each fires once, so the chain ends
+      if (a.x !== null) springAmbushes(st, a, report);
     }
     if (passing && mover.x !== null) mover.at = place;
     return stopped;
@@ -1302,7 +1332,7 @@ const Sim = (() => {
     standAt(st, u, to);
     const lines = [`🌳 ${u.name} moves to ${placeName(u.at)}`];
     springAmbushes(st, u, lines);
-    u.halfShot = u.x !== null && targets(st, u, true).length > 0;
+    u.halfShot = u.x !== null && firesOnTheMove(u) && targets(st, u, true).length > 0;
     return { ok: true, lines: [lines.join(', ') + '.'] };
   }
 
@@ -1405,6 +1435,7 @@ const Sim = (() => {
     };
     // The full dice on the target's field, the splash dice on each field round it
     for (const f of shellFields(which, x, y, side)) hitField(f.x, f.y, f.main ? S.dice : S.splash, !f.main);
+    checkDraw(st);
     return lines;
   }
 
@@ -1513,6 +1544,7 @@ const Sim = (() => {
         st.fx.push({ kind: 'bomb', x: field.x, y: field.y, faces, need, side, to: { id: t.id }, result, support: 'bomber', along: field.t, tookCover: ducks });
       }
     }
+    checkDraw(st);
     return lines;
   }
 
@@ -1656,14 +1688,29 @@ const Sim = (() => {
       }
     }
     const inHamlet = at(st, st.objective.x, st.objective.y, 'us').length > 0;
-    if (inHamlet && !u.shocked && fightsHandToHand(u) && adjacent(u, st.objective)) {
+    // A shaken piece can use its move to rally itself, as yours can (Steve: the same rules). It does, unless it has a shot
+    // and its captain is near enough to rally it for it
+    if (u.shocked && u.kind !== 'captain') {
+      const captain = st.units.find(c => c.side === 'de' && c.kind === 'captain' && c.x !== null);
+      const captainNear = captain && Math.abs(captain.x - u.x) + Math.abs(captain.y - u.y) <= RALLY_RANGE;
+      if (!captainNear || !bestTarget(st, u)) {
+        u.shocked = false;
+        rallyShown(st, u);
+        deSays(st, 'Pulls itself together');
+        rep.push(`📣 ${u.name} pulls itself together.`);
+        return null;
+      }
+    }
+    // (wire stops their men as it stops yours, Steve)
+    const noWire = o => !wire(st, u.x, u.y, o.x, o.y);
+    if (inHamlet && !u.shocked && fightsHandToHand(u) && adjacent(u, st.objective) && noWire(st.objective)) {
       deSays(st, `Charges into ${st.objective.name}`);
       // Setting off in sight of an ambush: stopped, it gets no further
       if (springAmbushes(st, u, [])) return null;
       rep.push('🔺 ' + charge(st, u, st.objective.x, st.objective.y).join(', ') + '.');
       return null;
     }
-    const weak = st.units.find(t => t.side === 'us' && t.x !== null && t.kind === 'company' && adjacent(u, t) && t.shocked);
+    const weak = st.units.find(t => t.side === 'us' && t.x !== null && t.kind === 'company' && adjacent(u, t) && noWire(t) && t.shocked);
     if (u.kind === 'company' && !u.shocked && u.platoons >= 2 && weak && st.rand() < 0.5) {
       deSays(st, `Charges ${weak.name}`);
       if (springAmbushes(st, u, [])) return null;
@@ -1757,16 +1804,10 @@ const Sim = (() => {
   function resolveShot(st, shot, withdraw) {
     const t = unitById(st, shot.target);
     if (t.x === null) return;
-    // A piece under the German bomber's line: it only chooses whether to get down; the bombs fall once all have chosen
-    if (shot.bombed) {
-      if (withdraw) takeCover(st, t);
-      return;
-    }
-    if (shot.artillery) {
-      st.deArtilleryAmmo--;
-      if (withdraw) takeCover(st, t);
-      const lines = fireMission(st, 'artillery', t.x, t.y, 'de');
-      st.de.rep.push(`🔺 German artillery on ${t.name}${withdraw ? ' (it takes cover)' : ''}: ${lines.length ? lines.join(', ') : 'no hits'}.`);
+    // A piece under the German bomber's line or their shells: it only chooses whether to get down; they land once all
+    // have chosen
+    if (shot.bombed || shot.shelled) {
+      if (withdraw) st.de.rep.push(`${takeCover(st, t).line}.`);
       return;
     }
     if (shot.mortar) {
@@ -1808,8 +1849,8 @@ const Sim = (() => {
     if (st.de.aim) {
       const shot = st.de.aim;
       st.de.aim = null;
-      // (the bomber's line has been shown: its run carries on below)
-      if (!shot.bomber) {
+      // (the bomber's line, or the artillery's target, has been shown: they carry on below)
+      if (!shot.bomber && !shot.artillery) {
         if (canReact(st, unitById(st, shot.target))) { st.de.ask = shot; return { ask: shot }; }
         resolveShot(st, shot, false);
       }
@@ -1837,9 +1878,25 @@ const Sim = (() => {
       const t = germanArtilleryTarget(st);
       deSays(st, t ? `Shells ${t.name}` : 'Holds fire: no target');
       if (t) {
-        const r = plan({ artillery: true, target: t.id });
-        if (r) return r;
+        // Every piece of yours the shells will fall on is asked first (Steve: as the Germans all decide under yours)
+        const under = shellFields('artillery', t.x, t.y, 'de').flatMap(f => at(st, f.x, f.y, 'us'));
+        st.de.shelling = { x: t.x, y: t.y, target: t.id, asks: under.map(u => u.id) };
+        // On the page, the target shows first
+        if (showAim) { st.de.aim = { artillery: true, target: t.id }; return { aim: st.de.aim }; }
       }
+    }
+    if (st.de.shelling) {
+      const shelling = st.de.shelling;
+      while (shelling.asks.length) {
+        const id = shelling.asks.shift();
+        if (canReact(st, unitById(st, id))) { st.de.ask = { shelled: true, artillery: true, target: id }; return { ask: st.de.ask }; }
+      }
+      // All have chosen: the shells land
+      st.de.shelling = null;
+      st.deArtilleryAmmo--;
+      const lines = fireMission(st, 'artillery', shelling.x, shelling.y, 'de');
+      st.de.rep.push(`🔺 German artillery on ${unitById(st, shelling.target).name}: ${lines.length ? lines.join(', ') : 'no hits'}.`);
+      if (st.won || st.lost) return { done: true };
     }
     if (st.de.mortar) {
       st.de.mortar = false;
@@ -2141,6 +2198,9 @@ const Sim = (() => {
     } else if (!st.units.some(u => u.side === 'us' && u.x !== null)) {
       st.lost = true;
       rep.unshift('💀 Nothing is left of the company. The attack has failed.');
+    } else if (cannotWin(st)) {
+      st.lost = true;
+      rep.unshift('⌛ No rifle platoon is left to take the village, and nothing is left that can hurt the German tanks. The attack has failed.');
     } else if (TURNS && st.turn >= TURNS) {
       st.lost = true;
       rep.unshift(`⌛ After ${TURNS} rounds the attack has run out of time short of ${st.objective.name}.`);
@@ -2169,7 +2229,7 @@ const Sim = (() => {
   }
 
   return {
-    canAmbush, actAmbush, bestMoveShoot, bomberHeading, bomberEdges, bomberLine, bombNeed, bombWhy, bestBomberRun,
+    firesOnTheMove, canAmbush, actAmbush, bestMoveShoot, bomberHeading, bomberEdges, bomberLine, bombNeed, bombWhy, bestBomberRun,
     newGame, roll, endTurn, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, chargeSpots,
     rallyTargets, canAct, canReact, firepower, canCallFire, holdsObjective, roundText, roomFor,
     startGermanHour, germanStep, answer, finishHour, startRound, drawToken, endGermanToken, activationOver, passToken, usCanMove, endRound, canFire, actSkip, actSkipShot, skipSupport,

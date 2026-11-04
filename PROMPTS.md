@@ -1104,7 +1104,7 @@ How the game was made: each prompt, what was built, and the assumptions made.
 
 ## 194b. Holes in the rules? (question, nothing built)
 
-- Steve: are there any holes in the game logic? Checked against v108 with test games: a game can go on for ever (4 of 60 still unfinished after 60 rounds); German men charge across barbed wire (Americans can't); a machine gun, or a captain with no shots left, can move inside its field and then fire; an ambush firing doesn't set off another ambush; when a bomb kills the last of both sides, whoever is hit first decides it; under German artillery only the main target is asked about taking cover; German mortars pick a target without checking sight; shaken Germans never rally themselves
+- Steve: are there any holes in the game logic? Checked against v108 with test games: a game can go on for ever (4 of 60 still unfinished after 60 rounds); German men charge across barbed wire (Americans can't); a machine gun, or a captain with no shots left, can move inside its field and then fire; an ambush firing doesn't set off another ambush; when a bomb kills the last of both sides, whoever is hit first decides it; under German artillery only the main target is asked about taking cover; shaken Germans never rally themselves
 
 ## 195. The Germans Move & shoot (v110)
 
@@ -1119,6 +1119,16 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - Steve: bazooka and Panzerschreck teams shoot 4 fields, not 3; tanks 7, not 6; artillery 5 dice, not 6, both sides. No balance test, by request
 - Steve: all mortars have 1 anti-tank die, which only shakes a tank, or knocks it out if it is already shaken. Your mortars can now target a tank
 - (Assumed: long range starts where it did, beyond 1 field for those teams and beyond 4 for tanks; the PaK stays at 6; the German mortar fires first on a shaken tank, then a platoon, and on an unshaken tank only with nothing else; the Panther's armour counts against the die, as with artillery)
+
+## 197. Closing the holes (v111)
+
+- Steve picked all of them: the Germans follow the same rules, machine gun and captain shots, the ambush chain, game endings and a draw
+- German men no longer charge across barbed wire. Every American the German artillery will fall on is asked Stand fast or Take cover in turn, then it fires once. A shaken German uses its move to rally itself, unless it has a shot and its captain is within 3 fields
+- Moving inside its field: a machine gun, or a captain with no shot left, can't fire after
+- An ambush firing sets off any enemy ambush that can see it, each firing once
+- A mission or bomb taking the last of both sides is a draw. You lose at the end of a round with no rifle platoon left and nothing left that can hurt the German tanks (a piece with anti-tank dice, or mortars, artillery or bomber with some left)
+- Not a hole after all: the German mortars. A piece next to a field always counts as seeing it, for both sides, and they only fire next to a German. Taken back
+- Played in a visible browser: both pieces asked under shells; a draw by real clicks; no errors. Test player, 60 rounds at most: 2 of 60 still unfinished (was 4). Balance: the test player wins 11% in about 11.9 rounds (v110 alone: 15% in about 10.6); doing nothing wins 0%
 
 ## Sessions
 

@@ -230,7 +230,11 @@ const UI = (() => {
         // After moving with Move & shoot, offer the half-dice shot straight away, with red targets on who can be hit
         if (how === 'moveShoot' || how === 'line' || (how === 'charge' && spot.kind === 'line')) {
           if (u.halfShot) view.mode = 'halfShot';
-          else { view.mode = null; view.log.push(`No Germans in reach for ${u.name} to shoot from here.`); }
+          else {
+            view.mode = null;
+            // (a machine gun can't fire after moving at all, so there is nothing to say)
+            if (Sim.firesOnTheMove(u)) view.log.push(`No Germans in reach for ${u.name} to shoot from here.`);
+          }
         } else view.mode = null;
       }
       return null;
