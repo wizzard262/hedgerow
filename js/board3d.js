@@ -807,7 +807,8 @@ const Board = (() => {
       // one of yours with a shot or a rally still to come), nor while its fight or shot is still being shown
       const movingNow = st.de && st.de.move && st.de.move.id === u.id;
       const activeNow = st.drawn === 'us' && st.activeId === u.id;
-      const done = u.acted && !movingNow && !activeNow && !h;
+      // (in ambush it hasn't finished: it goes light green or grey once it has fired, Steve)
+      const done = u.acted && !u.ambush && !movingNow && !activeNow && !h;
       // Moved this round: yours light green, the Germans' grey (Steve)
       const tint = done ? (u.side === 'us' ? 'green' : 'grey') : false;
       if (g) { g.visible = h ? h.visible : u.x !== null; greyOut(g, tint); }
@@ -1424,7 +1425,8 @@ const Board = (() => {
   // Where a shot leaves from and lands: the middle of the pieces' bases, a little above the table
   function shotEnds(f) {
     const tu = { id: f.to && f.to.id, x: f.x, y: f.y, kind: f.armour ? 'sherman' : 'company' };
-    const to = pieces[tu.id] ? pieceCentre(tu) : new T.Vector3(f.x + 0.5, 0, f.y + 0.5);
+    // (an ambush on a piece on the move lands where it was seen, not where it is going)
+    const to = pieces[tu.id] && !f.midMove ? pieceCentre(tu) : new T.Vector3(f.x + 0.5, 0, f.y + 0.5);
     let from = null;
     if (f.from) from = pieces[f.from.id] ? pieceCentre({ id: f.from.id, x: f.from.x, y: f.from.y }) : new T.Vector3(f.from.x + 0.5, 0, f.from.y + 0.5);
     return { from, to };
@@ -1908,6 +1910,7 @@ const Board = (() => {
     if (view.stateChanged) shadowStale = true;
     const moving = glide(dt);
     const hopping = moveHop(now);
+    const waiting = pulseAmbush(now);
     const firing = playShots(now);
     const flying = moveCoin(now) | moveHoming(now) | moveCompass(now);
     // Shadows: worked out again only while something moves, and once more after it stops
@@ -1918,12 +1921,38 @@ const Board = (() => {
     // (dice still to come: keep drawing until they are on the table, or they only appear at the next redraw)
     if (firing || flying || diceDue !== null) return true;
     // Targets pulse, so keep drawing while they show
-    return moving || hopping || !!(view.targets && view.targets.length);
+    return moving || hopping || waiting || !!(view.targets && view.targets.length);
+  }
+
+  // A piece in ambush (Steve): a dashed amber ring under it, slowly pulsing. Either side's, as the table hides nothing
+  let ambushRings = [];
+  function markAmbush(u) {
+    const p = pieceCentre(u), big = u.kind === 'company' || Sim.isTank(u);
+    const inner = big ? 0.3 : 0.17, outer = big ? 0.35 : 0.21;
+    const material = new T.MeshBasicMaterial({ color: 0xffa726, transparent: true, opacity: 0.9, depthWrite: false });
+    const ring = new T.Group();
+    const dashes = 12, each = 2 * Math.PI / dashes;
+    for (let k = 0; k < dashes; k++) {
+      ring.add(at(new T.Mesh(new T.RingGeometry(inner, outer, 6, 1, k * each, each * 0.6), material), 0, 0, 0, -Math.PI / 2, 0, 0));
+    }
+    at(ring, p.x, 0.007, p.z);
+    marks.add(ring);
+    ambushRings.push({ ring, material });
+  }
+  // One frame of the slow pulse. Returns true while any ring is showing, so the page keeps drawing
+  function pulseAmbush(now) {
+    const wave = Math.sin(now / 450);
+    for (const r of ambushRings) {
+      r.ring.scale.setScalar(1 + 0.07 * wave);
+      r.material.opacity = 0.65 + 0.3 * wave;
+    }
+    return ambushRings.length > 0;
   }
 
   // Everything marked on the table for this view: lit fields, rings, targets and their bubbles, lines of fire
   function buildMarks(st, view) {
     pulsers = [];
+    ambushRings = [];
     while (marks.children.length) { const o = marks.children[0]; marks.remove(o); freeObject(o); }
     setCompass(view.compass);
     if (view.hover) mark(view.hover.x, view.hover.y, 'hover', 0.02);
@@ -1948,8 +1977,9 @@ const Board = (() => {
     if (view.mortarAim && pieces[view.mortarAim.id]) marks.add(fireArc({ side: 'de', support: view.aimWhich || 'mortars' }, view.mortarAim, true));
     // Your mortars or artillery choosing a target: an arc from the gun to each one, the one under the pointer brighter
     if (view.fireFrom) for (const t of view.targets || []) if (pieces[t.id]) marks.add(fireArc({ side: 'us', support: view.fireFrom }, t, view.hotTarget && view.hotTarget.id === t.id));
+    for (const u of st.units) if (u.ambush && u.x !== null && pieces[u.id]) markAmbush(u);
     if (view.ready) for (const u of st.units) {
-      if (u.side !== 'us' || u.x === null || !pieces[u.id]) continue;
+      if (u.side !== 'us' || u.x === null || !pieces[u.id] || u.ambush) continue;
       const can = view.ready(u);
       if (!can && !u.acted) continue;
       const p = pieceCentre(u), big = u.kind === 'company' || Sim.isTank(u);

@@ -1079,6 +1079,14 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - Skip turn uses the token and keeps the run. Your pieces under a German bomber's line are each asked Stand fast or Take cover before it arrives. (Assumed: a side's own men under its own bomber aren't asked, as under its own artillery; the computer flies only a line catching at least 2 more enemies than its own, each of those counting 1.5)
 - Played in a visible browser, both bombers, by real clicks: no errors. Balance: the test player wins 35% in about 10.9 rounds; doing nothing wins 0%
 
+## 191. Ambush (v108)
+
+- Steve: any piece (not the bomber, artillery or mortars) can go into ambush, from the same pop-up menu as Skip turn. It shoots the first enemy that moves into sight and can be hit on 6 or less. Pieces in sight when it goes in aren't shot unless they move or shoot. When it has fired it turns normal light green or grey, finished for the round. It doesn't carry over to the next round. Asked how to mark it: Steve picked a pulsing amber ring only
+- Steve on the timing: it shoots as soon as it can, anywhere along a piece's move; the piece carries on if not killed, stops if shaken, and can still shoot if not charging. Asked if that is consistent: yes
+- A dashed amber ring pulses under the piece, either side. It checks at setting off, at each field along the way, on arriving, on moving within a field, and after a shot. Each ambusher fires once; a piece on the move can't take cover, as it has already used its move
+- (Assumed: a hit on a piece already shaken also stops it; shaken in a field of friends it can only pass through, it stops at the next field it can, as for a wire snag; a stopped charge gets no fight; a piece it can't hurt doesn't set it off, nor a shot needing 7 or more, and it keeps waiting; driven out by a tank it stops waiting; the captain gives up his rallies, as when he skips; the Germans lie in wait when they have no shot and nowhere to go; Ambush is in the pop-up menu only, as the panel has no room for a fifth button)
+- Balance: the test player, which never uses ambush itself, wins 32% in about 11.2 rounds; doing nothing wins 0%
+
 ## Sessions
 
 | # | Date | Length | What we did |

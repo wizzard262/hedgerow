@@ -855,6 +855,7 @@ const Sim = (() => {
         step(st, d, spot.x, spot.y);
         // (driven out by a tank it is up and running, no longer down in cover)
         d.down = false;
+        d.ambush = false;
         out.push(`${d.name} falls back`);
         st.fx.push({ kind: 'rally', x: d.x, y: d.y, to: { id: d.id }, result: 'Falls back', ok: false });
       } else {
@@ -995,7 +996,10 @@ const Sim = (() => {
     if (!canAct(st, u) || !mayFire(u) || !targets(st, u).includes(target)) return { ok: false };
     spend(st, u);
     u.fired = true;
-    return { ok: true, lines: [`🔫 ${u.name} fires on ${target.name}: ` + fireAt(st, u, target, 1).join(', ') + '.'] };
+    const lines = [`🔫 ${u.name} fires on ${target.name}: ` + fireAt(st, u, target, 1).join(', ')];
+    // Shooting gives it away to any ambush that can see it (Steve)
+    springAmbushes(st, u, lines);
+    return { ok: true, lines: [lines.join(', ') + '.'] };
   }
 
   // The routes Move & shoot can take: up to MOVE_SHOOT_MOVES ending only where the piece will have someone to
@@ -1042,22 +1046,26 @@ const Sim = (() => {
     spend(st, u);
     u.fired = true;
     const lines = followRoute(st, u, route);
-    // Snagged on wire on the way: it stops there, and fires from there if it can
-    if (u.snagged) { u.halfShot = targets(st, u, true).length > 0; return { ok: true, lines: [lines.join(', ') + '.'] }; }
+    // Snagged on wire on the way, or stopped by an ambush: it stays there, and fires from there if it can (Steve)
+    if (u.snagged) { u.halfShot = u.x !== null && targets(st, u, true).length > 0; return { ok: true, lines: [lines.join(', ') + '.'] }; }
     const how = step(st, u, x, y);
     // Where it stands: where it was sent, or (none given) the first place in the field with a shot
     const place = side !== undefined ? side : [u.at, ...anchorsFor(u)].find(p => { if (!fitsAt(st, u, x, y, p)) return false; u.at = p; return targets(st, u, true).length; });
     standAt(st, u, place === undefined ? u.at : place);
     setTrail(st, u, route);
     lines.push(moveLine(u, how).replace(/\.$/, ''));
-    u.halfShot = targets(st, u, true).length > 0;
+    // Arriving in sight of an ambush
+    springAmbushes(st, u, lines);
+    u.halfShot = u.x !== null && targets(st, u, true).length > 0;
     return { ok: true, lines: [lines.join(', ') + '.'] };
   }
 
   function actHalfShot(st, u, target) {
     if (!u || !u.halfShot || u.x === null || !targets(st, u, true).includes(target)) return { ok: false };
     u.halfShot = false;
-    return { ok: true, lines: [`🔫 ${u.name} moves and fires on ${target.name}: ` + fireAt(st, u, target, 1, false, true).join(', ') + '.'] };
+    const lines = [`🔫 ${u.name} moves and fires on ${target.name}: ` + fireAt(st, u, target, 1, false, true).join(', ')];
+    springAmbushes(st, u, lines);
+    return { ok: true, lines: [lines.join(', ') + '.'] };
   }
 
   function moveLine(u, how) {
@@ -1148,19 +1156,77 @@ const Sim = (() => {
     return Math.max(1, Math.floor(far * SHAKEN_MOVE));
   }
 
+  // ---------- Ambush (Steve) ----------
+
+  // Can this piece go into ambush now: on its token, with its move still to make, and able to fire
+  function canAmbush(st, u) {
+    return canAct(st, u) && mayFire(u);
+  }
+
+  // Go into ambush: it uses the piece's move and its token, and lasts until it fires or the round ends. A piece already
+  // in sight isn't fired on until it moves or shoots
+  function actAmbush(st, u) {
+    if (!canAmbush(st, u)) return { ok: false };
+    spend(st, u);
+    u.ambush = true;
+    // The captain gives up any rallies he has left too, as when he skips
+    if (u.kind === 'captain') u.skipped = true;
+    return { ok: true, lines: [`🪤 ${u.name} lies in ambush.`] };
+  }
+
+  // A piece has just moved or shot in the open: every enemy lying in ambush that can see it and hit it on 6 or less fires
+  // now, once. Returns true if that stops it moving: wiped out, shaken, or losing men. passing: it is on its way through
+  // this field, not lining any hedge in it
+  function springAmbushes(st, mover, lines, passing = false) {
+    let stopped = false;
+    // (the Germans' moves are reported on their list)
+    const report = mover.side === 'de' && st.de ? st.de.rep : lines;
+    const place = mover.at;
+    if (passing) mover.at = null;
+    const waiting = st.units.filter(a => a.ambush && a.side !== mover.side && a.x !== null);
+    for (const a of waiting) {
+      // Already dead: nothing left to fire on
+      if (mover.x === null) break;
+      // Only what it can see, and hurt, and hit on 6 or less: otherwise it keeps waiting
+      if (!targets(st, a).includes(mover) || shotNeed(st, a, mover) > MAX_NEED) continue;
+      a.ambush = false;
+      const wasShaken = mover.shocked, strength = mover.platoons, shotsBefore = st.fx.length;
+      report.push(`🪤 ${a.name} springs its ambush on ${mover.name}: ${fireAt(st, a, mover, 1).join(', ')}`);
+      // These shots land where it is now, not where it is going (the table)
+      for (let k = shotsBefore; k < st.fx.length; k++) st.fx[k].midMove = true;
+      if (mover.x === null || mover.platoons < strength || (mover.shocked && !wasShaken)) stopped = true;
+    }
+    if (passing && mover.x !== null) mover.at = place;
+    return stopped;
+  }
+
   // Go along a route's fields up to (not into) its goal, cutting, flattening or climbing on the way. Returns the lines to report
   // A tank that flattens barbed wire on the way can get snagged (Steve: WIRE_SNAG): it stops in that field (unless it
-  // is a field of friends it can only pass through), u.snagged says so, and its move goes no further
+  // is a field of friends it can only pass through), u.snagged says so, and its move goes no further. An ambush that
+  // shakes it stops it the same way (Steve), or kills it
   function followRoute(st, u, route) {
     const lines = [];
     u.snagged = false;
+    // Setting off in sight of an ambush: it fires straight away (Steve: as soon as it can)
+    let halted = springAmbushes(st, u, lines);
+    if (halted) {
+      u.snagged = true;
+      setTrail(st, u, []);
+      return lines;
+    }
     const way = route.slice(0, -1);
     for (let i = 0; i < way.length; i++) {
       const p = way[i];
       let how = step(st, u, p.x, p.y);
       if (how === 'flattened' && !p.pass && st.rand() < WIRE_SNAG) { how = 'snagged'; u.snagged = true; }
       if (how) lines.push(moveLine(u, how).replace(/\.$/, ''));
-      // Snagged: here it stops, and the table shows the way it came this far
+      // Seen from here: any ambush fires
+      if (springAmbushes(st, u, lines, true)) halted = true;
+      // Dead: nothing more
+      if (u.x === null) { u.snagged = true; break; }
+      // Shaken in a field of friends it can only pass through: it stops at the first one it can
+      if (halted && !p.pass) u.snagged = true;
+      // Snagged or stopped: here it stays, and the table shows the way it came this far
       if (u.snagged) { setTrail(st, u, route.slice(0, i + 1)); break; }
     }
     return lines;
@@ -1193,11 +1259,14 @@ const Sim = (() => {
     // The fields before the goal are crossed on the way
     const home = { x: u.x, y: u.y, at: u.at };
     lines.push(...followRoute(st, u, route));
-    // Snagged on wire on the way: it gets no further
+    // Snagged on wire on the way, or stopped by an ambush: it gets no further
     if (u.snagged) return { ok: true, lines: [lines.join(', ') + '.'] };
+    const empty = !at(st, x, y, enemyOf(u.side)).length;
     lines.push(...charge(st, u, x, y));
     // Arrived (not beaten back): it stands where it was sent, and the table shows the way it came
     if (u.x === x && u.y === y) { standAt(st, u, side); setTrail(st, u, route); }
+    // Arriving in an empty field in sight of an ambush (a fight is its own business)
+    if (empty && u.x === x && u.y === y) springAmbushes(st, u, lines);
     // Beaten back into a field of friends it passed through: it can't stay there, so it ends back where it started
     if (route.some(p => p.pass && p.x === u.x && p.y === u.y)) {
       u.x = home.x; u.y = home.y; u.at = home.at;
@@ -1221,8 +1290,10 @@ const Sim = (() => {
     // (a move that may fire after, like a Move & shoot: the captain can still fire only with a rally to spare)
     if (u.kind === 'captain' && mayFire(u)) u.fired = true;
     standAt(st, u, to);
-    u.halfShot = targets(st, u, true).length > 0;
-    return { ok: true, lines: [`🌳 ${u.name} moves to ${placeName(u.at)}.`] };
+    const lines = [`🌳 ${u.name} moves to ${placeName(u.at)}`];
+    springAmbushes(st, u, lines);
+    u.halfShot = u.x !== null && targets(st, u, true).length > 0;
+    return { ok: true, lines: [lines.join(', ') + '.'] };
   }
 
   // Shocked friendly pieces a captain can reach
@@ -1519,12 +1590,15 @@ const Sim = (() => {
     const inHamlet = at(st, st.objective.x, st.objective.y, 'us').length > 0;
     if (inHamlet && !u.shocked && fightsHandToHand(u) && adjacent(u, st.objective)) {
       deSays(st, `Charges into ${st.objective.name}`);
+      // Setting off in sight of an ambush: stopped, it gets no further
+      if (springAmbushes(st, u, [])) return null;
       rep.push('🔺 ' + charge(st, u, st.objective.x, st.objective.y).join(', ') + '.');
       return null;
     }
     const weak = st.units.find(t => t.side === 'us' && t.x !== null && t.kind === 'company' && adjacent(u, t) && t.shocked);
     if (u.kind === 'company' && !u.shocked && u.platoons >= 2 && weak && st.rand() < 0.5) {
       deSays(st, `Charges ${weak.name}`);
+      if (springAmbushes(st, u, [])) return null;
       rep.push('🔺 ' + charge(st, u, weak.x, weak.y).join(', ') + '.');
       return null;
     }
@@ -1535,6 +1609,7 @@ const Sim = (() => {
     if (across && !PIECES[u.kind].fixed) {
       deSays(st, `Lines the hedge facing ${across.name}`);
       u.at = freePlace(st, u, u.x, u.y, dirTo(u, across));
+      springAmbushes(st, u, []);
       return null;
     }
     // On the way to its post: march there and dig in
@@ -1556,6 +1631,12 @@ const Sim = (() => {
     // Nothing better to do: a Hail Mary, if it has anyone in reach
     const longShot = targets(st, u)[0];
     if (longShot) { deSays(st, `Hail Mary at ${longShot.name}`); return { shooter: u.id, target: longShot.id }; }
+    // No one in reach and nowhere to go: it lies in wait
+    if (mayFire(u)) {
+      u.ambush = true;
+      deSays(st, 'Lies in ambush');
+      rep.push(`🪤 ${u.name} lies in ambush.`);
+    }
     return null;
   }
 
@@ -1572,6 +1653,8 @@ const Sim = (() => {
     const goal = route[route.length - 1];
     step(st, u, goal.x, goal.y);
     setTrail(st, u, route);
+    // Arriving in sight of an ambush
+    springAmbushes(st, u, []);
   }
 
   // The German mortar picks the strongest American company next to a German field
@@ -1628,6 +1711,8 @@ const Sim = (() => {
     const u = unitById(st, shot.shooter);
     if (u.x === null) return;
     st.de.rep.push(`🔺 ${u.name} fires on ${t.name}: ` + fireAt(st, u, t, 1, withdraw).join(', ') + '.');
+    // Shooting gives it away to any ambush that can see it (Steve)
+    springAmbushes(st, u, []);
   }
 
   // Run the German hour until it ends or a question needs the player. Returns { ask } or { done: true }
@@ -1982,6 +2067,8 @@ const Sim = (() => {
       if (u.x === null) continue;
       const missed = !!u.spentNext;
       u.acted = missed; u.spentNext = false; u.rallied = 0; u.fired = false; u.skipped = false;
+      // An ambush doesn't carry over to the next round (Steve)
+      u.ambush = false;
       // Down in cover: it stays down through the hour it misses, then gets up
       if (!missed) u.down = false;
     }
@@ -1992,7 +2079,7 @@ const Sim = (() => {
   }
 
   return {
-    bomberHeading, bomberEdges, bomberLine, bombNeed, bombWhy, bestBomberRun,
+    canAmbush, actAmbush, bomberHeading, bomberEdges, bomberLine, bombNeed, bombWhy, bestBomberRun,
     newGame, roll, endTurn, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, chargeSpots,
     rallyTargets, canAct, canReact, firepower, canCallFire, holdsObjective, roundText, roomFor,
     startGermanHour, germanStep, answer, finishHour, startRound, drawToken, endGermanToken, activationOver, passToken, usCanMove, endRound, canFire, actSkip, actSkipShot, skipSupport,

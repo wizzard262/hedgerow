@@ -770,8 +770,8 @@ check('bazooka and Panzerschreck teams go one field further on a Move & shoot an
   assert(!reaches(Sim.moveShootSpots(st, team), 3, 5), 'a captain moves three fields and shoots');
 });
 
-// The table with only these pieces on it, for the bomber's checks: { id: [x, y] }
-function bomberTable(places, seed = 3) {
+// The table with only these pieces on it: { id: [x, y] }
+function tableWith(places, seed = 3) {
   const st = Sim.newGame(seed);
   st.wire = {}; st.hedges = {};
   for (const u of st.units) if (!(u.id in places)) u.x = u.y = null;
@@ -810,7 +810,7 @@ check('the bomber: picked again it spins to the same direction; a new round spin
 });
 
 check('the bomber: a bomb at 5+ on every piece under the line, either side, plus cover; one run only', () => {
-  const st = bomberTable({ A: [3, 7], T1: [3, 6], d1: [3, 1], mg1: [6, 6] });
+  const st = tableWith({ A: [3, 7], T1: [3, 6], d1: [3, 1], mg1: [6, 6] });
   st.spin.us = 0;
   const r = Sim.actFire(st, 'bomber', 3, 7);
   assert(r.ok, 'the bomber could not fly');
@@ -829,7 +829,7 @@ check('the bomber: a bomb at 5+ on every piece under the line, either side, plus
 });
 
 check('the bomber only goes through an edge field, on your token; the score adds cover and take cover', () => {
-  const st = bomberTable({ A: [7, 4] });
+  const st = tableWith({ A: [7, 4] });
   assert(!Sim.actFire(st, 'bomber', 5, 4).ok, 'it flew through a field in the middle of the board');
   const men = Sim.unitById(st, 'A');
   // Saint-Jean's fields are houses: +1 against bombs as against shells
@@ -840,14 +840,14 @@ check('the bomber only goes through an edge field, on your token; the score adds
   men.down = true;
   assert(Sim.bombNeed(st, men) === BOMBER.need + TAKE_COVER, 'taking cover does not add two');
   // With the bag: not on a German token
-  const bag = bomberTable({ A: [0, 6] });
+  const bag = tableWith({ A: [0, 6] });
   Sim.startRound(bag);
   bag.drawn = 'de';
   assert(!Sim.actFire(bag, 'bomber', 0, 6).ok, 'it flew on a German token');
 });
 
 check('the bomber can stay away: the token is used, the run is kept, and it is back in the bag', () => {
-  const st = bomberTable({ A: [0, 6], d1: [9, 1] });
+  const st = tableWith({ A: [0, 6], d1: [9, 1] });
   Sim.startRound(st);
   st.drawn = 'us'; st.activeId = null;
   assert(Sim.skipSupport(st, 'bomber').ok, 'it could not stay away');
@@ -858,7 +858,7 @@ check('the bomber can stay away: the token is used, the run is kept, and it is b
 });
 
 check('the German bomber: your pieces under the line are each asked, then it flies once; its line is worth flying', () => {
-  const st = bomberTable({ A: [3, 7], B: [3, 5], C: [3, 3], d1: [9, 1] });
+  const st = tableWith({ A: [3, 7], B: [3, 5], C: [3, 3], d1: [9, 1] });
   Sim.startRound(st);
   st.spin.de = 0;
   st.deFired = {};
@@ -881,7 +881,7 @@ check('the German bomber: your pieces under the line are each asked, then it fli
   assert(bombs.find(f => f.to.id === 'B').need === BOMBER.need + TAKE_COVER, 'taking cover did not count');
   assert(Sim.unitById(st, 'B').down, 'B did not get down');
   // Nothing worth bombing: it stays away and keeps its run
-  const quiet = bomberTable({ A: [3, 7], d1: [9, 1] });
+  const quiet = tableWith({ A: [3, 7], d1: [9, 1] });
   Sim.startRound(quiet);
   quiet.spin.de = 0;
   quiet.de = { queue: [], mortar: false, artillery: false, bomber: true, rep: [], ask: null, move: { gun: 'bomber', what: '' } };
@@ -889,10 +889,126 @@ check('the German bomber: your pieces under the line are each asked, then it fli
 });
 
 check('the computer never flies a line that catches more of its own than the enemy', () => {
-  const st = bomberTable({ A: [3, 7], B: [3, 5], C: [3, 3], d1: [3, 6], d2: [3, 4], d3: [3, 1] });
+  const st = tableWith({ A: [3, 7], B: [3, 5], C: [3, 3], d1: [3, 6], d2: [3, 4], d3: [3, 1] });
   st.spin.de = 0;
   const run = Sim.bestBomberRun(st, 'de');
   assert(!run || run.x !== 3, 'it flew up the column with its own men in');
+});
+
+// For the ambush checks: one German platoon waiting on the lane, and every die a 6 (shakes) or a 1
+function ambushOnLane(places, x = 8) {
+  const st = tableWith(Object.assign({ d1: [x, 5] }, places));
+  const d1 = Sim.unitById(st, 'd1');
+  d1.ambush = true; d1.acted = true;
+  return { st, d1 };
+}
+const HIGH = () => 0.99, LOW = () => 0;
+
+check('ambush: any piece can go into it, not after moving; it uses the token; a piece already in sight is not fired on', () => {
+  const st = tableWith({ mg1: [0, 5], d1: [3, 5] });
+  const mg = Sim.unitById(st, 'mg1');
+  const r = Sim.actAmbush(st, mg);
+  assert(r.ok && mg.ambush && mg.acted, 'it did not go into ambush');
+  assert(st.fx.length === 0, 'it fired on a piece already in sight');
+  assert(!Sim.canAmbush(st, mg) && !Sim.actAmbush(st, mg).ok, 'it went into ambush twice');
+  // Not on the other side's token
+  const bag = tableWith({ A: [0, 5], d1: [9, 1] });
+  Sim.startRound(bag);
+  bag.drawn = 'de';
+  assert(!Sim.canAmbush(bag, Sim.unitById(bag, 'A')), 'it went into ambush on a German token');
+});
+
+check('ambush: fires as soon as an enemy comes into sight along its move; a shaken piece stops there and can still shoot', () => {
+  const { st, d1 } = ambushOnLane({ A: [2, 5] }, 7);
+  const A = Sim.unitById(st, 'A');
+  st.rand = HIGH;
+  // Two fields along the lane: seen from the first (four fields from the ambush), shaken, and stops
+  const r = Sim.actMoveShoot(st, A, 4, 5);
+  assert(r.ok, 'the move was refused');
+  assert(A.x === 3 && A.shocked, `it ended at ${A.x} (shaken: ${A.shocked})`);
+  assert(!d1.ambush && d1.acted, 'the ambush did not end, or the piece could act again');
+  const shot = st.fx.find(f => f.from && f.from.id === 'd1');
+  assert(shot && shot.midMove && shot.x === 3, 'the shot was not at the field it was seen in');
+  // Not charging: it still has its shot
+  assert(A.halfShot && Sim.actHalfShot(st, A, d1).ok, 'it lost its shot');
+});
+
+check('ambush: a miss and it carries on; it fires only once', () => {
+  const { st, d1 } = ambushOnLane({ A: [2, 5] }, 7);
+  const A = Sim.unitById(st, 'A');
+  st.rand = LOW;
+  assert(Sim.actCharge(st, A, 5, 5).ok, 'the charge was refused');
+  assert(A.x === 5 && !A.shocked, `it ended at ${A.x}`);
+  assert(st.fx.filter(f => f.from && f.from.id === 'd1').length === 1, 'it fired more than once');
+  assert(!d1.ambush, 'the ambush went on');
+});
+
+check('ambush: a charge stopped short gets no fight; a piece killed on the way stays dead', () => {
+  const { st } = ambushOnLane({ A: [4, 5] }, 7);
+  const A = Sim.unitById(st, 'A');
+  st.rand = HIGH;
+  // Charging the ambusher itself: shaken as it sets off, already in sight
+  assert(Sim.actCharge(st, A, 7, 5).ok, 'the charge was refused');
+  assert(A.x === 4 && A.shocked && !st.fx.some(f => f.kind === 'melee'), `it reached ${A.x}`);
+  assert(!A.halfShot, 'a charge got a shot');
+  // A team already shaken: this hit kills it, and it doesn't come back at the goal
+  const two = ambushOnLane({ bz1: [3, 5] }, 7);
+  const bz = Sim.unitById(two.st, 'bz1');
+  bz.shocked = true;
+  two.st.rand = HIGH;
+  assert(Sim.actCharge(two.st, bz, 5, 5).ok, 'the second charge was refused');
+  assert(bz.x === null, `the team is at ${bz.x}`);
+});
+
+check('ambush: shaken in a field of friends it can only pass through, it stops at the next field it can', () => {
+  // A tank fills the field, so the platoon can only pass through
+  const { st } = ambushOnLane({ A: [2, 5], T1: [3, 4] }, 7);
+  const A = Sim.unitById(st, 'A'), T1 = Sim.unitById(st, 'T1');
+  T1.y = 5;
+  st.rand = HIGH;
+  assert(!Sim.roomFor(st, A, 3, 5), 'there is room beside the tank');
+  assert(Sim.actMoveShoot(st, A, 4, 5).ok, 'the move was refused');
+  assert(A.x === 4, `it ended at ${A.x}`);
+});
+
+check('ambush: it waits rather than fire at 7 or more, or at what it cannot hurt', () => {
+  // Long range, a small target, down in cover, and the ambusher shaken (its elite one less): 7
+  const hard = ambushOnLane({ bz1: [3, 5] }, 7);
+  const bz = Sim.unitById(hard.st, 'bz1');
+  bz.down = true;
+  hard.d1.shocked = true;
+  assert(Sim.shotNeed(hard.st, hard.d1, bz) === 7, `the shot needs ${Sim.shotNeed(hard.st, hard.d1, bz)}`);
+  assert(Sim.actCharge(hard.st, bz, 4, 5).ok, 'the charge was refused');
+  assert(hard.d1.ambush, 'it fired at 7 or more');
+  // Rifles can't hurt a tank
+  const tank = ambushOnLane({ T1: [3, 5] }, 7);
+  assert(Sim.actCharge(tank.st, Sim.unitById(tank.st, 'T1'), 6, 5).ok, 'the tank was refused');
+  assert(tank.d1.ambush, 'rifles fired at a tank');
+});
+
+check('ambush: an enemy shooting in its sight sets it off, and its token is over for the round', () => {
+  const st = tableWith({ mg1: [0, 5], d1: [3, 5] });
+  const mg = Sim.unitById(st, 'mg1'), d1 = Sim.unitById(st, 'd1');
+  Sim.actAmbush(st, mg);
+  d1.acted = true;
+  d1.post = { x: 3, y: 5 };
+  st.de = { queue: ['d1'], mortar: false, artillery: false, bomber: false, rep: [], ask: null, move: { id: 'd1', what: '' } };
+  for (let r = Sim.germanStep(st); !r.done; r = Sim.germanStep(st)) Sim.answer(st, false);
+  assert(st.fx.some(f => f.from && f.from.id === 'd1'), 'the German did not fire');
+  assert(st.fx.some(f => f.from && f.from.id === 'mg1'), 'the ambush did not answer');
+  assert(!mg.ambush && mg.acted, 'it is still waiting, or could act again');
+});
+
+check('ambush: it ends with the round; the Germans lie in wait with nothing better to do', () => {
+  const st = tableWith({ A: [0, 7], d1: [11, 0] });
+  const d1 = Sim.unitById(st, 'd1');
+  d1.post = { x: 11, y: 0 }; d1.reserve = false; d1.acted = true;
+  st.de = { queue: ['d1'], mortar: false, artillery: false, bomber: false, rep: [], ask: null, move: { id: 'd1', what: '' } };
+  for (let r = Sim.germanStep(st); !r.done; r = Sim.germanStep(st)) Sim.answer(st, false);
+  assert(d1.ambush && st.de.move.what === 'Lies in ambush', `the German ${st.de.move.what}`);
+  st.de = null;
+  Sim.endRound(st);
+  assert(!d1.ambush && !d1.acted, 'the ambush carried over to the next round');
 });
 
 check('machine guns fire five dice', () => {

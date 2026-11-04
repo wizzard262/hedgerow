@@ -372,7 +372,7 @@ window.Game = (() => {
     if (!f) { tip.style.display = 'none'; return; }
     const NAMES = { field: 'Field', orchard: 'Orchard', village: 'Village', hamlet: 'Hamlet', river: 'River', bridge: 'Bridge', laneEW: 'Lane', laneNS: 'Lane', crossroads: 'Crossroads' };
     const here = Sim.at(st, f.x, f.y);
-    const lines = here.map(u => `${u.side === 'us' ? 'US' : 'German'} · ${u.name}${u.kind === 'company' ? ` · ${u.platoons} sections` : ''}${u.shocked ? ' · shaken' : ''}`);
+    const lines = here.map(u => `${u.side === 'us' ? 'US' : 'German'} · ${u.name}${u.kind === 'company' ? ` · ${u.platoons} sections` : ''}${u.ambush ? ' · in ambush' : ''}${u.shocked ? ' · shaken' : ''}`);
     const t = Sim.tileType(f.x, f.y);
     // Houses and trees: their cover (see PLACE_COVER), and the view
     const place = PLACE_COVER[t];

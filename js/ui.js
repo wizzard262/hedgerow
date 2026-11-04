@@ -253,11 +253,11 @@ const UI = (() => {
     const menu = document.querySelector('#menu');
     menu.innerHTML = '';
     for (const u of pieces) {
-      const state = u.down && u.acted ? '<span class="pill bad">Taking cover</span>' : u.shocked ? '<span class="pill bad">Shaken</span>' : u.acted ? '<span class="pill done">✓ Moved this round</span>' : '<span class="pill ready">Ready</span>';
+      const state = u.down && u.acted ? '<span class="pill bad">Taking cover</span>' : u.ambush ? '<span class="pill ready">🪤 In ambush</span>' : u.shocked ? '<span class="pill bad">Shaken</span>' : u.acted ? '<span class="pill done">✓ Moved this round</span>' : '<span class="pill ready">Ready</span>';
       menu.append(el('div', 'mhead', `<b>${u.name}${u.quality === 'elite' ? ' ★' : ''}</b><span>${state}</span>`));
       // Moving and shooting are done by clicking the lit areas and red targets, so the menu only ever has Skip and Rally
       // (Steve: never Move & shoot, not even its shot after the move)
-      const acts = actionButtons(u).filter(a => ['skip', 'skipShot', 'rally', 'selfRally'].includes(a.mode));
+      const acts = actionButtons(u).filter(a => ['ambush', 'skip', 'skipShot', 'rally', 'selfRally'].includes(a.mode));
       for (const a of acts) {
         const b = el('button', '', a.label);
         b.disabled = !a.ok; b.title = a.title || '';
@@ -401,6 +401,8 @@ const UI = (() => {
     const b = actionButtonsFor(u);
     // Everyone can skip a turn (Steve): it gives up its move this round, using the token
     const canSkip = Sim.canAct(st, u) || (u.kind === 'captain' && Sim.canRally(st, u));
+    // Any piece can lie in ambush instead (Steve): it gives up its move and waits, until it fires or the round ends
+    b.push({ mode: 'ambush', label: '🪤 Ambush', ok: Sim.canAmbush(st, u), title: 'Give up its move and wait: it fires as soon as an enemy moves or shoots in its sight, if it can hit on 6 or less. Ends with the round', run: () => Sim.actAmbush(st, u) });
     b.push({ mode: 'skip', label: '⏭️ Skip turn', ok: canSkip, title: 'Give up its move this round (the token is used)', run: () => Sim.actSkip(st, u) });
     // Moved with Move & shoot and not wanting to fire (Steve: no Pass button): skip the shot, and the token is done
     if (u.halfShot) b.push({ mode: 'skipShot', label: '⏭️ Skip the shot', ok: true, title: 'Don\'t fire after moving; the token is used', run: () => Sim.actSkipShot(st, u) });
@@ -509,7 +511,7 @@ const UI = (() => {
     const dice = `🎲 ${Math.round(Sim.menDice(f) * 10) / 10} dice vs men${f.hard ? `, ${Math.round(f.hard * 10) / 10} vs tanks` : ''}`;
     // A tank's armour (Steve): what it adds to the score anti-tank dice need
     const armour = Sim.isTank(u) ? `🛡️ Armour +${Sim.armourOf(u)}` : '';
-    const status = u.down && u.acted ? '<span class="pill bad">Taking cover: +2 cover; the captain can get it up</span>' : u.shocked ? '<span class="pill bad">Shaken: +1 to hit, half moves</span>' : u.acted ? '<span class="pill done">✓ Moved this round</span>' : '<span class="pill ready">Ready</span>';
+    const status = u.down && u.acted ? '<span class="pill bad">Taking cover: +2 cover; the captain can get it up</span>' : u.ambush ? '<span class="pill ready">🪤 In ambush</span>' : u.shocked ? '<span class="pill bad">Shaken: +1 to hit, half moves</span>' : u.acted ? '<span class="pill done">✓ Moved this round</span>' : '<span class="pill ready">Ready</span>';
     box.append(el('div', 'name', `${u.name}${u.quality === 'elite' ? ' ★' : ''}`));
     // Elite troops say so (Steve): Rangers or Fallschirmjäger, one less needed to hit
     const elite = u.quality === 'elite' ? ` · <b class="elite">Elite</b> (${u.side === 'us' ? 'Rangers' : 'Fallschirmjäger'}: −1 to hit)` : '';
@@ -519,7 +521,8 @@ const UI = (() => {
     // A German piece: just what it is (Steve), no actions
     if (u.side !== 'us') return;
     const acts = el('div'); acts.id = 'actions'; acts.style.marginTop = '6px';
-    for (const a of actionButtons(u)) {
+    // (Ambush is in the piece's pop-up menu only, Steve: the panel has no room for a fifth button)
+    for (const a of actionButtons(u).filter(o => o.mode !== 'ambush')) {
       const btn = el('button', view.mode === a.mode ? 'on' : '', a.label);
       btn.disabled = !a.ok; btn.title = a.title;
       btn.onclick = () => { if (a.run) { const r = a.run(); if (r.ok) view.log.push(...r.lines); view.mode = null; } else view.mode = view.mode === a.mode ? null : a.mode; refresh(); };
