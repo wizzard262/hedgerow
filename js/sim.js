@@ -277,7 +277,8 @@ const Sim = (() => {
   function rangeOf(u) {
     if (!u.kind) return { sight: SIGHT_RANGE, long: 1 };
     if (PIECES[u.kind].sniper) return RANGES.sniper;
-    if (isTank(u) || ['mg', 'mg42', 'pak'].includes(u.kind)) return RANGES.heavy;
+    if (isTank(u)) return RANGES.tank;
+    if (['mg', 'mg42', 'pak'].includes(u.kind)) return RANGES.heavy;
     if (u.kind === 'company' || u.kind === 'captain') return RANGES.rifle;
     return RANGES.short;
   }
@@ -547,7 +548,8 @@ const Sim = (() => {
 
   // What hits do to a piece (Steve): every hit shakes it, and each hit is a coin toss whether it wounds: a section
   // of a platoon, a whole team, or a tank lost. Only anti-tank (hard) hits count against tanks
-  function damage(st, u, softHits, hardHits, deadly = false) {
+  // shakeOnly (a mortar on a tank, Steve): no coin toss, so a hit only shakes it, unless it is already shaken
+  function damage(st, u, softHits, hardHits, deadly = false, shakeOnly = false) {
     const name = u.name, out = [];
     const hits = isTank(u) ? hardHits : softHits + hardHits;
     if (hits <= 0) return out;
@@ -559,7 +561,7 @@ const Sim = (() => {
       // A bazooka, Panzerschreck or tank gun hitting men kills outright (Steve: they're powerful)
       if (deadly && !isTank(u)) wounds++;
       else if (u.shocked) wounds++;
-      else if (st.rand() < WOUND_CHANCE) wounds++;
+      else if (!shakeOnly && st.rand() < WOUND_CHANCE) wounds++;
       u.shocked = true;
     }
     if (isTank(u)) {
@@ -1044,20 +1046,28 @@ const Sim = (() => {
     const route = canAct(st, u) && moveShootRoutes(st, u).find(r => r[r.length - 1].x === x && r[r.length - 1].y === y);
     if (!route) return { ok: false };
     spend(st, u);
+    const lines = moveToShoot(st, u, route, side);
+    u.halfShot = u.x !== null && targets(st, u, true).length > 0;
+    return { ok: true, lines: [lines.join(', ') + '.'] };
+  }
+
+  // The move of a Move & shoot, either side (Steve: the same rules for the Germans): along its route to where it will
+  // stand. Returns the lines to report; the shot comes after, needing one more for moving
+  function moveToShoot(st, u, route, side) {
     u.fired = true;
+    const goal = route[route.length - 1];
     const lines = followRoute(st, u, route);
     // Snagged on wire on the way, or stopped by an ambush: it stays there, and fires from there if it can (Steve)
-    if (u.snagged) { u.halfShot = u.x !== null && targets(st, u, true).length > 0; return { ok: true, lines: [lines.join(', ') + '.'] }; }
-    const how = step(st, u, x, y);
+    if (u.snagged) return lines;
+    const how = step(st, u, goal.x, goal.y);
     // Where it stands: where it was sent, or (none given) the first place in the field with a shot
-    const place = side !== undefined ? side : [u.at, ...anchorsFor(u)].find(p => { if (!fitsAt(st, u, x, y, p)) return false; u.at = p; return targets(st, u, true).length; });
+    const place = side !== undefined ? side : [u.at, ...anchorsFor(u)].find(p => { if (!fitsAt(st, u, goal.x, goal.y, p)) return false; u.at = p; return targets(st, u, true).length; });
     standAt(st, u, place === undefined ? u.at : place);
     setTrail(st, u, route);
     lines.push(moveLine(u, how).replace(/\.$/, ''));
     // Arriving in sight of an ambush
     springAmbushes(st, u, lines);
-    u.halfShot = u.x !== null && targets(st, u, true).length > 0;
-    return { ok: true, lines: [lines.join(', ') + '.'] };
+    return lines;
   }
 
   function actHalfShot(st, u, target) {
@@ -1383,7 +1393,8 @@ const Sim = (() => {
         // Against a tank only the anti-tank dice count (its armour is in need); against men every die
         const soft = isTank(t) ? 0 : roll(st, n, need, faces), hard = isTank(t) ? roll(st, S.hard || 0, need, faces) : 0;
         const before = t.platoons, wasShocked = t.shocked;
-        const hurt = damage(st, t, soft, hard);
+        const shakeOnly = which === 'mortars' && isTank(t);
+        const hurt = damage(st, t, soft, hard, false, shakeOnly);
         lines.push(...(t.side === side ? hurt.map(l => `⚠️ friendly fire: ${l}`) : hurt));
         const lost = before - (t.x === null ? 0 : t.platoons);
         const result = t.x === null ? 'Wiped out' : lost ? (isTank(t) ? 'Tank knocked out' : 'Section lost') : t.shocked && !wasShocked ? 'Shaken' : soft + hard ? 'No effect' : 'Missed';
@@ -1537,12 +1548,69 @@ const Sim = (() => {
 
   // What a German piece would most like to shoot: tanks for anti-tank weapons, otherwise the weakest infantry
   // (only proper shots: a Hail Mary is for when it has nothing better to do, see germanAct)
-  function bestTarget(st, u) {
-    const ts = targets(st, u).filter(t => shotNeed(st, u, t) <= MAX_NEED);
+  function bestTarget(st, u, moving = false) {
+    const ts = targets(st, u).filter(t => shotNeed(st, u, t, moving) <= MAX_NEED);
     if (!ts.length) return null;
+    return ts.sort((a, b) => targetScore(st, u, b) - targetScore(st, u, a))[0];
+  }
+
+  // How much a German piece wants to shoot this target from where it stands
+  function targetScore(st, u, t) {
     const f = firepower(st, u);
-    const score = t => (isTank(t) ? f.hard * 2 : menDice(f)) * (7 - TO_HIT - cover(st, u, t)) / 2 + (t.shocked ? 1 : 0) - t.platoons * 0.1;
-    return ts.sort((a, b) => score(b) - score(a))[0];
+    return (isTank(t) ? f.hard * 2 : menDice(f)) * (7 - TO_HIT - cover(st, u, t)) / 2 + (t.shocked ? 1 : 0) - t.platoons * 0.1;
+  }
+
+  // Where a German piece is heading: its post, or (reserves) the objective if nobody holds it, else the nearest American
+  function germanGoal(st, u) {
+    // On the way to its post, or back to it
+    if (u.post && !u.reserve) return u.post;
+    // A reserve rifle platoon goes to hold the objective if no platoon does
+    const garrison = at(st, st.objective.x, st.objective.y, 'de').some(g => g.kind === 'company');
+    if (!garrison && u.kind === 'company') return st.objective;
+    // The rest make for the nearest American
+    const far = o => Math.abs(o.x - u.x) + Math.abs(o.y - u.y);
+    const us = st.units.filter(o => o.side === 'us' && o.x !== null).sort((a, b) => far(a) - far(b));
+    return us[0] || st.objective;
+  }
+
+  // A German piece's Move & shoot (Steve): the route and place with the shot it most wants, needing 6 or less after the
+  // +1 for moving, the nearer its goal the better. null if it has none, or if it stands in the objective: it holds that
+  function bestMoveShoot(st, u) {
+    if (u.x === st.objective.x && u.y === st.objective.y) return null;
+    const routes = moveShootRoutes(st, u);
+    if (!routes.length) return null;
+    const goal = germanGoal(st, u);
+    const home = { x: u.x, y: u.y, at: u.at };
+    let best = null;
+    // For each field it could reach
+    for (const route of routes) {
+      const end = route[route.length - 1];
+      u.x = end.x; u.y = end.y;
+      const away = Math.abs(end.x - goal.x) + Math.abs(end.y - goal.y);
+      // For each place it fits in that field: what it could fire on from there
+      for (const place of anchorsFor(u)) {
+        if (!fitsAt(st, u, end.x, end.y, place)) continue;
+        u.at = place;
+        const t = bestTarget(st, u, true);
+        if (!t) continue;
+        const score = targetScore(st, u, t) - away * 0.1;
+        if (!best || score > best.score) best = { route, place, score };
+      }
+    }
+    // (only tried out: it goes back to where it stands)
+    u.x = home.x; u.y = home.y; u.at = home.at;
+    return best;
+  }
+
+  // A German piece has just moved: the shot it now takes, needing one more for moving, if it has a proper one
+  function shotAfterMove(st, u, moved) {
+    // Killed on the way by an ambush: nothing more
+    if (u.x === null) return null;
+    const t = bestTarget(st, u, true);
+    // Stopped short with nothing it can hit
+    if (!t) { deSays(st, moved); return null; }
+    deSays(st, `${moved}, fires on ${t.name}`);
+    return { shooter: u.id, target: t.id, moving: true };
   }
 
   // Where a German piece moves towards a goal (Steve: the same rules as yours): any route a Charge of yours could take,
@@ -1610,7 +1678,15 @@ const Sim = (() => {
       deSays(st, `Lines the hedge facing ${across.name}`);
       u.at = freePlace(st, u, u.x, u.y, dirTo(u, across));
       springAmbushes(st, u, []);
-      return null;
+      // As with yours, it may fire from the hedge, one more needed for moving
+      return shotAfterMove(st, u, `Lines the hedge facing ${across.name}`);
+    }
+    // No shot from here, but one a Move & shoot would give it (Steve: it does that rather than just marching)
+    const plan = bestMoveShoot(st, u);
+    if (plan) {
+      const lines = moveToShoot(st, u, plan.route, plan.place);
+      rep.push('🔺 ' + lines.join(', ') + '.');
+      return shotAfterMove(st, u, 'Moves up');
     }
     // On the way to its post: march there and dig in
     if (u.post && !u.reserve && (u.x !== u.post.x || u.y !== u.post.y)) {
@@ -1669,9 +1745,12 @@ const Sim = (() => {
     return ts.sort((a, b) => score(b) - score(a))[0] || null;
   }
 
+  // A tank too (Steve: all mortars have an anti-tank die): first of all one already shaken, as a hit kills it; otherwise
+  // only when there is no platoon to fire on
   function germanMortarTarget(st) {
-    const ts = st.units.filter(t => t.side === 'us' && t.x !== null && t.kind === 'company' && st.units.some(g => g.side === 'de' && g.x !== null && adjacent(g, t)));
-    return ts.sort((a, b) => b.platoons - a.platoons)[0] || null;
+    const ts = st.units.filter(t => t.side === 'us' && t.x !== null && (t.kind === 'company' || isTank(t)) && st.units.some(g => g.side === 'de' && g.x !== null && adjacent(g, t)));
+    const worth = t => (isTank(t) ? (t.shocked ? 9 : 0) : t.platoons);
+    return ts.sort((a, b) => worth(b) - worth(a))[0] || null;
   }
 
   // Carry out a planned German shot (or mortar mission), with or without the target pulling back
@@ -1698,10 +1777,13 @@ const Sim = (() => {
       const pre = withdraw ? takeCover(st, t) : null;
       const need = shellNeed(st, t);
       const faces = [];
-      const hits = roll(st, DE_MORTAR.dice, need, faces);
+      // One anti-tank die on a tank, which it can only shake (or kill if already shaken); all the dice on men
+      const onTank = isTank(t);
+      const hits = roll(st, onTank ? DE_MORTAR.hard : DE_MORTAR.dice, need, faces);
       fx.faces = faces; fx.need = need; fx.side = 'de'; fx.tookCover = !!pre;
       const before = t.platoons, wasShaken = t.shocked;
-      const lines = (pre ? [pre.line] : []).concat(damage(st, t, hits, 0));
+      const hurt = onTank ? damage(st, t, 0, hits, false, true) : damage(st, t, hits, 0);
+      const lines = (pre ? [pre.line] : []).concat(hurt);
       const lost = before - (t.x === null ? 0 : t.platoons);
       fx.result = t.x === null ? 'Wiped out' : lost ? 'Section lost' : t.shocked && !wasShaken ? 'Shaken' : hits ? 'No effect' : 'Missed';
       st.fx.push(fx);
@@ -1710,7 +1792,8 @@ const Sim = (() => {
     }
     const u = unitById(st, shot.shooter);
     if (u.x === null) return;
-    st.de.rep.push(`🔺 ${u.name} fires on ${t.name}: ` + fireAt(st, u, t, 1, withdraw).join(', ') + '.');
+    const fired = shot.moving ? 'moves and fires on' : 'fires on';
+    st.de.rep.push(`🔺 ${u.name} ${fired} ${t.name}: ` + fireAt(st, u, t, 1, withdraw, !!shot.moving).join(', ') + '.');
     // Shooting gives it away to any ambush that can see it (Steve)
     springAmbushes(st, u, []);
   }
@@ -1944,13 +2027,20 @@ const Sim = (() => {
     return side;
   }
 
-  // What moves on a German token: their guns if they have a target, then a piece with someone to shoot, then any
+  // What moves on a German token: their guns if they have a target, then a piece with someone to shoot, then one that
+  // could move and shoot, then any
   function pickGerman(st) {
-    const options = st.units.filter(u => u.side === 'de' && u.x !== null && !u.acted).map(u => ({ unit: u, score: (bestTarget(st, u) ? 2 : 0) + st.rand() }));
+    const options = st.units.filter(u => u.side === 'de' && u.x !== null && !u.acted).map(u => ({ unit: u, score: germanEagerness(st, u) + st.rand() }));
     if (st.deMortarAmmo > 0 && !st.deFired.mortars) options.push({ gun: 'mortars', score: (germanMortarTarget(st) ? 2.5 : -1) + st.rand() });
     if (st.deArtilleryAmmo > 0 && !st.deFired.artillery) options.push({ gun: 'artillery', score: (germanArtilleryTarget(st) ? 2.5 : -1) + st.rand() });
     if (st.deBomberAmmo > 0 && !st.deFired.bomber) options.push({ gun: 'bomber', score: (bestBomberRun(st, 'de') ? 2.5 : -1) + st.rand() });
     return options.sort((a, b) => b.score - a.score)[0];
+  }
+
+  // How keen a German piece is to go on this token: 2 with a shot from where it stands, 1 with one after a move
+  function germanEagerness(st, u) {
+    if (bestTarget(st, u)) return 2;
+    return bestMoveShoot(st, u) ? 1 : 0;
   }
 
   // The German move is over (germanStep said done): back to the bag
@@ -2079,7 +2169,7 @@ const Sim = (() => {
   }
 
   return {
-    canAmbush, actAmbush, bomberHeading, bomberEdges, bomberLine, bombNeed, bombWhy, bestBomberRun,
+    canAmbush, actAmbush, bestMoveShoot, bomberHeading, bomberEdges, bomberLine, bombNeed, bombWhy, bestBomberRun,
     newGame, roll, endTurn, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, chargeSpots,
     rallyTargets, canAct, canReact, firepower, canCallFire, holdsObjective, roundText, roomFor,
     startGermanHour, germanStep, answer, finishHour, startRound, drawToken, endGermanToken, activationOver, passToken, usCanMove, endRound, canFire, actSkip, actSkipShot, skipSupport,

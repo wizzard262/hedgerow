@@ -52,7 +52,7 @@ const UI = (() => {
     if (view.mode === 'fire:bomber') return Sim.bomberEdges().map(f => ({ x: f.x, y: f.y, kind: 'fire' }));
     if (view.mode && view.mode.startsWith('fire:')) {
       const out = [];
-      for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) if (Sim.canCallFire(st, x, y) && Sim.at(st, x, y, 'de').some(t => view.mode !== 'fire:mortars' || !Sim.isTank(t))) out.push({ x, y, kind: 'fire' });
+      for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) if (Sim.canCallFire(st, x, y) && Sim.at(st, x, y, 'de').length) out.push({ x, y, kind: 'fire' });
       return out;
     }
     if (!u || !view.mode) return [];
@@ -112,9 +112,7 @@ const UI = (() => {
     if (view.mode === 'fire:bomber') return [];
     // Mortars or guns chosen: every German piece in a field they can be called on to, with the score their dice need
     if (view.mode && view.mode.startsWith('fire:')) {
-      // (mortars have no anti-tank dice: no target on a tank, as nothing would be rolled)
-      const hurts = t => view.mode !== 'fire:mortars' || !Sim.isTank(t);
-      const inReach = st.units.filter(t => t.side === 'de' && t.x !== null && hurts(t) && Sim.canCallFire(st, t.x, t.y));
+      const inReach = st.units.filter(t => t.side === 'de' && t.x !== null && Sim.canCallFire(st, t.x, t.y));
       return inReach.map(t => {
         t.needNow = Sim.shellNeed(st, t);
         t.needWhy = Sim.shellWhy(st, t);
@@ -483,6 +481,9 @@ const UI = (() => {
       box.append(el('div', 'sub', which === 'bomber' ? 'Off the board' : `${S.name}, off the board`));
       // What a mission does, one fact a line (Steve): where it can fire, the dice on the field, and the blast round it
       const does = which === 'bomber' ? bomberFacts() : [`${st.ammo[which]} rounds left`, '🎯 Fires on a field your troops can see', `🎲 ${S.dice} dice on each German piece there`];
+      // One anti-tank die: artillery as any other hit, mortars only shaking a tank (Steve)
+      if (which === 'mortars') does.push(`🛡️ ${S.hard} die on a tank: only shakes it, or kills it if already shaken`);
+      if (which === 'artillery') does.push(`🛡️ ${S.hard} die on a tank`);
       if (which !== 'bomber' && S.splash) does.push(`💥 ${S.splash} die on every piece in the 4 fields next to it, including your own`);
       box.append(el('div', 'stats', [...does, gunState(which)].map(s => `<span>${s}</span>`).join('')));
       const acts = el('div'); acts.id = 'actions';

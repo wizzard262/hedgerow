@@ -54,9 +54,10 @@ const LONG_RANGE = 1;             // added to the score needed at long range (th
 // How far each kind of weapon sees and shoots, and how many fields away before long range starts (Steve: rifles one
 // further, machine guns and tanks two beyond the rifles, the sniper the whole board with no long range)
 const RANGES = {
-  short: { sight: 3, long: 1 },     // bazookas and Panzerschrecks
+  short: { sight: 4, long: 1 },     // bazookas and Panzerschrecks (Steve: one further)
   rifle: { sight: 4, long: 2 },     // rifle platoons and the captain's HQ
-  heavy: { sight: 6, long: 4 },     // machine guns, tanks and the PaK
+  heavy: { sight: 6, long: 4 },     // machine guns and the PaK
+  tank: { sight: 7, long: 4 },      // tanks (Steve: one further than the machine guns)
   sniper: { sight: 99, long: 99 },  // the sniper: anywhere he can see, no long range, and cover doesn't help the target
 };
 const ON_THE_MOVE = 1;           // added to the score needed when firing after a move (Steve: like range and cover, +1 each)
@@ -104,10 +105,11 @@ const HAND_TO_HAND_LIMIT = 40;
 
 // Fire support: dice on the target field (and a few on the fields around it for artillery), and its ammo: once fired it
 // never comes back (Steve: mortars, artillery and, later, bombers never replenish)
-const MORTARS = { name: '81 mm mortars', dice: 4, splash: 0, ammo: 6 };
-const ARTILLERY = { name: '105 mm battery', dice: 6, splash: 1, ammo: 3, hard: 1 };
-const DE_MORTAR = { dice: 3, ammo: 8 };   // the Germans' own mortar, one mission a turn while ammo lasts
-const DE_ARTILLERY = { name: '10.5 cm battery', dice: 6, splash: 1, ammo: 2, hard: 1 };   // the Germans' guns: like ours, fewer rounds
+// hard: its dice against a tank. A mortar's (Steve) only shakes a tank, or kills one already shaken: see damage in sim.js
+const MORTARS = { name: '81 mm mortars', dice: 4, splash: 0, ammo: 6, hard: 1 };
+const ARTILLERY = { name: '105 mm battery', dice: 5, splash: 1, ammo: 3, hard: 1 };
+const DE_MORTAR = { dice: 3, ammo: 8, hard: 1 };   // the Germans' own mortar, one mission a turn while ammo lasts
+const DE_ARTILLERY = { name: '10.5 cm battery', dice: 5, splash: 1, ammo: 2, hard: 1 };   // the Germans' guns: like ours, fewer rounds
 // The bomber (Steve): the same for both sides. One run a game; a compass spin says which way it flies; it goes straight
 // through a field chosen on the edge of the board and drops one bomb on every piece in every field under it, friend or foe.
 // need: the score a bomb needs before cover. worth: how many more enemy pieces than a side's own (each of those counts

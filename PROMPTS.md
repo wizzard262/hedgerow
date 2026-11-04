@@ -1102,6 +1102,24 @@ How the game was made: each prompt, what was built, and the assumptions made.
 
 - Steve: do these two apply: the bomber's token in the bag, and the PaK killing men outright? Yes, both were already in the rules; How to play now says so. No change to the rules
 
+## 194b. Holes in the rules? (question, nothing built)
+
+- Steve: are there any holes in the game logic? Checked against v108 with test games: a game can go on for ever (4 of 60 still unfinished after 60 rounds); German men charge across barbed wire (Americans can't); a machine gun, or a captain with no shots left, can move inside its field and then fire; an ambush firing doesn't set off another ambush; when a bomb kills the last of both sides, whoever is hit first decides it; under German artillery only the main target is asked about taking cover; German mortars pick a target without checking sight; shaken Germans never rally themselves
+
+## 195. The Germans Move & shoot (v110)
+
+- Steve: the Germans never move and shoot, and they need to. Weapon differences between the sides stay as they are, as they are easy numbers to change later
+- A German piece with no shot where it stands now uses the same Move & shoot as yours: up to two fields, then it fires needing +1. It picks the place with the shot it most wants, nearer its goal if that is close. The shot is aimed first, showing "+1 moving", and the word bubble says "Moves up, fires on …". Lining a hedge can now fire too, as yours can
+- It goes on a token after pieces with a shot, before pieces with neither. An ambush can stop it, as yours
+- (Assumed: a piece standing in the objective doesn't leave it this way; other pieces may leave their posts to fire and march back later; a piece with a shot where it stands takes that rather than moving; proper shots only, no Hail Mary on the move; machine guns and the PaK don't Move & shoot, as yours don't)
+- Balance, before the number changes below: the test player falls from 32% to 18%, in about 10.1 rounds; doing nothing wins 0%
+
+## 196. Longer ranges, mortars on tanks, less artillery (v110)
+
+- Steve: bazooka and Panzerschreck teams shoot 4 fields, not 3; tanks 7, not 6; artillery 5 dice, not 6, both sides. No balance test, by request
+- Steve: all mortars have 1 anti-tank die, which only shakes a tank, or knocks it out if it is already shaken. Your mortars can now target a tank
+- (Assumed: long range starts where it did, beyond 1 field for those teams and beyond 4 for tanks; the PaK stays at 6; the German mortar fires first on a shaken tank, then a platoon, and on an unshaken tank only with nothing else; the Panther's armour counts against the die, as with artillery)
+
 ## Sessions
 
 | # | Date | Length | What we did |

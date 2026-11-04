@@ -134,15 +134,17 @@ window.Game = (() => {
         if (s) spots.push({ x: s.x, y: s.y, kind: 'charge' });
         spots.push({ x: t.x, y: t.y, kind: 'shoot' });
         if (s) {
-          t.needNow = Sim.needFor(st, s, t) + Sim.armourOf(t);
-          t.needWhy = Sim.needWhy(st, s, t);
+          // (a shot after a move needs one more, and says so)
+          const moving = !!shot.moving;
+          t.needNow = Sim.needFor(st, s, t, moving) + Sim.armourOf(t);
+          t.needWhy = Sim.needWhy(st, s, t, moving);
           shooter = s;
           // A German tank's high explosive: the whole field
           blast = Sim.isTank(s) && !Sim.isTank(t) ? [{ x: t.x, y: t.y, main: true }] : [];
           // Still aiming: the other pieces it could have fired on, each with its score
           if (st.de.aim) others = Sim.targets(st, s).filter(o => o.id !== t.id).map(o => {
-            o.needNow = Sim.needFor(st, s, o) + Sim.armourOf(o);
-            o.needWhy = Sim.needWhy(st, s, o);
+            o.needNow = Sim.needFor(st, s, o, moving) + Sim.armourOf(o);
+            o.needWhy = Sim.needWhy(st, s, o, moving);
             return o;
           });
         } else {
@@ -247,10 +249,17 @@ window.Game = (() => {
   // The German piece moves; before it fires, its targets show as yours do (Steve), then if it fires on a piece that
   // could take cover, ask first
   const GERMAN_AIM_SHOWN = 1400;
+  // A Move & shoot: the piece gets there before its shot is aimed at for that long
+  const GERMAN_ARRIVES = 1100;
   function runGermans() {
     germanPicked = null;
     const r = Sim.germanStep(st, true);
-    if (r.aim) { changed(); later(runGermans, GERMAN_AIM_SHOWN + Board.busyFor()); return; }
+    if (r.aim) {
+      changed();
+      const arriving = r.aim.moving ? GERMAN_ARRIVES : 0;
+      later(runGermans, GERMAN_AIM_SHOWN + arriving + Board.busyFor());
+      return;
+    }
     if (r.ask) return ask(r.ask);
     // Keep what it did on the table a moment after the token ends, so you can see it (Steve)
     shownMove = st.de && st.de.move;

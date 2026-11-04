@@ -49,7 +49,7 @@ function usToken(st) {
   }
   for (const which of ['artillery', 'mortars']) {
     if (!Sim.canFire(st, which)) continue;
-    const seen = st.units.filter(g => g.side === 'de' && g.x !== null && (which === 'artillery' || !Sim.isTank(g)) && Sim.canCallFire(st, g.x, g.y));
+    const seen = st.units.filter(g => g.side === 'de' && g.x !== null && Sim.canCallFire(st, g.x, g.y));
     const t = seen.sort((a, b) => b.platoons - a.platoons)[0];
     if (t && Sim.actFire(st, which, t.x, t.y).ok) return;
   }

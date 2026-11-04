@@ -1817,5 +1817,288 @@ check('tanks never fight hand to hand: a tank charging men makes them fall back,
   assert(fell > 10, `the men fell back in only ${fell} of 20`);
 });
 
+// A German piece alone on an open board against one American, for the Move & shoot checks below
+function moveShootBoard(seed, kind) {
+  const st = Sim.newGame(seed);
+  st.hedges = {}; st.wire = {};
+  const u = st.units.find(o => o.side === 'de' && o.kind === kind), A = Sim.unitById(st, 'A');
+  for (const o of st.units) if (o !== u && o !== A) o.x = o.y = null;
+  st.deMortarAmmo = st.deArtilleryAmmo = st.deBomberAmmo = 0;
+  u.post = null; u.reserve = true; u.quality = 'standard'; u.x = 3; u.y = 0; u.at = null;
+  // One field past rifle range where it stands, so a move puts it in range. The objective is far from both
+  A.x = 3; A.y = 5; A.at = null; A.acted = true;
+  st.objective = { x: 11, y: 7, name: 'Test' };
+  return { st, u, A };
+}
+// Give one German piece its token and run it to the end, standing fast. Returns the first plan aimed
+function germanToken(st, u, showAim = false) {
+  Sim.startGermanHour(st);
+  st.de.queue = [u.id]; st.de.mortar = st.de.artillery = st.de.bomber = false; st.de.move = { id: u.id, what: '' };
+  let aimed = null;
+  for (let r = Sim.germanStep(st, showAim), n = 0; !r.done && n < 20; r = Sim.germanStep(st, showAim), n++) {
+    if (r.aim && !aimed) aimed = r.aim;
+    if (r.ask) { aimed = aimed || r.ask; Sim.answer(st, false); }
+  }
+  return aimed;
+}
+
+check('the Germans Move & shoot: with no shot from where they stand they move up and fire, needing one more', () => {
+  for (let seed = 1; seed <= 20; seed++) {
+    const { st, u } = moveShootBoard(seed, 'company');
+    assert(!Sim.targets(st, u).length, `seed ${seed}: it had a shot before moving`);
+    st.fx = [];
+    const aimed = germanToken(st, u, true);
+    assert(u.y > 0, `seed ${seed}: it did not move up`);
+    assert(Math.abs(u.x - 3) + u.y <= MOVE_SHOOT_MOVES, `seed ${seed}: it moved further than a Move & shoot, to ${u.x},${u.y}`);
+    assert(aimed && aimed.moving, `seed ${seed}: it did not fire on the move`);
+    assert(st.fx.some(f => f.from && f.from.id === u.id), `seed ${seed}: no shot on the table`);
+  }
+});
+
+check('a German shot after a move needs exactly one more than the same shot standing still', () => {
+  const { st, u, A } = moveShootBoard(5, 'company');
+  st.fx = [];
+  germanToken(st, u);
+  const shot = st.fx.find(f => f.from && f.from.id === u.id);
+  assert(shot, 'it did not fire');
+  assert(shot.need === Sim.needFor(st, u, A) + ON_THE_MOVE, `it needed ${shot.need}, standing still ${Sim.needFor(st, u, A)}`);
+});
+
+check('on the page a German Move & shoot is aimed first, showing the +1, and only then fired', () => {
+  const { st, u, A } = moveShootBoard(5, 'company');
+  Sim.startGermanHour(st);
+  st.de.queue = [u.id]; st.de.mortar = st.de.artillery = st.de.bomber = false; st.de.move = { id: u.id, what: '' };
+  st.fx = [];
+  const r = Sim.germanStep(st, true);
+  assert(r.aim && r.aim.moving && r.aim.target === A.id, `not aimed: ${JSON.stringify(r)}`);
+  assert(u.y > 0, 'it should have moved before aiming');
+  assert(!st.fx.some(f => f.from && f.from.id === u.id), 'it fired before it aimed');
+  assert(String(Sim.needWhy(st, u, A, true)).includes('moving'), 'the label does not say it is moving');
+  assert(st.de.move.what.includes(A.name), `the word bubble says "${st.de.move.what}"`);
+});
+
+check("the Germans don't Move & shoot where you can't: machine guns and the PaK, or a shot that would be a Hail Mary", () => {
+  for (const kind of ['mg42', 'pak']) {
+    const { st, u } = moveShootBoard(5, kind);
+    assert(!Sim.bestMoveShoot(st, u), `${kind} had a Move & shoot`);
+  }
+  // Every shot it could take after moving needs 7 or more: down in cover in a village, and a small target
+  const { st, u, A } = moveShootBoard(5, 'company');
+  A.kind = 'bazooka'; A.platoons = 1; A.down = true; A.x = 7; A.y = 4; A.at = null; u.x = 4; u.y = 4;
+  const home = { x: u.x, y: u.y, at: u.at };
+  const plan = Sim.bestMoveShoot(st, u);
+  if (plan) {
+    const end = plan.route[plan.route.length - 1];
+    u.x = end.x; u.y = end.y; u.at = plan.place;
+    assert(Sim.shotNeed(st, u, A, true) <= MAX_NEED, 'it planned a Hail Mary on the move');
+    Object.assign(u, home);
+  }
+});
+
+check('a German piece standing in the objective stays in it; anywhere else it goes to fire', () => {
+  const { st, u } = moveShootBoard(5, 'company');
+  assert(Sim.bestMoveShoot(st, u), 'it had no Move & shoot off the objective');
+  st.objective = { x: u.x, y: u.y, name: 'Test' };
+  assert(!Sim.bestMoveShoot(st, u), 'it would leave the objective');
+  germanToken(st, u);
+  assert(u.x === st.objective.x && u.y === st.objective.y, 'it left the objective');
+});
+
+check('a German piece with a shot from where it stands takes that, without moving', () => {
+  const { st, u, A } = moveShootBoard(5, 'company');
+  u.x = 3; u.y = 3;
+  assert(Sim.targets(st, u).includes(A), 'no shot');
+  st.fx = [];
+  germanToken(st, u);
+  assert(u.x === 3 && u.y === 3, 'it moved');
+  const shot = st.fx.find(f => f.from && f.from.id === u.id);
+  assert(shot && shot.need === Sim.needFor(st, u, A), 'it paid for moving');
+});
+
+check('an ambush can stop a German Move & shoot, and it goes no further', () => {
+  let touched = 0;
+  for (let seed = 1; seed <= 40; seed++) {
+    const { st, u } = moveShootBoard(seed, 'company');
+    const mg = Sim.unitById(st, 'mg1');
+    mg.x = 3; mg.y = 3; mg.at = null; mg.ambush = true; mg.acted = true;
+    const before = u.platoons;
+    germanToken(st, u);
+    if (u.x === null || u.shocked || u.platoons < before) touched++;
+    if (u.x !== null) assert(Math.abs(u.x - 3) + u.y <= MOVE_SHOOT_MOVES, `seed ${seed}: went too far`);
+  }
+  assert(touched > 0, 'the ambush never touched it');
+});
+
+check('a German piece lining a hedge can fire from it, needing one more, as yours can', () => {
+  const { st, u, A } = moveShootBoard(5, 'company');
+  // A hedge between them, with neither lining it: no shot until it goes to the hedge
+  u.x = 3; u.y = 5; u.at = 'n'; A.x = 3; A.y = 6; A.at = 's';
+  st.hedges = { '3,5|3,6': true };
+  assert(!Sim.targets(st, u).length, 'it could already see through the hedge');
+  st.fx = [];
+  const aimed = germanToken(st, u, true);
+  assert(u.x === 3 && u.y === 5, 'it left its field');
+  assert(aimed && aimed.moving, 'it lined the hedge but did not fire');
+  const shot = st.fx.find(f => f.from && f.from.id === u.id);
+  assert(shot && shot.need === Sim.needFor(st, u, A, true), 'it did not pay for moving');
+});
+
+check('in whole games the Germans fire on the move, and it never leaves pieces overlapping', () => {
+  let moved = 0;
+  for (let seed = 1; seed <= 30; seed++) {
+    const st = Sim.newGame(seed);
+    for (let round = 0; round < 8 && !st.won && !st.lost; round++) {
+      Sim.startRound(st);
+      for (let side = Sim.drawToken(st); side && side !== 'timer'; side = Sim.drawToken(st)) {
+        if (side === 'us') { Sim.passToken(st); continue; }
+        for (let r = Sim.germanStep(st, true); !r.done; r = Sim.germanStep(st, true)) {
+          if (r.aim && r.aim.moving) moved++;
+          if (r.ask) Sim.answer(st, false);
+        }
+        Sim.endGermanToken(st);
+      }
+      for (const u of live(st)) assert(fieldOk(st, u.x, u.y), `seed ${seed}: pieces overlap at ${u.x},${u.y}`);
+      Sim.endRound(st);
+    }
+  }
+  assert(moved > 0, 'no German ever fired on the move');
+});
+
+check('ranges: bazookas and Panzerschrecks reach 4, tanks 7, machine guns and the PaK still 6', () => {
+  const st = Sim.newGame(3);
+  st.hedges = {}; st.wire = {};
+  for (const u of st.units) u.at = null;
+  const reach = (shooter, far) => {
+    const t = Sim.unitById(st, 'd2');
+    shooter.x = 0; shooter.y = 2; t.x = far; t.y = 2;
+    return !!Sim.sight(st, shooter, t);
+  };
+  // Along the lane: nothing in the way
+  const clear = (id, last) => {
+    const u = Sim.unitById(st, id);
+    for (const o of st.units) if (o !== u && o.id !== 'd2') o.x = o.y = null;
+    assert(reach(u, last), `${id} does not reach ${last} fields`);
+    assert(!reach(u, last + 1), `${id} reaches ${last + 1} fields`);
+  };
+  clear('bz1', 4); clear('T1', 7); clear('mg1', 6);
+  const de = Sim.newGame(3);
+  de.hedges = {}; de.wire = {};
+  const sch = de.units.find(u => u.kind === 'schreck'), tar = Sim.unitById(de, 'A');
+  for (const o of de.units) if (o !== sch && o !== tar) o.x = o.y = null;
+  sch.at = tar.at = null; sch.x = 0; sch.y = 2; tar.x = 4; tar.y = 2;
+  assert(Sim.sight(de, sch, tar), 'a Panzerschreck does not reach 4 fields');
+  tar.x = 5;
+  assert(!Sim.sight(de, sch, tar), 'a Panzerschreck reaches 5 fields');
+});
+
+check('artillery rolls 5 dice on the target field, both sides', () => {
+  assert(ARTILLERY.dice === 5 && DE_ARTILLERY.dice === 5, 'artillery is not 5 dice');
+  const st = Sim.newGame(3);
+  const t = st.units.find(u => u.side === 'de' && u.kind === 'company');
+  for (const o of st.units) if (o !== t) o.x = o.y = null;
+  t.x = 4; t.y = 3; t.at = null;
+  st.fx = [];
+  Sim.startRound(st);
+  st.drawn = 'us'; st.activeId = null;
+  const friend = st.units.find(u => u.id === 'A');
+  friend.x = 4; friend.y = 2; friend.at = null;
+  st.hedges = {}; st.wire = {};
+  assert(Sim.actFire(st, 'artillery', 4, 3).ok, 'it did not fire');
+  const shell = st.fx.find(f => f.kind === 'shell' && f.to && f.to.id === t.id && f.x === 4 && f.y === 3);
+  assert(shell && shell.faces.length === 5, `it rolled ${shell && shell.faces.length} dice`);
+});
+
+// A mortar mission on one tank, either side. Returns what became of it
+function mortarOnTank(seed, side, shaken) {
+  const st = Sim.newGame(seed);
+  st.hedges = {}; st.wire = {};
+  const tank = st.units.find(u => u.side === (side === 'us' ? 'de' : 'us') && Sim.isTank(u));
+  const spot = st.units.find(u => u.side === side && u.kind === 'company');
+  const foe = st.units.find(u => u.side === tank.side && u.kind === 'company');
+  for (const o of st.units) if (o !== tank && o !== spot && o !== foe) o.x = o.y = null;
+  tank.x = 5; tank.y = 3; tank.at = null; tank.shocked = shaken; tank.down = false;
+  // The spotter next to it; a piece of the tank's side elsewhere, so the game doesn't stop when it goes
+  spot.x = 5; spot.y = 2; spot.at = null;
+  foe.x = 0; foe.y = 7; foe.at = null; foe.acted = true;
+  st.fx = [];
+  if (side === 'us') {
+    Sim.startRound(st);
+    st.drawn = 'us'; st.activeId = null;
+    assert(Sim.actFire(st, 'mortars', 5, 3).ok, 'your mortars would not fire on a tank');
+  } else {
+    Sim.startGermanHour(st);
+    st.de.queue = []; st.de.artillery = false; st.de.bomber = false; st.de.mortar = true; st.de.move = { gun: 'mortars', what: '' };
+    for (let r = Sim.germanStep(st); !r.done; r = Sim.germanStep(st)) if (r.ask) Sim.answer(st, false);
+  }
+  const shell = st.fx.find(f => f.kind === 'shell' && f.to && f.to.id === tank.id);
+  return { tank, shell };
+}
+
+check('a mortar has one anti-tank die: a hit only shakes a tank, however many are tried, both sides', () => {
+  for (const side of ['us', 'de']) {
+    let shook = 0;
+    for (let seed = 1; seed <= 60; seed++) {
+      const { tank, shell } = mortarOnTank(seed, side, false);
+      assert(shell && shell.faces.length === 1, `${side}: ${shell ? shell.faces.length : 'no'} dice on the tank`);
+      const hit = shell.faces[0].hit;
+      assert(tank.x !== null, `${side}, seed ${seed}: an unshaken tank was knocked out by a mortar`);
+      assert(tank.shocked === hit, `${side}, seed ${seed}: hit ${hit} but shaken ${tank.shocked}`);
+      if (hit) shook++;
+    }
+    assert(shook > 10, `${side}: only ${shook} of 60 shook it`);
+  }
+});
+
+check('a mortar hit on a tank already shaken knocks it out, both sides', () => {
+  for (const side of ['us', 'de']) {
+    let killed = 0, missed = 0;
+    for (let seed = 1; seed <= 60; seed++) {
+      const { tank, shell } = mortarOnTank(seed, side, true);
+      const hit = shell.faces[0].hit;
+      assert((tank.x === null) === hit, `${side}, seed ${seed}: hit ${hit} but gone ${tank.x === null}`);
+      if (hit) killed++; else missed++;
+    }
+    assert(killed > 10 && missed > 0, `${side}: killed ${killed}, missed ${missed}`);
+  }
+});
+
+check('artillery on a tank can still knock it out with one hit, unlike a mortar', () => {
+  let killed = 0;
+  for (let seed = 1; seed <= 80; seed++) {
+    const st = Sim.newGame(seed);
+    st.hedges = {}; st.wire = {};
+    const tank = st.units.find(u => u.side === 'de' && Sim.isTank(u) && !PIECES[u.kind].armour), spot = Sim.unitById(st, 'A');
+    const foe = st.units.find(u => u.side === 'de' && u.kind === 'company');
+    for (const o of st.units) if (o !== tank && o !== spot && o !== foe) o.x = o.y = null;
+    tank.x = 5; tank.y = 3; tank.at = null;
+    spot.x = 5; spot.y = 1; spot.at = null;
+    foe.x = 11; foe.y = 7; foe.at = null;
+    Sim.startRound(st);
+    st.drawn = 'us'; st.activeId = null;
+    assert(Sim.actFire(st, 'artillery', 5, 3).ok, 'it did not fire');
+    if (tank.x === null) killed++;
+  }
+  assert(killed > 0, 'artillery never knocked out an unshaken tank');
+});
+
+check("the German mortar goes for a shaken tank first, a platoon next, an unshaken tank only if there's nothing else", () => {
+  const st = Sim.newGame(3);
+  const tank = Sim.unitById(st, 'T1'), A = Sim.unitById(st, 'A'), de = st.units.find(u => u.side === 'de' && u.kind === 'company');
+  for (const o of st.units) if (o !== tank && o !== A && o !== de) o.x = o.y = null;
+  de.x = 5; de.y = 3; tank.x = 5; tank.y = 4; A.x = 5; A.y = 2;
+  const firstShot = () => {
+    Sim.startGermanHour(st);
+    st.de.queue = []; st.de.artillery = false; st.de.bomber = false; st.de.mortar = true; st.de.move = { gun: 'mortars', what: '' };
+    const r = Sim.germanStep(st, true);
+    return r.aim ? r.aim.target : null;
+  };
+  tank.shocked = false;
+  assert(firstShot() === 'A', 'it did not go for the platoon');
+  tank.shocked = true;
+  assert(firstShot() === 'T1', 'it did not go for the shaken tank');
+  tank.shocked = false; A.x = A.y = null;
+  assert(firstShot() === 'T1', 'it ignored the tank with nothing else to fire on');
+});
+
 console.log(failed ? `\n${failed} failed` : '\nall passed');
 process.exit(failed ? 1 : 0);
