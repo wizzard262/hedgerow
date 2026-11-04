@@ -662,38 +662,9 @@ const Sim = (() => {
     return isTank(target) ? cover.tank : cover.men;
   }
 
-  // Which village, hamlet or orchard a field belongs to: fields of one kind joined side to side are one place (the map
-  // never changes, so this is worked out once). null for any other field
-  let placeIds = null;
-  function placeIdOf(x, y) {
-    if (!placeIds) {
-      placeIds = {};
-      let next = 1;
-      for (let fy = 0; fy < ROWS; fy++) for (let fx = 0; fx < COLS; fx++) {
-        const kind = tileType(fx, fy);
-        if (!PLACE_COVER[kind] || placeIds[fx + ',' + fy]) continue;
-        // Spread out over joined fields of the same kind
-        const open = [[fx, fy]];
-        placeIds[fx + ',' + fy] = next;
-        while (open.length) {
-          const [px, py] = open.pop();
-          for (const [dx, dy] of NEIGHBOURS) {
-            const qx = px + dx, qy = py + dy, key = qx + ',' + qy;
-            if (!inside(qx, qy) || placeIds[key] || tileType(qx, qy) !== kind) continue;
-            placeIds[key] = next;
-            open.push([qx, qy]);
-          }
-        }
-        next++;
-      }
-    }
-    return placeIds[x + ',' + y] || null;
-  }
-  // Are two things inside the same village, hamlet or orchard?
-  function samePlace(a, b) {
-    const id = placeIdOf(a.x, a.y);
-    return id !== null && id === placeIdOf(b.x, b.y);
-  }
+  // Are two pieces inside the same village, hamlet or orchard? Only in the very same field (Steve: not the next field of
+  // a block of them)
+  const samePlace = (a, b) => a.x === b.x && a.y === b.y;
 
 
   // Put the score every shot starts from first (Steve: "3+", then "+1 small target"…, then the total), so the sum adds

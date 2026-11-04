@@ -313,7 +313,7 @@ window.Game = (() => {
     const t = Sim.tileType(f.x, f.y);
     // Houses and trees: their cover (see PLACE_COVER), and the view
     const place = PLACE_COVER[t];
-    const cover = place ? `${t === 'orchard' ? 'Trees' : 'Houses'}: +${place.men} to hit men here, +${place.tank} a tank, +${place.shells} with mortars or artillery; none for an enemy inside it too. Seen into and out of, never through` : t === 'river' ? 'Nothing can cross except at a bridge' : '';
+    const cover = place ? `${t === 'orchard' ? 'Trees' : 'Houses'}: +${place.men} to hit men here, +${place.tank} a tank, +${place.shells} with mortars or artillery; none for an enemy in this same field. Seen into and out of, never through` : t === 'river' ? 'Nothing can cross except at a bridge' : '';
     // A village field takes the name of the nearest village
     const village = t === 'village' ? VILLAGES.slice().sort((a, b) => (Math.abs(a.x - f.x) + Math.abs(a.y - f.y)) - (Math.abs(b.x - f.x) + Math.abs(b.y - f.y)))[0].name : null;
     tip.innerHTML = `<b>${village || NAMES[t]}</b>${cover ? `<br><span style="color:var(--muted)">${cover}</span>` : ''}${lines.length ? '<br>' + lines.join('<br>') : ''}`;

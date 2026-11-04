@@ -1078,9 +1078,11 @@ check('villages, hamlets and orchards: +2 or +1 for men, +1 a tank, +1 against s
   for (const k of ['village', 'hamlet', 'orchard']) assert(PLACE_COVER[k].tank === 1 && PLACE_COVER[k].shells === 1, `${k}: a tank or shells are not +1`);
   const st0 = Sim.newGame(3);
   for (const u of st0.units) u.x = u.y = null;
-  // Two enemies in the same village (fields joined together): no cover from it; one outside: full cover
+  // Two enemies in the very same field: no cover from it; in the next field of the block: full cover (Steve)
   const inside = { x: 7, y: 3, side: 'us', kind: 'company' }, target = { x: 7, y: 4, side: 'de', kind: 'company' };
-  assert(Sim.tileType(7, 3) === 'village' && Sim.cover(st0, inside, target) - (Sim.sight(st0, inside, target) || { cover: 0 }).cover === 0, 'an enemy inside the same village still got cover from it');
+  const sameField = { x: 7, y: 4, side: 'us', kind: 'company' };
+  assert(Sim.tileType(7, 3) === 'village' && Sim.cover(st0, inside, target) - (Sim.sight(st0, inside, target) || { cover: 0 }).cover === PLACE_COVER.village.men, 'a piece in the next field of the village lost its cover');
+  assert(Sim.cover(st0, sameField, target) === 0, 'an enemy in the very same field still got cover from it');
   assert(Sim.shellNeed(st0, target) === TO_HIT + 1, 'shells on the village needed more than +1');
   const tank = { x: 7, y: 4, side: 'de', kind: 'pz4' };
   assert(Sim.cover(st0, null, tank) === 1, 'a tank in the village did not get +1');
