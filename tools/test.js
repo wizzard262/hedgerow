@@ -740,6 +740,36 @@ check('the label says +2 cover in a village, +1 in an orchard, not the kind of p
   assert(!Sim.needWhy(st, M, t).some(w => /village|hamlet|orchard/.test(w)), 'the label names the place');
 });
 
+check('bazooka and Panzerschreck teams go one field further on a Move & shoot and a Charge; others do not', () => {
+  // Set up: an empty table but for one team on the lane, and a German tank down the lane
+  const setUp = kind => {
+    const st = Sim.newGame(3);
+    st.wire = {}; st.hedges = {};
+    const team = Sim.unitById(st, 'bz1');
+    const tank = st.units.find(u => u.side === 'de' && Sim.isTank(u));
+    for (const u of st.units) if (u !== team && u !== tank) u.x = u.y = null;
+    team.kind = kind; team.x = 0; team.y = 5; team.at = null;
+    tank.x = 6; tank.y = 5; tank.at = null;
+    return { st, team };
+  };
+  const reaches = (list, x, y) => list.some(p => p.x === x && p.y === y);
+  // Both anti-tank teams: four fields charging, three moving to fire (the tank is in reach from three fields along)
+  for (const kind of ['bazooka', 'schreck']) {
+    const { st, team } = setUp(kind);
+    assert(reaches(Sim.chargeSpots(st, team), 4, 5), `${kind} cannot charge four fields`);
+    assert(!reaches(Sim.chargeSpots(st, team), 5, 5), `${kind} charges five fields`);
+    assert(reaches(Sim.moveShootSpots(st, team), 3, 5), `${kind} cannot move three fields and shoot`);
+    // Shaken: half of that, rounded down
+    team.shocked = true;
+    assert(reaches(Sim.chargeSpots(st, team), 2, 5) && !reaches(Sim.chargeSpots(st, team), 3, 5), `shaken ${kind} does not charge two fields`);
+  }
+  // Anyone else stays at three and two
+  const { st, team } = setUp('sniper');
+  assert(reaches(Sim.chargeSpots(st, team), 3, 5) && !reaches(Sim.chargeSpots(st, team), 4, 5), 'a sniper charges further than three fields');
+  team.kind = 'captain';
+  assert(!reaches(Sim.moveShootSpots(st, team), 3, 5), 'a captain moves three fields and shoots');
+});
+
 check('machine guns fire five dice', () => {
   assert(PIECES.mg.soft === 5 && PIECES.mg42.soft === 5, 'an MG team does not fire five dice');
 });

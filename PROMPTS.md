@@ -1059,6 +1059,18 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - Every model was many small parts, each drawn on its own, twice a frame (once for its shadow): over 5,400 draws a frame. Now each piece, and the fields, houses and trees, are merged into one mesh for each material (about 600 draws). Shadows are worked out only while something moves. The marks on the table are built when something changes, and between times only the cross-hairs pulse. The sharpest screens are drawn at 1.5 times, not 2
 - Measured in the same test window: from about 15 frames a second to 60-70 (as fast as that screen shows), with memory steady, while playing and with targets showing. No change to the rules
 
+## 188. Checks, and a bomber estimate (no change)
+
+- Steve: don't say +1 hamlet, it must be +1 cover: did we do this? Yes, v103 (the corner label too in v104)
+- Steve: 6+ should be a long shot, named Hail Mary: did we do this? Yes in v104, but from 7 up, as Steve chose then: 6+ stays a plain 6. Asked again whether 6+ should change
+- Steve: a bomber: a B-17 / Ju 88 below the mortars with a token; a 16-way compass spin when picked (the same result if picked again that round); pick any field round the edge; it flies straight through that field, a bomb at 5+ on each piece in each field it crosses. Asked if it fits the rules and how long: it fits, with six things to settle (how many runs; do cover and take cover add to the 5+; what a hit does, as one die at 5+ is far weaker than a mortar's four at 3+; which fields a slanted line counts; skipping after the spin; take-cover bubbles along the line), about 2-3 hours. Not built yet
+
+## 189. Bazookas go further (v106)
+
+- Steve: the bazooka can move one space further, he's got to get to the tank: on Move & shoot and Charge
+- Move & shoot three fields, Charge four. Shaken, half of that, as for everyone. (Assumed: the Panzerschreck too, as both sides behave the same)
+- Balance: the test player wins 38% in about 10.8 rounds; doing nothing wins 0%
+
 ## Sessions
 
 | # | Date | Length | What we did |

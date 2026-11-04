@@ -1138,8 +1138,13 @@ const Sim = (() => {
 
   // How far a piece can go (Steve): a shaken piece can always move or charge, but only half as far (at least one field)
   function reach(u, full) {
-    if (!u.shocked) return full;
-    return Math.max(1, Math.floor(full * SHAKEN_MOVE));
+    // Bazooka and Panzerschreck teams go one field further (Steve)
+    const extra = PIECES[u.kind].extraMove || 0;
+    const far = full + extra;
+    // Not shaken: the whole way
+    if (!u.shocked) return far;
+    // Shaken: half of that
+    return Math.max(1, Math.floor(far * SHAKEN_MOVE));
   }
 
   // Go along a route's fields up to (not into) its goal, cutting, flattening or climbing on the way. Returns the lines to report

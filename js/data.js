@@ -88,10 +88,11 @@ const PIECES = {
   pz4:      { name: 'Panzer IV', soft: 1.5, hard: 1.5, tank: true, armour: 0, cutter: true },
   panther:  { name: 'Panther', soft: 1.5, hard: 3, tank: true, armour: 1, cutter: true },
   mg:       { name: '.50 cal team', soft: 5, hard: 0, team: true, men: 3 },        // machine guns fire 5 dice (Steve)
-  bazooka:  { name: 'Bazooka team', soft: 0, hard: 2, team: true, men: 2 },
-  sniper:   { name: 'Sniper team', soft: 1, hard: 0, team: true, sniper: true, men: 2 },   // the sniper and his spotter (Steve: a two-man team); sees the whole board, ignores cover and range (Steve)
+  // extraMove: fields more than other pieces on a Move & shoot or a Charge (Steve: he's got to get to the tank)
+  bazooka:  { name: 'Bazooka team', soft: 0, hard: 2, team: true, men: 2, extraMove: 1 },
+  sniper:  { name: 'Sniper team', soft: 1, hard: 0, team: true, sniper: true, men: 2 },   // the sniper and his spotter (Steve: a two-man team); sees the whole board, ignores cover and range (Steve)
   mg42:     { name: 'MG 42 team', soft: 5, hard: 0, team: true, men: 3 },
-  schreck:  { name: 'Panzerschreck team', soft: 0, hard: 2.5, team: true, men: 2 },
+  schreck:  { name: 'Panzerschreck team', soft: 0, hard: 2.5, team: true, men: 2, extraMove: 1 },   // both sides the same (Steve)
   pak:      { name: 'PaK 40 gun', soft: 0.5, hard: 3, team: true, fixed: true },
   captain:  { name: 'Captain', soft: 1, hard: 0, men: 1 },   // his HQ's carbines and submachine guns (Steve: he can shoot)
 };

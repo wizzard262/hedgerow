@@ -412,9 +412,13 @@ const UI = (() => {
       // charge), one if he shoots or moves and shoots (before or after). Only with someone in reach to rally
       if (Sim.captainCanRally(st, u)) b.push({ mode: 'rally', label: '📣 Rally', ok: true, title: 'Get a piece that took cover up and moving, or steady a shaken one (himself too), up to three fields away. Two rallies a round if he stays put or charges, one if he shoots or moves and shoots. Skip turn to stop before using them all' });
     } else {
-      add('charge', '⚔️ Charge', Sim.chargeSpots(st, u).length > 0, 'Up to three fields, no shooting (climbing a hedge uses one more)');
+      // Bazooka and Panzerschreck teams go one field further (Steve)
+      const further = PIECES[u.kind].extraMove > 0;
+      const chargeFields = further ? 'four' : 'three';
+      const moveFields = further ? 'three' : 'two';
+      add('charge', '⚔️ Charge', Sim.chargeSpots(st, u).length > 0, `Up to ${chargeFields} fields, no shooting (climbing a hedge uses one more)`);
       // Machine guns can't move and fire: they Charge to a new spot, then Shoot next round
-      if (u.kind !== 'mg' && u.kind !== 'mg42') add('moveShoot', '➡️ Move & shoot', Sim.moveShootSpots(st, u).length > 0, 'Up to two fields to where it can fire (the red-hatched fields), then fire needing one more on the dice');
+      if (u.kind !== 'mg' && u.kind !== 'mg42') add('moveShoot', '➡️ Move & shoot', Sim.moveShootSpots(st, u).length > 0, `Up to ${moveFields} fields to where it can fire (the red-hatched fields), then fire needing one more on the dice`);
       add('shoot', '🎯 Shoot', Sim.targets(st, u).length > 0, 'Fire with every die');
     }
     // Line another hedge of its field, to fire through it
