@@ -82,7 +82,28 @@ const Sim = (() => {
   function takenAreas(st, u, x, y, leaving = []) {
     const taken = new Set();
     for (const o of st.units) if (o !== u && o.x === x && o.y === y && !leaving.includes(o)) for (const k of footprint(o)) taken.add(k);
+    // A wreck takes its three areas too, whoever's it was
+    const wreck = wreckAt(st, x, y);
+    if (wreck) for (const k of wreck.areas) taken.add(k);
     return taken;
+  }
+  // The wreck in a field, if there is one (one to a field at most, see leaveWreck)
+  const wreckAt = (st, x, y) => st.wrecks.find(w => w.x === x && w.y === y) || null;
+  // A tank knocked out stays where it died, burnt out (Steve). It is shoved into a corner and takes that corner and the
+  // two edges beside it, never the middle: every 2×2 block needs the middle, so a full platoon or a tank can still come
+  // in at the opposite corner (the objective is one field, and must always be takeable). A second wreck in a field
+  // clears away the older one, so there is always that room
+  function leaveWreck(st, u) {
+    // An older wreck in this field goes
+    st.wrecks = st.wrecks.filter(w => !(w.x === u.x && w.y === u.y));
+    // What the others in the field already stand on
+    const taken = takenAreas(st, u, u.x, u.y);
+    // A tank in a corner block stays in that corner; one in the middle rolls to a corner nobody stands in
+    const corner = u.at && u.at !== 'c' ? footprint(u)[0] : CORNERS.find(k => !taken.has(k)) || CORNERS[0];
+    // Its corner and the two edges beside it, less any square a piece is already on (only ever a tank that died in the middle)
+    const areas = [corner, corner[0], corner[1]].filter(k => !taken.has(k));
+    // turn: when it died, as the fire dies down after the next round
+    st.wrecks.push({ id: u.id, kind: u.kind, side: u.side, x: u.x, y: u.y, corner, areas, turn: st.turn });
   }
   const fitsAt = (st, u, x, y, at, leaving = []) => { const taken = takenAreas(st, u, x, y, leaving); return footprint(u, at).every(k => !taken.has(k)); };
   // The place nearest the one wanted where the piece fits among the others (Steve: where other pieces allow it)
@@ -163,7 +184,7 @@ const Sim = (() => {
     seed = seed || (Date.now() % 1e9);
     const R = rng(seed);
     const st = {
-      seed, turn: 1, hedges: {}, wire: {}, units: [], report: [], fx: [],
+      seed, turn: 1, hedges: {}, wire: {}, units: [], wrecks: [], report: [], fx: [],
       fired: {},          // fire support used this hour (the mortars and the guns each fire once an hour)
       ammo: { mortars: MORTARS.ammo, artillery: ARTILLERY.ammo, bomber: BOMBER.ammo },
       deMortarAmmo: DE_MORTAR.ammo, deArtilleryAmmo: DE_ARTILLERY.ammo, deBomberAmmo: BOMBER.ammo, won: false, lost: false,
@@ -423,30 +444,45 @@ const Sim = (() => {
     }
     return { s0, s1 };
   }
-  // Does a line pass a tank (not the shooter or the target)? 'blocked' through one of its areas, or past its corner
-  // with neither piece in an area touching that corner; 'cover' past its corner from such an area (both +1) unless
-  // either piece is right beside that side of the tank there; null if no tank is in the way
+  // Does a line pass a tank or a wreck (not the shooter or the target)? 'blocked' through one of its areas, or past its
+  // corner with neither piece in an area touching that corner; 'cover' past its corner from such an area (both +1) unless
+  // either piece is right beside that side of it there; null if nothing is in the way
   function tankInWay(st, from, target, a, b) {
     const len = Math.hypot(b.x - a.x, b.y - a.y);
     const piecesCells = [from, target].map(u => (u.kind ? standsIn(u).map(k => cellOf(u, k)) : []));
     let cover = false;
+    // Tanks still running
     for (const t of st.units) {
       if (t === from || t === target || t.x === null || !isTank(t)) continue;
-      for (const k of standsIn(t)) {
-        const cell = cellOf(t, k);
-        const hit = lineInCell(a, b, cell);
-        if (!hit) continue;
-        // Through the area itself: blocked
-        if ((hit.s1 - hit.s0) * len > 1e-6) return 'blocked';
-        // Only touching a corner of it: from an area at that very corner it sees past, in cover
-        const p = { x: a.x + hit.s0 * (b.x - a.x), y: a.y + hit.s0 * (b.y - a.y) };
-        const cornerOf = c => [[c.x0, c.y0], [c.x0 + THIRD, c.y0], [c.x0, c.y0 + THIRD], [c.x0 + THIRD, c.y0 + THIRD]].some(([x, y]) => Math.abs(x - p.x) < 1e-6 && Math.abs(y - p.y) < 1e-6);
-        const atIt = piecesCells.map(cells => cells.some(cornerOf));
-        if (!atIt[0] && !atIt[1]) return 'blocked';
-        // Right beside that side of the tank (its area shares a side with the tank's, at that corner): no cover
-        const beside = cells => cells.some(c => cornerOf(c) && (Math.abs(c.x0 - cell.x0) < 1e-6 || Math.abs(c.y0 - cell.y0) < 1e-6));
-        if (!piecesCells.some(beside)) cover = true;
-      }
+      const passing = lineByAreas(a, b, len, piecesCells, t, standsIn(t));
+      if (passing === 'blocked') return 'blocked';
+      if (passing === 'cover') cover = true;
+    }
+    // Wrecks block the view the same way, corners and all (Steve)
+    for (const w of st.wrecks) {
+      const passing = lineByAreas(a, b, len, piecesCells, w, w.areas);
+      if (passing === 'blocked') return 'blocked';
+      if (passing === 'cover') cover = true;
+    }
+    return cover ? 'cover' : null;
+  }
+  // One line against the areas one tank or wreck stands in, in field f (see tankInWay)
+  function lineByAreas(a, b, len, piecesCells, f, areas) {
+    let cover = false;
+    for (const k of areas) {
+      const cell = cellOf(f, k);
+      const hit = lineInCell(a, b, cell);
+      if (!hit) continue;
+      // Through the area itself: blocked
+      if ((hit.s1 - hit.s0) * len > 1e-6) return 'blocked';
+      // Only touching a corner of it: from an area at that very corner it sees past, in cover
+      const p = { x: a.x + hit.s0 * (b.x - a.x), y: a.y + hit.s0 * (b.y - a.y) };
+      const cornerOf = c => [[c.x0, c.y0], [c.x0 + THIRD, c.y0], [c.x0, c.y0 + THIRD], [c.x0 + THIRD, c.y0 + THIRD]].some(([x, y]) => Math.abs(x - p.x) < 1e-6 && Math.abs(y - p.y) < 1e-6);
+      const atIt = piecesCells.map(cells => cells.some(cornerOf));
+      if (!atIt[0] && !atIt[1]) return 'blocked';
+      // Right beside that side of it (its area shares a side with this one, at that corner): no cover
+      const beside = cells => cells.some(c => cornerOf(c) && (Math.abs(c.x0 - cell.x0) < 1e-6 || Math.abs(c.y0 - cell.y0) < 1e-6));
+      if (!piecesCells.some(beside)) cover = true;
     }
     return cover ? 'cover' : null;
   }
@@ -605,6 +641,8 @@ const Sim = (() => {
   }
 
   function remove(st, u) {
+    // A tank stays on the table as a burnt-out wreck (Steve)
+    if (isTank(u) && u.x !== null) leaveWreck(st, u);
     u.x = null; u.y = null; u.shocked = false;
     // The last piece of a side gone: the game stops there and then, without finishing the round (Steve)
     wipedOut(st);
@@ -2230,6 +2268,7 @@ const Sim = (() => {
 
   return {
     firesOnTheMove, canAmbush, actAmbush, bestMoveShoot, bomberHeading, bomberEdges, bomberLine, bombNeed, bombWhy, bestBomberRun,
+    wreckAt, remove,
     newGame, roll, endTurn, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, chargeSpots,
     rallyTargets, canAct, canReact, firepower, canCallFire, holdsObjective, roundText, roomFor,
     startGermanHour, germanStep, answer, finishHour, startRound, drawToken, endGermanToken, activationOver, passToken, usCanMove, endRound, canFire, actSkip, actSkipShot, skipSupport,

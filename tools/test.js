@@ -2227,5 +2227,83 @@ check("the German mortar goes for a shaken tank first, a platoon next, an unshak
   assert(firstShot() === 'T1', 'it ignored the tank with nothing else to fire on');
 });
 
+check('a knocked-out tank stays as a wreck: three squares in its corner, the middle free, so a full platoon still fits opposite', () => {
+  const st = Sim.newGame(3);
+  const tank = Sim.unitById(st, 'T1'), A = Sim.unitById(st, 'A');
+  for (const o of st.units) if (o !== tank && o !== A) o.x = o.y = null;
+  tank.x = 5; tank.y = 3; tank.at = 'nw'; A.x = 2; A.y = 3;
+  Sim.remove(st, tank);
+  assert(tank.x === null, 'the tank is still a piece on the table');
+  const w = Sim.wreckAt(st, 5, 3);
+  assert(w && w.corner === 'nw' && w.areas.slice().sort().join() === 'n,nw,w', `the wreck takes ${w && w.areas}`);
+  assert(A.platoons === 3 && Sim.roomFor(st, A, 5, 3), 'no room for a full platoon');
+  assert(Sim.fitsAt(st, A, 5, 3, 'se'), 'a full platoon does not fit at the opposite corner');
+  for (const corner of ['nw', 'ne', 'sw', null]) assert(!Sim.fitsAt(st, A, 5, 3, corner), `a full platoon fits on the wreck at ${corner}`);
+  assert(Sim.freePlace(st, A, 5, 3, 'nw') === 'se', 'the platoon was not sent to the opposite corner');
+});
+
+check('a tank knocked out in the objective never stops the village being taken', () => {
+  for (const place of ['nw', 'ne', 'sw', 'se', null]) {
+    const st = Sim.newGame(3);
+    const tank = Sim.unitById(st, 'T1'), A = Sim.unitById(st, 'A');
+    for (const o of st.units) if (o !== tank && o !== A) o.x = o.y = null;
+    tank.x = st.objective.x; tank.y = st.objective.y; tank.at = place; A.x = 1; A.y = 1;
+    Sim.remove(st, tank);
+    assert(Sim.roomFor(st, A, st.objective.x, st.objective.y), `no room after a tank died at ${place}`);
+    A.x = st.objective.x; A.y = st.objective.y; A.at = Sim.freePlace(st, A, A.x, A.y, 'nw');
+    assert(Sim.holdsObjective(st), 'the full platoon does not hold the objective');
+    assert(!Sim.footprint(A).some(k => Sim.wreckAt(st, A.x, A.y).areas.includes(k)), `the platoon stands on the wreck (tank died at ${place})`);
+  }
+});
+
+check('a tank dying in the middle of a field rolls to a corner nobody stands in', () => {
+  const st = Sim.newGame(3);
+  const tank = Sim.unitById(st, 'T1'), team = st.units.find(u => u.side === 'us' && Sim.sizeOf(u) === 1);
+  for (const o of st.units) if (o !== tank && o !== team) o.x = o.y = null;
+  tank.x = 5; tank.y = 3; tank.at = null; team.x = 5; team.y = 3; team.at = 'nw';
+  Sim.remove(st, tank);
+  const w = Sim.wreckAt(st, 5, 3);
+  assert(w && w.corner !== 'nw' && !w.areas.includes('nw'), `the wreck took ${w && w.areas}, where the team stands`);
+});
+
+check('a second wreck in a field clears the older one, so there is always room', () => {
+  const st = Sim.newGame(3);
+  const tanks = st.units.filter(Sim.isTank).slice(0, 2), A = Sim.unitById(st, 'A');
+  for (const o of st.units) if (!tanks.includes(o) && o !== A) o.x = o.y = null;
+  tanks[0].x = 5; tanks[0].y = 3; tanks[0].at = 'nw'; tanks[1].x = 7; tanks[1].y = 7; A.x = 1; A.y = 1;
+  Sim.remove(st, tanks[0]);
+  tanks[1].x = 5; tanks[1].y = 3; tanks[1].at = 'se';
+  Sim.remove(st, tanks[1]);
+  assert(st.wrecks.length === 1 && st.wrecks[0].id === tanks[1].id && st.wrecks[0].corner === 'se', 'the older wreck is still there');
+  assert(Sim.roomFor(st, A, 5, 3) && Sim.fitsAt(st, A, 5, 3, 'nw'), 'no room for a full platoon');
+});
+
+check('a wreck blocks the view through its three squares; past its corner only from a piece touching that corner', () => {
+  const st = Sim.newGame(3);
+  st.wire = {}; st.hedges = {};
+  const p = Sim.unitById(st, 'mg1'), q = st.units.find(u => u.side === 'de' && u.kind === 'mg42'), T = Sim.unitById(st, 'T1');
+  for (const u of st.units) if (![p, q, T].includes(u)) u.x = u.y = null;
+  // Straight across the field along its north row: clear until a tank dies there
+  p.x = 8; p.y = 6; p.at = 'ne'; q.x = 10; q.y = 6; q.at = 'nw';
+  T.x = 9; T.y = 6; T.at = 'nw';
+  Sim.remove(st, T);
+  assert(!Sim.sight(st, p, q), 'a line along the wreck was not blocked');
+  // The south row of that field is not the wreck's, so that line is clear
+  p.at = 'se'; q.at = 'sw';
+  const clear = Sim.sight(st, p, q);
+  assert(clear && clear.cover === 0, 'a line clear of the wreck was blocked or in cover');
+  // A wreck in the north-east of (10,7): its squares are ne, n, e. Looking north-west along the 45° line to (9,6)
+  st.wrecks = [];
+  T.x = 10; T.y = 7; T.at = 'ne';
+  Sim.remove(st, T);
+  q.x = 9; q.y = 6; q.at = 'c';
+  // From the middle, touching the corner of its north square: seen past it
+  p.x = 10; p.y = 7; p.at = 'c';
+  assert(Sim.sight(st, p, q), 'a piece touching the wreck did not see past its corner');
+  // From the far corner, touching none of the corner it grazes: blocked
+  p.at = 'se';
+  assert(!Sim.sight(st, p, q), 'a piece not touching that corner saw past the wreck');
+});
+
 console.log(failed ? `\n${failed} failed` : '\nall passed');
 process.exit(failed ? 1 : 0);

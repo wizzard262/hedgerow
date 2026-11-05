@@ -478,13 +478,15 @@ const Board = (() => {
   // from the field's middle
   const OPEN = { platoon: 0.31, spread: 0.85, tank: 0.31, small: 0.31 };
   const YARD = { platoon: 0.2, spread: 0.7, tank: 0.2, small: 0.2 };
+  // A yard with a wreck in it: a platoon pushes on out to the far corner, to clear the hull
+  const YARD_WITH_WRECK = { platoon: 0.31, spread: 0.7, tank: 0.2, small: 0.2 };
   function arrange(st, x, y) {
     const here = Sim.at(st, x, y);
     const loose = (u, k) => { const R = seeded(u.id.length * 977 + x * 131 + y * 71 + k * 7 + u.id.charCodeAt(0)); return [(R() - 0.5) * 0.05, (R() - 0.5) * 0.05, (R() - 0.5) * 0.5]; };
     // A field with houses round it: the pieces keep to the yard inside the houses (Steve: never under a house), so they
     // stand closer to the middle and closer together
     const houses = ['village', 'hamlet'].includes(Sim.tileType(x, y));
-    const reach = houses ? YARD : OPEN;
+    const reach = !houses ? OPEN : Sim.wreckAt(st, x, y) ? YARD_WITH_WRECK : YARD;
     for (const u of here) {
       const g = model(u), p = Sim.spotXY(u);
       if (u.kind === 'company') {
@@ -810,8 +812,10 @@ const Board = (() => {
       // (in ambush it hasn't finished: it goes light green or grey once it has fired, Steve)
       const done = u.acted && !u.ambush && !movingNow && !activeNow && !h;
       // Moved this round: yours light green, the Germans' grey (Steve)
-      const tint = done ? (u.side === 'us' ? 'green' : 'grey') : false;
-      if (g) { g.visible = h ? h.visible : u.x !== null; greyOut(g, tint); }
+      const tint = done && u.x !== null ? (u.side === 'us' ? 'green' : 'grey') : false;
+      // A knocked-out tank stays on the table as its wreck (see updateWrecks)
+      const wrecked = u.x === null && st.wrecks.some(w => w.id === u.id);
+      if (g) { g.visible = h ? h.visible : u.x !== null || wrecked; greyOut(g, tint); }
       // A piece lost in hand to hand is no longer arranged in a field: its bases drop away blow by blow here
       if (g && u.x === null && h) g.userData.bases.forEach((b, i) => { b.visible = i < shownStrength(u); });
       // Taking cover: every figure crouches (tanks stay as they are)
@@ -849,6 +853,79 @@ const Board = (() => {
       if (!pieces[u.id]) continue;
       marker(u, ':shock', '#9b2a22', '!', u.shocked, 'back');
     }
+    updateWrecks(st);
+  }
+
+  // ---------- Wrecks (Steve): a knocked-out tank burns where it died, black and scorched, and stays ----------
+
+  // Where a wreck's hull sits from the middle of its field, towards its corner: along the way it points and across it.
+  // It has to clear the hedges in a field, or the houses round a yard, and leave room for a platoon opposite
+  const WRECK_OPEN = { along: 0.16, across: 0.22 };
+  const WRECK_YARD = { along: 0.04, across: 0.18 };
+  // The fires on the table: piece id → { fire, x, y }
+  const wreckFires = {};
+
+  // Bring the table up to date with the wrecks in the game: a new one once the shot that killed it has landed, and any
+  // older one a newer one has cleared away. Its look is set just the once
+  function updateWrecks(st) {
+    for (const w of st.wrecks) {
+      const g = pieces[w.id];
+      if (!g || wreckFires[w.id] || holding(w.id)) continue;
+      wreckFires[w.id] = { fire: setWreck(st, w, g) };
+      shadowStale = true;
+    }
+    for (const id of Object.keys(wreckFires)) {
+      if (!st.wrecks.some(w => w.id === id)) removeFire(id);
+    }
+  }
+
+  // Scorch the hull, set it down in its corner, and light it. Returns the fire
+  function setWreck(st, w, g) {
+    const hull = g.userData.bases[0];
+    // Square to the field: the way it faced, to the nearest quarter turn
+    const quarter = Math.round(hull.rotation.y / (Math.PI / 2));
+    const facing = quarter * (Math.PI / 2);
+    // A tank's length runs the way it faces: east-west on an even quarter turn, north-south on an odd one
+    const eastWest = Math.abs(quarter) % 2 === 0;
+    const houses = ['village', 'hamlet'].includes(Sim.tileType(w.x, w.y));
+    const reach = houses ? WRECK_YARD : WRECK_OPEN;
+    const offX = eastWest ? reach.along : reach.across;
+    const offZ = eastWest ? reach.across : reach.along;
+    // Towards its corner, from the middle of the field
+    const cx = 0.5 + (w.corner.includes('e') ? offX : -offX);
+    const cz = 0.5 + (w.corner.includes('s') ? offZ : -offZ);
+    // Stops dead there, a little askew and down on one side
+    g.userData.way = null;
+    aim(g, w.x, w.y, 0, true);
+    hull.visible = true;
+    const askew = (w.x * 7 + w.y * 13) % 2 ? 0.09 : -0.09;
+    aim(hull, cx, cz, facing + askew, true);
+    hull.rotation.z = 0.03;
+    hull.rotation.x = askew * 0.35;
+    Fire.scorch(hull);
+    // The fire on the hull
+    const fire = Fire.make(facing);
+    fire.position.set(w.x + cx, 0, w.y + cz);
+    fire.userData.wreck = w;
+    scene.add(fire);
+    return fire;
+  }
+
+  function removeFire(id) {
+    scene.remove(wreckFires[id].fire);
+    Fire.free(wreckFires[id].fire);
+    delete wreckFires[id];
+    // The hull goes when the piece isn't drawn (see updatePieces), the patch and flames with the fire
+  }
+
+  // One frame of the fires: burning hard to the end of the next round, then just smouldering. Returns true if any is lit
+  function burnWrecks(st, now, dt) {
+    const ids = Object.keys(wreckFires);
+    for (const id of ids) {
+      const { fire } = wreckFires[id];
+      Fire.burn(fire, now, dt, st.turn <= fire.userData.wreck.turn + 1 ? 1 : 0.3);
+    }
+    return ids.length > 0;
   }
 
   // ---------- Highlights on the table ----------
@@ -1878,6 +1955,11 @@ const Board = (() => {
     meleeUntil = 0;
     endFlight(); flightUntil = 0;
     setCompass(null);
+    // No wrecks left over: their fires go, and their scorched models, so the next game builds them new
+    for (const id of Object.keys(wreckFires)) {
+      removeFire(id);
+      if (pieces[id]) { scene.remove(pieces[id]); freeObject(pieces[id]); delete pieces[id]; }
+    }
     diceDue = null; diceComing = [];
     labelKey = ''; reticleNudges = new Map();
     marksReady = false; shadowStale = true;
@@ -1913,6 +1995,8 @@ const Board = (() => {
     const waiting = pulseAmbush(now);
     const firing = playShots(now);
     const flying = moveCoin(now) | moveHoming(now) | moveCompass(now);
+    // Fires flicker all the time, but cast no shadows, so they don't count as busy
+    const burning = burnWrecks(st, now, dt);
     // Shadows: worked out again only while something moves, and once more after it stops
     const busy = moving || hopping || firing || flying || shadowStale;
     renderer.shadowMap.needsUpdate = busy || wasBusy;
@@ -1921,7 +2005,7 @@ const Board = (() => {
     // (dice still to come: keep drawing until they are on the table, or they only appear at the next redraw)
     if (firing || flying || diceDue !== null) return true;
     // Targets pulse, so keep drawing while they show
-    return moving || hopping || waiting || !!(view.targets && view.targets.length);
+    return moving || hopping || waiting || burning || !!(view.targets && view.targets.length);
   }
 
   // A piece in ambush (Steve): a dashed amber ring under it, slowly pulsing. Either side's, as the table hides nothing
