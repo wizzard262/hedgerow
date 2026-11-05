@@ -2305,5 +2305,18 @@ check('a wreck blocks the view through its three squares; past its corner only f
   assert(!Sim.sight(st, p, q), 'a piece not touching that corner saw past the wreck');
 });
 
+check('the table is drawn with no more pixels than the budget on a big screen, and as before on an ordinary one', () => {
+  const drawn = (w, h, screen, budget = PIXELS.start) => w * h * Math.pow(pixelRatioFor(w, h, screen, budget), 2);
+  // A 4K screen, whether at 100% or scaled to 150%: within the budget
+  assert(Math.abs(drawn(3840, 2160, 1) - PIXELS.start) < 1, 'a 4K window at 100% is over the budget');
+  assert(Math.abs(drawn(2560, 1440, 1.5) - PIXELS.start) < 1, 'a 4K window at 150% is over the budget');
+  // An ordinary window keeps its sharpness
+  assert(pixelRatioFor(1600, 950, 1, PIXELS.start) === 1, 'an ordinary window was drawn softer');
+  assert(pixelRatioFor(1920, 1080, 1, PIXELS.start) === 1, 'a 1080p window was drawn softer');
+  assert(pixelRatioFor(800, 600, 3, PIXELS.start) === 1.5, 'a small sharp screen went above 1.5');
+  // At the floor it never asks for more than the floor
+  assert(Math.abs(drawn(3840, 2160, 1, PIXELS.least) - PIXELS.least) < 1, 'the floor is not kept');
+});
+
 console.log(failed ? `\n${failed} failed` : '\nall passed');
 process.exit(failed ? 1 : 0);

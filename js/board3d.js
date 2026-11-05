@@ -33,10 +33,36 @@ const Board = (() => {
     fxMarks = new T.Group(); scene.add(fxMarks);
   }
 
+  // How finely the table is drawn (Steve: a low-power laptop on a 4K screen ran poorly, and well in a smaller window). The
+  // canvas always fills its box; on a big screen it is drawn with fewer pixels and stretched. See PIXELS in data.js
+  let shownW = 0, shownH = 0, pixelBudget = PIXELS.start, frameGaps = [];
+  function setResolution() {
+    // The pixels the budget allows on this size of window
+    renderer.setPixelRatio(pixelRatioFor(shownW, shownH, window.devicePixelRatio || 1, pixelBudget));
+    renderer.setSize(shownW, shownH);
+  }
+  // Watch how long frames take while the table is being drawn without a break. Still slow after a good sample (the
+  // middle frame, so one hard frame doesn't count): draw with fewer pixels, down to a floor. It doesn't come back up, so
+  // the picture doesn't keep changing; a new page starts afresh. wanted: the last frame asked for another straight away
+  function watchFrames(gap, wanted) {
+    // The table was waiting for you (only moving the mouse now and then), or the tab was in the background: not slowness
+    if (!wanted || gap > PIXELS.pause) { frameGaps = []; return; }
+    frameGaps.push(gap);
+    if (frameGaps.length < PIXELS.sample) return;
+    const middle = frameGaps.sort((a, b) => a - b)[Math.floor(frameGaps.length / 2)];
+    frameGaps = [];
+    if (middle <= PIXELS.slowFrame) return;
+    // What it draws now, not the budget: a small window may already be well under it
+    const drawn = shownW * shownH * Math.pow(renderer.getPixelRatio(), 2);
+    if (drawn <= PIXELS.least) return;
+    pixelBudget = Math.max(PIXELS.least, drawn * PIXELS.step);
+    setResolution();
+  }
+
   // Fit the whole table in the box: the camera keeps its slant and backs off until every corner shows
   function resize(w, h) {
-    renderer.setPixelRatio(Math.min(1.5, window.devicePixelRatio || 1));
-    renderer.setSize(w, h);
+    shownW = w; shownH = h;
+    setResolution();
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
     const centre = new T.Vector3(COLS / 2, 0, ROWS / 2);
@@ -1935,7 +1961,8 @@ const Board = (() => {
 
   // view: { spots: [{ x, y, kind }], selected: piece, hover: { x, y }, blast: [{ x, y, main }], deMove: { id | gun, what } }. dt: seconds since the last frame.
   // Returns true while pieces are still gliding, so the page keeps drawing
-  let lastT = 0;
+  let lastT = 0, onlyFires = false, drawingOn = false;
+  const FIRE_FRAME = 33;             // milliseconds between frames when only fires are moving (about 30 a second)
   // Free what an object made for itself (geometry, materials), not what it shares: textures, sprites' common shape, the
   // models' own materials
   function freeObject(o) {
@@ -1967,8 +1994,12 @@ const Board = (() => {
   }
 
   function render(st, view = {}) {
-    const now = performance.now(), dt = lastT ? Math.min(0.1, (now - lastT) / 1000) : 0.016;
+    const now = performance.now();
+    // Nothing happening on the table but fires flickering: they don't need every frame the screen can show
+    if (onlyFires && view.same && now - lastT < FIRE_FRAME) return true;
+    const gap = lastT ? (now - lastT) / 1000 : 0, dt = lastT ? Math.min(0.1, gap) : 0.016;
     lastT = now;
+    if (gap) watchFrames(gap, drawingOn);
     if (!built || built.userData.seed !== st.seed) { clearDice(true); for (const id in pieces) { scene.remove(pieces[id]); freeObject(pieces[id]); } for (const id in tokens) scene.remove(tokens[id]); pieces = {}; tokens = {}; build(st); buildSupport(); built.userData.seed = st.seed; }
     updateSupport(st);
     buildHedges(st);
@@ -2003,9 +2034,12 @@ const Board = (() => {
     wasBusy = busy; shadowStale = false;
     renderer.render(scene, camera);
     // (dice still to come: keep drawing until they are on the table, or they only appear at the next redraw)
-    if (firing || flying || diceDue !== null) return true;
+    if (firing || flying || diceDue !== null) { onlyFires = false; drawingOn = true; return true; }
     // Targets pulse, so keep drawing while they show
-    return moving || hopping || waiting || burning || !!(view.targets && view.targets.length);
+    const others = moving || hopping || waiting || !!(view.targets && view.targets.length);
+    onlyFires = burning && !others;
+    drawingOn = others || burning;
+    return drawingOn;
   }
 
   // A piece in ambush (Steve): a dashed amber ring under it, slowly pulsing. Either side's, as the table hides nothing

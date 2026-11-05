@@ -49,6 +49,16 @@ const SHAKEN_MOVE = 0.5;         // a shaken piece still moves and charges, but 
 const MAX_NEED = 6;              // past this a shot is a Hail Mary (Steve): throw a 6, then throw another 6 to hit, about 3%
 const WOUND_CHANCE = 0.5;        // each hit is a coin toss: heads it wounds (a section, a team or a tank lost); every hit shakes
 const QUALITY = { elite: { name: 'Elite', shoot: 1, assault: 1.3 }, standard: { name: 'Standard', shoot: 0, assault: 1 } };
+// How finely the table is drawn (Steve: a low-power laptop on a 4K screen). start: the most pixels drawn on any screen,
+// about 2560×1600; least: the floor it may fall to when frames are slow; step: the share kept each time it falls;
+// slowFrame: seconds a frame may take (the middle of `sample` frames) before it does; pause: a gap longer than this isn't a slow frame
+const PIXELS = { start: 4000000, least: 1200000, step: 0.7, slowFrame: 0.04, sample: 40, pause: 2 };
+// The pixel ratio for a window: never above 1.5 or the screen's own, and within the budget of pixels
+function pixelRatioFor(width, height, screenRatio, budget) {
+  const fitted = Math.sqrt(budget / (width * height));
+  return Math.min(1.5, screenRatio, fitted);
+}
+
 const SIGHT_RANGE = 99;          // how far any piece sees (Steve: the whole board; hedges, villages and orchards block the view). Shooting: RANGES
 const LONG_RANGE = 1;             // added to the score needed at long range (the penalties stack)
 // How far each kind of weapon sees and shoots, and how many fields away before long range starts (Steve: rifles one
