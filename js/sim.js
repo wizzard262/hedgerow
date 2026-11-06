@@ -745,10 +745,11 @@ const Sim = (() => {
   }
 
 
-  // Can a side see this field (to call fire on it)? Any of its pieces next to it, or with a line of sight to it, however
-  // far (Steve: the whole board), moved this round or not
-  function sees(st, side, x, y) {
-    return st.units.some(u => u.side === side && u.x !== null && (Math.abs(u.x - x) + Math.abs(u.y - y) <= 1 || sight(st, u, { x, y, at: null }, true)));
+  // Can a side see this piece, to call fire on it? Any of its pieces with a line of sight to that very piece, however far
+  // (Steve: the whole board), moved this round or not. (Steve: guns were firing on pieces nobody could see: it used to be
+  // enough to see any corner of the field, or just to stand next to it across a hedge.) target: a piece, or a field with at: null
+  function sees(st, side, target) {
+    return st.units.some(u => u.side === side && u.x !== null && !!sight(st, u, target, true));
   }
 
   // ---------- Fire ----------
@@ -1837,9 +1838,10 @@ const Sim = (() => {
     return { ok: true, lines };
   }
 
-  // Fields the player can call fire on: seen by their pieces, with none of their own in them
+  // Fields the player can call fire on: an enemy piece there that their pieces can see, and none of their own there
   function canCallFire(st, x, y) {
-    return inside(x, y) && sees(st, st.human, x, y) && at(st, x, y, st.human).length === 0;
+    if (!inside(x, y) || at(st, x, y, st.human).length) return false;
+    return at(st, x, y, enemyOf(st.human)).some(t => sees(st, st.human, t));
   }
 
   // A side's mortars or artillery: their numbers (Steve: the differences between the sides stay)
@@ -1916,9 +1918,10 @@ const Sim = (() => {
     if (which === 'bomber') return actBomb(st, x, y);
     const side = st.human;
     if (st.won || st.lost || st.computer || st.fired[side][which] || st.ammo[side][which] <= 0 || !canCallFire(st, x, y)) return { ok: false };
-    // German mortars need a piece to drop on: the one clicked, or the first in the field
+    // German mortars need a piece to drop on, one they can see: the one clicked, or the first in the field
     const onOnePiece = which === 'mortars' && side === 'de';
-    const piece = onOnePiece ? target || at(st, x, y, enemyOf(side))[0] : null;
+    const seen = onOnePiece ? at(st, x, y, enemyOf(side)).filter(t => sees(st, side, t)) : [];
+    const piece = onOnePiece ? (seen.includes(target) ? target : seen[0]) : null;
     if (onOnePiece && !piece) return { ok: false };
     // With the bag: on the player's token not yet used by a piece; firing uses the token (Steve: the guns are in the bag)
     if (st.tokens && (st.drawn !== side || st.activeId)) return { ok: false };
@@ -2402,7 +2405,7 @@ const Sim = (() => {
     const near = (a, b) => fieldsApart(a, b) <= 1;
     const enemies = st.units.filter(t => t.side === enemyOf(side) && t.x !== null);
     const friends = st.units.filter(g => g.side === side && g.x !== null);
-    const ts = enemies.filter(t => sees(st, side, t.x, t.y) && !friends.some(g => near(g, t)));
+    const ts = enemies.filter(t => sees(st, side, t) && !friends.some(g => near(g, t)));
     const score = t => enemies.filter(o => near(o, t)).reduce((n, o) => n + o.platoons, 0);
     return ts.sort((a, b) => score(b) - score(a))[0] || null;
   }
@@ -2413,8 +2416,8 @@ const Sim = (() => {
   // it can see, in a field with no Americans
   function mortarTarget(st, side) {
     const inReach = side === 'de'
-      ? t => st.units.some(g => g.side === 'de' && g.x !== null && adjacent(g, t))
-      : t => sees(st, 'us', t.x, t.y) && !at(st, t.x, t.y, 'us').length;
+      ? t => sees(st, 'de', t) && st.units.some(g => g.side === 'de' && g.x !== null && adjacent(g, t))
+      : t => sees(st, 'us', t) && !at(st, t.x, t.y, 'us').length;
     const ts = st.units.filter(t => t.side === enemyOf(side) && t.x !== null && (t.kind === 'company' || isTank(t)) && inReach(t));
     const worth = t => (isTank(t) ? (t.shocked ? 9 : 0) : t.platoons);
     return ts.sort((a, b) => worth(b) - worth(a))[0] || null;
@@ -2861,7 +2864,7 @@ const Sim = (() => {
     firesOnTheMove, canAmbush, actAmbush, bestMoveShoot, bomberHeading, bomberAims, bomberLine, bombNeed, bombWhy, bestBomberRun,
     isBunker, inFrontOf, isRoad, featuresAt, walkDistance, fireSound, wreckAt, remove, computerSide, isRobot, piecesToAsk, takeCover, enemyOf, gunStats, edgeKey, atCloseRange, closeCells, hailMaryCells,
     newGame, roll, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, chargeSpots,
-    rallyTargets, canAct, canReact, firepower, canCallFire, holdsObjective, roundText, roomFor,
+    rallyTargets, canAct, canReact, firepower, canCallFire, artilleryTarget, mortarTarget, holdsObjective, roundText, roomFor,
     computerStep, answer, finishRound, startRound, drawToken, endComputerToken, activationOver, passToken, humanCanMove, endRound, canFire, actSkip, actSkipShot, skipSupport,
     smallTarget, menDice, armourOf, shotNeed, mayFire, shootCells, tokensHome, captainCanRally, fireAt,
     actShoot, actMoveShoot, moveShootSpots, chargeRoutes, DIRS, needWhy, shellNeed, shellWhy, shellFields,

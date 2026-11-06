@@ -121,9 +121,9 @@ const UI = (() => {
   function targets() {
     // The bomber aims at a field, not at a piece
     if (view.mode === 'fire:bomber') return [];
-    // Mortars or guns chosen: every enemy piece in a field they can be called on to, with the score their dice need
+    // Mortars or guns chosen: every enemy piece your side can see that they can be called on to, with the score their dice need
     if (view.mode && view.mode.startsWith('fire:')) {
-      const inReach = st.units.filter(t => t.side === enemy() && t.x !== null && Sim.canCallFire(st, t.x, t.y));
+      const inReach = st.units.filter(t => t.side === enemy() && t.x !== null && Sim.canCallFire(st, t.x, t.y) && Sim.sees(st, st.human, t));
       return inReach.map(t => {
         t.needNow = Sim.shellNeed(st, t);
         t.needWhy = Sim.shellWhy(st, t);
@@ -541,7 +541,7 @@ const UI = (() => {
       // (German mortars drop on the one piece, Steve: the differences between the sides stay)
       const onOnePiece = which === 'mortars' && st.human === 'de';
       const diceFact = onOnePiece ? `🎲 ${S.dice} dice on the one piece` : `🎲 ${S.dice} dice on each ${foes().slice(0, -1)} piece there`;
-      const does = which === 'bomber' ? bomberFacts() : [`${st.ammo[st.human][which]} rounds left`, '🎯 Fires on a field your troops can see', diceFact];
+      const does = which === 'bomber' ? bomberFacts() : [`${st.ammo[st.human][which]} rounds left`, '🎯 Fires on a piece your troops can see', diceFact];
       // One anti-tank die: artillery as any other hit, mortars only shaking a tank (Steve)
       if (which === 'mortars') does.push(`🛡️ ${S.hard} die on a tank: only shakes it, or kills it if already shaken`);
       if (which === 'artillery') does.push(`🛡️ ${S.hard} die on a tank`);

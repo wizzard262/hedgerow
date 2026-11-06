@@ -373,7 +373,7 @@ check('seeing reaches the whole board (to call fire); shooting only the weapon\'
   // Down the lane at the bottom of the open row: from one end of the board to the other
   B.x = 0; B.y = 5; B.at = null; B.acted = true;
   const far = { x: COLS - 1, y: 5, at: null };
-  assert(Sim.sees(st, 'us', far.x, far.y), 'a piece could not see the far end of an open lane (moved this round, too)');
+  assert(Sim.sees(st, 'us', far), 'a piece could not see the far end of an open lane (moved this round, too)');
   assert(!Sim.sight(st, B, far), 'a rifle platoon could shoot the whole length of the board');
 });
 
@@ -3724,6 +3724,45 @@ check('a bunker fires across 120 degrees: 60 either side of straight ahead', () 
   assert(Sim.inFrontOf(bunker, { x: 6, y: 7 }) && !Sim.inFrontOf(bunker, { x: 6, y: 8 }), 'two fields out');
   // Its own column and behind it: never
   assert(!Sim.inFrontOf(bunker, { x: 8, y: 3 }) && !Sim.inFrontOf(bunker, { x: 9, y: 4 }), 'beside or behind it');
+});
+
+check('the guns only fire on a piece their side can see: not behind a hedge, not next door across one', () => {
+  const setUp = (ax, ay, where) => {
+    const st = tableWith({ A: [ax, ay], d2: [5, 5] });
+    for (const [x, y] of [[4, 5], [6, 5], [5, 4], [5, 6]]) st.hedges[Sim.edgeKey(5, 5, x, y)] = true;
+    const A = Sim.unitById(st, 'A'), d2 = Sim.unitById(st, 'd2');
+    A.at = null; d2.at = where;
+    return { st, d2 };
+  };
+  // In the middle of a field with a hedge all round it, from far off, or from right next to it: not seen
+  for (const [ax, ay] of [[1, 5], [4, 5]]) {
+    const { st, d2 } = setUp(ax, ay, null);
+    assert(!Sim.sees(st, 'us', d2), `seen from ${ax},${ay}`);
+    assert(!Sim.canCallFire(st, 5, 5), `fire could be called from ${ax},${ay}`);
+    assert(!Sim.artilleryTarget(st, 'us') && !Sim.mortarTarget(st, 'us'), `the computer's guns would fire from ${ax},${ay}`);
+    st.drawn = 'us';
+    const rounds = st.ammo.us.artillery;
+    assert(!Sim.actFire(st, 'artillery', 5, 5).ok && st.ammo.us.artillery === rounds, 'the guns fired on a piece nobody could see');
+  }
+  // Lining the hedge on the far side from you, still not; lining the side you are looking from, seen
+  const lined = setUp(1, 5, 'w');
+  assert(Sim.sees(lined.st, 'us', lined.d2) && Sim.canCallFire(lined.st, 5, 5), 'a piece lining the near hedge could not be seen');
+  assert(Sim.artilleryTarget(lined.st, 'us') === lined.d2, 'the computer would not fire on a piece it can see');
+  const far = setUp(1, 5, 'e');
+  assert(!Sim.sees(far.st, 'us', far.d2), 'a piece lining the far hedge was seen through the near one');
+  Sim.newGame(1);
+});
+
+check('whenever a robot picks a gun target, on every map, someone on that side can see it', () => {
+  for (const map of MAPS) for (let seed = 1; seed <= 3; seed++) {
+    const st = Sim.newGame(seed, 'none', map.id);
+    for (const side of ['us', 'de']) {
+      for (const t of [Sim.artilleryTarget(st, side), Sim.mortarTarget(st, side)]) {
+        if (t) assert(st.units.some(u => u.side === side && u.x !== null && Sim.sight(st, u, t, true)), `${map.id} ${seed}: ${side} would fire on ${t.name} unseen`);
+      }
+    }
+  }
+  Sim.newGame(1);
 });
 
 console.log(failed ? `\n${failed} failed` : '\nall passed');
