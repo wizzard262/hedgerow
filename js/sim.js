@@ -1336,6 +1336,21 @@ const Sim = (() => {
   // village or hamlet but not go on through one (no charging through houses), and when charging, a field the enemy holds
   // ends the route in a hand-to-hand fight (rifle platoons and tanks only, and not against tanks alone unless it can hurt them)
   function routesFor(st, u, budget, charging) {
+    const routes = routesWithin(st, u, budget, charging, false);
+    // A tank on the road goes one further if it stays on it, road or lane or a mix of both (Steve). Not a shaken one: it goes
+    // half as far
+    if (!isTank(u) || u.shocked || !isRoad(u.x, u.y)) return routes;
+    const reached = new Set(routes.map(r => `${r[r.length - 1].x},${r[r.length - 1].y}`));
+    const further = routesWithin(st, u, budget + TANK_ROAD_BONUS, charging, true);
+    return routes.concat(further.filter(r => !reached.has(`${r[r.length - 1].x},${r[r.length - 1].y}`)));
+  }
+
+  // Is a field road or lane: a lane, a crossroads, a bridge, a street, or a square on the streets
+  const ROADS = ['laneEW', 'laneNS', 'crossroads', 'bridge', 'street', 'square'];
+  const isRoad = (x, y) => ROADS.includes(tileType(x, y));
+
+  // The search itself. onRoadOnly: only by fields that are road or lane
+  function routesWithin(st, u, budget, charging, onRoadOnly) {
     const cheapest = {}, routeTo = {};
     cheapest[u.x + ',' + u.y] = 0;
     const open = [{ x: u.x, y: u.y, cost: 0, path: [] }];
@@ -1349,6 +1364,7 @@ const Sim = (() => {
         const x = here.x + dx, y = here.y + dy, key = x + ',' + y;
         const c = stepCost(st, u, here.x, here.y, x, y);
         if (c === null || here.cost + c > budget) continue;
+        if (onRoadOnly && !isRoad(x, y)) continue;
         const cost = here.cost + c;
         if (cheapest[key] !== undefined && cheapest[key] <= cost) continue;
         const enemies = at(st, x, y, enemyOf(u.side));
@@ -2682,7 +2698,7 @@ const Sim = (() => {
 
   return {
     firesOnTheMove, canAmbush, actAmbush, bestMoveShoot, bomberHeading, bomberEdges, bomberLine, bombNeed, bombWhy, bestBomberRun,
-    featuresAt, walkDistance, fireSound, wreckAt, remove, computerSide, isRobot, piecesToAsk, takeCover, enemyOf, gunStats, edgeKey, atCloseRange, closeCells,
+    isRoad, featuresAt, walkDistance, fireSound, wreckAt, remove, computerSide, isRobot, piecesToAsk, takeCover, enemyOf, gunStats, edgeKey, atCloseRange, closeCells,
     newGame, roll, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, chargeSpots,
     rallyTargets, canAct, canReact, firepower, canCallFire, holdsObjective, roundText, roomFor,
     computerStep, answer, finishRound, startRound, drawToken, endComputerToken, activationOver, passToken, humanCanMove, endRound, canFire, actSkip, actSkipShot, skipSupport,

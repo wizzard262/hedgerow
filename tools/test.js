@@ -3243,5 +3243,52 @@ check('Open farmland has its barns and duck pond, in fields with room round them
   Sim.newGame(1);
 });
 
+check('a tank goes one field further if it starts, stays and ends on road or lane; nobody else does', () => {
+  // Along the lane at y 5 on the usual map, with nothing in the way
+  const lane = (id, x = 3, y = 5) => {
+    const st = tableWith({ [id]: [x, y], d2: [11, 0] });
+    return { st, u: Sim.unitById(st, id) };
+  };
+  const reaches = (spots, x, y) => spots.some(p => p.x === x && p.y === y);
+  const { st, u } = lane('T1');
+  assert(Sim.isRoad(3, 5) && Sim.isRoad(2, 5) && !Sim.isRoad(3, 6), 'the map is not as this expects');
+  assert(reaches(Sim.chargeSpots(st, u), 7, 5), 'a tank on the lane did not charge four fields along it');
+  assert(!reaches(Sim.chargeSpots(st, u), 8, 5), 'a tank on the lane charged five');
+  // Three fields along and then off the road, three in all, as anyone: four to end off the road, no
+  assert(reaches(Sim.chargeSpots(st, u), 5, 6), 'three fields, ending off the road, should be allowed');
+  assert(!reaches(Sim.chargeSpots(st, u), 6, 6), 'four fields ending off the road');
+  // Starting off the road: no more
+  const off = lane('T1', 3, 6);
+  assert(!reaches(Sim.chargeSpots(off.st, off.u), 7, 5), 'a tank starting off the road went further');
+  assert(!reaches(Sim.chargeSpots(off.st, off.u), 7, 6), 'a tank starting off the road went four fields');
+  // Lane and crossroads together: from the lane at y 5 round the corner up the lane at x 2
+  const corner = lane('T1', 3, 5);
+  assert(reaches(Sim.chargeSpots(corner.st, corner.u), 2, 2), 'a tank did not go along a mix of lane and crossroads');
+  // Move & shoot: three, not two, with someone to fire at from there
+  const ms = tableWith({ T1: [3, 5], d2: [7, 5] });
+  const tank = Sim.unitById(ms, 'T1');
+  ms.units.find(o => o.id === 'd2').at = null;
+  const spots = Sim.moveShootSpots(ms, tank);
+  assert(reaches(spots, 6, 5), 'a tank did not Move & shoot three fields along the lane');
+  // Shaken: half as far, and no more
+  const shaken = lane('T1');
+  shaken.u.shocked = true;
+  assert(!reaches(Sim.chargeSpots(shaken.st, shaken.u), 5, 5), 'a shaken tank went further than half');
+  // Nobody else
+  const men = lane('A');
+  assert(!reaches(Sim.chargeSpots(men.st, men.u), 7, 5), 'a platoon went four fields along the lane');
+  // Bridges and city streets count
+  const river = Sim.newGame(3, 'us', 'river');
+  assert(Sim.isRoad(5, 5) && Sim.tileType(5, 5) === 'bridge', 'a bridge is not road');
+  const city = Sim.newGame(3, 'us', 'paris');
+  let street = false, square = false;
+  for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
+    if (Sim.tileType(x, y) === 'street') street = Sim.isRoad(x, y);
+    if (Sim.tileType(x, y) === 'square') square = Sim.isRoad(x, y);
+  }
+  assert(street && square, 'city streets and squares are not road');
+  Sim.newGame(1);
+});
+
 console.log(failed ? `\n${failed} failed` : '\nall passed');
 process.exit(failed ? 1 : 0);

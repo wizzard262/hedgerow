@@ -143,6 +143,7 @@ const TAKE_COVER = 2;            // added to the score needed against a piece th
 const TO_HIT = 3;                // a die needs this or more to hit, before cover, range and moving (Steve: 3+)
 const MOVE_SHOOT_MOVES = 2;      // fields a Move & shoot can cover (Steve: one more than before)
 const CHARGE_MOVES = 3;          // fields a charge can cover
+const TANK_ROAD_BONUS = 1;       // fields more a tank goes, on a Move & shoot or a Charge, if it starts, stays and ends on road or lane (Steve)
 const CLIMB = 1;                 // extra moves it costs men to climb a hedge bank (tanks drive through; wire stops men)
 const SHAKEN_SHOOT = 1;          // a shaken piece needs one more to hit
 const SHAKEN_MOVE = 0.5;         // a shaken piece still moves and charges, but only half as far (rounded down, at least one field)
