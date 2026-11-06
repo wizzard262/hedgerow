@@ -126,8 +126,16 @@ const Sim = (() => {
   const dirTo = (a, b) => Object.keys(DIRS).find(d => DIRS[d][0] === b.x - a.x && DIRS[d][1] === b.y - a.y);
 
   // The same key for an edge whichever side it is looked at from
+  // (kept once made: line of sight asks for these all the time)
+  const edgeKeys = new Map();
   function edgeKey(ax, ay, bx, by) {
-    return ax < bx || (ax === bx && ay < by) ? `${ax},${ay}|${bx},${by}` : `${bx},${by}|${ax},${ay}`;
+    const asked = (ax + 1) * 1000000 + (ay + 1) * 10000 + (bx + 1) * 100 + (by + 1);
+    let key = edgeKeys.get(asked);
+    if (key === undefined) {
+      key = ax < bx || (ax === bx && ay < by) ? `${ax},${ay}|${bx},${by}` : `${bx},${by}|${ax},${ay}`;
+      edgeKeys.set(asked, key);
+    }
+    return key;
   }
 
   // Does a hedge grow on this edge before any gaps are made? Villages, hamlets and orchards have none round them (Steve);
@@ -172,7 +180,9 @@ const Sim = (() => {
   const isRobot = (st, side) => st.players[side] === 'robot';
   // The side the computer is playing now: the one on its token; otherwise whichever the player isn't
   const computerSide = st => (st.computer && st.computer.side) || enemyOf(st.human);
-  const adjacent = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y) === 1;
+  // How many fields apart two things are, going along the fields
+  const fieldsApart = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+  const adjacent = (a, b) => fieldsApart(a, b) === 1;
 
   // Is there room for a unit in a field? (Steve: the nine areas decide, see footprint.) Never with the enemy, except in
   // a hand-to-hand fight
@@ -195,9 +205,13 @@ const Sim = (() => {
     const R = rng(seed);
     const st = {
       seed, mode, human, players, turn: 1, hedges: {}, wire: {}, units: [], wrecks: [], report: [], fx: [],
-      fired: {},          // fire support used this hour (the mortars and the guns each fire once an hour)
-      ammo: { mortars: MORTARS.ammo, artillery: ARTILLERY.ammo, bomber: BOMBER.ammo },
-      deMortarAmmo: DE_MORTAR.ammo, deArtilleryAmmo: DE_ARTILLERY.ammo, deBomberAmmo: BOMBER.ammo, won: false, lost: false,
+      // Each side's guns and bomber: what they have fired this round, and what they have left
+      fired: { us: {}, de: {} },
+      ammo: {
+        us: { mortars: MORTARS.ammo, artillery: ARTILLERY.ammo, bomber: BOMBER.ammo },
+        de: { mortars: DE_MORTAR.ammo, artillery: DE_ARTILLERY.ammo, bomber: BOMBER.ammo },
+      },
+      won: false, lost: false,
       spin: {},           // the bomber's compass this round, each side: picked again, it spins to the same direction (Steve)
     };
     // This game's objective: one of the villages
@@ -275,7 +289,7 @@ const Sim = (() => {
 
   // ---------- Who commands whom ----------
 
-  // A piece has used its move for the hour
+  // A piece has used its move for the round
   function spend(st, u) {
     u.acted = true;
     if (st.tokens) { st.activeId = u.id; activated(st, { side: u.side, id: u.id }); }
@@ -354,10 +368,11 @@ const Sim = (() => {
     // The best line between any of the shooter's areas and any of the target's
     const fromPoints = areaPoints(from);
     const toPoints = target.kind ? areaPoints(target) : GRID.map(k => areaPoint(target, k));
+    const inTheWay = blockersFor(st, from, target);
     let best = null;
     for (const a of fromPoints) {
       for (const b of toPoints) {
-        const line = lineOfSight(st, from, target, a, b);
+        const line = lineOfSight(st, from, target, a, b, inTheWay);
         if (line && (!best || line.cover < best.cover)) best = line;
         if (best && best.cover === 0) break;
       }
@@ -389,7 +404,7 @@ const Sim = (() => {
   };
 
   // One straight line from point a (an area of from) to point b (an area of target, or of a field)
-  function lineOfSight(st, from, target, a, b) {
+  function lineOfSight(st, from, target, a, b, inTheWay) {
     const EPS = 1e-6, dx = b.x - a.x, dy = b.y - a.y;
     // Every place the line crosses a line between fields: s is how far along it, 0 to 1
     const hits = [];
@@ -443,7 +458,7 @@ const Sim = (() => {
       if (screens({ x: fx, y: fy })) return null;
     }
     // Tanks in the way (Steve): no line through the areas one stands in; past its corner, see tankInWay
-    const tank = tankInWay(st, from, target, a, b);
+    const tank = tankInWay(a, b, inTheWay);
     if (tank === 'blocked') return null;
     const tankCorner = tank === 'cover';
     return { cover: (hedgeCover ? COVER.hedge : 0) + (tankCorner ? COVER.tankCorner : 0) + (placeCorner ? COVER.placeCorner : 0), hedge: hedgeCover, tankCorner, placeCorner };
@@ -468,24 +483,28 @@ const Sim = (() => {
   // Does a line pass a tank or a wreck (not the shooter or the target)? 'blocked' through one of its areas, or past its
   // corner with neither piece in an area touching that corner; 'cover' past its corner from such an area (both +1) unless
   // either piece is right beside that side of it there; null if nothing is in the way
-  function tankInWay(st, from, target, a, b) {
+  function tankInWay(a, b, inTheWay) {
     const len = Math.hypot(b.x - a.x, b.y - a.y);
-    const piecesCells = [from, target].map(u => (u.kind ? standsIn(u).map(k => cellOf(u, k)) : []));
     let cover = false;
-    // Tanks still running
-    for (const t of st.units) {
-      if (t === from || t === target || t.x === null || !isTank(t)) continue;
-      const passing = lineByAreas(a, b, len, piecesCells, t, standsIn(t));
-      if (passing === 'blocked') return 'blocked';
-      if (passing === 'cover') cover = true;
-    }
-    // Wrecks block the view the same way, corners and all (Steve)
-    for (const w of st.wrecks) {
-      const passing = lineByAreas(a, b, len, piecesCells, w, w.areas);
+    for (const thing of inTheWay.things) {
+      const passing = lineByAreas(a, b, len, inTheWay.piecesCells, thing.field, thing.areas);
       if (passing === 'blocked') return 'blocked';
       if (passing === 'cover') cover = true;
     }
     return cover ? 'cover' : null;
+  }
+
+  // What can stand in the way of a look from one piece at another: tanks still running, and wrecks, which block the view
+  // the same way, corners and all (Steve); with the areas the two pieces stand in
+  function blockersFor(st, from, target) {
+    const things = [];
+    for (const t of st.units) {
+      if (t === from || t === target || t.x === null || !isTank(t)) continue;
+      things.push({ field: t, areas: standsIn(t) });
+    }
+    for (const w of st.wrecks) things.push({ field: w, areas: w.areas });
+    const piecesCells = [from, target].map(u => (u.kind ? standsIn(u).map(k => cellOf(u, k)) : []));
+    return { things, piecesCells };
   }
   // One line against the areas one tank or wreck stands in, in field f (see tankInWay)
   function lineByAreas(a, b, len, piecesCells, f, areas) {
@@ -658,7 +677,8 @@ const Sim = (() => {
     if (!tanksLeft) return false;
     // Anything still able to hurt a tank: a piece with anti-tank weapons, or fire support with rounds or a run left
     if (us.some(u => firepower(st, u).hard > 0)) return false;
-    return st.ammo.mortars <= 0 && st.ammo.artillery <= 0 && st.ammo.bomber <= 0;
+    const left = st.ammo.us;
+    return left.mortars <= 0 && left.artillery <= 0 && left.bomber <= 0;
   }
 
   function remove(st, u) {
@@ -799,21 +819,21 @@ const Sim = (() => {
     return weapon;
   }
 
-  function fireAt(st, shooter, target, power, withdraw = false, moving = false, blast = false) {
+  function fireAt(st, shooter, target, withdraw = false, moving = false, blast = false) {
     const f = firepower(st, shooter);
     // The computer's piece fired on takes cover when it is wise to (Steve), as you can
-    if (!withdraw && isRobot(st, target.side) && computerTakesCover(st, target, menDice(f) * power, needFor(st, shooter, target, moving))) withdraw = true;
+    if (!withdraw && isRobot(st, target.side) && computerTakesCover(st, target, menDice(f), needFor(st, shooter, target, moving))) withdraw = true;
     // Taking cover happens before the dice roll: its men are already down (and two more are needed)
     const pre = withdraw ? takeCover(st, target) : null;
     const need = needFor(st, shooter, target, moving);
     const faces = [];
     let softHits, hardHits;
     if (isTank(target)) {
-      hardHits = roll(st, dice(st, f.hard * power), need + armourOf(target), faces);
-      softHits = roll(st, dice(st, f.soft * power), need, []);
+      hardHits = roll(st, dice(st, f.hard), need + armourOf(target), faces);
+      softHits = roll(st, dice(st, f.soft), need, []);
     } else {
       // Anti-tank weapons are poor against men in a hedge: half value
-      const full = dice(st, menDice(f) * power);
+      const full = dice(st, menDice(f));
       softHits = roll(st, full, need, faces);
       hardHits = 0;
     }
@@ -828,19 +848,32 @@ const Sim = (() => {
       : lost ? (isTank(target) ? `Tank knocked out` : lost > 1 ? `${lost} sections lost` : 'Section lost')
       : target.shocked && !before.shocked ? 'Shaken' : softHits + hardHits ? 'No effect' : 'Missed';
     // What the table shows: the weapon's muzzle flash and tracers from the shooter, and what lands on the target
-    st.fx.push({ from: { id: shooter.id, x: shooter.x, y: shooter.y }, to: { id: target.id }, weapon: weaponOf(shooter), armour: isTank(target), x: target.x === null ? stood.x : target.x, y: target.x === null ? stood.y : target.y, kind: softHits + hardHits ? 'hit' : 'miss', faces, need: need + armourOf(target), side: shooter.side, result, tookCover: !!pre });
+    st.fx.push({
+      from: { id: shooter.id, x: shooter.x, y: shooter.y },
+      to: { id: target.id },
+      weapon: weaponOf(shooter),
+      armour: isTank(target),
+      x: target.x === null ? stood.x : target.x,
+      y: target.x === null ? stood.y : target.y,
+      kind: softHits + hardHits ? 'hit' : 'miss',
+      faces,
+      need: need + armourOf(target),
+      side: shooter.side,
+      result,
+      tookCover: !!pre,
+    });
     // A tank firing high explosive at men hits the whole field, like a mortar: every other piece on foot in it rolls too
     if (isTank(shooter) && !isTank(target) && !blast) {
       for (const other of at(st, stood.x, stood.y, target.side)) {
         if (other === target || isTank(other)) continue;
-        out.push(...fireAt(st, shooter, other, power, false, moving, true));
+        out.push(...fireAt(st, shooter, other, false, moving, true));
       }
     }
     return out.length ? out : [`${target.name}: no hits`];
   }
 
   // A piece fired on takes cover (Steve): no moving back, its men get down where they are. One more is needed to hit it
-  // for the rest of the German hour, and it misses its move next hour unless the captain gets it up
+  // for the rest of the round, and it uses up its move unless the captain gets it up
   // The chance of one die hitting, given the score it needs
   const hitChance = need => (need > MAX_NEED ? 1 / 36 : Math.max(0, 7 - need) / 6);
 
@@ -894,17 +927,6 @@ const Sim = (() => {
   // Can a piece step to a field next to it? Tanks can't climb the hedge banks: they need a gap or a lane,
   // unless they carry hedge cutters and drive straight through
   const cutter = u => isTank(u) && !!PIECES[u.kind].cutter;
-  function canStep(st, u, x, y, leaving = []) {
-    if (!inside(x, y) || !adjacent(u, { x, y })) return false;
-    if (tileType(x, y) === 'river') return false;
-    // Only tanks with hedge cutters go across a hedge; everyone else needs a gap, a lane, or to break through
-    if (!cutter(u) && hedge(st, u.x, u.y, x, y)) return false;
-    // Barbed wire stops men until it is cut; tanks roll over it
-    if (!isTank(u) && wire(st, u.x, u.y, x, y)) return false;
-    if (PIECES[u.kind].fixed) return false;
-    return roomFor(st, u, x, y, leaving);
-  }
-
   // Move a piece. A tank with hedge cutters going through a hedge leaves a gap.
   // Returns what happened to the hedge: 'cut' (driven through), 'climbed' (men clambered over) or ''
   function step(st, u, x, y, assault = false) {
@@ -1085,7 +1107,7 @@ const Sim = (() => {
   }
 
   // ---------- The player's actions ----------
-  // Each returns { ok, lines } and spends a command point when it works. A piece acts once an hour
+  // Each returns { ok, lines }. A piece acts once a round
 
   function canAct(st, u) {
     return !!u && u.side === st.human && u.x !== null && !st.won && !st.lost && !st.computer && !u.acted && tokenAllows(st, u);
@@ -1109,7 +1131,7 @@ const Sim = (() => {
     if (!canAct(st, u) || !mayFire(u) || !targets(st, u).includes(target)) return { ok: false };
     spend(st, u);
     u.fired = true;
-    const lines = [`🔫 ${u.name} fires on ${target.name}: ` + fireAt(st, u, target, 1).join(', ')];
+    const lines = [`🔫 ${u.name} fires on ${target.name}: ` + fireAt(st, u, target).join(', ')];
     // Shooting gives it away to any ambush that can see it (Steve)
     springAmbushes(st, u, lines);
     return { ok: true, lines: [lines.join(', ') + '.'] };
@@ -1145,24 +1167,23 @@ const Sim = (() => {
   // Of the nine areas of a field it could Move & shoot to, the ones a click on would leave it able to fire (Steve: only
   // those are hatched red): for each area, where it would stand (the nearest place it fits) and whether it has a shot
   function shootCells(st, u, x, y) {
-    const home = { x: u.x, y: u.y, at: u.at }, out = [];
-    u.x = x; u.y = y;
-    for (const k of GRID) {
-      u.at = freePlace(st, u, x, y, k === 'c' ? null : k);
-      if (targets(st, u, true).length) out.push(k);
-    }
-    u.x = home.x; u.y = home.y; u.at = home.at;
-    return out;
+    return areasWhere(st, u, x, y, () => targets(st, u, true).length > 0);
   }
 
   // Of those areas, the ones where it would have a shot at close range (Steve: hatched differently)
   function closeCells(st, u, x, y) {
+    return areasWhere(st, u, x, y, () => targets(st, u, true).some(t => atCloseRange(u, t)));
+  }
+
+  // The areas of a field where a piece, tried out standing there, passes a test
+  function areasWhere(st, u, x, y, passes) {
     const home = { x: u.x, y: u.y, at: u.at }, out = [];
     u.x = x; u.y = y;
     for (const k of GRID) {
       u.at = freePlace(st, u, x, y, k === 'c' ? null : k);
-      if (targets(st, u, true).some(t => atCloseRange(u, t))) out.push(k);
+      if (passes()) out.push(k);
     }
+    // (only tried out: it goes back to where it stands)
     u.x = home.x; u.y = home.y; u.at = home.at;
     return out;
   }
@@ -1199,7 +1220,7 @@ const Sim = (() => {
   function actHalfShot(st, u, target) {
     if (!u || !u.halfShot || u.x === null || !targets(st, u, true).includes(target)) return { ok: false };
     u.halfShot = false;
-    const lines = [`🔫 ${u.name} moves and fires on ${target.name}: ` + fireAt(st, u, target, 1, false, true).join(', ')];
+    const lines = [`🔫 ${u.name} moves and fires on ${target.name}: ` + fireAt(st, u, target, false, true).join(', ')];
     springAmbushes(st, u, lines);
     return { ok: true, lines: [lines.join(', ') + '.'] };
   }
@@ -1354,7 +1375,7 @@ const Sim = (() => {
       if (!targets(st, a).includes(mover) || shotNeed(st, a, mover) > MAX_NEED) continue;
       a.ambush = false;
       const wasShaken = mover.shocked, strength = mover.platoons, shotsBefore = st.fx.length;
-      report.push(`🪤 ${a.name} springs its ambush on ${mover.name}: ${fireAt(st, a, mover, 1).join(', ')}`);
+      report.push(`🪤 ${a.name} springs its ambush on ${mover.name}: ${fireAt(st, a, mover).join(', ')}`);
       // These shots land where it is now, not where it is going (the table)
       for (let k = shotsBefore; k < st.fx.length; k++) st.fx[k].midMove = true;
       if (mover.x === null || mover.platoons < strength || (mover.shocked && !wasShaken)) stopped = true;
@@ -1520,10 +1541,10 @@ const Sim = (() => {
 
   // Shocked friendly pieces a captain can reach
   function rallyTargets(st, cap) {
-    // Shaken pieces, and pieces down in cover missing this hour, up to RALLY_RANGE fields away
+    // Shaken pieces, and pieces down in cover, up to RALLY_RANGE fields away
     // (himself too)
     const needsHim = t => t.shocked || (t.down && t.acted);
-    return st.units.filter(t => t.side === cap.side && t.x !== null && needsHim(t) && Math.abs(t.x - cap.x) + Math.abs(t.y - cap.y) <= RALLY_RANGE);
+    return st.units.filter(t => t.side === cap.side && t.x !== null && needsHim(t) && fieldsApart(t, cap) <= RALLY_RANGE);
   }
 
   // A shaken piece uses its move to pull itself together (Steve: pieces can rally themselves; a rally always works)
@@ -1646,7 +1667,7 @@ const Sim = (() => {
     // The bomber has its own way of going in
     if (which === 'bomber') return actBomb(st, x, y);
     const side = st.human;
-    if (st.won || st.lost || st.computer || firedOf(st, side)[which] || ammoOf(st, side)[which] <= 0 || !canCallFire(st, x, y)) return { ok: false };
+    if (st.won || st.lost || st.computer || st.fired[side][which] || st.ammo[side][which] <= 0 || !canCallFire(st, x, y)) return { ok: false };
     // German mortars need a piece to drop on: the one clicked, or the first in the field
     const onOnePiece = which === 'mortars' && side === 'de';
     const piece = onOnePiece ? target || at(st, x, y, enemyOf(side))[0] : null;
@@ -1654,8 +1675,8 @@ const Sim = (() => {
     // With the bag: on the player's token not yet used by a piece; firing uses the token (Steve: the guns are in the bag)
     if (st.tokens && (st.drawn !== side || st.activeId)) return { ok: false };
     if (st.tokens) { st.activeId = 'gun:' + which; activated(st, { side, gun: which }); }
-    firedOf(st, side)[which] = true;
-    useRound(st, side, which);
+    st.fired[side][which] = true;
+    st.ammo[side][which]--;
     const S = gunStats(which, side);
     // The American computer's piece takes cover first if it is wise to, as it does under your other weapons
     const ducks = onOnePiece && isRobot(st, piece.side) && computerTakesCover(st, piece, S.dice, shellNeed(st, piece));
@@ -1777,12 +1798,12 @@ const Sim = (() => {
   function actBomb(st, x, y) {
     const onEdge = bomberEdges().some(f => f.x === x && f.y === y);
     const side = st.human;
-    if (st.won || st.lost || st.computer || firedOf(st, side).bomber || ammoOf(st, side).bomber <= 0 || !onEdge) return { ok: false };
+    if (st.won || st.lost || st.computer || st.fired[side].bomber || st.ammo[side].bomber <= 0 || !onEdge) return { ok: false };
     // With the bag: on the player's token not yet used by a piece; flying uses the token
     if (st.tokens && (st.drawn !== side || st.activeId)) return { ok: false };
     if (st.tokens) { st.activeId = 'gun:bomber'; activated(st, { side, gun: 'bomber' }); }
-    firedOf(st, side).bomber = true;
-    useRound(st, side, 'bomber');
+    st.fired[side].bomber = true;
+    st.ammo[side].bomber--;
     const lines = dropBombs(st, side, x, y);
     return { ok: true, lines: [`✈️ The ${BOMBER_NAMES[side]} flies over: ${lines.length ? lines.join(', ') : 'no hits'}.`] };
   }
@@ -1812,7 +1833,7 @@ const Sim = (() => {
     const garrison = at(st, st.objective.x, st.objective.y, 'de').some(g => g.kind === 'company');
     if (!garrison && u.kind === 'company') return st.objective;
     // The rest make for the nearest American
-    const far = o => Math.abs(o.x - u.x) + Math.abs(o.y - u.y);
+    const far = o => fieldsApart(o, u);
     const us = st.units.filter(o => o.side === 'us' && o.x !== null).sort((a, b) => far(a) - far(b));
     return us[0] || st.objective;
   }
@@ -1831,7 +1852,7 @@ const Sim = (() => {
     for (const route of routes) {
       const end = route[route.length - 1];
       u.x = end.x; u.y = end.y;
-      const away = Math.abs(end.x - goal.x) + Math.abs(end.y - goal.y);
+      const away = fieldsApart(end, goal);
       // For each place it fits in that field: what it could fire on from there
       for (const place of anchorsFor(u)) {
         if (!fitsAt(st, u, end.x, end.y, place)) continue;
@@ -1883,7 +1904,7 @@ const Sim = (() => {
   // as far, staying out of American fields; men climb hedge banks (the hedge stays) and are stopped by wire, tanks
   // drive through. The route that ends nearest the goal, if it gets any nearer
   function routeToward(st, u, goal) {
-    const far = p => Math.abs(p.x - goal.x) + Math.abs(p.y - goal.y);
+    const far = p => fieldsApart(p, goal);
     let best = null, bestD = far(u);
     for (const route of routesFor(st, u, reach(u, CHARGE_MOVES), false)) {
       const end = route[route.length - 1];
@@ -1893,19 +1914,10 @@ const Sim = (() => {
     return best;
   }
 
-  // The German hour runs a piece at a time, so it can stop and ask the player whether a piece being fired on pulls back.
-  // st.computer holds the hour in progress: who still has to act, the report so far, and any question waiting for an answer
-  function startGermanHour(st) {
-    // Shaken Germans stay shaken until their captain rallies them (Steve: only a rally clears it)
-    for (const u of st.units) u.halfShot = false;
-    st.fx = [];
-    st.computer = { queue: st.units.filter(u => u.side === 'de' && u.x !== null).map(u => u.id), mortar: st.deMortarAmmo > 0, artillery: st.deArtilleryAmmo > 0, rep: [], ask: null };
-  }
-
   // The rallying on the computer's token, either side. Returns true if that was the piece's go
   function computerRallies(st, u) {
     const rep = st.computer.rep;
-    const far = t => Math.abs(t.x - u.x) + Math.abs(t.y - u.y);
+    const far = t => fieldsApart(t, u);
     // The captain (Steve): first he rallies the nearest shaken piece of his in reach, himself too. Not from cover
     if (u.kind === 'captain' && !u.down) {
       const shaken = st.units.filter(t => t.side === u.side && t.x !== null && t.shocked && far(t) <= RALLY_RANGE).sort((a, b) => far(a) - far(b));
@@ -1974,22 +1986,8 @@ const Sim = (() => {
         return null;
       }
     }
-    // Americans just across a hedge it isn't lining: go to that hedge
-    const across = st.units.find(o => o.side === 'us' && o.x !== null && acrossHedge(st, u, o) && !atHedge(u, o));
-    if (across && !PIECES[u.kind].fixed) {
-      computerSays(st, `Lines the hedge facing ${across.name}`);
-      u.at = freePlace(st, u, u.x, u.y, dirTo(u, across));
-      springAmbushes(st, u, []);
-      // As with yours, it may fire from the hedge, one more needed for moving
-      return shotAfterMove(st, u, `Lines the hedge facing ${across.name}`);
-    }
-    // No shot from here, but one a Move & shoot would give it (Steve: it does that rather than just marching)
-    const plan = bestMoveShoot(st, u);
-    if (plan) {
-      const lines = moveToShoot(st, u, plan.route, plan.place);
-      rep.push('🔺 ' + lines.join(', ') + '.');
-      return shotAfterMove(st, u, 'Moves up');
-    }
+    const moved = computerMovesToFire(st, u);
+    if (moved) return moved.shot;
     // On the way to its post: march there and dig in
     if (u.post && !u.reserve && (u.x !== u.post.x || u.y !== u.post.y)) {
       const route = routeToward(st, u, u.post);
@@ -2001,19 +1999,41 @@ const Sim = (() => {
       if (holding) computerSays(st, `Holds ${st.objective.name}`);
       const garrison = at(st, st.objective.x, st.objective.y, 'de').some(g => g.kind === 'company');
       const us = st.units.filter(o => o.side === 'us' && o.x !== null);
-      const near = us.sort((a, b) => (Math.abs(a.x - u.x) + Math.abs(a.y - u.y)) - (Math.abs(b.x - u.x) + Math.abs(b.y - u.y)))[0];
+      const near = us.sort((a, b) => (fieldsApart(a, u)) - (fieldsApart(b, u)))[0];
       const goal = (!garrison && u.kind === 'company') || !near ? st.objective : near;
       const route = holding ? null : routeToward(st, u, goal);
       if (route) { computerSays(st, goal === st.objective ? `Moves up to hold ${st.objective.name}` : `Moves up towards ${near.name}`); computerMove(st, u, route); return null; }
     }
-    // Nothing better to do: a Hail Mary, if it has anyone in reach
+    return computerLastResort(st, u);
+  }
+
+  // No shot from where it stands: either computer player moves to get one. Enemies just across a hedge it isn't lining: to
+  // that hedge. Otherwise a Move & shoot, if that would give it one (Steve: it does that rather than just marching). As with
+  // yours, it may fire after, one more needed for moving. Returns { shot }, with any shot it plans, or null if it didn't move
+  function computerMovesToFire(st, u) {
+    const across = st.units.find(o => o.side !== u.side && o.x !== null && acrossHedge(st, u, o) && !atHedge(u, o));
+    if (across && !PIECES[u.kind].fixed) {
+      computerSays(st, `Lines the hedge facing ${across.name}`);
+      u.at = freePlace(st, u, u.x, u.y, dirTo(u, across));
+      springAmbushes(st, u, []);
+      return { shot: shotAfterMove(st, u, `Lines the hedge facing ${across.name}`) };
+    }
+    const plan = bestMoveShoot(st, u);
+    if (!plan) return null;
+    const lines = moveToShoot(st, u, plan.route, plan.place);
+    st.computer.rep.push('🔺 ' + lines.join(', ') + '.');
+    return { shot: shotAfterMove(st, u, 'Moves up') };
+  }
+
+  // Nothing better to do: a Hail Mary, if it has anyone in reach. No one in reach and nowhere to go: it lies in wait.
+  // Returns any shot it plans
+  function computerLastResort(st, u) {
     const longShot = targets(st, u)[0];
     if (longShot) { computerSays(st, `Hail Mary at ${longShot.name}`); return { shooter: u.id, target: longShot.id }; }
-    // No one in reach and nowhere to go: it lies in wait
     if (mayFire(u)) {
       u.ambush = true;
       computerSays(st, 'Lies in ambush');
-      rep.push(`🪤 ${u.name} lies in ambush.`);
+      st.computer.rep.push(`🪤 ${u.name} lies in ambush.`);
     }
     return null;
   }
@@ -2024,7 +2044,7 @@ const Sim = (() => {
   // rest at the nearest German
   function americanGoal(st, u) {
     if (u.kind === 'company') return st.objective;
-    const far = o => Math.abs(o.x - u.x) + Math.abs(o.y - u.y);
+    const far = o => fieldsApart(o, u);
     if (u.kind === 'captain') {
       const platoons = st.units.filter(o => o.side === 'us' && o.x !== null && o.kind === 'company').sort((a, b) => b.platoons - a.platoons);
       if (platoons.length) return platoons[0];
@@ -2075,20 +2095,8 @@ const Sim = (() => {
     }
     const t = bestTarget(st, u);
     if (t) { computerSays(st, `Fires on ${t.name}`); return { shooter: u.id, target: t.id }; }
-    // Germans just across a hedge it isn't lining: go to that hedge, and it may fire from there
-    const across = st.units.find(o => o.side === 'de' && o.x !== null && acrossHedge(st, u, o) && !atHedge(u, o));
-    if (across && !PIECES[u.kind].fixed) {
-      u.at = freePlace(st, u, u.x, u.y, dirTo(u, across));
-      springAmbushes(st, u, []);
-      return shotAfterMove(st, u, `Lines the hedge facing ${across.name}`);
-    }
-    // No shot from here, but a Move & shoot would give it one
-    const plan = bestMoveShoot(st, u);
-    if (plan) {
-      const lines = moveToShoot(st, u, plan.route, plan.place);
-      rep.push('🔺 ' + lines.join(', ') + '.');
-      return shotAfterMove(st, u, 'Moves up');
-    }
+    const moved = computerMovesToFire(st, u);
+    if (moved) return moved.shot;
     // On towards its goal
     const goal = computerGoal(st, u);
     const route = routeToward(st, u, goal);
@@ -2097,16 +2105,7 @@ const Sim = (() => {
       computerMove(st, u, route);
       return null;
     }
-    // Nothing better to do: a Hail Mary, if it has anyone in reach
-    const longShot = targets(st, u)[0];
-    if (longShot) { computerSays(st, `Hail Mary at ${longShot.name}`); return { shooter: u.id, target: longShot.id }; }
-    // No one in reach and nowhere to go: it lies in wait
-    if (mayFire(u)) {
-      u.ambush = true;
-      computerSays(st, 'Lies in ambush');
-      rep.push(`🪤 ${u.name} lies in ambush.`);
-    }
-    return null;
+    return computerLastResort(st, u);
   }
 
   // What the computer's piece or gun on this token is doing, in a few words, for its word bubble on the table (Steve)
@@ -2131,7 +2130,7 @@ const Sim = (() => {
   // it, and no Germans in or next to it (they don't shell their own men)
   // (either side: the American computer's artillery chooses the same way)
   function artilleryTarget(st, side) {
-    const near = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y) <= 1;
+    const near = (a, b) => fieldsApart(a, b) <= 1;
     const enemies = st.units.filter(t => t.side === enemyOf(side) && t.x !== null);
     const friends = st.units.filter(g => g.side === side && g.x !== null);
     const ts = enemies.filter(t => sees(st, side, t.x, t.y) && !friends.some(g => near(g, t)));
@@ -2184,7 +2183,7 @@ const Sim = (() => {
       return;
     }
     if (shot.mortar) {
-      useRound(st, 'de', 'mortars');
+      st.ammo.de.mortars--;
       // (the American robot's piece decides for itself)
       const ducks = withdraw || (isRobot(st, t.side) && computerTakesCover(st, t, DE_MORTAR.dice, shellNeed(st, t)));
       const lines = mortarOnOnePiece(st, t, ducks);
@@ -2194,7 +2193,7 @@ const Sim = (() => {
     const u = unitById(st, shot.shooter);
     if (u.x === null) return;
     const fired = shot.moving ? 'moves and fires on' : 'fires on';
-    st.computer.rep.push(`🔺 ${u.name} ${fired} ${t.name}: ` + fireAt(st, u, t, 1, withdraw, !!shot.moving).join(', ') + '.');
+    st.computer.rep.push(`🔺 ${u.name} ${fired} ${t.name}: ` + fireAt(st, u, t, withdraw, !!shot.moving).join(', ') + '.');
     // Shooting gives it away to any ambush that can see it (Steve)
     springAmbushes(st, u, []);
   }
@@ -2202,7 +2201,7 @@ const Sim = (() => {
   // Is a person to be asked about this piece? It can still take cover, and a human commands it (a robot's decides for itself)
   const askable = (st, u) => !isRobot(st, u.side) && canReact(st, u);
 
-  // Run the German hour until it ends or a question needs the player. Returns { ask } or { done: true }
+  // Run the computer's token until it ends or a question needs a person. Returns { ask } or { done: true }
   // showAim (the page, Steve: the Germans show their targeting as yours do): each shot first comes back as { aim }, so
   // the table can show its targets and the score needed; the next call fires it (or asks its target first)
   function computerStep(st, showAim = false) {
@@ -2260,7 +2259,7 @@ const Sim = (() => {
       }
       // All have chosen: the shells land
       st.computer.shelling = null;
-      useRound(st, side, shelling.which);
+      st.ammo[side][shelling.which]--;
       const lines = fireMission(st, shelling.which, shelling.x, shelling.y, side);
       st.computer.rep.push(`🔺 ${side === 'de' ? 'German' : 'American'} ${shelling.which} on ${unitById(st, shelling.target).name}: ${lines.length ? lines.join(', ') : 'no hits'}.`);
       if (st.won || st.lost) return { done: true };
@@ -2296,7 +2295,7 @@ const Sim = (() => {
       }
       // All have chosen: it flies
       st.computer.run = null;
-      useRound(st, side, 'bomber');
+      st.ammo[side].bomber--;
       const lines = dropBombs(st, side, run.x, run.y);
       st.computer.rep.push(`🔺 The ${BOMBER_NAMES[side]} flies over: ${lines.length ? lines.join(', ') : 'no hits'}.`);
     }
@@ -2314,39 +2313,23 @@ const Sim = (() => {
   // ---------- The blind bag (Steve) ----------
   // Each round the bag holds a token for every piece on the table that can still move: green for the Americans, grey for
   // the Germans. One is drawn at a time and that side moves one piece; then the next is drawn. A piece destroyed, or one
-  // that loses its move (taking cover), takes a token out with it. When the bag is empty, the round (the hour) ends
+  // that loses its move (taking cover), takes a token out with it. When the bag is empty, the round ends
 
   // Everything of a side's off the board, and what each has left
   const SUPPORT = ['artillery', 'mortars', 'bomber'];
-  const ammoOf = (st, side) => (side === 'us' ? st.ammo : { mortars: st.deMortarAmmo, artillery: st.deArtilleryAmmo, bomber: st.deBomberAmmo });
-  // Which of a side's guns have fired this round (marks can be added to it)
-  function firedOf(st, side) {
-    if (side === 'us') return st.fired;
-    st.deFired = st.deFired || {};
-    return st.deFired;
-  }
-  // One round, or the bomber's run, gone
-  function useRound(st, side, which) {
-    if (side === 'us') { st.ammo[which]--; return; }
-    if (which === 'mortars') st.deMortarAmmo--;
-    if (which === 'artillery') st.deArtilleryAmmo--;
-    if (which === 'bomber') st.deBomberAmmo--;
-  }
 
   // Pieces of a side that can still move this round, and its mortars and artillery that still have rounds and haven't
   // fired (Steve: out of rounds, they come out of the bag)
   function movable(st, side) {
     const pieces = st.units.filter(u => u.side === side && u.x !== null && !u.acted).length;
-    const ammo = ammoOf(st, side);
-    const fired = firedOf(st, side);
-    const guns = SUPPORT.filter(w => ammo[w] > 0 && !fired[w]).length;
+    const guns = SUPPORT.filter(w => st.ammo[side][w] > 0 && !st.fired[side][w]).length;
     return pieces + guns;
   }
 
   // Can your mortars or artillery fire now: rounds left, not fired this round, and (with the bag) on an unused token of yours
   function canFire(st, which) {
     const side = st.human;
-    return ammoOf(st, side)[which] > 0 && !firedOf(st, side)[which] && !st.won && !st.lost && !st.computer && (!st.tokens || (st.drawn === side && !st.activeId));
+    return st.ammo[side][which] > 0 && !st.fired[side][which] && !st.won && !st.lost && !st.computer && (!st.tokens || (st.drawn === side && !st.activeId));
   }
 
   // Skip a turn (Steve: anyone can): the piece, or the gun, gives up its move this round and the token is used
@@ -2368,7 +2351,7 @@ const Sim = (() => {
 
   function skipSupport(st, which) {
     if (!canFire(st, which)) return { ok: false };
-    firedOf(st, st.human)[which] = true;
+    st.fired[st.human][which] = true;
     if (st.tokens) { st.activeId = 'gun:' + which; activated(st, { side: st.human, gun: which }); }
     if (which === 'bomber') return { ok: true, lines: [`⏭️ The ${BOMBER_NAMES[st.human]} stays away this round.`] };
     return { ok: true, lines: [`⏭️ The ${which === 'mortars' ? 'mortars' : 'artillery'} hold fire this round.`] };
@@ -2390,7 +2373,7 @@ const Sim = (() => {
     st.drawnThisRound = 0;
     st.drawn = null;
     st.activeId = null;
-    st.deFired = {};
+    st.fired.de = {};
     st.roundRep = [];
   }
 
@@ -2401,7 +2384,7 @@ const Sim = (() => {
     const back = st.returning || { first: true, activated: [] };
     const out = {};
     for (const side of ['us', 'de']) {
-      const ammo = ammoOf(st, side);
+      const ammo = st.ammo[side];
       // Who has a token in the new bag at all
       const hasToken = w => (w.gun ? ammo[w.gun] > 0 : (u => !!u && u.x !== null && !u.acted)(unitById(st, w.id)));
       let from;
@@ -2456,7 +2439,7 @@ const Sim = (() => {
     if (isRobot(st, side)) {
       const pick = pickComputer(st, side);
       if (pick.gun) {
-        firedOf(st, side)[pick.gun] = true;
+        st.fired[side][pick.gun] = true;
         activated(st, { side, gun: pick.gun });
         st.computer = { queue: [], mortar: pick.gun === 'mortars', artillery: pick.gun === 'artillery', bomber: pick.gun === 'bomber', rep: st.roundRep, ask: null, side, move: { gun: pick.gun, what: '', side } };
       } else {
@@ -2471,7 +2454,7 @@ const Sim = (() => {
   // What moves on the computer's token: its guns if they have a target, then a piece with someone to shoot, then one that
   // could move and shoot, then any
   function pickComputer(st, side) {
-    const ammo = ammoOf(st, side), fired = firedOf(st, side);
+    const ammo = st.ammo[side], fired = st.fired[side];
     const options = st.units.filter(u => u.side === side && u.x !== null && !u.acted).map(u => ({ unit: u, score: eagerness(st, u) + st.rand() }));
     if (ammo.mortars > 0 && !fired.mortars) options.push({ gun: 'mortars', score: (mortarTarget(st, side) ? 2.5 : -1) + st.rand() });
     if (ammo.artillery > 0 && !fired.artillery) options.push({ gun: 'artillery', score: (artilleryTarget(st, side) ? 2.5 : -1) + st.rand() });
@@ -2518,39 +2501,14 @@ const Sim = (() => {
   // Can any of the player's pieces move on this token?
   const humanCanMove = st => SUPPORT.some(w => canFire(st, w)) || st.units.some(u => u.side === st.human && u.x !== null && (canAct(st, u) || canSelfRally(st, u) || (u.kind === 'captain' && captainCanRally(st, u))));
 
-  // The bag is empty: the round (the hour) ends: has the village fallen, are the Germans gone? Then the next round
+  // The bag is empty: the round ends: has the village fallen, are the Germans gone? Then the next round
   function endRound(st) {
     st.computer = null;
     st.drawn = null;
-    finishHour(st);
+    finishRound(st);
   }
 
   // ---------- Turns ----------
-
-  function arrive(st, side, def, rep) {
-    const edge = side === 'us' ? 0 : COLS - 1;
-    const u = makeUnit(def, side);
-    // The free field nearest the middle of the edge
-    const rows = [...Array(ROWS).keys()].sort((a, b) => Math.abs(a - 4) - Math.abs(b - 4));
-    for (const y of rows) {
-      if (roomFor(st, u, edge, y)) { u.x = edge; u.y = y; st.units.push(u); return u; }
-    }
-    return null;
-  }
-
-  function reinforcements(st, rep) {
-    for (const r of REINFORCEMENTS) {
-      if (r.turn !== st.turn) continue;
-      if (r.replacements) {
-        const weak = st.units.filter(u => u.side === 'us' && u.kind === 'company' && u.x !== null && u.platoons < 3).sort((a, b) => a.platoons - b.platoons)[0];
-        if (weak) { weak.platoons++; rep.push(`🪖 A replacement section joins ${weak.name}.`); }
-        continue;
-      }
-      const u = arrive(st, r.side, r.unit, rep);
-      if (!u) continue;
-      rep.push(r.side === 'us' ? `🪖 ${u.name} arrives on the west edge.` : `⚠️ German reinforcements reported: ${u.name}.`);
-    }
-  }
 
   // Does the US hold the hamlet: an American company in it and no Germans left there
   function holdsObjective(st) {
@@ -2558,17 +2516,8 @@ const Sim = (() => {
     return here.some(u => u.side === 'us' && u.kind === 'company') && !here.some(u => u.side === 'de');
   }
 
-  // End the American hour and play the German one. decide(shot) answers each "pull back?" question (headless play);
-  // the page instead calls startGermanHour, computerStep and answer itself, then finishHour
-  function endTurn(st, decide = () => false) {
-    if (st.won || st.lost) return;
-    startGermanHour(st);
-    for (let r = computerStep(st); !r.done; r = computerStep(st)) answer(st, decide(r.ask));
-    finishHour(st);
-  }
-
-  // After the German hour: has the hamlet fallen, has the battalion gone, has time run out? Then a new hour
-  function finishHour(st) {
+  // The end of a round: has the village fallen, has a side gone, has time run out? Then a new round
+  function finishRound(st) {
     const rep = st.computer ? st.computer.rep : (st.roundRep || []);
     st.computer = null;
     // Already over: one side was wiped out during the round
@@ -2576,7 +2525,7 @@ const Sim = (() => {
     const germansLeft = st.units.some(u => u.side === 'de' && u.x !== null);
     if (holdsObjective(st)) {
       st.won = true;
-      // Taken and held at the end of an hour wins at once
+      // Taken and held at the end of a round wins at once
       rep.unshift(`🏆 ${st.objective.name} is taken and held at the end of ${roundText(st.turn)}!`);
     } else if (!germansLeft) {
       // Every German on the table destroyed wins too (Steve), even with no rifle platoons left to take the village
@@ -2599,12 +2548,12 @@ const Sim = (() => {
       st.draw = true;
       rep.unshift(`🤝 Neither side could finish it in ${ROBOT_ROUNDS} rounds. A draw.`);
     }
-    if (!st.won && !st.lost) newTurn(st, rep);
+    if (!st.won && !st.lost) newRound(st);
     st.report = rep.length ? rep : ['A quiet round.'];
   }
 
   // A new hour (shaken stays: only a rally clears it, Steve): a fresh move for every piece (except those that took cover), fire support (no more ammo: it never comes back, Steve) and reinforcements
-  function newTurn(st, rep) {
+  function newRound(st) {
     st.turn++;
     // Both sides alike (a German who took cover used to stay down for the rest of the game)
     for (const u of st.units) {
@@ -2613,22 +2562,25 @@ const Sim = (() => {
       u.acted = missed; u.spentNext = false; u.rallied = 0; u.fired = false; u.skipped = false;
       // An ambush doesn't carry over to the next round (Steve)
       u.ambush = false;
-      // Down in cover: it stays down through the hour it misses, then gets up
+      // Down in cover: it stays down through a round it misses, then gets up
       if (!missed) u.down = false;
     }
-    st.fired = {};
+    st.fired.us = {};
     // A new round: the bombers' compasses spin afresh
     st.spin = {};
-    reinforcements(st, rep);
   }
 
   return {
     firesOnTheMove, canAmbush, actAmbush, bestMoveShoot, bomberHeading, bomberEdges, bomberLine, bombNeed, bombWhy, bestBomberRun,
-    fireSound, wreckAt, remove, computerSide, isRobot, piecesToAsk, takeCover, enemyOf, ammoOf, firedOf, gunStats, edgeKey, atCloseRange, closeCells,
-    newGame, roll, endTurn, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, chargeSpots,
+    fireSound, wreckAt, remove, computerSide, isRobot, piecesToAsk, takeCover, enemyOf, gunStats, edgeKey, atCloseRange, closeCells,
+    newGame, roll, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, chargeSpots,
     rallyTargets, canAct, canReact, firepower, canCallFire, holdsObjective, roundText, roomFor,
-    startGermanHour, computerStep, answer, finishHour, startRound, drawToken, endComputerToken, activationOver, passToken, humanCanMove, endRound, canFire, actSkip, actSkipShot, skipSupport,
-    smallTarget, menDice, armourOf, shotNeed, mayFire, shootCells, tokensHome, captainCanRally, fireAt, actShoot, actMoveShoot, moveShootSpots, chargeRoutes, DIRS, needWhy, shellNeed, shellWhy, shellFields, canRally, needFor, canSelfRally, actSelfRally, actHalfShot, actCharge, actRally, actFire, sight, isSmall, cover, wire, lineSides, actLine, atHedge, acrossHedge, SIDE_NAMES, PLACES, placeXY, placeName, lines, sizeOf, footprint, spotXY, occupant, fitsAt, freePlace,
+    computerStep, answer, finishRound, startRound, drawToken, endComputerToken, activationOver, passToken, humanCanMove, endRound, canFire, actSkip, actSkipShot, skipSupport,
+    smallTarget, menDice, armourOf, shotNeed, mayFire, shootCells, tokensHome, captainCanRally, fireAt,
+    actShoot, actMoveShoot, moveShootSpots, chargeRoutes, DIRS, needWhy, shellNeed, shellWhy, shellFields,
+    canRally, needFor, canSelfRally, actSelfRally, actHalfShot, actCharge, actRally, actFire, sight, isSmall,
+    cover, wire, lineSides, actLine, atHedge, acrossHedge, SIDE_NAMES, PLACES, placeXY, placeName, lines,
+    sizeOf, footprint, spotXY, occupant, fitsAt, freePlace,
     hasCutters: u => cutter(u),
   };
 })();

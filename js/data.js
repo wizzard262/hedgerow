@@ -171,7 +171,3 @@ const DE_START = [
   { id: 'dt2', kind: 'panther', name: 'Panther', reserve: true },
 ];
 
-// Reinforcements: who arrives on which turn, at their own edge (US west, German east). None for now (Steve: both sides
-// keep what they start with); an entry looks like { turn: 3, side: 'us', unit: { id, kind, name } }, or { turn, side,
-// replacements: 1 } for a replacement section
-const REINFORCEMENTS = [];

@@ -6,7 +6,7 @@ Local repo `C:\DEV\Repositories\GitHub\hedgerow`, on GitHub as wizzard262/hedger
 - At the end of each session, record its length in the **Sessions** table at the bottom of PROMPTS.md (keep that table last)
 - After each change to the game, save a numbered screenshot in `screenshots/` (`06-short-name.png`, …), taken in a visible browser, then add it to `screenshots/list.json`
   - Serve the game with `python -m http.server 8768` in this folder, then `node tools/shot.js <name> [hours to play]`. It borrows Playwright from `..\harrier-carrier-playwright-tests`
-- Run `node tools/test.js` before every commit (headless checks of the rules)
+- Run `node tools/test.js` before every commit (headless checks of the rules). After changing `ui.js`, `main.js` or `board3d.js`, also run `node tools/check-page.js` (real clicks in a visible browser)
 - After a rules change, run `node tools/sweep.js ""` (150 games with a simple attacking bot, token by token as the page plays; about 4 minutes): with no time limit it plays up to 20 rounds: note its win rate and average rounds, both ways round (as the Americans, and as the Germans against the American computer); doing nothing must never win
 - Plain JavaScript, classic scripts loaded in order (no modules); three.js r128 from cdnjs
   - `js/data.js` the map and every number to tune; `js/sim.js` the rules (no DOM); `js/sound.js` the battle sounds (Web Audio, no files); `js/models.js` the 3D models; `js/fire.js` how a burnt-out tank looks (flames, smoke, scorched hull); `js/labels.js` where the red score bubbles go (no DOM); `js/board3d.js` the table, camera and picking; `js/ui.js` the left-hand panel; `js/main.js` start-up, input and the German hour

@@ -292,17 +292,14 @@ const Board = (() => {
   // Show as many rounds beside each gun as it has shots left
   function updateSupport(st) {
     if (!support) return;
-    const left = { us: st.ammo, de: { artillery: st.deArtilleryAmmo || 0, mortars: st.deMortarAmmo || 0, bomber: st.deBomberAmmo || 0 } };
-    // Which guns have fired this hour, each side
-    const fired = { us: st.fired || {}, de: st.deFired || {} };
     for (const side of ['us', 'de']) for (const which of SUPPORT) {
-      const gun = support[side][which], n = left[side][which];
+      const gun = support[side][which], n = st.ammo[side][which];
       gun.rounds.forEach((r, k) => { r.visible = k < n; });
-      // Out of rounds: the gun isn't on the table this hour (Steve); it comes back when more arrive
+      // Out of rounds: the gun isn't on the table (Steve)
       gun.model.visible = n > 0;
       gun.name.visible = n > 0;
-      // Fired this hour: greyed out like a piece that has moved (Steve)
-      greyOut(gun.model, fired[side][which] ? (side === 'us' ? 'green' : 'grey') : false);
+      // Fired this round: greyed out like a piece that has moved (Steve)
+      greyOut(gun.model, st.fired[side][which] ? (side === 'us' ? 'green' : 'grey') : false);
     }
   }
 
@@ -2291,5 +2288,10 @@ const Board = (() => {
     return { x: g.position.x + b.position.x, z: g.position.z + b.position.z, visible: g.visible, bases: g.userData.bases.filter(o => o.visible).length };
   }
 
-  return { whereNow, reset, diceLeft, labelReport: () => labelReport, init, resize, render, fieldAt, pieceAt, pieceUnder, portrait, bounce, bounceGun, busyFor, settledIn, gunAt, targetAt, screenPoint, pieceScreen, labelBox, clearDice, respinCompass, flyToken, clearToken, returnTokens, canvas: () => renderer.domElement };
+  return {
+    whereNow, reset, diceLeft, labelReport: () => labelReport, init, resize, render, fieldAt, pieceAt,
+    pieceUnder, portrait, bounce, bounceGun, busyFor, settledIn, gunAt, targetAt, screenPoint, pieceScreen,
+    labelBox, clearDice, respinCompass, flyToken, clearToken, returnTokens,
+    canvas: () => renderer.domElement,
+  };
 })();

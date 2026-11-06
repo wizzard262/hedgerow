@@ -39,20 +39,27 @@ function actPiece(st, u) {
   return false;
 }
 
+// The test player's guns, either side: the bomber, when its compass gives a line worth flying; then artillery and mortars on
+// the strongest enemy in sight. Returns true if one of them used the token
+function useGuns(st) {
+  if (Sim.canFire(st, 'bomber')) {
+    const run = Sim.bestBomberRun(st, st.human);
+    if (run && Sim.actFire(st, 'bomber', run.x, run.y).ok) return true;
+  }
+  const enemy = Sim.enemyOf(st.human);
+  for (const which of ['artillery', 'mortars']) {
+    if (!Sim.canFire(st, which)) continue;
+    const seen = st.units.filter(t => t.side === enemy && t.x !== null && Sim.canCallFire(st, t.x, t.y));
+    const t = seen.sort((a, b) => b.platoons - a.platoons)[0];
+    if (t && Sim.actFire(st, which, t.x, t.y, t).ok) return true;
+  }
+  return false;
+}
+
 // One American token: guns first, then the captain's rallies, then the first piece that can do something
 function usToken(st) {
   const us = st.units.filter(u => u.side === 'us' && u.x !== null);
-  // The bomber, when its compass gives a line worth flying
-  if (Sim.canFire(st, 'bomber')) {
-    const run = Sim.bestBomberRun(st, 'us');
-    if (run && Sim.actFire(st, 'bomber', run.x, run.y).ok) return;
-  }
-  for (const which of ['artillery', 'mortars']) {
-    if (!Sim.canFire(st, which)) continue;
-    const seen = st.units.filter(g => g.side === 'de' && g.x !== null && Sim.canCallFire(st, g.x, g.y));
-    const t = seen.sort((a, b) => b.platoons - a.platoons)[0];
-    if (t && Sim.actFire(st, which, t.x, t.y).ok) return;
-  }
+  if (useGuns(st)) return;
   const cap = us.find(u => u.kind === 'captain');
   if (cap && Sim.captainCanRally(st, cap)) {
     while (Sim.captainCanRally(st, cap)) {
@@ -108,16 +115,7 @@ function play(seed, bot, maxRounds = 20) {
 // or Move & shoot; the rest stay where they are
 function deToken(st) {
   const de = st.units.filter(u => u.side === 'de' && u.x !== null);
-  if (Sim.canFire(st, 'bomber')) {
-    const run = Sim.bestBomberRun(st, 'de');
-    if (run && Sim.actFire(st, 'bomber', run.x, run.y).ok) return;
-  }
-  for (const which of ['artillery', 'mortars']) {
-    if (!Sim.canFire(st, which)) continue;
-    const seen = st.units.filter(a => a.side === 'us' && a.x !== null && Sim.canCallFire(st, a.x, a.y));
-    const t = seen.sort((a, b) => b.platoons - a.platoons)[0];
-    if (t && Sim.actFire(st, which, t.x, t.y, t).ok) return;
-  }
+  if (useGuns(st)) return;
   const cap = de.find(u => u.kind === 'captain');
   if (cap && Sim.captainCanRally(st, cap)) {
     while (Sim.captainCanRally(st, cap)) {

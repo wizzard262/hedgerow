@@ -6,12 +6,12 @@ const UI = (() => {
   const $ = s => document.querySelector(s);
   const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html !== undefined) e.innerHTML = html; return e; };
   // What the player has chosen: a piece, and an action waiting for a field to be clicked
-  const view = { sel: null, mode: null, log: [] };
+  const view = { sel: null, mode: null };
 
   const KIND = { company: 'Rifle platoon', captain: 'Captain', sherman: 'Sherman', firefly: 'Firefly', mg: '.50 cal team', bazooka: 'Bazooka team', sniper: 'Sniper team',
                  pz4: 'Panzer IV', panther: 'Panther', mg42: 'MG 42 team', schreck: 'Panzerschreck team', pak: 'PaK 40 anti-tank gun' };
 
-  function setState(s) { st = s; view.sel = null; view.mode = null; view.log = []; view.support = null; }
+  function setState(s) { st = s; view.sel = null; view.mode = null; view.support = null; }
 
   // The other side, for the words and the checks: the side the player isn't
   const enemy = () => Sim.enemyOf(st.human);
@@ -28,7 +28,7 @@ const UI = (() => {
   // For the rings under the guns
   function supportState() {
     const out = {};
-    for (const which of ['mortars', 'artillery', 'bomber']) out[which] = { ready: canFire(which), chosen: view.support === which, present: Sim.ammoOf(st, st.human)[which] > 0 };
+    for (const which of ['mortars', 'artillery', 'bomber']) out[which] = { ready: canFire(which), chosen: view.support === which, present: st.ammo[st.human][which] > 0 };
     return out;
   }
   const selected = () => (view.sel ? Sim.unitById(st, view.sel) : null);
@@ -39,12 +39,12 @@ const UI = (() => {
   };
   function gunState(which) {
     if (canFire(which)) return '<span class="pill ready">Ready</span>';
-    if (Sim.ammoOf(st, st.human)[which] <= 0) return `<span class="pill bad">${which === 'bomber' ? 'Flown' : 'No rounds'}</span>`;
+    if (st.ammo[st.human][which] <= 0) return `<span class="pill bad">${which === 'bomber' ? 'Flown' : 'No rounds'}</span>`;
     return `<span class="pill done">✓ ${which === 'bomber' ? 'Stayed away' : 'Fired'} this round</span>`;
   }
   // What the bomber does, one fact a line
   function bomberFacts() {
-    const facts = [`${Sim.ammoOf(st, st.human).bomber} run left`];
+    const facts = [`${st.ammo[st.human].bomber} run left`];
     // The compass only spins when it can fly
     if (canFire('bomber')) facts.push(`🧭 Flies ${COMPASS_POINTS[Sim.bomberHeading(st, st.human)]}`);
     facts.push(`💣 ${BOMBER.need}+ on each piece under it, yours too`);
@@ -175,7 +175,6 @@ const UI = (() => {
     const u = selected();
     const r = Sim.actRally(st, u, t);
     if (!r.ok) return false;
-    view.log.push(...r.lines);
     // If he hasn't moved yet, his moves show again
     view.mode = Sim.canAct(st, u) ? 'go' : null;
     return true;
@@ -186,13 +185,13 @@ const UI = (() => {
     // Mortars or guns: the fire mission lands on the target's field
     if (t && view.mode && view.mode.startsWith('fire:')) {
       const fired = Sim.actFire(st, view.mode.slice(5), t.x, t.y, t);
-      if (fired.ok) { view.log.push(...fired.lines); view.mode = null; }
+      if (fired.ok) view.mode = null;
       return fired.ok;
     }
     const u = selected();
     if (!u || !t) return false;
     const r = view.mode === 'halfShot' ? Sim.actHalfShot(st, u, t) : Sim.actShoot(st, u, t);
-    if (r.ok) { view.log.push(...r.lines); view.mode = null; }
+    if (r.ok) view.mode = null;
     return r.ok;
   }
 
@@ -265,15 +264,9 @@ const UI = (() => {
       else if (view.mode === 'halfShot') r = Sim.actHalfShot(st, u, pickTarget(u, x, y));
       else if (view.mode === 'rally') r = Sim.actRally(st, u, Sim.rallyTargets(st, u).find(t => t.x === x && t.y === y));
       if (r && r.ok) {
-        view.log.push(...r.lines);
         // After moving with Move & shoot, offer the half-dice shot straight away, with red targets on who can be hit
         if (how === 'moveShoot' || how === 'line' || (how === 'charge' && spot.kind === 'line')) {
-          if (u.halfShot) view.mode = 'halfShot';
-          else {
-            view.mode = null;
-            // (a machine gun can't fire after moving at all, so there is nothing to say)
-            if (Sim.firesOnTheMove(u)) view.log.push(`No ${foes()} in reach for ${u.name} to shoot from here.`);
-          }
+          view.mode = u.halfShot ? 'halfShot' : null;
         } else view.mode = null;
       }
       return null;
@@ -289,12 +282,21 @@ const UI = (() => {
     return [picked];
   }
 
+  // A piece's state as a badge: the first that fits. The menu has the short words, the panel the long ones
+  function statePill(u, inCover, shaken) {
+    if (u.down && u.acted) return `<span class="pill bad">${inCover}</span>`;
+    if (u.ambush) return '<span class="pill ready">🪤 In ambush</span>';
+    if (u.shocked) return `<span class="pill bad">${shaken}</span>`;
+    if (u.acted) return '<span class="pill done">✓ Moved this round</span>';
+    return '<span class="pill ready">Ready</span>';
+  }
+
   // The menu by a piece on the table: for each of your pieces in the field, its name and state and the actions it can take now
   function openMenu(pieces, left, top, box) {
     const menu = document.querySelector('#menu');
     menu.innerHTML = '';
     for (const u of pieces) {
-      const state = u.down && u.acted ? '<span class="pill bad">Taking cover</span>' : u.ambush ? '<span class="pill ready">🪤 In ambush</span>' : u.shocked ? '<span class="pill bad">Shaken</span>' : u.acted ? '<span class="pill done">✓ Moved this round</span>' : '<span class="pill ready">Ready</span>';
+      const state = statePill(u, 'Taking cover', 'Shaken');
       menu.append(el('div', 'mhead', `<b>${u.name}${u.quality === 'elite' ? ' ★' : ''}</b><span>${state}</span>`));
       // Moving and shooting are done by clicking the lit areas and red targets, so the menu only ever has Skip and Rally
       // (Steve: never Move & shoot, not even its shot after the move)
@@ -305,7 +307,7 @@ const UI = (() => {
         b.onclick = ev => {
           ev.stopPropagation();
           view.sel = u.id;
-          if (a.run) { const r = a.run(); if (r.ok) view.log.push(...r.lines); view.mode = null; }
+          if (a.run) { a.run(); view.mode = null; }
           else view.mode = a.mode;
           closeMenu(); refresh();
         };
@@ -342,8 +344,7 @@ const UI = (() => {
 
   // A gun holds fire this round, using the token (from its menu or the panel)
   function skipGun(which) {
-    const r = Sim.skipSupport(st, which);
-    if (r.ok) view.log.push(...r.lines);
+    Sim.skipSupport(st, which);
     view.mode = null;
     refresh();
   }
@@ -518,6 +519,13 @@ const UI = (() => {
     return !!view.mode && spots().some(p => p.x === x && p.y === y);
   }
 
+  // How strong a piece is, in words for the panel
+  function strengthWords(u) {
+    if (u.kind === 'company') return `${u.platoons} section${u.platoons > 1 ? 's' : ''} (${u.platoons * MEN_A_BASE} men)`;
+    if (Sim.isTank(u)) return `${u.platoons} tank${u.platoons > 1 ? 's' : ''}`;
+    return PIECES[u.kind].men ? `${PIECES[u.kind].men} men` : '';
+  }
+
   function card() {
     const u = selected(), box = $('#card');
     box.innerHTML = '';
@@ -531,7 +539,7 @@ const UI = (() => {
       // (German mortars drop on the one piece, Steve: the differences between the sides stay)
       const onOnePiece = which === 'mortars' && st.human === 'de';
       const diceFact = onOnePiece ? `🎲 ${S.dice} dice on the one piece` : `🎲 ${S.dice} dice on each ${foes().slice(0, -1)} piece there`;
-      const does = which === 'bomber' ? bomberFacts() : [`${Sim.ammoOf(st, st.human)[which]} rounds left`, '🎯 Fires on a field your troops can see', diceFact];
+      const does = which === 'bomber' ? bomberFacts() : [`${st.ammo[st.human][which]} rounds left`, '🎯 Fires on a field your troops can see', diceFact];
       // One anti-tank die: artillery as any other hit, mortars only shaking a tank (Steve)
       if (which === 'mortars') does.push(`🛡️ ${S.hard} die on a tank: only shakes it, or kills it if already shaken`);
       if (which === 'artillery') does.push(`🛡️ ${S.hard} die on a tank`);
@@ -552,12 +560,14 @@ const UI = (() => {
     }
     if (!u || u.x === null) {
       box.className = '';
-      box.innerHTML = st.mode === 'none' ? '<div class="sub">Click any piece on the table to see what it is.</div>' : `<div class="sub">Click one of your pieces on the table (or ${st.human === 'us' ? 'a German' : 'an American'} one to see what it is).</div>`;
+      const theirs = st.human === 'us' ? 'a German' : 'an American';
+      const words = st.mode === 'none' ? 'Click any piece on the table to see what it is.' : `Click one of your pieces on the table (or ${theirs} one to see what it is).`;
+      box.innerHTML = `<div class="sub">${words}</div>`;
       return;
     }
     // Its picture on the left (Steve), for your pieces and the Germans'
     picture(box, u.side, u.kind, u.quality === 'elite');
-    const strength = u.kind === 'company' ? `${u.platoons} section${u.platoons > 1 ? 's' : ''} (${u.platoons * MEN_A_BASE} men)` : Sim.isTank(u) ? `${u.platoons} tank${u.platoons > 1 ? 's' : ''}` : PIECES[u.kind].men ? `${PIECES[u.kind].men} men` : '';
+    const strength = strengthWords(u);
     const f = Sim.firepower(st, u);
     // Against men: its own dice and half its anti-tank ones (see Sim.menDice)
     // A captain's submachine gun reaches close range only (Steve)
@@ -565,7 +575,8 @@ const UI = (() => {
     const dice = `🎲 ${Math.round(Sim.menDice(f) * 10) / 10} dice vs men${closeOnly}${f.hard ? `, ${Math.round(f.hard * 10) / 10} vs tanks` : ''}`;
     // A tank's armour (Steve): what it adds to the score anti-tank dice need
     const armour = Sim.isTank(u) ? `🛡️ Armour +${Sim.armourOf(u)}` : '';
-    const status = u.down && u.acted ? `<span class="pill bad">Taking cover: +2 cover; ${u.kind === 'captain' ? 'no rallies until next round' : 'the captain can get it up'}</span>` : u.ambush ? '<span class="pill ready">🪤 In ambush</span>' : u.shocked ? '<span class="pill bad">Shaken: +1 to hit, half moves</span>' : u.acted ? '<span class="pill done">✓ Moved this round</span>' : '<span class="pill ready">Ready</span>';
+    const inCover = `Taking cover: +2 cover; ${u.kind === 'captain' ? 'no rallies until next round' : 'the captain can get it up'}`;
+    const status = statePill(u, inCover, 'Shaken: +1 to hit, half moves');
     box.append(el('div', 'name', `${u.name}${u.quality === 'elite' ? ' ★' : ''}`));
     // Elite troops say so (Steve): Rangers or Fallschirmjäger, one less needed to hit
     const elite = u.quality === 'elite' ? ` · <b class="elite">Elite</b> (${u.side === 'us' ? 'Rangers' : 'Fallschirmjäger'}: −1 to hit)` : '';
@@ -580,7 +591,7 @@ const UI = (() => {
     for (const a of actionButtons(u).filter(o => o.mode !== 'ambush')) {
       const btn = el('button', view.mode === a.mode ? 'on' : '', a.label);
       btn.disabled = !a.ok; btn.title = a.title;
-      btn.onclick = () => { if (a.run) { const r = a.run(); if (r.ok) view.log.push(...r.lines); view.mode = null; } else view.mode = view.mode === a.mode ? null : a.mode; refresh(); };
+      btn.onclick = () => { if (a.run) { a.run(); view.mode = null; } else view.mode = view.mode === a.mode ? null : a.mode; refresh(); };
       acts.append(btn);
     }
     box.append(acts);
@@ -592,7 +603,9 @@ const UI = (() => {
     const theirToken = st.drawn === 'de' ? 'German token: a German piece moves…' : 'American token: an American piece moves…';
     // Two humans (Steve): whose token it is, as they share the screen
     const yours = st.mode === 'both' ? `${st.human === 'us' ? 'American' : 'German'} player, your token` : 'Your token';
-    const text = !view.mode ? (computerToken ? theirToken : st.drawn === st.human ? (st.activeId ? 'Finish its move (or Skip in its menu).' : `${yours}: pick one piece and give it its move (or Skip turn in its menu).`) : 'Drawing a token…')
+    const myToken = st.activeId ? 'Finish its move (or Skip in its menu).' : `${yours}: pick one piece and give it its move (or Skip turn in its menu).`;
+    const noAction = computerToken ? theirToken : st.drawn === st.human ? myToken : 'Drawing a token…';
+    const text = !view.mode ? noAction
       : view.mode === 'fire:bomber' ? 'Point at a lit field on the edge of the board to see the line; click it to send the bomber through.'
       : view.mode.startsWith('fire:') ? `Click a red target, or a field with ${foes()} your troops can see.`
       : view.mode === 'halfShot' ? 'Moved. Click a red target to fire on it (one more needed on the move), or Esc to hold fire.'
@@ -666,5 +679,9 @@ const UI = (() => {
     refresh = onChange;
   }
 
-  return { init, setState, update, asksForShot, asksForField, clickField, openMenu, openGunMenu, openAsk, closeMenu, inspect, actsOn, spots, moveSpotsFor, targets, shootTarget, rallies, rallyTarget, view, selected, selectSupport, supportState, flyToken, returnTokens, KIND };
+  return {
+    init, setState, update, asksForShot, asksForField, clickField, openMenu, openGunMenu, openAsk, closeMenu,
+    inspect, actsOn, spots, moveSpotsFor, targets, shootTarget, rallies, rallyTarget, view, selected,
+    selectSupport, supportState, flyToken, returnTokens, KIND,
+  };
 })();

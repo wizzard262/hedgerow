@@ -190,7 +190,17 @@ window.Game = (() => {
       dirty = false;
       const same = !viewChanged, stateChanged = gameChanged;
       viewChanged = false; gameChanged = false;
-      const more = Board.render(st, { same, stateChanged, spots, selected: UI.selected(), hover, targets, hotTarget: aimedAt || hotTarget, ready, shooter, mortarAim, aimWhich, guns, blast, rallies: UI.rallies(), computerMove: (st.computer && st.computer.move) || shownMove, fireFrom: (UI.view.mode || '').startsWith('fire:') ? UI.view.mode.slice(5) : null, compass: compassNow(), flightLine: flightLineNow() });
+      const mode = UI.view.mode || '';
+      const more = Board.render(st, {
+        same, stateChanged, spots, hover, targets, ready, shooter, mortarAim, aimWhich, guns, blast,
+        selected: UI.selected(),
+        hotTarget: aimedAt || hotTarget,
+        rallies: UI.rallies(),
+        computerMove: (st.computer && st.computer.move) || shownMove,
+        fireFrom: mode.startsWith('fire:') ? mode.slice(5) : null,
+        compass: compassNow(),
+        flightLine: flightLineNow(),
+      });
       if (more) dirty = true;
       const p = Board.screenPoint(st.objective.x + 0.5, st.objective.y, 0.35), r = board.getBoundingClientRect();
       Object.assign($('#label').style, { left: p.x - r.left + 'px', top: p.y - r.top + 'px' });
@@ -236,7 +246,6 @@ window.Game = (() => {
   // The bag is empty (or the timer came out): the round ends, then a new one starts with a full bag
   function nextRound() {
     Sim.endRound(st);
-    UI.view.log = [];
     changed();
     if (st.won || st.lost) return showResult();
     Sim.startRound(st);
