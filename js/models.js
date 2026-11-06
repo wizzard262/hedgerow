@@ -813,10 +813,12 @@ const Models = (() => {
   const texCache = {};
   const fieldMats = {};
   function field(type, wheat, seed) {
-    const key = type === 'village' ? 'v' : type === 'orchard' ? 'o' : type === 'street' ? 'st' : type === 'square' ? 'sq' : wheat ? 'w' : 'g' + (seed % 3);
+    const key = type === 'village' ? 'v' : type === 'orchard' ? 'o' : type === 'street' ? 'st' : type === 'square' ? 'sq' : type === 'yard' ? 'yd' : wheat ? 'w' : 'g' + (seed % 3);
     // The city's paving (Steve: cobbled): grey cobbles for the streets, big pale flagstones for the squares
     if (key === 'st' && !texCache.st) texCache.st = cobbleTex(['#6b675f', '#5d5a53', '#77736a', '#524f49', '#827d73'], 26, 26, [4, 4], 41);
     if (key === 'sq' && !texCache.sq) texCache.sq = cobbleTex(['#a39c8b', '#928c7d', '#b0a998', '#88826f', '#9b9585'], 64, 44, [3, 3], 43);
+    // The railway yard: dark, oily ballast
+    if (key === 'yd' && !texCache.yd) texCache.yd = flockTex('#57504a', ['#4a443f', '#625b53', '#3f3a36', '#6d665d'], 53);
     if (!texCache[key]) texCache[key] = key === 'o' ? orchardGrass() : key === 'v' ? flockTex('#7c7465', ['#6e675a', '#8a8272', '#5f584c', '#99907e'], 11) : key === 'w' ? flockTex('#9c8b55', WHEAT, 12) : flockTex(['#5f6d3c', '#647140', '#5a6838'][seed % 3], GRASS, 13 + seed % 3);
     if (!fieldMats[key]) fieldMats[key] = new T.MeshStandardMaterial({ map: texCache[key], roughness: 1 });
     const m = new T.Mesh(new T.PlaneGeometry(1, 1), fieldMats[key]);
@@ -974,6 +976,236 @@ const Models = (() => {
       duck.add(at(box(0.012, 0.003, 0.006, M.duckBill), 0.034, 0.029, 0));
       g.add(at(duck, x, 0.006, z, 0, ry, 0));
     }
+    return castAll(g);
+  }
+
+  // ---------- The railway (Steve) ----------
+
+  // A length of track along x, flat on the ground: pale ballast, dark sleepers across it, two steel rails along it
+  function trackTex() {
+    return canvasTexture(512, 128, (g, w, h) => {
+      const R = seeded(59);
+      g.fillStyle = '#7b7367';
+      g.fillRect(0, 0, w, h);
+      for (let k = 0; k < 1400; k++) {
+        g.fillStyle = R() < 0.5 ? 'rgba(40,36,30,.3)' : 'rgba(210,200,185,.2)';
+        g.fillRect(R() * w, R() * h, 1 + R() * 3, 1 + R() * 3);
+      }
+      // The sleepers
+      for (let i = 0; i < 9; i++) { g.fillStyle = i % 3 ? '#3f2e22' : '#4a372a'; g.fillRect((i + 0.25) * (w / 9), 8, w / 9 * 0.42, h - 16); }
+      // The rails, with a shine along the top
+      for (const y of [h * 0.26, h * 0.7]) {
+        g.fillStyle = '#34343a'; g.fillRect(0, y, w, 8);
+        g.fillStyle = '#b6bcc2'; g.fillRect(0, y + 1, w, 3);
+      }
+    });
+  }
+  function track(length) {
+    if (!M.track2) M.track2 = new T.MeshStandardMaterial({ map: trackTex(), roughness: 0.9 });
+    const m = new T.Mesh(new T.PlaneGeometry(length, 0.2), M.track2);
+    m.rotation.x = -Math.PI / 2;
+    m.receiveShadow = true;
+    return m;
+  }
+
+  // Where a track ends against a building: a buffer stop
+  function bufferStop() {
+    const g = new T.Group();
+    if (!M.buffer) { M.buffer = mat('#5a2a22', 0.9); M.bufferPad = mat('#2a2a2c', 0.6, 0.3); }
+    g.add(at(box(0.016, 0.05, 0.13, M.buffer), 0, 0.025, 0));
+    for (const z of [-0.04, 0.04]) g.add(at(box(0.02, 0.012, 0.012, M.bufferPad), 0.014, 0.036, z));
+    return castAll(g);
+  }
+
+  // What a railway vehicle stands on, along x: a chassis on axles
+  function railMaterials() {
+    if (M.wagonDark) return;
+    M.wagonDark = mat('#26242a', 0.8, 0.3);
+    M.wagonVans = ['#6a3d2a', '#5b5f48', '#7a5a34', '#4f4436'].map(c => mat(c, 0.95));
+    M.wagonRoof = mat('#8f8c80', 0.95);
+    M.coalLump = M.coalLump || mat('#1c1b1d', 1);
+    M.tankBody = mat('#3a3d42', 0.6, 0.3);
+    M.wheatLoad = mat('#c9a544', 1);
+    M.wheatDark = mat('#a5842f', 1);
+    M.timberLoad = mat('#8a6a42', 1);
+    M.timberEnd = mat('#c7a878', 1);
+    M.carriageColours = [['#2f4a38', '#d8d0ba'], ['#5a2a2a', '#d8d0ba'], ['#2d3a52', '#cfc8b4']].map(([body, band]) => [mat(body, 0.8), mat(band, 0.9)]);
+    M.carriageGlass = mat('#2a3338', 0.3);
+    M.engineBlack = mat('#1f2022', 0.55, 0.45);
+    M.engineGreen = mat('#28402f', 0.5, 0.3);
+    M.engineRed = mat('#8f2a22', 0.7);
+    M.engineBrass = mat('#a88a44', 0.4, 0.6);
+  }
+  const RAIL = { width: 0.15, floor: 0.035 };
+  function addChassis(g, length, axles = 2) {
+    railMaterials();
+    g.add(at(box(length, 0.014, RAIL.width * 0.8, M.wagonDark), 0, RAIL.floor, 0));
+    for (let i = 0; i < axles; i++) {
+      const x = axles === 1 ? 0 : -length * 0.34 + (i / (axles - 1)) * length * 0.68;
+      for (const z of [-0.055, 0.055]) g.add(at(cyl(0.02, 0.02, 0.008, M.wagonDark, 10), x, 0.02, z, Math.PI / 2, 0, 0));
+    }
+  }
+
+  // A goods wagon, along x: a closed van, or an open truck loaded with coal, wheat or timber, or a tank. length: along x
+  function wagon(length = 0.56, seed = 0, load = 'van') {
+    const g = new T.Group(), R = seeded(seed + 17);
+    addChassis(g, length);
+    const body = length - 0.03, width = RAIL.width, floor = RAIL.floor;
+    const colour = M.wagonVans[Math.floor(R() * M.wagonVans.length)];
+    if (load === 'tank') {
+      // A long drum lying on its side
+      g.add(at(cyl(0.056, 0.056, body * 0.96, M.tankBody, 14), 0, floor + 0.062, 0, 0, 0, Math.PI / 2));
+      g.add(at(cyl(0.014, 0.014, 0.02, M.tankBody, 8), 0, floor + 0.124, 0));
+      return castAll(g);
+    }
+    if (load === 'van') {
+      // Boards, a sliding door each side, a low roof
+      g.add(at(box(body, 0.1, width, colour), 0, floor + 0.057, 0));
+      g.add(at(box(body + 0.008, 0.012, width + 0.012, M.wagonRoof), 0, floor + 0.113, 0));
+      for (const s of [-1, 1]) g.add(at(box(0.07, 0.085, 0.003, M.wagonDark), 0, floor + 0.052, s * (width / 2 + 0.001)));
+      return castAll(g);
+    }
+    // An open truck: low sides, and what it carries
+    g.add(at(box(body, 0.05, width, colour), 0, floor + 0.032, 0));
+    if (load === 'coal') {
+      g.add(at(box(body - 0.016, 0.004, width - 0.016, M.coalLump), 0, floor + 0.056, 0));
+      const lumps = Math.round(body / 0.04);
+      for (let i = 0; i < lumps; i++) {
+        const lump = new T.Mesh(new T.DodecahedronGeometry(0.02 + R() * 0.012), M.coalLump);
+        g.add(at(lump, -body / 2 + (i + 0.5) * (body / lumps), floor + 0.066, (R() - 0.5) * 0.08, R(), R(), R()));
+      }
+    }
+    if (load === 'wheat') {
+      // Heaped grain, with a darker ridge along it
+      g.add(at(box(body - 0.012, 0.03, width - 0.012, M.wheatLoad), 0, floor + 0.065, 0));
+      g.add(at(box(body - 0.05, 0.02, width * 0.5, M.wheatDark), 0, floor + 0.086, 0));
+      const heaps = Math.round(body / 0.09);
+      for (let i = 0; i < heaps; i++) {
+        const heap = new T.Mesh(new T.SphereGeometry(0.036, 8, 6), M.wheatLoad);
+        heap.scale.y = 0.55;
+        g.add(at(heap, -body / 2 + (i + 0.5) * (body / heaps), floor + 0.082, (R() - 0.5) * 0.04));
+      }
+    }
+    if (load === 'timber') {
+      // Logs lying along it, pale at the cut ends
+      for (const [z, y] of [[-0.044, 0.07], [0, 0.07], [0.044, 0.07], [-0.022, 0.104], [0.022, 0.104]]) {
+        g.add(at(cyl(0.02, 0.02, body - 0.01, M.timberLoad, 8), 0, floor + y, z, 0, 0, Math.PI / 2));
+        for (const s of [-1, 1]) g.add(at(cyl(0.017, 0.017, 0.003, M.timberEnd, 8), s * (body / 2 - 0.004), floor + y, z, 0, 0, Math.PI / 2));
+      }
+    }
+    return castAll(g);
+  }
+
+  // A passenger carriage, along x: a long body in its railway's colours, a band of windows, a curved roof
+  function carriage(length = 0.56, seed = 0) {
+    const g = new T.Group(), R = seeded(seed + 23);
+    addChassis(g, length);
+    const body = length - 0.02, width = RAIL.width, floor = RAIL.floor;
+    const [colour, band] = M.carriageColours[Math.floor(R() * M.carriageColours.length)];
+    g.add(at(box(body, 0.1, width, colour), 0, floor + 0.057, 0));
+    g.add(at(box(body + 0.002, 0.03, width + 0.002, band), 0, floor + 0.078, 0));
+    // The roof: a low hump
+    const roof = cyl(0.082, 0.082, body + 0.006, M.wagonRoof, 14);
+    roof.scale.x = 0.34;
+    g.add(at(roof, 0, floor + 0.106, 0, 0, 0, Math.PI / 2));
+    // Windows along both sides
+    const windows = Math.max(2, Math.floor(body / 0.05));
+    for (const s of [-1, 1]) {
+      for (let i = 0; i < windows; i++) {
+        const x = -body / 2 + (i + 0.5) * (body / windows);
+        g.add(at(box(body / windows * 0.62, 0.02, 0.003, M.carriageGlass), x, floor + 0.08, s * (width / 2 + 0.002)));
+      }
+    }
+    return castAll(g);
+  }
+
+  // A steam engine, along x, chimney towards +x: boiler, chimney and dome, a cab, a tender of coal, big driving wheels
+  function engine(length = 0.9, seed = 0) {
+    const g = new T.Group(), R = seeded(seed + 29);
+    railMaterials();
+    const coat = R() < 0.5 ? M.engineBlack : M.engineGreen;
+    const floor = RAIL.floor;
+    g.add(at(box(length, 0.016, RAIL.width * 0.8, M.wagonDark), 0, floor, 0));
+    // The boiler, the front two thirds
+    const boilerLong = length * 0.52, boilerX = length * 0.16;
+    g.add(at(cyl(0.05, 0.05, boilerLong, coat, 16), boilerX, floor + 0.062, 0, 0, 0, Math.PI / 2));
+    g.add(at(cyl(0.052, 0.052, 0.024, M.engineBlack, 16), boilerX + boilerLong / 2, floor + 0.062, 0, 0, 0, Math.PI / 2));
+    // Chimney, dome and a brass band
+    g.add(at(cyl(0.02, 0.015, 0.05, M.engineBlack, 10), boilerX + boilerLong * 0.4, floor + 0.128, 0));
+    g.add(at(cyl(0.024, 0.024, 0.008, M.engineBlack, 10), boilerX + boilerLong * 0.4, floor + 0.154, 0));
+    g.add(at(new T.Mesh(new T.SphereGeometry(0.022, 10, 6), M.engineBrass), boilerX - boilerLong * 0.05, floor + 0.112, 0));
+    g.add(at(cyl(0.052, 0.052, 0.006, M.engineBrass, 16), boilerX - boilerLong * 0.3, floor + 0.062, 0, 0, 0, Math.PI / 2));
+    // The red buffer beam at the front
+    g.add(at(box(0.01, 0.022, RAIL.width, M.engineRed), length / 2 - 0.005, floor + 0.004, 0));
+    // The cab
+    const cabX = boilerX - boilerLong / 2 - 0.05;
+    g.add(at(box(0.1, 0.11, RAIL.width, coat), cabX, floor + 0.062, 0));
+    g.add(at(box(0.116, 0.008, RAIL.width + 0.012, M.engineBlack), cabX, floor + 0.122, 0));
+    for (const s of [-1, 1]) g.add(at(box(0.04, 0.035, 0.003, M.carriageGlass), cabX, floor + 0.086, s * (RAIL.width / 2 + 0.002)));
+    // The tender, heaped with coal
+    const tenderX = -length / 2 + 0.085;
+    g.add(at(box(0.15, 0.07, RAIL.width, coat), tenderX, floor + 0.042, 0));
+    g.add(at(box(0.13, 0.008, RAIL.width - 0.02, M.coalLump), tenderX, floor + 0.08, 0));
+    for (let i = 0; i < 8; i++) {
+      const lump = new T.Mesh(new T.DodecahedronGeometry(0.014 + R() * 0.01), M.coalLump);
+      g.add(at(lump, tenderX + (R() - 0.5) * 0.11, floor + 0.09, (R() - 0.5) * 0.09, R(), R(), R()));
+    }
+    // Wheels: big driving wheels under the boiler, small ones under the tender
+    for (const s of [-1, 1]) {
+      for (const x of [boilerX + boilerLong * 0.3, boilerX, boilerX - boilerLong * 0.3]) g.add(at(cyl(0.032, 0.032, 0.008, M.engineRed, 14), x, 0.032, s * 0.066, Math.PI / 2, 0, 0));
+      for (const x of [tenderX - 0.04, tenderX + 0.04]) g.add(at(cyl(0.02, 0.02, 0.008, M.wagonDark, 10), x, 0.02, s * 0.06, Math.PI / 2, 0, 0));
+    }
+    return castAll(g);
+  }
+
+  // A signal box: a brick base, a glazed cabin all round, and a slate roof
+  function signalbox() {
+    const g = new T.Group();
+    if (!M.boxBrick) { M.boxBrick = mat('#7a4a36', 1); M.boxWood = mat('#b5ad8f', 1); M.boxGlass = mat('#34464c', 0.3); M.boxRoof = mat('#46494f', 0.9); }
+    g.add(at(box(0.2, 0.09, 0.16, M.boxBrick), 0, 0.045, 0));
+    g.add(at(box(0.2, 0.06, 0.16, M.boxWood), 0, 0.12, 0));
+    g.add(at(box(0.204, 0.036, 0.164, M.boxGlass), 0, 0.122, 0));
+    for (const s of [-1, 1]) g.add(at(box(0.12, 0.01, 0.12, M.boxRoof), 0, 0.166, s * 0.045, s * 0.5, 0, 0));
+    g.add(at(box(0.21, 0.006, 0.17, M.boxRoof), 0, 0.152, 0));
+    return castAll(g);
+  }
+
+  // A signal: a tall post, a red arm with a white stripe, a lamp, on a small base
+  function signal() {
+    const g = new T.Group();
+    if (!M.signalPost) { M.signalPost = mat('#d8d3c4', 0.8); M.signalArm = mat('#a12a22', 0.7); M.signalStripe = mat('#ece6d6', 0.8); M.signalLamp = mat('#2a2a2c', 0.5, 0.3); }
+    g.add(at(box(0.04, 0.012, 0.04, M.signalLamp), 0, 0.006, 0));
+    g.add(at(cyl(0.004, 0.006, 0.22, M.signalPost, 8), 0, 0.116, 0));
+    g.add(at(box(0.07, 0.016, 0.004, M.signalArm), 0.034, 0.2, 0, 0, 0, -0.18));
+    g.add(at(box(0.008, 0.016, 0.005, M.signalStripe), 0.044, 0.198, 0, 0, 0, -0.18));
+    g.add(at(box(0.012, 0.016, 0.01, M.signalLamp), 0.004, 0.176, 0));
+    return castAll(g);
+  }
+
+  // A water tower: an iron drum on four legs, with a hose hanging down
+  function watertower() {
+    const g = new T.Group();
+    if (!M.towerIron) { M.towerIron = mat('#34373a', 0.7, 0.3); M.towerTank = mat('#4d4f4a', 0.8, 0.2); }
+    for (const x of [-0.055, 0.055]) for (const z of [-0.055, 0.055]) g.add(at(cyl(0.005, 0.007, 0.13, M.towerIron, 6), x, 0.065, z));
+    g.add(at(cyl(0.09, 0.09, 0.07, M.towerTank, 16), 0, 0.165, 0));
+    g.add(at(cyl(0.02, 0.095, 0.03, M.towerIron, 16), 0, 0.215, 0));
+    g.add(at(cyl(0.006, 0.006, 0.08, M.towerIron, 6), 0.09, 0.09, 0));
+    return castAll(g);
+  }
+
+  // A coal heap: lumps piled up behind a low wall of sleepers
+  function coal(length, seed = 0) {
+    const g = new T.Group(), R = seeded(seed + 19);
+    if (!M.coalLump) M.coalLump = mat('#1c1b1d', 1);
+    if (!M.sleeper) M.sleeper = mat('#3f2e22', 1);
+    const heap = cyl(0.03, 0.11, 0.08, M.coalLump, 10);
+    g.add(at(heap, 0, 0.04, 0));
+    for (let i = 0; i < 12; i++) {
+      const lump = new T.Mesh(new T.DodecahedronGeometry(0.012 + R() * 0.012), M.coalLump);
+      const a = R() * 6.28, r = R() * 0.09;
+      g.add(at(lump, Math.cos(a) * r, 0.03 + R() * 0.05, Math.sin(a) * r, R(), R(), R()));
+    }
+    for (const s of [-1, 1]) g.add(at(box(0.24, 0.04, 0.012, M.sleeper), 0, 0.02, s * 0.115));
     return castAll(g);
   }
 
@@ -1164,5 +1396,5 @@ const Models = (() => {
     return castAll(g);
   }
 
-  return { cow, sheep, lampPost, posterColumn, marketStall, cafe, barn, fountain, pond, reeds, BRIDGE_DECK, materials, M, mergeParts, eliteBand, water, bridge, soldier, squad, team, captain, pak, mortar, bomber, bomberOnStand, howitzer, round, coin, token, sherman, panther, panzer4, hedge, tree, house, die, table, field, lane, at };
+  return { track, bufferStop, engine, carriage, wagon, signalbox, signal, watertower, coal, cow, sheep, lampPost, posterColumn, marketStall, cafe, barn, fountain, pond, reeds, BRIDGE_DECK, materials, M, mergeParts, eliteBand, water, bridge, soldier, squad, team, captain, pak, mortar, bomber, bomberOnStand, howitzer, round, coin, token, sherman, panther, panzer4, hedge, tree, house, die, table, field, lane, at };
 })();

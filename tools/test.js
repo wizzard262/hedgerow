@@ -3031,7 +3031,7 @@ check('every map is the same size, has real tiles, and its villages are villages
     assert(played.rows.length === ROWS, `${map.id}: ${played.rows.length} rows`);
     for (const row of played.rows) {
       assert(row.length === COLS, `${map.id}: row "${row}"`);
-      assert(/^[.ovhr#=|+sq]+$/.test(row), `${map.id}: odd tile in "${row}"`);
+      assert(/^[.ovhr#=|+sqt]+$/.test(row), `${map.id}: odd tile in "${row}"`);
     }
     assert(played.villages.length >= 1 && map.name && map.note, `${map.id}: not filled in`);
     for (const v of played.villages) assert(Sim.tileType(v.x, v.y) === 'village', `${map.id}: ${v.name} is not in a village`);
@@ -3360,6 +3360,73 @@ check('the scenery is only to look at: the same each time for a game, on the rig
   }
   for (const k of ['cow', 'sheep', 'lamp', 'posters', 'stall']) assert(kinds.has(k), `no ${k} anywhere`);
   assert(!kinds.has('parachute'), 'a parachute is back');
+  Sim.newGame(1);
+});
+
+check('the train station: houses and tracks; many trucks and a few other things, all blocking the view, new each game', () => {
+  const layouts = new Set();
+  for (let seed = 1; seed <= 30; seed++) {
+    const st = Sim.newGame(seed, 'us', 'station');
+    assert(/^[vt]+$/.test(st.map.rows.join('')), 'something other than houses and tracks');
+    assert(!Object.keys(st.hedges).length && !Object.keys(st.wire).length, 'hedges or wire in the yard');
+    const ON_RAILS = ['engine', 'carriage', 'wagon'];
+    const trucks = st.features.filter(f => ON_RAILS.includes(f.kind));
+    const others = st.features.filter(f => !ON_RAILS.includes(f.kind));
+    assert(trucks.length >= 20, `seed ${seed}: only ${trucks.length} on the rails`);
+    // One or two engines, the full length of a field; mostly carriages and goods wagons
+    const engines = trucks.filter(f => f.kind === 'engine');
+    assert(engines.length === 1 || engines.length === 2, `seed ${seed}: ${engines.length} engines`);
+    assert(engines.every(f => f.areas.length === 3), `seed ${seed}: a short engine`);
+    assert(trucks.some(f => f.kind === 'carriage') && trucks.some(f => f.kind === 'wagon'), `seed ${seed}: no carriages or no wagons`);
+    assert(others.length >= 2, `seed ${seed}: only ${others.length} other things`);
+    assert(st.map.joins.length >= 5, `seed ${seed}: only ${st.map.joins.length} joins`);
+    for (const f of st.features) {
+      assert(f.blocksView, `${f.name} doesn't block the view`);
+      assert(Sim.tileType(f.x, f.y) === 'yard', `${f.name} is not on the tracks`);
+      assert(!f.areas.includes('c'), `${f.name} takes the middle`);
+      // Room left for a big piece
+      const tank = st.units.find(u => Sim.isTank(u));
+      const there = st.units.filter(u => u !== tank && u.x === f.x && u.y === f.y);
+      const saved = there.map(u => [u.x, u.y]);
+      there.forEach(u => { u.x = u.y = null; });
+      assert(Sim.roomFor(st, tank, f.x, f.y), `no room for a tank beside the ${f.name}`);
+      there.forEach((u, i) => { [u.x, u.y] = saved[i]; });
+    }
+    for (const u of live(st)) assert(fieldOk(st, u.x, u.y), `seed ${seed}: too many in ${u.x},${u.y}`);
+    layouts.add(JSON.stringify(st.features));
+    // The same seed, the same yard
+    assert(JSON.stringify(Sim.newGame(seed, 'us', 'station').features) === JSON.stringify(st.features), 'not the same yard twice');
+  }
+  assert(layouts.size === 30, 'the yard did not change from game to game');
+  const kinds = new Set();
+  for (let seed = 1; seed <= 30; seed++) for (const f of Sim.newGame(seed, 'us', 'station').features) kinds.add(f.kind);
+  for (const k of ['engine', 'carriage', 'wagon', 'signalbox', 'signal', 'watertower', 'coal']) assert(kinds.has(k), `no ${k} anywhere`);
+  const loads = new Set();
+  for (let seed = 1; seed <= 30; seed++) for (const f of Sim.newGame(seed, 'us', 'station').features) if (f.kind === 'wagon') loads.add(f.load);
+  for (const l of ['van', 'coal', 'wheat', 'timber', 'tank']) assert(loads.has(l), `no wagon of ${l}`);
+  Sim.newGame(1);
+});
+
+check('railway tracks change nothing: as open ground for moving and for the view, and not a road for a tank', () => {
+  const st = Sim.newGame(3, 'us', 'station');
+  st.features = [];
+  for (const u of st.units) if (u.id !== 'T1' && u.id !== 'B' && u.id !== 'd2') u.x = u.y = null;
+  const T1 = Sim.unitById(st, 'T1'), B = Sim.unitById(st, 'B'), d2 = Sim.unitById(st, 'd2');
+  d2.x = 11; d2.y = 0; d2.at = null;
+  T1.x = 1; T1.y = 7; T1.at = null; T1.shocked = false;
+  assert(!Sim.isRoad(1, 7), 'tracks count as a road');
+  const reach = Sim.chargeSpots(st, T1);
+  assert(reach.some(p => p.x === 4 && p.y === 7), 'a tank could not go three fields over the tracks');
+  assert(!reach.some(p => p.x === 5 && p.y === 7), 'a tank went further on the tracks');
+  // Men the same, and across them there is nothing in the way
+  B.x = 1; B.y = 5; B.at = null;
+  assert(Sim.chargeSpots(st, B).some(p => p.x === 4 && p.y === 5), 'men could not go three fields over the tracks');
+  d2.x = 4; d2.y = 5; d2.at = null;
+  assert(Sim.sight(st, B, d2), 'tracks blocked the view');
+  // A truck between them does block it
+  st.features = [{ x: 3, y: 5, kind: 'wagon', areas: ['w', 'c', 'e'], blocksView: true, name: 'Railway truck' }];
+  B.at = 'e'; d2.at = 'w'; B.platoons = 1; d2.platoons = 1;
+  assert(!Sim.sight(st, B, d2), 'a truck did not block the view');
   Sim.newGame(1);
 });
 

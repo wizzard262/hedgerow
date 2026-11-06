@@ -1,7 +1,7 @@
 // Hedgerow: the map and every number to tune
 
 // A board: one character per field. Each field is a tile; hedges grow on the edges between fields
-//   s  street (paved, in the city)    q  square (paved and open, in the city)
+//   s  street (paved, in the city)    q  square (paved and open, in the city)    t  railway tracks (only to look at: as open ground)
 //   .  field        o  orchard (some cover)        h  hamlet: a few houses round a yard (good cover)
 //   v  village (good cover, no hedges round it)    r  river (nothing can enter it)    #  bridge (a lane across the river)
 // One unit to a field (Steve); only hand-to-hand fighting brings two sides into the same field.
@@ -13,7 +13,7 @@
 // the objective, the field to take and hold, its church in the middle. Left out, a map keeps the usual:
 //   gap, wire: chance of a gap in a hedge, and of a gap being fenced    deploy: share of the board each side starts in
 //   us, de: { add: pieces more, remove: ids of pieces less }            ammo: { us: {...}, de: {...} } rounds and bomber runs
-//   features: things standing in fields, see FEATURES                   generated: a new board each game (rows, villages and features come from sim.js)
+//   features: things standing in fields, see FEATURES                   generated: made new each game in sim.js: 'city', a whole board; 'yard', what stands in the yard
 // Things that stand in a field and take some of its nine areas (Steve). A building (blocksView) blocks the view like a tank.
 // side: along that side of the field, three areas. areas: the very areas it takes (Steve: not all the full length, and some in
 // the middle of the field). With the middle free a platoon or a tank can stand beside it; a building in the middle leaves room
@@ -23,6 +23,13 @@ const FEATURES = {
   barn: { name: 'Barn', blocksView: true },
   fountain: { name: 'Fountain', blocksView: false },
   pond: { name: 'Duck pond', blocksView: false },
+  engine: { name: 'Steam engine', blocksView: true },
+  carriage: { name: 'Railway carriage', blocksView: true },
+  wagon: { name: 'Goods wagon', blocksView: true },
+  signalbox: { name: 'Signal box', blocksView: true },
+  signal: { name: 'Signal', blocksView: true },
+  watertower: { name: 'Water tower', blocksView: true },
+  coal: { name: 'Coal heap', blocksView: true },
 };
 const MAPS = [
   {
@@ -99,10 +106,26 @@ const MAPS = [
   },
   {
     id: 'paris', name: 'Paris', note: 'A tight city, a new maze of cobbled streets each game: houses, streets and little squares, each with a café and a fountain. Few tanks: no Firefly and no Panther; a second bazooka for the Americans, an extra MG 42 for the Germans.',
-    generated: true,
+    generated: 'city',
     gap: 1, wire: 0,
     us: { remove: ['T2'], add: [{ id: 'bz2', kind: 'bazooka', name: 'Bazooka Team 2' }] },
     de: { remove: ['dt2'], add: [{ id: 'dmg5', kind: 'mg42', name: 'MG 42 Team', reserve: true }] },
+  },
+  {
+    id: 'station', name: 'Train station', note: 'Houses and tracks: a railway yard with tracks everywhere, joining and parting. One or two engines, carriages and goods wagons, some loaded with coal, wheat or timber, stand all over it, with signal boxes, signals, water towers and coal heaps, all blocking the view like a tank, in new places each game. The tracks themselves have no effect.',
+    generated: 'yard',
+    rows: [
+      'tttttttttttt',
+      'ttvttttvvttt',
+      'tttttttttttt',
+      'tttttttvvttv',
+      'tttvtttvvttt',
+      'tttttttttttt',
+      'ttttvtttttvt',
+      'tttttttttttt',
+    ],
+    villages: [{ x: 7, y: 4, name: 'La Gare' }, { x: 7, y: 1, name: 'Le Dépôt' }],
+    gap: 1, wire: 0,
   },
   {
     id: 'deep', name: 'Deep bocage', note: 'Hedges nearly everywhere and few lanes. More infantry and fewer tanks: no Firefly and no Panther; a fourth American platoon and second bazooka, a sixth German platoon and second Panzerschreck.',

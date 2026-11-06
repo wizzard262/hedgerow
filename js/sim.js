@@ -16,7 +16,7 @@ const Sim = (() => {
 
   // ---------- The board ----------
 
-  const TYPES = { '.': 'field', o: 'orchard', v: 'village', h: 'hamlet', r: 'river', '#': 'bridge', '=': 'laneEW', '|': 'laneNS', '+': 'crossroads', s: 'street', q: 'square' };
+  const TYPES = { '.': 'field', o: 'orchard', v: 'village', h: 'hamlet', r: 'river', '#': 'bridge', '=': 'laneEW', '|': 'laneNS', '+': 'crossroads', s: 'street', q: 'square', t: 'yard' };
   const inside = (x, y) => x >= 0 && y >= 0 && x < COLS && y < ROWS;
   // The map being played (one game at a time, so a new game changes it for everyone asking)
   let currentMap = MAPS[0];
@@ -213,7 +213,8 @@ const Sim = (() => {
     const players = { us: mode === 'us' || mode === 'both' ? 'human' : 'robot', de: mode === 'de' || mode === 'both' ? 'human' : 'robot' };
     const R = rng(seed);
     // A map made new each game: from this game's dice, so the same seed gives the same streets
-    if (map.generated) map = Object.assign({}, map, cityMap(R));
+    if (map.generated === 'city') map = Object.assign({}, map, cityMap(R));
+    if (map.generated === 'yard') map = Object.assign({}, map, yardMap(map, R));
     currentMap = map;
     walkTables.clear();
     const st = {
@@ -365,6 +366,48 @@ const Sim = (() => {
     const names = shuffled(CITY_NAMES);
     const villages = shuffled(places).slice(0, 2).map((p, i) => ({ x: p.x, y: p.y, name: names[i] }));
     return { rows: tiles.map(row => row.join('')), villages, features };
+  }
+
+  // The railway yard (Steve: a train station): what stands on the tracks, new each game: one or two engines, mostly carriages
+  // and goods wagons, some loaded, a few signal boxes and signals and other things, each blocking the view like a tank; and
+  // where the tracks join. Each field has a track along its
+  // north row of areas and one along its south row. The tracks themselves change nothing
+  const YARD = { truck: 0.42, other: 0.1, joinInField: 0.18, joinToNext: 0.1 };
+  const YARD_THINGS = ['signal', 'signal', 'signalbox', 'coal', 'watertower'];
+  // What a goods wagon is, or carries; a closed van twice as often as anything else
+  const YARD_LOADS = ['van', 'van', 'coal', 'wheat', 'timber', 'tank'];
+  const YARD_CARRIAGES = 0.35;   // the share of what stands on the tracks that is carriages
+  function yardMap(map, R) {
+    const features = [], joins = [];
+    const isYard = (x, y) => map.rows[y] && map.rows[y][x] === 't';
+    for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
+      if (!isYard(x, y)) continue;
+      const what = R();
+      if (what < YARD.truck) {
+        // On one of its two tracks, the full length of the field or two thirds of it
+        const row = SIDE_AREAS[R() < 0.5 ? 'n' : 's'];
+        const length = Math.floor(R() * 3);
+        const areas = length === 0 ? row : length === 1 ? [row[0], row[1]] : [row[1], row[2]];
+        const carriage = R() < YARD_CARRIAGES;
+        const load = YARD_LOADS[Math.floor(R() * YARD_LOADS.length)];
+        features.push({ x, y, kind: carriage ? 'carriage' : 'wagon', load: carriage ? undefined : load, areas, seed: Math.floor(R() * 1000) });
+      } else if (what < YARD.truck + YARD.other) {
+        // Between the tracks, to one side of the middle, so a big piece still has a block free
+        const kind = YARD_THINGS[Math.floor(R() * YARD_THINGS.length)];
+        features.push({ x, y, kind, area: R() < 0.5 ? 'w' : 'e', seed: Math.floor(R() * 1000) });
+      }
+      if (R() < YARD.joinInField) joins.push({ x, y, within: true, flip: R() < 0.5 });
+      if (isYard(x, y + 1) && R() < YARD.joinToNext) joins.push({ x, y, within: false, flip: R() < 0.5 });
+    }
+    // One or two of the longest are engines
+    const longest = features.filter(f => f.areas && f.areas.length === 3);
+    const engines = 1 + Math.floor(R() * 2);
+    for (let i = 0; i < engines && longest.length; i++) {
+      const f = longest.splice(Math.floor(R() * longest.length), 1)[0];
+      f.kind = 'engine';
+      f.load = undefined;
+    }
+    return { features, joins };
   }
 
   // Where a café stands in its square (Steve): one way in three each, along a whole side, along part of a side, or in the middle

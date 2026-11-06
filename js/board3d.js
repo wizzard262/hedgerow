@@ -332,6 +332,7 @@ const Board = (() => {
       if (t === 'orchard') for (const [ox, oz] of orchardTrees(seed)) built.add(at(Models.tree(seed + ox * 10 + oz * 3, 0.68 + ((ox * 31 + oz * 17) % 1) * 0.15), x + ox, 0, y + oz));
       if (t === 'village' || t === 'hamlet') addHouses(x, y, seed);
     }
+    if (st.map.joins) addTracks(st);
     for (const f of st.features) addFeature(f);
     addScenery(st);
     // Fields, houses and trees never move: merged, they are drawn in a few goes
@@ -409,16 +410,44 @@ const Board = (() => {
     }
   }
 
+  // The railway yard's tracks: one along the north row of each field's areas and one along the south, a buffer stop where one
+  // runs up against houses, and pieces of track where they join: within a field, or down to the track of the field below
+  const TRACK_ROWS = [0.5 - 1 / 3, 0.5 + 1 / 3];
+  function addTracks(st) {
+    const isYard = (x, y) => Sim.inside(x, y) && Sim.tileType(x, y) === 'yard';
+    for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
+      if (!isYard(x, y)) continue;
+      for (const row of TRACK_ROWS) {
+        built.add(at(Models.track(1), x + 0.5, 0.002, y + row, -Math.PI / 2, 0, 0));
+        if (Sim.inside(x + 1, y) && !isYard(x + 1, y)) built.add(at(Models.bufferStop(), x + 0.96, 0, y + row, 0, Math.PI, 0));
+        if (Sim.inside(x - 1, y) && !isYard(x - 1, y)) built.add(at(Models.bufferStop(), x + 0.04, 0, y + row));
+      }
+    }
+    for (const join of st.map.joins) {
+      // From the track at one height to the track at the next, slanting across the field
+      const upper = join.within ? TRACK_ROWS[0] : TRACK_ROWS[1], lower = join.within ? TRACK_ROWS[1] : 1 + TRACK_ROWS[0];
+      const across = 0.7, down = lower - upper;
+      const slant = Math.atan2(down, across) * (join.flip ? 1 : -1);
+      const piece = Models.track(Math.hypot(across, down));
+      piece.rotation.set(-Math.PI / 2, 0, slant);
+      piece.position.set(join.x + 0.5, 0.0035, join.y + (upper + lower) / 2);
+      built.add(piece);
+    }
+  }
+
   // A café, a barn, a fountain or a pond in its field: in the middle of the areas it takes, as long as they are (a third of a
   // field each, less a little), running the way they run, its front facing into the field
   function addFeature(f) {
-    const MAKERS = { cafe: Models.cafe, barn: Models.barn, fountain: Models.fountain, pond: Models.pond };
+    const MAKERS = {
+      cafe: Models.cafe, barn: Models.barn, fountain: Models.fountain, pond: Models.pond,
+      engine: Models.engine, carriage: Models.carriage, wagon: Models.wagon, signalbox: Models.signalbox, signal: Models.signal, watertower: Models.watertower, coal: Models.coal,
+    };
     const spots = f.areas.map(k => Sim.placeXY(k === 'c' ? null : k));
     const midX = spots.reduce((n, p) => n + p.x, 0) / spots.length, midY = spots.reduce((n, p) => n + p.y, 0) / spots.length;
     const alongX = new Set(spots.map(p => p.y)).size === 1;
     const facing = alongX ? (midY > 0 ? Math.PI : 0) : (midX > 0 ? -Math.PI / 2 : Math.PI / 2);
     const length = f.areas.length / 3 - 0.1;
-    built.add(at(MAKERS[f.kind](length), f.x + 0.5 + midX / 3, 0, f.y + 0.5 + midY / 3, 0, facing, 0));
+    built.add(at(MAKERS[f.kind](length, f.seed, f.load), f.x + 0.5 + midX / 3, 0, f.y + 0.5 + midY / 3, 0, facing, 0));
   }
 
   function addHouses(x, y, seed) {
