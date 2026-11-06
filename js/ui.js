@@ -443,7 +443,7 @@ const UI = (() => {
       add('charge', '⚔️ Charge', Sim.chargeSpots(st, u).length > 0, 'Up to three fields, no shooting (climbing a hedge uses one more)');
       // (after two rallies only a charge is left, Steve)
       add('moveShoot', '➡️ Move & shoot', Sim.mayFire(u) && Sim.moveShootSpots(st, u).length > 0, 'Up to two fields to where he can fire (the red-hatched fields), then fire needing one more on the dice');
-      add('shoot', '🎯 Shoot', Sim.mayFire(u) && Sim.targets(st, u).length > 0, `His HQ fires: one die, or ${PIECES[u.kind].smg} with his submachine gun at close range`);
+      add('shoot', '🎯 Shoot', Sim.mayFire(u) && Sim.targets(st, u).length > 0, `His submachine gun: ${PIECES[u.kind].soft} dice, at close range only`);
       // Rallying isn't his move (Steve): two rallies if he stays put or charges (before, after or either side of the
       // charge), one if he shoots or moves and shoots (before or after). Only with someone in reach to rally
       if (Sim.captainCanRally(st, u)) b.push({ mode: 'rally', label: '📣 Rally', ok: true, title: 'Get a piece that took cover up and moving, or steady a shaken one (himself too), up to three fields away. Two rallies a round if he stays put or charges, one if he shoots or moves and shoots. Skip turn to stop before using them all' });
@@ -530,9 +530,9 @@ const UI = (() => {
     const strength = u.kind === 'company' ? `${u.platoons} section${u.platoons > 1 ? 's' : ''} (${u.platoons * MEN_A_BASE} men)` : Sim.isTank(u) ? `${u.platoons} tank${u.platoons > 1 ? 's' : ''}` : PIECES[u.kind].men ? `${PIECES[u.kind].men} men` : '';
     const f = Sim.firepower(st, u);
     // Against men: its own dice and half its anti-tank ones (see Sim.menDice)
-    // A captain's submachine gun (Steve): more dice at close range
-    const smg = PIECES[u.kind].smg ? `, ${PIECES[u.kind].smg} with SMG at close range` : '';
-    const dice = `🎲 ${Math.round(Sim.menDice(f) * 10) / 10} dice vs men${smg}${f.hard ? `, ${Math.round(f.hard * 10) / 10} vs tanks` : ''}`;
+    // A captain's submachine gun reaches close range only (Steve)
+    const closeOnly = PIECES[u.kind].closeOnly ? ' (SMG: close range only)' : '';
+    const dice = `🎲 ${Math.round(Sim.menDice(f) * 10) / 10} dice vs men${closeOnly}${f.hard ? `, ${Math.round(f.hard * 10) / 10} vs tanks` : ''}`;
     // A tank's armour (Steve): what it adds to the score anti-tank dice need
     const armour = Sim.isTank(u) ? `🛡️ Armour +${Sim.armourOf(u)}` : '';
     const status = u.down && u.acted ? `<span class="pill bad">Taking cover: +2 cover; ${u.kind === 'captain' ? 'no rallies until next round' : 'the captain can get it up'}</span>` : u.ambush ? '<span class="pill ready">🪤 In ambush</span>' : u.shocked ? '<span class="pill bad">Shaken: +1 to hit, half moves</span>' : u.acted ? '<span class="pill done">✓ Moved this round</span>' : '<span class="pill ready">Ready</span>';

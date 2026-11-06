@@ -2724,33 +2724,33 @@ check('close range does nothing for mortars, artillery or bombs', () => {
   assert(!Sim.shellWhy(st, t).some(w => w.includes('close range')), 'the shell label says close range');
 });
 
-check('both captains: three dice with the submachine gun at close range, one beyond it, and only at men', () => {
+check('both captains: three dice at close range, and no shot at all beyond it', () => {
   for (const [capId, targetId] of [['cap', 'd2'], ['dcap', 'A']]) {
     const near = tableWith({ [capId]: [3, 5], [targetId]: [4, 5] });
     const cap = Sim.unitById(near, capId), t = Sim.unitById(near, targetId);
     cap.at = null; t.at = null;
-    assert(Sim.firepowerAt(near, cap, t).soft === 3, `${capId} at close range had ${Sim.firepowerAt(near, cap, t).soft} dice`);
-    near.fx = [];
     near.human = cap.side;
+    assert(Sim.targets(near, cap).includes(t), `${capId} had no shot at close range`);
+    near.fx = [];
     Sim.fireAt(near, cap, t, 1);
     const shot = near.fx.find(f => f.from && f.from.id === capId);
     assert(shot && shot.faces.length === 3, `${capId} threw ${shot && shot.faces.length} dice at close range`);
-    // Two fields off along the lane, middle to middle: one die
+    // Two fields off along the lane, in plain view: nothing
     const far = tableWith({ [capId]: [3, 5], [targetId]: [5, 5] });
     const cap2 = Sim.unitById(far, capId), t2 = Sim.unitById(far, targetId);
     cap2.at = null; t2.at = null;
-    assert(Sim.firepowerAt(far, cap2, t2).soft === 1, `${capId} beyond close range had ${Sim.firepowerAt(far, cap2, t2).soft} dice`);
-    far.fx = [];
     far.human = cap2.side;
-    Sim.fireAt(far, cap2, t2, 1);
-    const shot2 = far.fx.find(f => f.from && f.from.id === capId);
-    assert(shot2 && shot2.faces.length === 1, `${capId} threw ${shot2 && shot2.faces.length} dice beyond close range`);
+    assert(!Sim.targets(far, cap2).includes(t2), `${capId} could shoot beyond close range`);
+    Sim.startRound(far);
+    far.drawn = cap2.side;
+    assert(!Sim.actShoot(far, cap2, t2).ok, `${capId} fired beyond close range`);
+    // A rifle platoon there can still fire
+    const rifles = tableWith({ B: [3, 5], [targetId === 'd2' ? 'd5' : 'd2']: [5, 5] });
+    const B = Sim.unitById(rifles, 'B');
+    B.at = null;
+    Sim.unitById(rifles, targetId === 'd2' ? 'd5' : 'd2').at = null;
+    assert(Sim.targets(rifles, B).length === 1, 'a rifle platoon lost its reach');
   }
-  // Nobody else has one
-  const st = tableWith({ A: [3, 5], d2: [4, 5] });
-  const A = Sim.unitById(st, 'A'), d2 = Sim.unitById(st, 'd2');
-  A.at = null; d2.at = null;
-  assert(Sim.firepowerAt(st, A, d2).soft === 3 && !PIECES.company.smg, 'a platoon changed');
 });
 
 check('close-range hatching: only the areas of a Move & shoot field with a shot at close range', () => {
@@ -2764,6 +2764,33 @@ check('close-range hatching: only the areas of a Move & shoot field with a shot 
   assert(!far.length, `close-range cells three fields off: ${far}`);
   // It goes back where it was
   assert(A.x === 3 && A.y === 5, 'trying the cells moved it');
+});
+
+check('a 1 always misses: no shot needs less than 2+, and the label says why', () => {
+  const st = tableWith({ A: [3, 5], d2: [4, 5] });
+  const A = Sim.unitById(st, 'A'), t = Sim.unitById(st, 'd2');
+  A.at = null; t.at = null;
+  assert(A.quality === 'elite' && Sim.atCloseRange(A, t), 'this needs an elite platoon at close range');
+  assert(Sim.needFor(st, A, t) === MIN_NEED, `it needed ${Sim.needFor(st, A, t)}`);
+  assert(Sim.needWhy(st, A, t).join('|') === '3+|−1 elite|−1 close range|+1 a 1 always misses', `the label says ${Sim.needWhy(st, A, t)}`);
+  // Every 1 thrown misses, over plenty of dice
+  let ones = 0;
+  for (let k = 0; k < 40; k++) {
+    const shot = tableWith({ A: [3, 5], d2: [4, 5] }, k + 1);
+    const a = Sim.unitById(shot, 'A'), b = Sim.unitById(shot, 'd2');
+    a.at = null; b.at = null;
+    Sim.fireAt(shot, a, b, 1);
+    for (const f of shot.fx) for (const d of f.faces || []) if (d.face === 1) { ones++; assert(!d.hit, 'a 1 hit'); }
+  }
+  assert(ones > 0, 'no 1 was thrown to try it');
+  // Elite at close range with one thing against it adds up as before, and the words stay off the label
+  t.down = true;
+  assert(Sim.needFor(st, A, t) === 3 && !Sim.needWhy(st, A, t).some(w => w.includes('always misses')), 'taking cover did not add up as before');
+  // Armour counts in the total: a Panther still needs 2+ in all, from an elite piece at close range
+  const armour = tableWith({ A: [3, 5], dt2: [4, 5] });
+  const shooter = Sim.unitById(armour, 'A'), panther = Sim.unitById(armour, 'dt2');
+  shooter.at = null; panther.at = null;
+  assert(Sim.shotNeed(armour, shooter, panther) === MIN_NEED, `a Panther at close range needed ${Sim.shotNeed(armour, shooter, panther)}`);
 });
 
 console.log(failed ? `\n${failed} failed` : '\nall passed');

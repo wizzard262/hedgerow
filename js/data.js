@@ -46,6 +46,7 @@ const CHARGE_MOVES = 3;          // fields a charge can cover
 const CLIMB = 1;                 // extra moves it costs men to climb a hedge bank (tanks drive through; wire stops men)
 const SHAKEN_SHOOT = 1;          // a shaken piece needs one more to hit
 const SHAKEN_MOVE = 0.5;         // a shaken piece still moves and charges, but only half as far (rounded down, at least one field)
+const MIN_NEED = 2;              // no shot needs less than this (Steve): a 1 always misses
 const MAX_NEED = 6;              // past this a shot is a Hail Mary (Steve): throw a 6, then throw another 6 to hit, about 3%
 const WOUND_CHANCE = 0.5;        // each hit is a coin toss: heads it wounds (a section, a team or a tank lost); every hit shakes
 const QUALITY = { elite: { name: 'Elite', shoot: 1, assault: 1.3 }, standard: { name: 'Standard', shoot: 0, assault: 1 } };
@@ -109,8 +110,8 @@ const PIECES = {
   mg42:     { name: 'MG 42 team', soft: 5, hard: 0, team: true, men: 3 },
   schreck:  { name: 'Panzerschreck team', soft: 0, hard: 2.5, team: true, men: 2, extraMove: 1 },   // both sides the same (Steve)
   pak:      { name: 'PaK 40 gun', soft: 0.5, hard: 3, team: true, fixed: true },
-  // His HQ's carbines (Steve: he can shoot). smg: the dice of his submachine gun, at close range only (Steve)
-  captain:  { name: 'Captain', soft: 1, hard: 0, men: 1, smg: 3 },
+  // His submachine gun (Steve): three dice, and closeOnly: he can't shoot beyond close range at all
+  captain:  { name: 'Captain', soft: 3, hard: 0, men: 1, closeOnly: true },
 };
 
 // Hand to hand (a charge into the enemy, Steve): the two sides strike in turn, the attacker first, a die for each base

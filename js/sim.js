@@ -554,14 +554,6 @@ const Sim = (() => {
     return { soft, hard };
   }
 
-  // A piece's firepower at this target: as above, but a captain at close range has his submachine gun (Steve)
-  function firepowerAt(st, u, target) {
-    const f = firepower(st, u);
-    const smg = PIECES[u.kind].smg;
-    if (smg && !isTank(target) && atCloseRange(u, target)) return { soft: smg, hard: f.hard };
-    return f;
-  }
-
   // The dice a piece rolls against men: its own, and half its anti-tank weapons' (Steve asked why a bazooka showed 0:
   // it rolls one die at men, half its two anti-tank dice)
   function menDice(f) {
@@ -678,7 +670,13 @@ const Sim = (() => {
   // Shoot at one piece. Hard dice go against tanks; soft dice against everything else (and only shake tanks).
   // withdraw: the target spends a point to try to pull back: if it works it takes half the hits and falls back a field
   // The score each die needs: TO_HIT, plus cover and range, plus one on the move, less one for elite troops
+  // A 1 always misses (Steve): with a tank's armour on top, the total is never under MIN_NEED
   function needFor(st, shooter, target, moving = false) {
+    return Math.max(MIN_NEED - armourOf(target), sumOfNeed(st, shooter, target, moving));
+  }
+
+  // What a shot adds up to, before that
+  function sumOfNeed(st, shooter, target, moving) {
     // The sniper: no cover, no long range (Steve)
     // A small target needs one more, whoever shoots (Steve)
     const small = smallTarget(target) ? SMALL_TARGET : 0;
@@ -700,6 +698,7 @@ const Sim = (() => {
       if (moving) why.push(`+${ON_THE_MOVE} moving`);
       if (shooter.shocked) why.push(`+${SHAKEN_SHOOT} shaken`);
       if (atCloseRange(shooter, target)) why.push(`−${CLOSE_BONUS} close range`);
+      why.push(...floorWhy(st, shooter, target, moving));
       return withStart(why);
     }
     const s = sight(st, shooter, target);
@@ -718,7 +717,15 @@ const Sim = (() => {
     if (armourOf(target)) why.push(`+${armourOf(target)} armour`);
     if (QUALITY[shooter.quality || 'standard'].shoot) why.push(`−${QUALITY[shooter.quality || 'standard'].shoot} elite`);
     if (atCloseRange(shooter, target)) why.push(`−${CLOSE_BONUS} close range`);
+    why.push(...floorWhy(st, shooter, target, moving));
     return withStart(why);
+  }
+
+  // Why a shot needs more than its sum (Steve: the label has to add up for a player doing the maths): the +1 that brings
+  // it up to 2+, because a 1 always misses
+  function floorWhy(st, shooter, target, moving) {
+    const total = sumOfNeed(st, shooter, target, moving) + armourOf(target);
+    return total < MIN_NEED ? [`+${MIN_NEED - total} a 1 always misses`] : [];
   }
 
   // Cover from the field a target stands in: a village, a hamlet or an orchard
@@ -780,7 +787,7 @@ const Sim = (() => {
   const weaponOf = u => (isTank(u) || u.kind === 'pak' ? 'gun' : u.kind === 'mg' || u.kind === 'mg42' ? 'mg' : u.kind === 'bazooka' || u.kind === 'schreck' ? 'rocket' : 'rifle');
 
   function fireAt(st, shooter, target, power, withdraw = false, moving = false, blast = false) {
-    const f = firepowerAt(st, shooter, target);
+    const f = firepower(st, shooter);
     // The computer's piece fired on takes cover when it is wise to (Steve), as you can
     if (!withdraw && target.side !== st.human && computerTakesCover(st, target, menDice(f) * power, needFor(st, shooter, target, moving))) withdraw = true;
     // Taking cover happens before the dice roll: its men are already down (and two more are needed)
@@ -863,8 +870,10 @@ const Sim = (() => {
     if (f.soft + f.hard <= 0) return [];
     // Tanks only to those with anti-tank weapons: rifles and machine guns can't hurt them
     // Captains too (Steve: he dies like all the others)
+    // A captain's submachine gun reaches close range only (Steve)
+    const closeOnly = !!PIECES[shooter.kind].closeOnly;
     return st.units.filter(t => t.side !== shooter.side && t.x !== null && (!isTank(t) || f.hard > 0)
-      && !!sight(st, shooter, t));
+      && (!closeOnly || atCloseRange(shooter, t)) && !!sight(st, shooter, t));
   }
 
   // ---------- Moving ----------
@@ -1727,7 +1736,7 @@ const Sim = (() => {
 
   // How much a German piece wants to shoot this target from where it stands
   function targetScore(st, u, t) {
-    const f = firepowerAt(st, u, t);
+    const f = firepower(st, u);
     return (isTank(t) ? f.hard * 2 : menDice(f)) * (7 - TO_HIT - cover(st, u, t) + closeBonus(u, t)) / 2 + (t.shocked ? 1 : 0) - t.platoons * 0.1;
   }
 
@@ -2529,7 +2538,7 @@ const Sim = (() => {
 
   return {
     firesOnTheMove, canAmbush, actAmbush, bestMoveShoot, bomberHeading, bomberEdges, bomberLine, bombNeed, bombWhy, bestBomberRun,
-    wreckAt, remove, computerSide, enemyOf, ammoOf, firedOf, gunStats, edgeKey, atCloseRange, firepowerAt, closeCells,
+    wreckAt, remove, computerSide, enemyOf, ammoOf, firedOf, gunStats, edgeKey, atCloseRange, closeCells,
     newGame, roll, endTurn, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, chargeSpots,
     rallyTargets, canAct, canReact, firepower, canCallFire, holdsObjective, roundText, roomFor,
     startGermanHour, computerStep, answer, finishHour, startRound, drawToken, endComputerToken, activationOver, passToken, humanCanMove, endRound, canFire, actSkip, actSkipShot, skipSupport,
