@@ -1,7 +1,7 @@
 // Headless checks of the rules in js/sim.js: node tools/test.js
 const fs = require('fs'), vm = require('vm'), path = require('path');
 const load = f => vm.runInThisContext(fs.readFileSync(path.join(__dirname, '..', 'js', f), 'utf8'));
-load('data.js'); load('sim.js');
+load('data.js'); load('sim.js'); load('scenery.js');
 const { play, playAsGermans, playRobots } = require('./bot.js');
 
 let failed = 0;
@@ -3325,6 +3325,40 @@ check('cafés and barns come in different lengths and places, and a big piece ge
       for (const u of Sim.at(city, f.x, f.y)) assert(Sim.sizeOf(u) === 1, `seed ${seed}: ${u.name} started beside a building in the middle`);
     }
   }
+  Sim.newGame(1);
+});
+
+check('the scenery is only to look at: the same each time for a game, on the right ground, and it leaves the rules alone', () => {
+  const kinds = new Set();
+  for (const map of MAPS) {
+    for (let seed = 1; seed <= 12; seed++) {
+      const st = Sim.newGame(seed, 'us', map.id);
+      const before = JSON.stringify([st.units, st.hedges, st.wire, st.features, st.rand()]);
+      const again = Sim.newGame(seed, 'us', map.id);
+      const items = Scenery.list(again);
+      // It uses none of the game's dice, and changes nothing
+      assert(JSON.stringify([again.units, again.hedges, again.wire, again.features, again.rand()]) === before, `${map.id} seed ${seed}: scenery changed the game`);
+      assert(JSON.stringify(Scenery.list(again)) === JSON.stringify(items), `${map.id} seed ${seed}: different scenery the second time`);
+      for (const item of items) {
+        kinds.add(item.kind);
+        const fx = Math.floor(item.x), fy = Math.floor(item.y);
+        assert(Sim.inside(fx, fy), `${map.id}: ${item.kind} off the board at ${item.x},${item.y}`);
+        const tile = Sim.tileType(fx, fy);
+        const ground = { cow: 'field', sheep: 'field', parachute: 'orchard', lamp: 'street', posters: 'street', stall: 'square' }[item.kind];
+        assert(tile === ground, `${map.id}: ${item.kind} on a ${tile}`);
+        // Animals stay out of fields with a barn or a pond, and things that could be in a piece's way say which field
+        if (item.kind === 'cow' || item.kind === 'sheep') assert(!Sim.featuresAt(again, fx, fy).length, `${map.id}: animals in a field with a building or a pond`);
+        if (['cow', 'sheep', 'stall'].includes(item.kind)) assert(item.field && item.field.x === fx && item.field.y === fy, `${map.id}: ${item.kind} has no field`);
+        // A stall keeps clear of the café and the fountain
+        if (item.kind === 'stall') {
+          const near = Sim.featuresAt(again, fx, fy).flatMap(f => f.areas);
+          const dx = item.x - fx < 0.5 ? 'w' : 'e', dy = item.y - fy < 0.5 ? 'n' : 's';
+          assert(!near.includes(dy + dx), `${map.id}: a stall on the ${dy + dx} of a square, in the way of what is there`);
+        }
+      }
+    }
+  }
+  for (const k of ['cow', 'sheep', 'parachute', 'lamp', 'posters', 'stall']) assert(kinds.has(k), `no ${k} anywhere`);
   Sim.newGame(1);
 });
 

@@ -333,6 +333,7 @@ const Board = (() => {
       if (t === 'village' || t === 'hamlet') addHouses(x, y, seed);
     }
     for (const f of st.features) addFeature(f);
+    addScenery(st);
     // Fields, houses and trees never move: merged, they are drawn in a few goes
     Models.mergeParts(built);
     scene.add(built);
@@ -351,6 +352,45 @@ const Board = (() => {
   // Houses round the square (Steve): small ones, about as tall as a figure, two along each side of the field with gaps
   // between, their fronts facing in. They stand in a band just inside the edge; the pieces keep to the yard inside it
   // (see YARD in arrange), so none stands under a house
+  // The things just to look at (see Scenery). Those that would stand in a piece's way go in a group for their field, hidden
+  // while a piece is there (see hideSceneryUnderPieces); the rest are part of the table
+  let sceneryGroups = [];
+  function addScenery(st) {
+    for (const g of sceneryGroups) { scene.remove(g); freeObject(g); }
+    sceneryGroups = [];
+    const byField = new Map();
+    for (const item of Scenery.list(st)) {
+      if (item.kind === 'parachute') {
+        // Up in one of the orchard's trees
+        const seed = item.x * 7 + item.y * 13, trees = orchardTrees(seed), [ox, oz] = trees[item.tree % trees.length];
+        built.add(at(Models.parachute(item.seed), item.x + ox, 0.2, item.y + oz));
+        continue;
+      }
+      if (item.kind === 'lamp') { built.add(at(Models.lampPost(), item.x, 0, item.y)); continue; }
+      if (item.kind === 'posters') { built.add(at(Models.posterColumn(item.seed), item.x, 0, item.y)); continue; }
+      const MAKERS = { cow: Models.cow, sheep: Models.sheep, stall: Models.marketStall };
+      const key = item.field.x + ',' + item.field.y;
+      if (!byField.has(key)) {
+        const group = new T.Group();
+        group.userData.field = item.field;
+        byField.set(key, group);
+      }
+      byField.get(key).add(at(MAKERS[item.kind](item.seed), item.x, 0, item.y, 0, item.turn, 0));
+    }
+    for (const group of byField.values()) {
+      Models.mergeParts(group);
+      scene.add(group);
+      sceneryGroups.push(group);
+    }
+  }
+  // Animals and stalls move out of the way of a piece in their field
+  function hideSceneryUnderPieces(st) {
+    for (const g of sceneryGroups) {
+      const f = g.userData.field;
+      g.visible = !st.units.some(u => u.x === f.x && u.y === f.y);
+    }
+  }
+
   // A lane is cobbled where it runs beside a village or a hamlet (Steve: a few cobbled streets on every map); only to look at
   function nearHouses(x, y) {
     for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
@@ -907,6 +947,7 @@ const Board = (() => {
     if (ran) Sound.play('run');
     if (drove) Sound.play('tank');
     for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) arrange(st, x, y);
+    hideSceneryUnderPieces(st);
     // The way a piece that just moved goes: through each field it passed, keeping its place in the field
     for (const u of st.units) {
       const g = pieces[u.id];

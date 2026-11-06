@@ -977,6 +977,99 @@ const Models = (() => {
     return castAll(g);
   }
 
+  // ---------- Just to look at (Steve) ----------
+
+  // Normandy cows: pale with brown patches, a head down to graze or up. Built along x. seed: so each differs
+  function cow(seed) {
+    const g = new T.Group(), R = seeded(seed + 3);
+    if (!M.cowPale) { M.cowPale = mat('#e3dccb', 1); M.cowPatch = mat('#6b4a30', 1); M.cowDark = mat('#2c2622', 1); }
+    g.add(at(box(0.11, 0.05, 0.05, M.cowPale), 0, 0.06, 0));
+    // Brown patches on the flanks and back, each cow its own
+    for (let i = 0; i < 3; i++) {
+      const size = 0.024 + R() * 0.018;
+      g.add(at(box(size, 0.052, 0.052, M.cowPatch), -0.04 + R() * 0.08, 0.061 + (R() - 0.5) * 0.004, 0));
+    }
+    for (const lx of [-0.04, 0.04]) for (const lz of [-0.018, 0.018]) g.add(at(box(0.01, 0.038, 0.01, M.cowDark), lx, 0.019, lz));
+    const grazing = R() < 0.5;
+    g.add(at(box(0.036, 0.026, 0.028, M.cowPatch), 0.068, grazing ? 0.03 : 0.082, 0, 0, 0, grazing ? -0.8 : 0.1));
+    g.add(at(box(0.012, 0.012, 0.024, M.cowPale), grazing ? 0.082 : 0.09, grazing ? 0.014 : 0.078, 0));
+    return castAll(g);
+  }
+
+  // A sheep: a woolly body of round lumps, a dark face and legs
+  function sheep(seed) {
+    const g = new T.Group(), R = seeded(seed + 5);
+    if (!M.wool) { M.wool = mat('#ddd6c4', 1); M.sheepDark = mat('#26231f', 1); }
+    for (let i = 0; i < 5; i++) {
+      const lump = new T.Mesh(new T.SphereGeometry(0.017 + R() * 0.005, 8, 6), M.wool);
+      g.add(at(lump, -0.024 + i * 0.012, 0.033 + (R() - 0.5) * 0.006, (R() - 0.5) * 0.012));
+    }
+    for (const lx of [-0.018, 0.018]) for (const lz of [-0.009, 0.009]) g.add(at(box(0.005, 0.02, 0.005, M.sheepDark), lx, 0.01, lz));
+    g.add(at(box(0.016, 0.014, 0.012, M.sheepDark), 0.038, 0.036, 0));
+    return castAll(g);
+  }
+
+  // A parachute caught in a tree: a torn white canopy draped over it, and a tangle of lines hanging down
+  function parachute(seed) {
+    const g = new T.Group(), R = seeded(seed + 7);
+    if (!M.silk) { M.silk = mat('#e6e1d3', 0.9); M.silkLine = mat('#b9b3a2', 1); }
+    const canopy = new T.Mesh(new T.SphereGeometry(0.085, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.55), M.silk);
+    canopy.scale.set(1, 0.55, 0.85);
+    g.add(at(canopy, 0, 0, 0, (R() - 0.5) * 0.7, R() * 6, (R() - 0.5) * 0.7));
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      g.add(at(cyl(0.0012, 0.0012, 0.09 + R() * 0.05, M.silkLine, 4), Math.cos(a) * 0.055, -0.05, Math.sin(a) * 0.05, (R() - 0.5) * 0.3, 0, (R() - 0.5) * 0.3));
+    }
+    return castAll(g);
+  }
+
+  // A street lamp: a thin iron post, a lantern on top
+  function lampPost() {
+    const g = new T.Group();
+    if (!M.iron) { M.iron = mat('#23272a', 0.6, 0.4); M.lampGlass = mat('#d9cf9c', 0.4); }
+    g.add(at(cyl(0.008, 0.012, 0.012, M.iron, 8), 0, 0.006, 0));
+    g.add(at(cyl(0.0035, 0.005, 0.2, M.iron, 8), 0, 0.106, 0));
+    g.add(at(cyl(0.012, 0.008, 0.024, M.lampGlass, 6), 0, 0.216, 0));
+    g.add(at(cyl(0.002, 0.016, 0.012, M.iron, 6), 0, 0.234, 0));
+    return castAll(g);
+  }
+
+  // A poster column: a dark green drum with bright bills pasted round it, and a little domed cap
+  function posterColumn(seed) {
+    const g = new T.Group(), R = seeded(seed + 11);
+    if (!M.columnGreen) {
+      M.columnGreen = mat('#2d4a3a', 0.9);
+      M.posters = ['#c9a23d', '#b5473a', '#d8d0ba', '#3f6a8a', '#a8652f'].map(c => mat(c, 1));
+    }
+    g.add(at(cyl(0.03, 0.034, 0.16, M.columnGreen, 14), 0, 0.08, 0));
+    g.add(at(cyl(0.006, 0.038, 0.03, M.columnGreen, 14), 0, 0.175, 0));
+    const bills = 6;
+    for (let i = 0; i < bills; i++) {
+      const a = (i / bills) * Math.PI * 2 + R();
+      const bill = box(0.024, 0.05 + R() * 0.03, 0.002, M.posters[Math.floor(R() * M.posters.length)]);
+      g.add(at(bill, Math.sin(a) * 0.032, 0.07 + R() * 0.03, Math.cos(a) * 0.032, 0, a, 0));
+    }
+    return castAll(g);
+  }
+
+  // A market stall: four poles, a striped canvas top, and a table of crates in bright colours
+  function marketStall(seed) {
+    const g = new T.Group(), R = seeded(seed + 13);
+    if (!M.canvasA) {
+      M.canvasA = mat('#3f6a5a', 0.95);
+      M.canvasB = mat('#e4dcc8', 0.95);
+      M.produce = ['#b5473a', '#d09a30', '#5f8a3a', '#a8652f', '#8f3f6a'].map(c => mat(c, 1));
+    }
+    const wide = 0.2, deep = 0.13;
+    for (const x of [-wide / 2, wide / 2]) for (const z of [-deep / 2, deep / 2]) g.add(at(cyl(0.0025, 0.0025, 0.11, M.wood, 5), x, 0.055, z));
+    for (let i = 0; i < 6; i++) g.add(at(box(wide / 6 + 0.008, 0.004, deep + 0.02, i % 2 ? M.canvasA : M.canvasB), -wide / 2 + (i + 0.5) * (wide / 6), 0.114, 0));
+    g.add(at(box(wide - 0.02, 0.006, deep - 0.05, M.wood), 0, 0.045, 0));
+    for (let i = 0; i < 4; i++) {
+      g.add(at(box(0.034, 0.018, 0.04, M.produce[Math.floor(R() * M.produce.length)]), -0.066 + i * 0.044, 0.057, 0));
+    }
+    return castAll(g);
+  }
+
   // ---------- The bridge (Steve: wide, arched, rustic stone) ----------
   // Built along x, the whole length of a field, its road humped over one low arch
   const BRIDGE = { length: 1, width: 0.76, crown: 0.1, archHalf: 0.25, archRise: 0.066 };
@@ -1085,5 +1178,5 @@ const Models = (() => {
     return castAll(g);
   }
 
-  return { cafe, barn, fountain, pond, reeds, BRIDGE_DECK, materials, M, mergeParts, eliteBand, water, bridge, soldier, squad, team, captain, pak, mortar, bomber, bomberOnStand, howitzer, round, coin, token, sherman, panther, panzer4, hedge, tree, house, die, table, field, lane, at };
+  return { cow, sheep, parachute, lampPost, posterColumn, marketStall, cafe, barn, fountain, pond, reeds, BRIDGE_DECK, materials, M, mergeParts, eliteBand, water, bridge, soldier, squad, team, captain, pak, mortar, bomber, bomberOnStand, howitzer, round, coin, token, sherman, panther, panzer4, hedge, tree, house, die, table, field, lane, at };
 })();
