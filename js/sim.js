@@ -18,7 +18,9 @@ const Sim = (() => {
 
   const TYPES = { '.': 'field', o: 'orchard', v: 'village', h: 'hamlet', r: 'river', '#': 'bridge', '=': 'laneEW', '|': 'laneNS', '+': 'crossroads' };
   const inside = (x, y) => x >= 0 && y >= 0 && x < COLS && y < ROWS;
-  const tileType = (x, y) => TYPES[MAP[y][x]];
+  // The map being played (one game at a time, so a new game changes it for everyone asking)
+  let currentMap = MAPS[0];
+  const tileType = (x, y) => TYPES[currentMap.rows[y][x]];
   const isLane = t => t === 'laneEW' || t === 'laneNS' || t === 'crossroads' || t === 'bridge';
   const NEIGHBOURS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
   // The four sides of a field, for a piece lining a hedge
@@ -198,35 +200,41 @@ const Sim = (() => {
   // humans, 'none' two robots. st.human is the side a person is commanding now: with two humans it changes with each
   // token; with two robots nobody acts on it. st.won means the Americans won and st.lost the Germans did, whoever plays
   // them: the page turns that into a win or a loss for the player
-  function newGame(seed, mode = 'us') {
+  // mapId: which of MAPS (Steve)
+  function newGame(seed, mode = 'us', mapId = MAPS[0].id) {
     seed = seed || (Date.now() % 1e9);
+    currentMap = MAPS.find(m => m.id === mapId) || MAPS[0];
+    walkTables.clear();
+    const map = currentMap;
     const human = mode === 'de' ? 'de' : 'us';
     const players = { us: mode === 'us' || mode === 'both' ? 'human' : 'robot', de: mode === 'de' || mode === 'both' ? 'human' : 'robot' };
     const R = rng(seed);
     const st = {
-      seed, mode, human, players, turn: 1, hedges: {}, wire: {}, units: [], wrecks: [], report: [], fx: [],
+      seed, mode, human, players, map, turn: 1, hedges: {}, wire: {}, units: [], wrecks: [], report: [], fx: [],
       // Each side's guns and bomber: what they have fired this round, and what they have left
       fired: { us: {}, de: {} },
       ammo: {
-        us: { mortars: MORTARS.ammo, artillery: ARTILLERY.ammo, bomber: BOMBER.ammo },
-        de: { mortars: DE_MORTAR.ammo, artillery: DE_ARTILLERY.ammo, bomber: BOMBER.ammo },
+        us: Object.assign({ mortars: MORTARS.ammo, artillery: ARTILLERY.ammo, bomber: BOMBER.ammo }, map.ammo && map.ammo.us),
+        de: Object.assign({ mortars: DE_MORTAR.ammo, artillery: DE_ARTILLERY.ammo, bomber: BOMBER.ammo }, map.ammo && map.ammo.de),
       },
       won: false, lost: false,
       spin: {},           // the bomber's compass this round, each side: picked again, it spins to the same direction (Steve)
     };
     // This game's objective: one of the villages
-    st.objective = VILLAGES[Math.floor(R() * VILLAGES.length)];
+    st.objective = map.villages[Math.floor(R() * map.villages.length)];
+    const gapChance = map.gap === undefined ? HEDGE_GAP : map.gap;
+    const wireChance = map.wire === undefined ? WIRE : map.wire;
     // Hedges on every edge that wants one, less the gaps; some gaps between fields are fenced with barbed wire
     for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
       for (const [dx, dy] of [[1, 0], [0, 1]]) {
         const bx = x + dx, by = y + dy;
         if (!inside(bx, by) || !hedgeWanted(x, y, bx, by)) continue;
-        if (R() >= HEDGE_GAP) st.hedges[edgeKey(x, y, bx, by)] = true;
-        else if (!isLane(tileType(x, y)) && !isLane(tileType(bx, by)) && R() < WIRE) st.wire[edgeKey(x, y, bx, by)] = true;
+        if (R() >= gapChance) st.hedges[edgeKey(x, y, bx, by)] = true;
+        else if (!isLane(tileType(x, y)) && !isLane(tileType(bx, by)) && R() < wireChance) st.wire[edgeKey(x, y, bx, by)] = true;
       }
     }
-    for (const d of US_START) st.units.push(makeUnit(d, 'us'));
-    for (const d of DE_START) st.units.push(makeUnit(d, 'de'));
+    for (const d of startingPieces(US_START, map.us)) st.units.push(makeUnit(d, 'us'));
+    for (const d of startingPieces(DE_START, map.de)) st.units.push(makeUnit(d, 'de'));
     // German teams that start with a company
     st.rand = R;
     deploy(st, 'us'); deploy(st, 'de');
@@ -234,10 +242,17 @@ const Sim = (() => {
     return st;
   }
 
-  // Each side starts spread at random over its own end of the board (DEPLOY of the width), in cover where it can be:
+  // Who starts on a side on this map: the usual list, less those it takes away, and those it adds
+  function startingPieces(usual, changes) {
+    if (!changes) return usual;
+    const kept = usual.filter(d => !(changes.remove || []).includes(d.id));
+    return kept.concat(changes.add || []);
+  }
+
+  // Each side starts spread at random over its own end of the board (DEPLOY of the width, or the map's), in cover where it can be:
   // a field with a hedge facing the enemy, an orchard or the village. Captains and teams start with a platoon
   function deploy(st, side) {
-    const cols = Math.max(1, Math.round(COLS * DEPLOY));
+    const cols = Math.max(1, Math.round(COLS * (st.map.deploy || DEPLOY)));
     const xs = side === 'us' ? [...Array(cols).keys()] : [...Array(cols).keys()].map(i => COLS - 1 - i);
     const fields = [];
     for (const x of xs) for (let y = 0; y < ROWS; y++) if (tileType(x, y) !== 'river') fields.push({ x, y });
@@ -1900,11 +1915,36 @@ const Sim = (() => {
     return found;
   }
 
+  // How many fields apart two places are for someone walking: round a river by the bridges, otherwise the same as fieldsApart.
+  // Worked out once for each place on each map
+  const walkTables = new Map();
+  function walkDistance(from, to) {
+    const key = to.x + ',' + to.y;
+    if (!walkTables.has(key)) walkTables.set(key, walkTableTo(to));
+    return walkTables.get(key)[from.y][from.x];
+  }
+  function walkTableTo(to) {
+    const table = MAPS[0].rows.map(row => [...row].map(() => Infinity));
+    table[to.y][to.x] = 0;
+    const open = [{ x: to.x, y: to.y }];
+    for (let i = 0; i < open.length; i++) {
+      const here = open[i];
+      for (const [dx, dy] of NEIGHBOURS) {
+        const x = here.x + dx, y = here.y + dy;
+        if (!inside(x, y) || tileType(x, y) === 'river' || table[y][x] !== Infinity) continue;
+        table[y][x] = table[here.y][here.x] + 1;
+        open.push({ x, y });
+      }
+    }
+    return table;
+  }
+
   // Where a German piece moves towards a goal (Steve: the same rules as yours): any route a Charge of yours could take,
   // as far, staying out of American fields; men climb hedge banks (the hedge stays) and are stopped by wire, tanks
   // drive through. The route that ends nearest the goal, if it gets any nearer
   function routeToward(st, u, goal) {
-    const far = p => fieldsApart(p, goal);
+    // (as men walk it: a river has to be crossed by a bridge)
+    const far = p => walkDistance(p, goal);
     let best = null, bestD = far(u);
     for (const route of routesFor(st, u, reach(u, CHARGE_MOVES), false)) {
       const end = route[route.length - 1];
@@ -2573,7 +2613,7 @@ const Sim = (() => {
 
   return {
     firesOnTheMove, canAmbush, actAmbush, bestMoveShoot, bomberHeading, bomberEdges, bomberLine, bombNeed, bombWhy, bestBomberRun,
-    fireSound, wreckAt, remove, computerSide, isRobot, piecesToAsk, takeCover, enemyOf, gunStats, edgeKey, atCloseRange, closeCells,
+    walkDistance, fireSound, wreckAt, remove, computerSide, isRobot, piecesToAsk, takeCover, enemyOf, gunStats, edgeKey, atCloseRange, closeCells,
     newGame, roll, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, chargeSpots,
     rallyTargets, canAct, canReact, firepower, canCallFire, holdsObjective, roundText, roomFor,
     computerStep, answer, finishRound, startRound, drawToken, endComputerToken, activationOver, passToken, humanCanMove, endRound, canFire, actSkip, actSkipShot, skipSupport,

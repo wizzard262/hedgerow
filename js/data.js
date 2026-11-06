@@ -1,28 +1,103 @@
 // Hedgerow: the map and every number to tune
 
-// The board: one character per field. Each field is a tile; hedges grow on the edges between fields
+// A board: one character per field. Each field is a tile; hedges grow on the edges between fields
 //   .  field        o  orchard (some cover)        h  hamlet: a few houses round a yard (good cover)
 //   v  village (good cover, no hedges round it)    r  river (nothing can enter it)    #  bridge (a lane across the river)
 // One unit to a field (Steve); only hand-to-hand fighting brings two sides into the same field.
 // MG and bazooka teams and the captain can also stand in a rifle platoon's field (Steve). Teams are never attached: each moves on its own
 //   =  lane east-west    |  lane north-south    +  crossroads (lanes have no hedges along their length)
 // Twelve fields long (Steve: two more); the villages three fields in from the German end (Steve: right at the back was too far)
-const MAP = [
-  '..|o.o...o.h',
-  '..|.h..vv.o.',
-  '..+=========',
-  '.o|.o..vv.h.',
-  '.h|.o..vv..o',
-  '==+=========',
-  '..|.oo..h..h',
-  'o.|.o.h....o',
+// The maps (Steve): all twelve fields by eight, with the villages about three fields in from the German end. Each can change
+// more than the ground: id and name; note, what the choice says about it; rows, the board; villages, each game one of them is
+// the objective, the field to take and hold, its church in the middle. Left out, a map keeps the usual:
+//   gap, wire: chance of a gap in a hedge, and of a gap being fenced    deploy: share of the board each side starts in
+//   us, de: { add: pieces more, remove: ids of pieces less }            ammo: { us: {...}, de: {...} } rounds and bomber runs
+const MAPS = [
+  {
+    id: 'hedges', name: 'Hedge country', note: 'The usual battle: two villages, hedges and lanes.',
+    rows: [
+      '..|o.o...o.h',
+      '..|.h..vv.o.',
+      '..+=========',
+      '.o|.o..vv.h.',
+      '.h|.o..vv..o',
+      '==+=========',
+      '..|.oo..h..h',
+      'o.|.o.h....o',
+    ],
+    villages: [{ x: 7, y: 4, name: 'Saint-Jean' }, { x: 7, y: 1, name: 'La Haye' }],
+  },
+  {
+    id: 'river', name: 'River crossing', note: 'Two bridges are the only way over. The Americans have 2 bomber runs and a fourth artillery round; the Germans an extra MG 42 and no Panther.',
+    rows: [
+      '..|.or.o..h.',
+      '.o|..r.vv..o',
+      '..+==#======',
+      '.h|.or.vv.h.',
+      '..|..r.vv..o',
+      '==+==#======',
+      '.o|.hr..o..h',
+      'h.|..r.h...o',
+    ],
+    villages: [{ x: 7, y: 4, name: 'Pont-Sainte-Marie' }, { x: 7, y: 1, name: 'Le Moulin' }],
+    ammo: { us: { bomber: 2, artillery: 4 } },
+    de: { remove: ['dt2'], add: [{ id: 'dmg5', kind: 'mg42', name: 'MG 42 Team', reserve: true }] },
+  },
+  {
+    id: 'town', name: 'Crossroads town', note: 'A town on each side of the crossroads, and both sides start further forward. The Germans have a second PaK 40 and no Panzer IV; the Americans a third tank.',
+    rows: [
+      '.o...|..o..h',
+      '..h..|.....o',
+      '.....|vv.o..',
+      '.o...|vv...h',
+      '=====+======',
+      '..h..|vv.o..',
+      '.....|vv...h',
+      'o...h|...o..',
+    ],
+    villages: [{ x: 7, y: 3, name: 'Saint-Martin' }, { x: 7, y: 5, name: 'Les Quatre-Routes' }],
+    deploy: 0.3,
+    us: { add: [{ id: 'T3', kind: 'sherman', name: 'Sherman (2)' }] },
+    de: { remove: ['dt1'], add: [{ id: 'pak2', kind: 'pak', name: 'PaK 40 (2)', post: [0, -1], garrison: true }] },
+  },
+  {
+    id: 'farmland', name: 'Open farmland', note: 'Few hedges and long shots. An extra tank each, and 2 bomber runs each.',
+    rows: [
+      '.....|.....h',
+      '..o..|.vv...',
+      '=====+======',
+      '.....|.vv..o',
+      '.h...|.vv...',
+      '.....|.....h',
+      '..o..|...o..',
+      '.....|.h....',
+    ],
+    villages: [{ x: 7, y: 4, name: 'Les Champs' }, { x: 7, y: 1, name: 'La Ferme' }],
+    gap: 0.8, wire: 0.2,
+    ammo: { us: { bomber: 2 }, de: { bomber: 2 } },
+    us: { add: [{ id: 'T3', kind: 'sherman', name: 'Sherman (2)' }] },
+    de: { add: [{ id: 'dt3', kind: 'pz4', name: 'Panzer IV (2)', reserve: true }] },
+  },
+  {
+    id: 'deep', name: 'Deep bocage', note: 'Hedges nearly everywhere and few lanes. More infantry and fewer tanks: no Firefly and no Panther; a fourth American platoon and second bazooka, a sixth German platoon and second Panzerschreck.',
+    rows: [
+      '..|.o..o.h.o',
+      'o.|...hvv...',
+      '..|.o.......',
+      '.h|...ovv.o.',
+      '..|.o..vv...',
+      '==+=========',
+      '.o|..o..h..h',
+      '..|.h...o..o',
+    ],
+    villages: [{ x: 7, y: 4, name: 'Saint-Fromond' }, { x: 7, y: 1, name: 'Le Bocage' }],
+    gap: 0.15,
+    deploy: 0.25,
+    us: { remove: ['T2'], add: [{ id: 'D', kind: 'company', name: '4th Platoon', quality: 'standard' }, { id: 'bz2', kind: 'bazooka', name: 'Bazooka Team 2' }] },
+    de: { remove: ['dt2'], add: [{ id: 'd6', kind: 'company', name: '6. Zug', quality: 'standard', reserve: true }, { id: 'dps2', kind: 'schreck', name: 'Panzerschreck Team', reserve: true }] },
+  },
 ];
-const COLS = MAP[0].length, ROWS = MAP.length;
-// The villages; each game one of them is the objective: the field to take and hold, its church in the middle
-const VILLAGES = [
-  { x: 7, y: 4, name: 'Saint-Jean' },
-  { x: 7, y: 1, name: 'La Haye' },
-];
+const COLS = MAPS[0].rows[0].length, ROWS = MAPS[0].rows.length;
 // Sharing a field (Steve): each field is nine areas; pieces share it while their areas don't overlap (see footprint in
 // sim.js: most pieces one area, the PaK two, a tank or a platoon of two or three sections four)
 const HEDGE_GAP = 0.45;          // chance an edge between two fields has a gap (a gate or a broken bank)

@@ -3023,5 +3023,116 @@ check('a gun that fired has its token in the next round\'s bag, on both sides al
   }
 });
 
+// ---------- The maps (Steve) ----------
+
+check('every map is the same size, has real tiles, and its villages are villages', () => {
+  for (const map of MAPS) {
+    assert(map.rows.length === ROWS, `${map.id}: ${map.rows.length} rows`);
+    for (const row of map.rows) {
+      assert(row.length === COLS, `${map.id}: row "${row}"`);
+      assert(/^[.ovhr#=|+]+$/.test(row), `${map.id}: odd tile in "${row}"`);
+    }
+    assert(map.villages.length >= 1 && map.name && map.note, `${map.id}: not filled in`);
+    Sim.newGame(1, 'us', map.id);
+    for (const v of map.villages) assert(Sim.tileType(v.x, v.y) === 'village', `${map.id}: ${v.name} is not in a village`);
+  }
+  // Ids are all different
+  assert(new Set(MAPS.map(m => m.id)).size === MAPS.length, 'two maps with the same id');
+  Sim.newGame(1);
+});
+
+check('every map: nobody starts in a river, every piece has its place, and all of the land can be walked', () => {
+  for (const map of MAPS) {
+    for (let seed = 1; seed <= 15; seed++) {
+      const st = Sim.newGame(seed, 'us', map.id);
+      for (const u of live(st)) {
+        assert(Sim.tileType(u.x, u.y) !== 'river', `${map.id} seed ${seed}: ${u.name} in the river`);
+        assert(fieldOk(st, u.x, u.y), `${map.id} seed ${seed}: too many in ${u.x},${u.y}`);
+      }
+      assert(new Set(st.units.map(u => u.id)).size === st.units.length, `${map.id}: two pieces with the same id`);
+      // A rifle platoon each side at least, and each side has a captain
+      for (const side of ['us', 'de']) {
+        const mine = live(st).filter(u => u.side === side);
+        assert(mine.some(u => u.kind === 'company') && mine.some(u => u.kind === 'captain'), `${map.id}: ${side} short of pieces`);
+      }
+      // Every field that isn't river can reach the objective on foot
+      for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
+        if (Sim.tileType(x, y) === 'river') continue;
+        assert(Sim.walkDistance({ x, y }, st.objective) < Infinity, `${map.id}: ${x},${y} is cut off`);
+      }
+    }
+  }
+  Sim.newGame(1);
+});
+
+check('every map changes what it says it does: pieces, ammunition and hedges', () => {
+  const pieces = id => Sim.newGame(1, 'us', id).units.map(u => u.id);
+  const usual = pieces('hedges');
+  assert(!pieces('river').includes('dt2') && pieces('river').includes('dmg5'), 'river crossing: the Germans not as it says');
+  assert(pieces('town').includes('T3') && pieces('town').includes('pak2') && !pieces('town').includes('dt1'), 'crossroads town: not as it says');
+  assert(pieces('farmland').includes('T3') && pieces('farmland').includes('dt3'), 'open farmland: not as it says');
+  assert(pieces('deep').includes('D') && !pieces('deep').includes('T2') && pieces('deep').includes('d6'), 'deep bocage: not as it says');
+  assert(usual.length === US_START.length + DE_START.length, 'the usual map changed its pieces');
+  // Two bomber runs on some maps, the guns as they say; one elsewhere
+  assert(Sim.newGame(1, 'us', 'river').ammo.us.bomber === 2 && Sim.newGame(1, 'us', 'river').ammo.de.bomber === 1, 'river crossing: bomber runs');
+  assert(Sim.newGame(1, 'us', 'river').ammo.us.artillery === 4, 'river crossing: artillery rounds');
+  const farm = Sim.newGame(1, 'us', 'farmland');
+  assert(farm.ammo.us.bomber === 2 && farm.ammo.de.bomber === 2, 'open farmland: bomber runs');
+  assert(Sim.newGame(1).ammo.us.bomber === 1 && Sim.newGame(1).ammo.de.bomber === 1, 'the usual map has one run each');
+  // Hedges: far more in deep bocage than in open farmland, over a few games
+  const hedges = id => { let n = 0; for (let s = 1; s <= 10; s++) n += Object.keys(Sim.newGame(s, 'us', id).hedges).length; return n; };
+  assert(hedges('deep') > hedges('hedges') && hedges('hedges') > hedges('farmland'), 'hedges not as the maps say');
+  Sim.newGame(1);
+});
+
+check('two bomber runs can both be flown, one a round; then it is out of the game', () => {
+  const st = Sim.newGame(3, 'us', 'river');
+  Sim.startRound(st);
+  st.drawn = 'us';
+  assert(Sim.canFire(st, 'bomber') && Sim.actFire(st, 'bomber', 0, 0).ok && st.ammo.us.bomber === 1, 'the first run did not fly');
+  st.activeId = null;
+  assert(!Sim.canFire(st, 'bomber'), 'it flew twice in a round');
+  Sim.endRound(st);
+  if (!st.won && !st.lost) {
+    Sim.startRound(st);
+    st.drawn = 'us';
+    assert(Sim.canFire(st, 'bomber') && Sim.actFire(st, 'bomber', 0, 0).ok && st.ammo.us.bomber === 0, 'the second run did not fly');
+    Sim.endRound(st);
+    if (!st.won && !st.lost) { Sim.startRound(st); st.drawn = 'us'; assert(!Sim.canFire(st, 'bomber'), 'a third run'); }
+  }
+  Sim.newGame(1);
+});
+
+check('the river: only the bridges cross it, and walking distance goes round by them', () => {
+  const st = Sim.newGame(3, 'us', 'river');
+  st.wire = {}; st.hedges = {};
+  for (const u of st.units) if (u.id !== 'A') u.x = u.y = null;
+  const A = Sim.unitById(st, 'A');
+  A.x = 4; A.y = 3; A.at = null;
+  assert(!Sim.chargeSpots(st, A).some(p => p.x === 5 && Sim.tileType(p.x, p.y) === 'river'), 'it could stand in the river');
+  assert(!Sim.chargeSpots(st, A).some(p => p.x === 6 && p.y === 3), 'it could wade across');
+  assert(Sim.walkDistance({ x: 4, y: 3 }, { x: 6, y: 3 }) === 4, `round by the bridge is ${Sim.walkDistance({ x: 4, y: 3 }, { x: 6, y: 3 })}, not 4`);
+  // From beside the bridge it can cross
+  A.x = 4; A.y = 2;
+  assert(Sim.chargeSpots(st, A).some(p => p.x === 6 && p.y === 2), 'it could not cross the bridge');
+  Sim.newGame(1);
+});
+
+check('every map: robots and the test players finish games, and doing nothing never wins', () => {
+  for (const map of MAPS) {
+    let robotsDone = 0;
+    for (let seed = 1; seed <= 6; seed++) {
+      const r = playRobots(seed, map.id);
+      if (r.won || r.lost) robotsDone++;
+      for (const u of live(r)) assert(Sim.tileType(u.x, u.y) !== 'river', `${map.id}: ${u.name} ended in the river`);
+      assert(!play(seed, false, 20, map.id).won, `${map.id} seed ${seed}: the Americans won by doing nothing`);
+      const idle = playAsGermans(seed, false, 20, map.id);
+      assert(!idle.lost || idle.draw, `${map.id} seed ${seed}: the Germans won by doing nothing`);
+    }
+    assert(robotsDone === 6, `${map.id}: robot games did not finish`);
+  }
+  Sim.newGame(1);
+});
+
 console.log(failed ? `\n${failed} failed` : '\nall passed');
 process.exit(failed ? 1 : 0);

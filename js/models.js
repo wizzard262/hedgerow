@@ -833,14 +833,113 @@ const Models = (() => {
     return castAll(g);
   }
 
-  // A stone bridge across the river, built along x: arch, deck and low parapets
+  // ---------- The bridge (Steve: wide, arched, rustic stone) ----------
+  // Built along x, the whole length of a field, its road humped over one low arch
+  const BRIDGE = { length: 1, width: 0.76, crown: 0.1, archHalf: 0.25, archRise: 0.066 };
+  const BRIDGE_DECK = 0.095;         // how high pieces stand on it
+  // How high the road is at x along the bridge (x from -half to +half): nearly level over the river, dropping to the banks
+  function bridgeRoad(x) {
+    const along = Math.abs(x) / (BRIDGE.length / 2);
+    return BRIDGE.crown * (1 - Math.pow(along, 4));
+  }
+  // Rough-cut stone: courses of uneven blocks in mixed greys and browns, dark mortar, a little moss
+  function bridgeStoneTex() {
+    return canvasTexture(512, 512, (g, w, h) => {
+      const R = seeded(83);
+      const shades = ['#a89d88', '#8e8472', '#b4a98f', '#7d7565', '#9c917b', '#6f695b', '#a3977f'];
+      g.fillStyle = '#463f33';
+      g.fillRect(0, 0, w, h);
+      // Each course of blocks: its own height, the blocks their own widths
+      for (let y = 0; y < h;) {
+        const tall = 40 + Math.floor(R() * 34);
+        for (let x = -Math.floor(R() * 40); x < w;) {
+          const wide = 50 + Math.floor(R() * 80);
+          g.fillStyle = shades[Math.floor(R() * shades.length)];
+          g.fillRect(x + 3, y + 3, wide - 5, tall - 5);
+          // A worn, lighter top edge on some
+          if (R() < 0.5) { g.fillStyle = 'rgba(255,245,220,.13)'; g.fillRect(x + 3, y + 3, wide - 5, 5); }
+          x += wide;
+        }
+        y += tall;
+      }
+      // Pitted all over
+      for (let k = 0; k < 2600; k++) {
+        g.fillStyle = R() < 0.5 ? 'rgba(30,25,18,.16)' : 'rgba(255,245,225,.09)';
+        g.fillRect(R() * w, R() * h, 1 + R() * 3, 1 + R() * 3);
+      }
+      // Moss in the damp
+      for (let k = 0; k < 26; k++) {
+        g.fillStyle = `rgba(${70 + R() * 30},${95 + R() * 30},50,${0.2 + R() * 0.25})`;
+        g.beginPath();
+        g.ellipse(R() * w, R() * h, 8 + R() * 24, 5 + R() * 12, R() * 3, 0, Math.PI * 2);
+        g.fill();
+      }
+    }, [5, 5]);
+  }
+  function bridgeMaterials() {
+    if (M.bridgeStone) return;
+    M.bridgeStone = mat('#ffffff', 1, 0, { map: bridgeStoneTex() });
+    M.bridgeBlock = mat('#8a8170', 1);
+    M.bridgeBlockLight = mat('#a79c86', 1);
+    M.bridgeCap = mat('#7b7364', 1);
+    if (!texCache.lane) texCache.lane = flockTex('#8f7d60', EARTH, 21);
+    M.bridgeRoad = new T.MeshStandardMaterial({ map: texCache.lane, roughness: 1 });
+  }
   function bridge() {
-    const g = new T.Group();
-    g.add(at(box(0.62, 0.05, 0.3, M.stone), 0, 0.03, 0));
-    const arch = cyl(0.12, 0.12, 0.31, M.water, 20, ); arch.rotation.x = Math.PI / 2; arch.scale.set(1, 1, 1); g.add(at(arch, 0, -0.07, 0));
-    for (const s of [-1, 1]) g.add(at(box(0.62, 0.045, 0.03, M.stone), 0, 0.075, s * 0.14));
+    bridgeMaterials();
+    const g = new T.Group(), R = seeded(29), half = BRIDGE.length / 2, side = BRIDGE.width / 2;
+    // The body: its side view, the road along the top and the arch cut out of the bottom, drawn out across the width
+    const shape = new T.Shape();
+    shape.moveTo(-half, 0);
+    for (let i = 1; i <= 28; i++) {
+      const x = -half + (i / 28) * BRIDGE.length;
+      shape.lineTo(x, bridgeRoad(x));
+    }
+    shape.lineTo(BRIDGE.archHalf, 0);
+    for (let i = 1; i <= 20; i++) {
+      const a = (i / 20) * Math.PI;
+      shape.lineTo(Math.cos(a) * BRIDGE.archHalf, Math.sin(a) * BRIDGE.archRise);
+    }
+    shape.lineTo(-half, 0);
+    const body = new T.ExtrudeGeometry(shape, { depth: BRIDGE.width, bevelEnabled: false });
+    body.translate(0, 0, -side);
+    g.add(new T.Mesh(body, M.bridgeStone));
+    // Each side: the arch's own ring of wedge stones, standing a little proud
+    for (const s of [-1, 1]) {
+      for (let i = 0; i <= 12; i++) {
+        const a = (i / 12) * Math.PI;
+        const x = Math.cos(a) * (BRIDGE.archHalf + 0.012), y = Math.sin(a) * (BRIDGE.archRise + 0.012);
+        const stone = box(0.036, 0.024 + R() * 0.006, 0.012, i % 2 ? M.bridgeBlock : M.bridgeBlockLight);
+        g.add(at(stone, x, y, s * (side + 0.003), 0, 0, a - Math.PI / 2));
+      }
+      // A buttress of rough blocks each side of the arch, standing in the river's edge
+      for (const end of [-1, 1]) {
+        g.add(at(box(0.05, 0.085, 0.034, M.bridgeBlock), end * (BRIDGE.archHalf + 0.05), 0.042, s * (side + 0.012)));
+        g.add(at(box(0.036, 0.03, 0.05, M.bridgeBlockLight), end * (BRIDGE.archHalf + 0.05), 0.016, s * (side + 0.02)));
+      }
+      // The parapet: a low, uneven wall following the road, block by block
+      const blocks = 16;
+      for (let i = 0; i < blocks; i++) {
+        const x = -half + ((i + 0.5) / blocks) * BRIDGE.length;
+        const step = BRIDGE.length / blocks;
+        const slope = Math.atan2(bridgeRoad(x + step / 2) - bridgeRoad(x - step / 2), step);
+        const tall = 0.026 + R() * 0.012;
+        const wall = box(step * 1.04, tall, 0.03 + R() * 0.008, i % 3 === 0 ? M.bridgeBlockLight : M.bridgeBlock);
+        g.add(at(wall, x, bridgeRoad(x) + tall / 2 - 0.002, s * (side - 0.012), 0, 0, slope));
+        // A flat coping stone on some of them
+        if (i % 2 === 0) g.add(at(box(step * 0.92, 0.007, 0.042, M.bridgeCap), x, bridgeRoad(x) + tall + 0.001, s * (side - 0.012), 0, 0, slope));
+      }
+    }
+    // The lane carries on over the top, as worn earth down the middle of the stones
+    const pieces = 14;
+    for (let i = 0; i < pieces; i++) {
+      const x = -half + ((i + 0.5) / pieces) * BRIDGE.length;
+      const step = BRIDGE.length / pieces;
+      const slope = Math.atan2(bridgeRoad(x + step / 2) - bridgeRoad(x - step / 2), step);
+      g.add(at(box(step * 1.04, 0.003, 0.3, M.bridgeRoad), x, bridgeRoad(x) + 0.001, 0, 0, 0, slope));
+    }
     return castAll(g);
   }
 
-  return { materials, M, mergeParts, eliteBand, water, bridge, soldier, squad, team, captain, pak, mortar, bomber, bomberOnStand, howitzer, round, coin, token, sherman, panther, panzer4, hedge, tree, house, die, table, field, lane, at };
+  return { BRIDGE_DECK, materials, M, mergeParts, eliteBand, water, bridge, soldier, squad, team, captain, pak, mortar, bomber, bomberOnStand, howitzer, round, coin, token, sherman, panther, panzer4, hedge, tree, house, die, table, field, lane, at };
 })();

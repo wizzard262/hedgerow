@@ -34,19 +34,37 @@ window.Game = (() => {
   }
 
   // A fresh table, with nothing moving yet
-  function setTable(seed, mode) {
+  function setTable(seed, mode, mapId) {
     gameNumber++;
     drawing = false; computerPicked = null; shownMove = null; resultWaiting = false; asking = false;
     Board.reset();
-    st = Sim.newGame(seed, mode);
+    st = Sim.newGame(seed, mode, mapId);
     G.state = st;
     UI.closeMenu();
     UI.setState(st);
   }
 
-  // mode: who plays each side; left out, as now
-  function start(seed, mode) {
-    setTable(seed, mode || st.mode);
+  // Which map (Steve): one of MAPS, or a new one at random each game; asked with the sides, and remembered on this computer
+  const MAP_KEY = 'hedgerow-map';
+  function rememberedMap() {
+    try {
+      const saved = localStorage.getItem(MAP_KEY);
+      return saved === 'random' || MAPS.some(m => m.id === saved) ? saved : 'random';
+    } catch (e) { return 'random'; }
+  }
+  function rememberMap(choice) {
+    try { localStorage.setItem(MAP_KEY, choice); } catch (e) { /* not remembered: this game still plays it */ }
+  }
+  let chosenMap = rememberedMap();
+  // The map for a game: the one chosen, or one picked at random
+  function mapFor(choice) {
+    if (choice !== 'random') return choice;
+    return MAPS[Math.floor(Math.random() * MAPS.length)].id;
+  }
+
+  // mode: who plays each side; left out, as now. mapId: one of MAPS or 'random'; left out, as chosen
+  function start(seed, mode, mapId) {
+    setTable(seed, mode || st.mode, mapFor(mapId || chosenMap));
     gameStarted = true;
     Sim.startRound(st);
     changed();
@@ -494,7 +512,7 @@ window.Game = (() => {
     const place = PLACE_COVER[t];
     const cover = place ? `${t === 'orchard' ? 'Trees' : 'Houses'}: +${place.men} to hit men here, +${place.tank} a tank, +${place.shells} with mortars or artillery; none for an enemy in this same field. Seen into and out of, never through` : t === 'river' ? 'Nothing can cross except at a bridge' : '';
     // A village field takes the name of the nearest village
-    const village = t === 'village' ? VILLAGES.slice().sort((a, b) => (Math.abs(a.x - f.x) + Math.abs(a.y - f.y)) - (Math.abs(b.x - f.x) + Math.abs(b.y - f.y)))[0].name : null;
+    const village = t === 'village' ? st.map.villages.slice().sort((a, b) => (Math.abs(a.x - f.x) + Math.abs(a.y - f.y)) - (Math.abs(b.x - f.x) + Math.abs(b.y - f.y)))[0].name : null;
     tip.innerHTML = `<b>${village || NAMES[t]}</b>${cover ? `<br><span style="color:var(--muted)">${cover}</span>` : ''}${lines.length ? '<br>' + lines.join('<br>') : ''}`;
     const r = board.getBoundingClientRect();
     Object.assign(tip.style, { display: 'block', left: Math.min(r.width - 290, e.clientX - r.left + 14) + 'px', top: e.clientY - r.top + 14 + 'px' });
@@ -529,12 +547,27 @@ window.Game = (() => {
     picked.us = mode === 'us' || mode === 'both' ? 'human' : 'robot';
     picked.de = mode === 'de' || mode === 'both' ? 'human' : 'robot';
     lightSides();
+    lightMap();
     $('#newgame [data-close]').hidden = !gameStarted;
     $('#newgame').hidden = false;
   }
   $('#new-btn').onclick = askSide;
   for (const side of ['us', 'de']) for (const who of ['human', 'robot']) {
     $(`#${side}-${who}`).onclick = () => { picked[side] = who; lightSides(); };
+  }
+  // A button for each map, and Random; what the one lit does is said under them
+  function lightMap() {
+    for (const b of document.querySelectorAll('#map-choice button')) b.className = b.dataset.map === chosenMap ? 'on' : '';
+    const map = MAPS.find(m => m.id === chosenMap);
+    $('#map-note').textContent = map ? map.note : 'A different map each game.';
+  }
+  for (const choice of [{ id: 'random', name: 'Random' }, ...MAPS]) {
+    const b = document.createElement('button');
+    b.id = 'map-' + choice.id;
+    b.dataset.map = choice.id;
+    b.textContent = choice.name;
+    b.onclick = () => { chosenMap = choice.id; lightMap(); };
+    $('#map-choice').append(b);
   }
   // The four variations, from the two choices
   function pickedMode() {
@@ -545,6 +578,7 @@ window.Game = (() => {
     const mode = pickedMode();
     $('#newgame').hidden = true;
     rememberMode(mode);
+    rememberMap(chosenMap);
     start(undefined, mode);
   };
   $('#newgame [data-close]').onclick = () => { $('#newgame').hidden = true; };
@@ -555,7 +589,7 @@ window.Game = (() => {
   Board.init(board);
   UI.init(changed);
   // The table waits behind the question (Steve: the game starts by asking which side)
-  setTable(undefined, rememberedMode());
+  setTable(undefined, rememberedMode(), mapFor(chosenMap));
   changed();
   askSide();
   fit();

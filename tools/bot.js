@@ -5,7 +5,7 @@ const fs = require('fs'), vm = require('vm'), path = require('path');
 const load = f => vm.runInThisContext(fs.readFileSync(path.join(__dirname, '..', 'js', f), 'utf8'));
 if (typeof Sim === 'undefined') { load('data.js'); load('sim.js'); }
 
-const toGoal = (st, p) => Math.abs(p.x - st.objective.x) + Math.abs(p.y - st.objective.y);
+const toGoal = (st, p) => Sim.walkDistance(p, st.objective);
 
 // One piece's go: true if it did something
 function actPiece(st, u) {
@@ -103,8 +103,8 @@ function playRound(st, bot) {
 }
 
 // Play a game; with no time limit it stops after maxRounds if neither side has won
-function play(seed, bot, maxRounds = 20) {
-  const st = Sim.newGame(seed);
+function play(seed, bot, maxRounds = 20, mapId) {
+  const st = Sim.newGame(seed, 'us', mapId);
   while (!st.won && !st.lost && st.turn <= maxRounds) playRound(st, bot);
   return st;
 }
@@ -154,8 +154,8 @@ function playRoundAsGermans(st, bot) {
 }
 
 // A game with the player as the Germans: st.lost means the Germans (the player) won, st.won the American computer
-function playAsGermans(seed, bot, maxRounds = 20) {
-  const st = Sim.newGame(seed, 'de');
+function playAsGermans(seed, bot, maxRounds = 20, mapId) {
+  const st = Sim.newGame(seed, 'de', mapId);
   while (!st.won && !st.lost && st.turn <= maxRounds) playRoundAsGermans(st, bot);
   return st;
 }
@@ -163,8 +163,8 @@ function playAsGermans(seed, bot, maxRounds = 20) {
 // ---------- Two robots ----------
 
 // A game with no human: every token is the computer's, and nobody is ever asked anything
-function playRobots(seed) {
-  const st = Sim.newGame(seed, 'none');
+function playRobots(seed, mapId) {
+  const st = Sim.newGame(seed, 'none', mapId);
   while (!st.won && !st.lost) {
     Sim.startRound(st);
     for (let side = Sim.drawToken(st); side; side = Sim.drawToken(st)) {

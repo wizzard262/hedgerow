@@ -17,6 +17,7 @@ async function checkPlayers() {
   // ---------- The choice ----------
   const lit = () => page.evaluate(() => ['us-human', 'us-robot', 'de-human', 'de-robot'].filter(id => document.getElementById(id).className === 'on').join(','));
   console.log('version', await page.textContent('#ver'), '| opens lit:', await lit(), '| asked:', await page.isVisible('#newgame'), '| cancel:', await page.isVisible('#newgame [data-close]'));
+  await page.click('#map-hedges');
   await page.click('#de-human');
   await page.waitForTimeout(200);
   console.log('after picking German Human:', await lit());
@@ -194,6 +195,7 @@ async function checkOrder() {
   await page.goto('http://localhost:8768/');
   await page.waitForTimeout(800);
   console.log('version', await page.textContent('#ver'));
+  await page.click('#map-hedges');
   await page.click('#us-human');
   await page.click('#de-robot');
   await page.click('#start-game');
@@ -267,7 +269,7 @@ async function checkOrder() {
     ['Ambush kills it as it arrives', 8, true],
   ];
   for (const [label, ambushX, kill] of cases) {
-    await page.evaluate(() => Game.restart(undefined, 'us'));
+    await page.evaluate(() => Game.restart(undefined, 'us', 'hedges'));
     await ourToken();
     await page.evaluate(([x, k]) => {
       const st = Game.state;
@@ -298,7 +300,7 @@ async function checkOrder() {
   // ---------- The PaK across the large village, as the Germans ----------
   let done = false;
   for (let k = 0; k < 8 && !done; k++) {
-    await page.evaluate(() => Game.restart(undefined, 'de'));
+    await page.evaluate(() => Game.restart(undefined, 'de', 'hedges'));
     await page.waitForTimeout(300);
     const large = await page.evaluate(() => Game.state.objective.y === 4);
     if (!large) continue;

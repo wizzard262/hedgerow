@@ -324,7 +324,7 @@ const Board = (() => {
         const wet = (xx, yy) => Sim.inside(xx, yy) && ['river', 'bridge'].includes(Sim.tileType(xx, yy));
         const top = wet(x, y - 1) || y === 0 ? 0 : 0.3, bottom = wet(x, y + 1) || y === ROWS - 1 ? 1 : 0.7;
         built.add(at(Models.water(0.42, bottom - top), x + 0.5, 0, y + (top + bottom) / 2));
-        if (t === 'bridge') { built.add(at(Models.lane(1, 0.3), x + 0.5, 0.0012, y + 0.5, -Math.PI / 2, 0, 0)); const b = Models.bridge(); built.add(at(b, x + 0.5, 0, y + 0.5)); }
+        if (t === 'bridge') built.add(at(Models.bridge(), x + 0.5, 0, y + 0.5));
       }
       if (t === 'orchard') for (const [ox, oz] of orchardTrees(seed)) built.add(at(Models.tree(seed + ox * 10 + oz * 3, 0.68 + ((ox * 31 + oz * 17) % 1) * 0.15), x + ox, 0, y + oz));
       if (t === 'village' || t === 'hamlet') addHouses(x, y, seed);
@@ -546,8 +546,12 @@ const Board = (() => {
         aim(g.userData.bases[0], 0.5 + p.x * reach.small, 0.5 + p.y * reach.small, facing);
       }
       aim(g, x, y, 0);
+      // On a bridge it stands up on the road
+      g.userData.to.y = standsAt(x, y);
     }
   }
+  // How high a piece stands in a field: on the road over a bridge, otherwise on the table
+  const standsAt = (x, y) => (Sim.inside(x, y) && Sim.tileType(x, y) === 'bridge' ? Models.BRIDGE_DECK : 0);
 
   // The bomber's compass (Steve): sixteen points on a card lying on the table above the board, its needle spinning round
   // and stopping on the way the bomber will fly. The card lies flat, so the needle points that way across the board too
@@ -683,9 +687,11 @@ const Board = (() => {
     if (!hop) return false;
     const g = hop.obj;
     const p = (now - hop.t0) / HOP.time;
+    // (from where it stands: on a bridge, that is up on the road)
+    const ground = g && g.userData.to && g.userData.to.y ? g.userData.to.y : 0;
     // Landed (or gone): back on the table
-    if (!g || p >= 1) { if (g) g.position.y = 0; hop = null; return false; }
-    g.position.y = HOP.height * Math.sin(Math.PI * p);
+    if (!g || p >= 1) { if (g) g.position.y = ground; hop = null; return false; }
+    g.position.y = ground + HOP.height * Math.sin(Math.PI * p);
     return true;
   }
 
@@ -877,7 +883,7 @@ const Board = (() => {
           const ex = (a.x + b.x) / 2 + offX, ez = (a.y + b.y) / 2 + offZ, dx = (b.x - a.x) * 0.12, dz = (b.y - a.y) * 0.12;
           way.push({ x: ex - dx, z: ez - dz, y: 0.14 }, { x: ex + dx, z: ez + dz, y: 0.14 });
         }
-        if (i < fields.length - 1) way.push({ x: b.x + offX, z: b.y + offZ, y: 0 });
+        if (i < fields.length - 1) way.push({ x: b.x + offX, z: b.y + offZ, y: standsAt(b.x, b.y) });
       }
       g.userData.way = way;
       g.userData.newTrail = null;
@@ -2075,7 +2081,7 @@ const Board = (() => {
     const gap = lastT ? (now - lastT) / 1000 : 0, dt = lastT ? Math.min(0.1, gap) : 0.016;
     lastT = now;
     if (gap) watchFrames(gap, drawingOn);
-    if (!built || built.userData.seed !== st.seed) { clearDice(true); for (const id in pieces) { scene.remove(pieces[id]); freeObject(pieces[id]); } for (const id in tokens) scene.remove(tokens[id]); pieces = {}; tokens = {}; build(st); buildSupport(); built.userData.seed = st.seed; }
+    if (!built || built.userData.seed !== st.seed || built.userData.map !== st.map) { clearDice(true); for (const id in pieces) { scene.remove(pieces[id]); freeObject(pieces[id]); } for (const id in tokens) scene.remove(tokens[id]); pieces = {}; tokens = {}; build(st); buildSupport(); built.userData.seed = st.seed; built.userData.map = st.map; }
     updateSupport(st);
     buildHedges(st);
     // New attacks: they play out, and their dice go in the corner once they have landed (Steve)
@@ -2093,6 +2099,7 @@ const Board = (() => {
       for (const p of pulsers) p.sprite.scale.setScalar(p.size * pulse);
     } else {
       buildMarks(st, view);
+      showMarksOverBridges();
       marksReady = true;
     }
     if (view.stateChanged) shadowStale = true;
@@ -2143,6 +2150,14 @@ const Board = (() => {
   }
 
   // Everything marked on the table for this view: lit fields, rings, targets and their bubbles, lines of fire
+  // What is marked in a bridge's field would be hidden under the bridge: it shows through
+  function showMarksOverBridges() {
+    for (const m of marks.children) {
+      const x = Math.floor(m.position.x), y = Math.floor(m.position.z);
+      if (m.material && Sim.inside(x, y) && Sim.tileType(x, y) === 'bridge') m.material.depthTest = false;
+    }
+  }
+
   function buildMarks(st, view) {
     pulsers = [];
     ambushRings = [];

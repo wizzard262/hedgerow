@@ -44,7 +44,8 @@ const UI = (() => {
   }
   // What the bomber does, one fact a line
   function bomberFacts() {
-    const facts = [`${st.ammo[st.human].bomber} run left`];
+    const runs = st.ammo[st.human].bomber;
+    const facts = [`${runs} run${runs === 1 ? '' : 's'} left`];
     // The compass only spins when it can fly
     if (canFire('bomber')) facts.push(`🧭 Flies ${COMPASS_POINTS[Sim.bomberHeading(st, st.human)]}`);
     facts.push(`💣 ${BOMBER.need}+ on each piece under it, yours too`);
@@ -619,7 +620,7 @@ const UI = (() => {
   }
 
   function update() {
-    $('#clock').innerHTML = `<b>Round ${st.turn}</b>${TURNS ? ` of ${TURNS}` : ''} · ${START_DATE}`;
+    $('#clock').innerHTML = `<b>Round ${st.turn}</b>${TURNS ? ` of ${TURNS}` : ''} · ${st.map.name}`;
     $('#goal').textContent = st.mode === 'none'
       ? `🎯 Two robots: the Americans attack ${st.objective.name}, the Germans hold it. Click any piece to see what it is.`
       : st.human === 'de'
