@@ -309,8 +309,19 @@ const Sim = (() => {
   }
 
   function isFar(from, target) {
-    return Math.hypot(target.x - from.x, target.y - from.y) > rangeOf(from).long + 0.5;
+    if (Math.hypot(target.x - from.x, target.y - from.y) <= rangeOf(from).long + 0.5) return false;
+    // (a target at close range is never at long range, whatever the weapon)
+    return !atCloseRange(from, target);
   }
+
+  // Is a target at close range (Steve): the nearest of the two pieces' areas no more than CLOSE_RANGE apart?
+  function atCloseRange(from, target) {
+    if (from.x === null || target.x === null) return false;
+    const fromPoints = areaPoints(from), toPoints = areaPoints(target);
+    return fromPoints.some(a => toPoints.some(b => Math.hypot(b.x - a.x, b.y - a.y) <= CLOSE_RANGE + 1e-6));
+  }
+  // What close range takes off the score a shot needs
+  const closeBonus = (from, target) => (atCloseRange(from, target) ? CLOSE_BONUS : 0);
 
   // A field whose houses or trees block the view across it
   const screens = f => ['village', 'hamlet', 'orchard'].includes(tileType(f.x, f.y));
@@ -543,6 +554,14 @@ const Sim = (() => {
     return { soft, hard };
   }
 
+  // A piece's firepower at this target: as above, but a captain at close range has his submachine gun (Steve)
+  function firepowerAt(st, u, target) {
+    const f = firepower(st, u);
+    const smg = PIECES[u.kind].smg;
+    if (smg && !isTank(target) && atCloseRange(u, target)) return { soft: smg, hard: f.hard };
+    return f;
+  }
+
   // The dice a piece rolls against men: its own, and half its anti-tank weapons' (Steve asked why a bazooka showed 0:
   // it rolls one die at men, half its two anti-tank dice)
   function menDice(f) {
@@ -663,10 +682,12 @@ const Sim = (() => {
     // The sniper: no cover, no long range (Steve)
     // A small target needs one more, whoever shoots (Steve)
     const small = smallTarget(target) ? SMALL_TARGET : 0;
+    // Close range: one less, whoever shoots (Steve)
+    const close = closeBonus(shooter, target);
     // Taking cover: two more from every weapon (Steve), but not the sniper (no cover helps against him)
     const down = target.down ? TAKE_COVER : 0;
-    if (PIECES[shooter.kind].sniper) return TO_HIT + small + (moving ? ON_THE_MOVE : 0) + (shooter.shocked ? SHAKEN_SHOOT : 0) - QUALITY[shooter.quality || 'standard'].shoot;
-    return TO_HIT + cover(st, shooter, target) + small + down + (moving ? ON_THE_MOVE : 0) + (shooter.shocked ? SHAKEN_SHOOT : 0) - QUALITY[shooter.quality || 'standard'].shoot;
+    if (PIECES[shooter.kind].sniper) return TO_HIT + small + (moving ? ON_THE_MOVE : 0) + (shooter.shocked ? SHAKEN_SHOOT : 0) - QUALITY[shooter.quality || 'standard'].shoot - close;
+    return TO_HIT + cover(st, shooter, target) + small + down + (moving ? ON_THE_MOVE : 0) + (shooter.shocked ? SHAKEN_SHOOT : 0) - QUALITY[shooter.quality || 'standard'].shoot - close;
   }
 
   // Why a shot needs what it needs, for the label on the target (Steve): each thing that makes it harder (−) or easier (+),
@@ -678,6 +699,7 @@ const Sim = (() => {
       if (smallTarget(target)) why.push(`+${SMALL_TARGET} small target`);
       if (moving) why.push(`+${ON_THE_MOVE} moving`);
       if (shooter.shocked) why.push(`+${SHAKEN_SHOOT} shaken`);
+      if (atCloseRange(shooter, target)) why.push(`−${CLOSE_BONUS} close range`);
       return withStart(why);
     }
     const s = sight(st, shooter, target);
@@ -695,6 +717,7 @@ const Sim = (() => {
     if (shooter.shocked) why.push(`+${SHAKEN_SHOOT} shaken`);
     if (armourOf(target)) why.push(`+${armourOf(target)} armour`);
     if (QUALITY[shooter.quality || 'standard'].shoot) why.push(`−${QUALITY[shooter.quality || 'standard'].shoot} elite`);
+    if (atCloseRange(shooter, target)) why.push(`−${CLOSE_BONUS} close range`);
     return withStart(why);
   }
 
@@ -757,7 +780,7 @@ const Sim = (() => {
   const weaponOf = u => (isTank(u) || u.kind === 'pak' ? 'gun' : u.kind === 'mg' || u.kind === 'mg42' ? 'mg' : u.kind === 'bazooka' || u.kind === 'schreck' ? 'rocket' : 'rifle');
 
   function fireAt(st, shooter, target, power, withdraw = false, moving = false, blast = false) {
-    const f = firepower(st, shooter);
+    const f = firepowerAt(st, shooter, target);
     // The computer's piece fired on takes cover when it is wise to (Steve), as you can
     if (!withdraw && target.side !== st.human && computerTakesCover(st, target, menDice(f) * power, needFor(st, shooter, target, moving))) withdraw = true;
     // Taking cover happens before the dice roll: its men are already down (and two more are needed)
@@ -1053,6 +1076,8 @@ const Sim = (() => {
   function canRally(st, cap) {
     if (!cap || cap.kind !== 'captain' || cap.side !== st.human || cap.x === null || st.won || st.lost || st.computer || !tokenAllows(st, cap)) return false;
     if (cap.skipped) return false;
+    // In cover he can't rally anyone, himself included (Steve): it wears off next round
+    if (cap.down) return false;
     return (cap.rallied || 0) < ralliesAllowed(cap);
   }
   // Can a piece shoot (or move and shoot) now? The captain not after two rallies: then only a charge is left (Steve)
@@ -1103,6 +1128,18 @@ const Sim = (() => {
     for (const k of GRID) {
       u.at = freePlace(st, u, x, y, k === 'c' ? null : k);
       if (targets(st, u, true).length) out.push(k);
+    }
+    u.x = home.x; u.y = home.y; u.at = home.at;
+    return out;
+  }
+
+  // Of those areas, the ones where it would have a shot at close range (Steve: hatched differently)
+  function closeCells(st, u, x, y) {
+    const home = { x: u.x, y: u.y, at: u.at }, out = [];
+    u.x = x; u.y = y;
+    for (const k of GRID) {
+      u.at = freePlace(st, u, x, y, k === 'c' ? null : k);
+      if (targets(st, u, true).some(t => atCloseRange(u, t))) out.push(k);
     }
     u.x = home.x; u.y = home.y; u.at = home.at;
     return out;
@@ -1690,8 +1727,8 @@ const Sim = (() => {
 
   // How much a German piece wants to shoot this target from where it stands
   function targetScore(st, u, t) {
-    const f = firepower(st, u);
-    return (isTank(t) ? f.hard * 2 : menDice(f)) * (7 - TO_HIT - cover(st, u, t)) / 2 + (t.shocked ? 1 : 0) - t.platoons * 0.1;
+    const f = firepowerAt(st, u, t);
+    return (isTank(t) ? f.hard * 2 : menDice(f)) * (7 - TO_HIT - cover(st, u, t) + closeBonus(u, t)) / 2 + (t.shocked ? 1 : 0) - t.platoons * 0.1;
   }
 
   // Where a German piece is heading: its post, or (reserves) the objective if nobody holds it, else the nearest American
@@ -1789,8 +1826,8 @@ const Sim = (() => {
   function computerRallies(st, u) {
     const rep = st.computer.rep;
     const far = t => Math.abs(t.x - u.x) + Math.abs(t.y - u.y);
-    // The captain (Steve): first he rallies the nearest shaken piece of his in reach, himself too
-    if (u.kind === 'captain') {
+    // The captain (Steve): first he rallies the nearest shaken piece of his in reach, himself too. Not from cover
+    if (u.kind === 'captain' && !u.down) {
       const shaken = st.units.filter(t => t.side === u.side && t.x !== null && t.shocked && far(t) <= RALLY_RANGE).sort((a, b) => far(a) - far(b));
       if (shaken.length) {
         const t = shaken[0];
@@ -2492,7 +2529,7 @@ const Sim = (() => {
 
   return {
     firesOnTheMove, canAmbush, actAmbush, bestMoveShoot, bomberHeading, bomberEdges, bomberLine, bombNeed, bombWhy, bestBomberRun,
-    wreckAt, remove, computerSide, enemyOf, ammoOf, firedOf, gunStats, edgeKey,
+    wreckAt, remove, computerSide, enemyOf, ammoOf, firedOf, gunStats, edgeKey, atCloseRange, firepowerAt, closeCells,
     newGame, roll, endTurn, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, chargeSpots,
     rallyTargets, canAct, canReact, firepower, canCallFire, holdsObjective, roundText, roomFor,
     startGermanHour, computerStep, answer, finishHour, startRound, drawToken, endComputerToken, activationOver, passToken, humanCanMove, endRound, canFire, actSkip, actSkipShot, skipSupport,

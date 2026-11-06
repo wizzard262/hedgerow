@@ -290,7 +290,8 @@ check('long range, cover and firing on the move each need one more on the dice',
   const us = Sim.unitById(st, 'B'), de = Sim.unitById(st, 'd2');
   for (const u of st.units) if (u !== us && u !== de) u.x = u.y = null;
   st.hedges = {}; st.wire = {};
-  us.x = 0; us.y = 6; de.x = 1; de.y = 6; us.at = null; de.at = null;
+  us.x = 0; us.y = 6; de.x = 2; de.y = 6; us.at = null; de.at = null;
+  // (two fields off: past close range, not yet long range)
   const near = Sim.needFor(st, us, de);
   de.x = 3;
   assert(Sim.needFor(st, us, de) === near + LONG_RANGE, 'long range did not add one');
@@ -2618,6 +2619,151 @@ check('the PaK faces out of its square when it moves: eight ways, the way clicke
   d.drawn = 'de';
   Sim.actLine(d, d2, 'se');
   assert(d2.aim === aimBefore, 'a platoon was turned as the PaK is');
+});
+
+check('a captain in cover can\'t rally anyone, himself included, on either side, until it wears off', () => {
+  for (const side of ['us', 'de']) {
+    const capId = side === 'us' ? 'cap' : 'dcap', friendId = side === 'us' ? 'A' : 'd2';
+    const st = side === 'us' ? tableWith({ cap: [3, 5], A: [4, 5], d2: [11, 0] }) : tableAsGermans({ dcap: [3, 5], d2: [4, 5], A: [0, 0] });
+    const cap = Sim.unitById(st, capId), friend = Sim.unitById(st, friendId);
+    friend.shocked = true;
+    Sim.startRound(st);
+    st.drawn = side;
+    assert(Sim.captainCanRally(st, cap), `${side}: a captain out of cover could not rally`);
+    // He takes cover, as Take cover does
+    assert(Sim.canReact(st, cap), `${side}: he could not take cover`);
+    cap.down = true; cap.acted = true; cap.shocked = true;
+    assert(!Sim.canRally(st, cap) && !Sim.captainCanRally(st, cap), `${side}: he could still rally from cover`);
+    assert(!Sim.actRally(st, cap, friend).ok, `${side}: he rallied a piece from cover`);
+    assert(!Sim.actRally(st, cap, cap).ok, `${side}: he rallied himself from cover`);
+    assert(friend.shocked && cap.down, `${side}: something changed`);
+    // A new round: the cover has worn off, and he can again
+    st.drawn = null;
+    Sim.finishHour(st);
+    Sim.startRound(st);
+    st.drawn = side;
+    assert(!cap.down && Sim.captainCanRally(st, cap), `${side}: he could not rally next round`);
+    assert(Sim.actRally(st, cap, friend).ok && !friend.shocked, `${side}: his rally next round did not work`);
+  }
+  // Out of cover he can still get another piece up from its cover
+  const st = tableWith({ cap: [3, 5], A: [4, 5] });
+  const cap = Sim.unitById(st, 'cap'), A = Sim.unitById(st, 'A');
+  A.down = true; A.acted = true;
+  Sim.startRound(st);
+  st.drawn = 'us';
+  assert(Sim.actRally(st, cap, A).ok && !A.down, 'a captain out of cover could not get a piece up');
+});
+
+check('the computer\'s captain in cover rallies nobody', () => {
+  const st = tableWith({ dcap: [9, 5], d2: [10, 5], A: [0, 0] });
+  const cap = Sim.unitById(st, 'dcap'), d2 = Sim.unitById(st, 'd2');
+  cap.down = true; d2.shocked = true;
+  Sim.startRound(st);
+  st.computer = { queue: [cap.id], mortar: false, artillery: false, bomber: false, rep: [], ask: null, move: { id: cap.id, what: '' } };
+  for (let r = Sim.computerStep(st); !r.done; r = Sim.computerStep(st)) Sim.answer(st, false);
+  assert(d2.shocked, 'he rallied a piece from cover');
+});
+
+check('close range is four areas across or less, from the nearest areas of the two pieces', () => {
+  // Along the lane: a platoon at the east edge of its field, the target at the west edge of the second field on
+  const st = tableWith({ mg1: [3, 5], dmg1: [5, 5] });
+  const a = Sim.unitById(st, 'mg1'), b = Sim.unitById(st, 'dmg1');
+  // Four areas apart: opposite edges of the field between them
+  a.at = 'e'; b.at = 'w';
+  assert(Sim.atCloseRange(a, b), 'four areas across was not close');
+  // Five areas apart
+  a.at = null; b.at = 'w';
+  assert(!Sim.atCloseRange(a, b), 'five areas across was close');
+  // Next door, middle to middle: three areas
+  const next = tableWith({ mg1: [3, 5], dmg1: [4, 5] });
+  const c = Sim.unitById(next, 'mg1'), d = Sim.unitById(next, 'dmg1');
+  c.at = null; d.at = null;
+  assert(Sim.atCloseRange(c, d), 'the next field, middle to middle, was not close');
+  // Next door, far edges: five areas
+  c.at = 'w'; d.at = 'e';
+  assert(!Sim.atCloseRange(c, d), 'far edges of the next field were close');
+  // A straight line, not a count of steps: corners of diagonal fields just inside, and past it
+  const diag = tableWith({ mg1: [3, 5], dmg1: [4, 6] });
+  const e = Sim.unitById(diag, 'mg1'), f = Sim.unitById(diag, 'dmg1');
+  e.at = null; f.at = null;
+  assert(Math.hypot(1, 1) > 4 / 3 && !Sim.atCloseRange(e, f), 'middles of diagonal fields are 4.2 areas apart, not close');
+  e.at = 'se'; f.at = 'nw';
+  assert(Sim.atCloseRange(e, f), 'corners touching were not close');
+});
+
+check('close range takes one off the score every piece needs, says so on the label, and is never long range', () => {
+  const st = tableWith({ A: [3, 5], B: [3, 3], mg1: [3, 7], d2: [4, 5] });
+  const A = Sim.unitById(st, 'B'), t = Sim.unitById(st, 'd2');
+  A.x = 3; A.y = 5; A.at = null; t.at = null;
+  const close = Sim.needFor(st, A, t);
+  assert(close === TO_HIT - CLOSE_BONUS, `a standard platoon at close range in the open needed ${close}`);
+  assert(Sim.needWhy(st, A, t).some(w => w.includes('close range')), 'the label does not say close range');
+  // Further off along the lane: no bonus, and no word of it
+  t.x = 5; t.y = 5;
+  assert(Sim.needFor(st, A, t) === TO_HIT, `at three fields it needed ${Sim.needFor(st, A, t)}`);
+  assert(!Sim.needWhy(st, A, t).some(w => w.includes('close range')), 'the label says close range when it is not');
+  // A bazooka two fields off, edge to edge: close, not long range as well
+  const bz = tableWith({ bz1: [3, 5], dt1: [5, 5] });
+  const baz = Sim.unitById(bz, 'bz1'), tank = Sim.unitById(bz, 'dt1');
+  baz.at = 'e'; tank.at = 'nw';
+  assert(Sim.atCloseRange(baz, tank), 'edge to edge across one field was not close');
+  assert(!Sim.needWhy(bz, baz, tank).some(w => w.includes('long range')), 'close and long range at once');
+  // The sniper gets it too
+  const sn = tableWith({ sn1: [3, 5], d2: [4, 5] });
+  const sniper = Sim.unitById(sn, 'sn1'), target = Sim.unitById(sn, 'd2');
+  sniper.at = null; target.at = null;
+  assert(Sim.needFor(sn, sniper, target) === TO_HIT - CLOSE_BONUS, 'the sniper had no close-range bonus');
+});
+
+check('close range does nothing for mortars, artillery or bombs', () => {
+  const st = tableWith({ A: [3, 5], d2: [4, 5] });
+  const t = Sim.unitById(st, 'd2');
+  t.at = null;
+  assert(Sim.shellNeed(st, t) === TO_HIT, 'shells got a close-range bonus');
+  assert(Sim.bombNeed(st, t) === BOMBER.need, 'bombs got a close-range bonus');
+  assert(!Sim.shellWhy(st, t).some(w => w.includes('close range')), 'the shell label says close range');
+});
+
+check('both captains: three dice with the submachine gun at close range, one beyond it, and only at men', () => {
+  for (const [capId, targetId] of [['cap', 'd2'], ['dcap', 'A']]) {
+    const near = tableWith({ [capId]: [3, 5], [targetId]: [4, 5] });
+    const cap = Sim.unitById(near, capId), t = Sim.unitById(near, targetId);
+    cap.at = null; t.at = null;
+    assert(Sim.firepowerAt(near, cap, t).soft === 3, `${capId} at close range had ${Sim.firepowerAt(near, cap, t).soft} dice`);
+    near.fx = [];
+    near.human = cap.side;
+    Sim.fireAt(near, cap, t, 1);
+    const shot = near.fx.find(f => f.from && f.from.id === capId);
+    assert(shot && shot.faces.length === 3, `${capId} threw ${shot && shot.faces.length} dice at close range`);
+    // Two fields off along the lane, middle to middle: one die
+    const far = tableWith({ [capId]: [3, 5], [targetId]: [5, 5] });
+    const cap2 = Sim.unitById(far, capId), t2 = Sim.unitById(far, targetId);
+    cap2.at = null; t2.at = null;
+    assert(Sim.firepowerAt(far, cap2, t2).soft === 1, `${capId} beyond close range had ${Sim.firepowerAt(far, cap2, t2).soft} dice`);
+    far.fx = [];
+    far.human = cap2.side;
+    Sim.fireAt(far, cap2, t2, 1);
+    const shot2 = far.fx.find(f => f.from && f.from.id === capId);
+    assert(shot2 && shot2.faces.length === 1, `${capId} threw ${shot2 && shot2.faces.length} dice beyond close range`);
+  }
+  // Nobody else has one
+  const st = tableWith({ A: [3, 5], d2: [4, 5] });
+  const A = Sim.unitById(st, 'A'), d2 = Sim.unitById(st, 'd2');
+  A.at = null; d2.at = null;
+  assert(Sim.firepowerAt(st, A, d2).soft === 3 && !PIECES.company.smg, 'a platoon changed');
+});
+
+check('close-range hatching: only the areas of a Move & shoot field with a shot at close range', () => {
+  const st = tableWith({ A: [3, 5], d2: [6, 5] });
+  const A = Sim.unitById(st, 'A');
+  // The field next to the target: its east areas are close, and so on
+  const cells = Sim.shootCells(st, A, 5, 5), close = Sim.closeCells(st, A, 5, 5);
+  assert(close.length > 0 && close.every(k => cells.includes(k)), `close ${close} is not within the fired-from cells ${cells}`);
+  // Too far for close range from anywhere in the field
+  const far = Sim.closeCells(st, A, 3, 5);
+  assert(!far.length, `close-range cells three fields off: ${far}`);
+  // It goes back where it was
+  assert(A.x === 3 && A.y === 5, 'trying the cells moved it');
 });
 
 console.log(failed ? `\n${failed} failed` : '\nall passed');

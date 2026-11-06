@@ -90,7 +90,8 @@ const UI = (() => {
     // A charge into a field the Germans hold is a hand-to-hand fight: marked differently
     const marked = uniq(list).map(p => Object.assign(p, { kind: view.mode === 'charge' && Sim.at(st, p.x, p.y, enemy()).length ? 'assault' : kind }));
     // Move & shoot: only the areas it could fire from are hatched (Steve)
-    if (view.mode === 'moveShoot') for (const p of marked) p.cells = Sim.shootCells(st, u, p.x, p.y);
+    // (those with a shot at close range differently, Steve)
+    if (view.mode === 'moveShoot') for (const p of marked) { p.cells = Sim.shootCells(st, u, p.x, p.y); p.closeCells = Sim.closeCells(st, u, p.x, p.y); }
     // Charging: its own field is marked too, to go and line another of its hedges (the old Line a hedge, Steve: implicit)
     if (view.mode === 'charge' && Sim.canAct(st, u) && Sim.lineSides(st, u).length) marked.push({ x: u.x, y: u.y, kind: 'line' });
     // Rallying: every field the captain's voice reaches, faintly, round the pieces he can rally (Steve)
@@ -280,7 +281,9 @@ const UI = (() => {
         };
         menu.append(b);
       }
-      if (!acts.some(a => a.ok)) menu.append(el('div', 'mnote', u.shocked ? 'Shaken: it has moved this round; the captain can rally it' : 'It has moved this round'));
+      // A captain in cover: why there is no Rally (Steve)
+      if (u.kind === 'captain' && u.down) menu.append(el('div', 'mnote', 'In cover: he can\'t rally anyone until next round'));
+      else if (!acts.some(a => a.ok)) menu.append(el('div', 'mnote', u.shocked ? 'Shaken: it has moved this round; the captain can rally it' : 'It has moved this round'));
       else if (u.shocked) menu.append(el('div', 'mnote', 'Shaken: it needs one more to hit and moves or charges half as far until it rallies'));
       if (acts.some(a => a.ok) && !u.acted && u.kind !== 'pak' && !Sim.chargeSpots(st, u).length) {
         // Boxed in: say why it can't charge, and how to get out
@@ -440,7 +443,7 @@ const UI = (() => {
       add('charge', '⚔️ Charge', Sim.chargeSpots(st, u).length > 0, 'Up to three fields, no shooting (climbing a hedge uses one more)');
       // (after two rallies only a charge is left, Steve)
       add('moveShoot', '➡️ Move & shoot', Sim.mayFire(u) && Sim.moveShootSpots(st, u).length > 0, 'Up to two fields to where he can fire (the red-hatched fields), then fire needing one more on the dice');
-      add('shoot', '🎯 Shoot', Sim.mayFire(u) && Sim.targets(st, u).length > 0, 'His HQ fires: one die');
+      add('shoot', '🎯 Shoot', Sim.mayFire(u) && Sim.targets(st, u).length > 0, `His HQ fires: one die, or ${PIECES[u.kind].smg} with his submachine gun at close range`);
       // Rallying isn't his move (Steve): two rallies if he stays put or charges (before, after or either side of the
       // charge), one if he shoots or moves and shoots (before or after). Only with someone in reach to rally
       if (Sim.captainCanRally(st, u)) b.push({ mode: 'rally', label: '📣 Rally', ok: true, title: 'Get a piece that took cover up and moving, or steady a shaken one (himself too), up to three fields away. Two rallies a round if he stays put or charges, one if he shoots or moves and shoots. Skip turn to stop before using them all' });
@@ -527,10 +530,12 @@ const UI = (() => {
     const strength = u.kind === 'company' ? `${u.platoons} section${u.platoons > 1 ? 's' : ''} (${u.platoons * MEN_A_BASE} men)` : Sim.isTank(u) ? `${u.platoons} tank${u.platoons > 1 ? 's' : ''}` : PIECES[u.kind].men ? `${PIECES[u.kind].men} men` : '';
     const f = Sim.firepower(st, u);
     // Against men: its own dice and half its anti-tank ones (see Sim.menDice)
-    const dice = `🎲 ${Math.round(Sim.menDice(f) * 10) / 10} dice vs men${f.hard ? `, ${Math.round(f.hard * 10) / 10} vs tanks` : ''}`;
+    // A captain's submachine gun (Steve): more dice at close range
+    const smg = PIECES[u.kind].smg ? `, ${PIECES[u.kind].smg} with SMG at close range` : '';
+    const dice = `🎲 ${Math.round(Sim.menDice(f) * 10) / 10} dice vs men${smg}${f.hard ? `, ${Math.round(f.hard * 10) / 10} vs tanks` : ''}`;
     // A tank's armour (Steve): what it adds to the score anti-tank dice need
     const armour = Sim.isTank(u) ? `🛡️ Armour +${Sim.armourOf(u)}` : '';
-    const status = u.down && u.acted ? '<span class="pill bad">Taking cover: +2 cover; the captain can get it up</span>' : u.ambush ? '<span class="pill ready">🪤 In ambush</span>' : u.shocked ? '<span class="pill bad">Shaken: +1 to hit, half moves</span>' : u.acted ? '<span class="pill done">✓ Moved this round</span>' : '<span class="pill ready">Ready</span>';
+    const status = u.down && u.acted ? `<span class="pill bad">Taking cover: +2 cover; ${u.kind === 'captain' ? 'no rallies until next round' : 'the captain can get it up'}</span>` : u.ambush ? '<span class="pill ready">🪤 In ambush</span>' : u.shocked ? '<span class="pill bad">Shaken: +1 to hit, half moves</span>' : u.acted ? '<span class="pill done">✓ Moved this round</span>' : '<span class="pill ready">Ready</span>';
     box.append(el('div', 'name', `${u.name}${u.quality === 'elite' ? ' ★' : ''}`));
     // Elite troops say so (Steve): Rangers or Fallschirmjäger, one less needed to hit
     const elite = u.quality === 'elite' ? ` · <b class="elite">Elite</b> (${u.side === 'us' ? 'Rangers' : 'Fallschirmjäger'}: −1 to hit)` : '';
@@ -561,9 +566,9 @@ const UI = (() => {
       : view.mode === 'halfShot' ? 'Moved. Click a red target to fire on it (one more needed on the move), or Esc to hold fire.'
       : view.mode === 'shoot' ? 'Click a red target to fire on it. Esc cancels.'
       : view.mode === 'rally' ? `Bright green: pieces he can rally; click one. Pale green: how far he reaches (${RALLY_RANGE} fields). Esc cancels.`
-      : view.mode === 'go' ? `${targets().length ? 'Red targets: shoot from here. ' : ''}Red hatching: Move & shoot. Other marked fields: Charge. ${st.human === 'us' ? 'Blue: the village. ' : ''}Click where in the field to stand: a corner, an edge (lining its hedge) or the middle. Or use the menu.`
+      : view.mode === 'go' ? `${targets().length ? 'Red targets: shoot from here. ' : ''}Red hatching: Move & shoot (crossed: close range). Other marked fields: Charge. ${st.human === 'us' ? 'Blue: the village. ' : ''}Click where in the field to stand: a corner, an edge (lining its hedge) or the middle. Or use the menu.`
       : view.mode === 'charge' ? `${st.human === 'us' ? 'Blue hatching: the village to take. ' : ''}Click where in a field to go: by a hedge to line it (green: cover), or the middle for the open. Bright red fields are held by the ${foes()}: a hand-to-hand fight. Its own field (green): line another hedge. Esc cancels.`
-      : view.mode === 'moveShoot' ? `Click where in a red-hatched field to go (by a hedge to line it, green: cover): ${u ? u.name : 'the piece'} moves there and can fire. Esc cancels.`
+      : view.mode === 'moveShoot' ? `Click where in a red-hatched field to go (by a hedge to line it, green: cover; crossed red: close range): ${u ? u.name : 'the piece'} moves there and can fire. Esc cancels.`
       : `Click a highlighted field for ${u ? u.name : 'the piece'}. Esc cancels.`;
     $('#hint').textContent = text;
   }

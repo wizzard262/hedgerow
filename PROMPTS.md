@@ -1171,7 +1171,7 @@ How the game was made: each prompt, what was built, and the assumptions made.
 
 - Steve: captain cannot rally if taken cover
 - Tried both sides with real clicks: a captain down in cover could rally. But a click on a blue target could do nothing, because the captain's own menu sat on top of it (it kept clear of lit fields and red targets, not blue ones). The menu now keeps clear of them too; rallied 12 times out of 12 afterwards, both by the blue target and by the Rally button
-- (Not settled: Steve's words could also mean a new rule, that a captain in cover can't rally at all. Asked him. As it stands yours can, himself included; the computer's can't, as a piece in cover gets no token from it)
+- Steve's words could also mean a new rule, so he was asked: he chose the rule (see 204). The menu fix stands, for rallies from out of cover
 
 ## 203. The PaK moves within its field (v115)
 
@@ -1182,6 +1182,26 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - (Assumed: it can't fire after moving, as a machine gun can't, Steve didn't ask for that; "the direction it came from" means it points back where it was, not on the way it was going; the German computer's PaK can do the same, Steve's rule that both sides play alike: with no shot from where it stands it moves to a place in the field that has one, faces out and lies in ambush)
 - Played in a visible browser with real clicks: all eight areas and the middle, close-ups of the drawn gun, Ambush and No ambush; no errors. Tests: 154 pass. Balance as the Americans: the test player wins 13% in about 11.8 rounds; doing nothing wins 0%. As the Germans: the test player wins 30%, the American computer 58% in about 8.9 rounds, 12% unfinished; doing nothing wins 0%. All as before
 
+## 204. A captain in cover can't rally (v116)
+
+- Steve chose it as a rule: a captain who has taken cover can't rally anyone, himself included, on either side, until the cover wears off next round
+- His menu says why, and his panel says no rallies until next round. A captain out of cover can still get other pieces up from their cover
+
+## 205. Close range and the captains' submachine guns (v116)
+
+- Steve: give both captains a submachine gun, 3 shots but only at close range. Everyone gets −1 on the dice needed at close range: 4 of the areas across, 1⅓ of a big square. Show the red hatching differently to indicate this. It applies to all but mortar, bomber and artillery
+- Close range: the nearest areas of the two pieces no more than four areas apart in a straight line. One less on the dice for every shot, the sniper's too; "−1 close range" on the red label. A target at close range is never at long range as well (it could be for a bazooka, two fields off, edge to edge)
+- A Move & shoot: areas where it would have a shot at close range have crossed red hatching, the others the old stripes
+- Each captain throws three dice at men at close range; the panel says so
+- (Assumed: beyond close range a captain keeps the one die he had; the same rifle sound; hand-to-hand dice don't change; the computer's pieces get the −1 and the guns too, and prefer such shots a little)
+- Played in a visible browser with real clicks, both sides: three dice close, one die two fields off, the labels, the hatching; no errors. Balance as the Americans: the test player wins 13% in about 13.1 rounds (was 11.8); doing nothing wins 0%. As the Germans: the test player wins 24%, the American computer 60% in about 8.5 rounds, 16% unfinished after 20 rounds; doing nothing wins 0%
+- To watch: an elite platoon in the open at close range, standing still, needs 1+ (3, −1 elite, −1 close): every die hits
+
+## 206. Moved colours by army (v116)
+
+- Steve: the grey and green washouts for the USA and the Germans seem the wrong way round now
+- v114 made them yours green, theirs grey, so playing the Germans swapped them. Now moved Americans are always light green and moved Germans grey, pieces and guns, whichever side you play
+
 ## Sessions
 
 | # | Date | Length | What we did |
@@ -1190,4 +1210,4 @@ How the game was made: each prompt, what was built, and the assumptions made.
 | 2 | 2026-10-31 | about 7 hours | Prompts 85–124: small targets, houses +2, small houses round the square, stop at a wipe-out; shaken token on the base, shaken not pinned; captain's blue rally targets; no river; taking cover halves the dice; no pick-up sound; the timer token; brown German bases, Germans greyed out; no glare, rounds not hours; tokens fly back into the bag; one round per base, the rocket, tanks turn then fire in turn; tanks face the nearest enemy, side by side; no Pass button; hand to hand to the finish; take cover in a word bubble; rally offered after the captain moves; villages and orchards seen only at their edge; a clearer timer token, a matt coin; no crowding in a field, no token sound; German cards and pictures, shaken half moves, sounds back, timer in the middle, bubbles below at the top, bombers; the prompts page; German pick sounds, hops, the timer hovering, louder bombers; moved pieces green for yours, grey for theirs; the guns hop too; the elite token explained, each tank recoils on its own; hand to hand shown blow by blow, tinted only when the move is complete; the timer never first; German tanks back; pieces in a village see out; a German captain; Germans move by your rules, rallies shown; tanks drive men back, captains can die |
 | 3 | 2026-11-03 | about 11 hours | Prompts 125–187: rallies always work and are the only cure for shaken; the end waits for the last shot; elite gold band, grey German tanks; a cleaner sand-glass; PaK crew of three that turns to fire; no more ammo; the table lower; the timer checked fair; a longer board with the villages at the back; targets back on reselecting; one tank a unit; tanks drive in curves, no spinning; shaken, never pinned; the villages three fields nearer; only used tokens fly back; no stall at the start; the Germans show their aim; the label top to bottom; taking cover on the tag; the last roll in the corner; the .50 cal; seeing the whole board; orchards; three men a base, camouflage, Fallschirmjäger; a brighter elite ring; the red dice in the corner; German move fields; one cover rule for houses and trees; wire snags tanks; Rangers, round bases; shots and sounds a base; bazooka dice; Elite in the panel; tank armour shown; no hedges round villages and orchards; nine areas a field; sight by areas and hedge thirds; big pieces hide in the middle; the captain's rallies; the Germans take cover; corner to corner sight; tanks block sight; hatching by area; one arrow a label; take cover +2; tank dice; the captain done; menu Skip and Rally; a row of dice per piece shelled; corners of villages and orchards; bubbles clear of other targets; cross-hairs apart; only used tokens fly home; villages seen into at any angle; same village means same field; a tidy-up; Hail Mary; frame rate |
 | 4 | 2026-11-05 | about an hour | Prompts 198–199: burning wrecks: flames, smoke, a scorched hull, a wreck that blocks sight and leaves room for a platoon; big screens on small machines |
-| 5 | 2026-11-06 | about 2 hours | Prompts 200–203: playing as the Germans: the game asks which side at the start and under New game, the American computer attacks, the Germans win by destroying every American piece on the table; the captain's menu kept off his rally targets; the PaK moves within its field, faces out of its square, and can lie in ambush on the same go |
+| 5 | 2026-11-06 | about 3 hours | Prompts 200–206: playing as the Germans: the game asks which side at the start and under New game, the American computer attacks, the Germans win by destroying every American piece on the table; the captain's menu kept off his rally targets; the PaK moves within its field, faces out of its square, and can lie in ambush on the same go; a captain in cover can't rally; close range, −1 for every shot, with crossed hatching; the captains' submachine guns; moved colours by army |

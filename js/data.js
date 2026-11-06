@@ -70,6 +70,10 @@ const RANGES = {
   tank: { sight: 7, long: 4 },      // tanks (Steve: one further than the machine guns)
   sniper: { sight: 99, long: 99 },  // the sniper: anywhere he can see, no long range, and cover doesn't help the target
 };
+// Close range (Steve): four areas across or less (a field is three), from whichever of their areas are nearest: one less
+// needed on the dice, for every shot; not mortars, artillery or bombs
+const CLOSE_RANGE = 4 / 3;       // in fields
+const CLOSE_BONUS = 1;           // taken off the score needed
 const ON_THE_MOVE = 1;           // added to the score needed when firing after a move (Steve: like range and cover, +1 each)
 const COVER = { hedge: 1, tankCorner: 1, placeCorner: 1 };   // added to the score needed: a target lining a hedge it is shot across (or past the end of), or a line past a tank's corner (Steve: a tank's edge acts like a hedge), or past the corner of a village, hamlet or orchard
 // Villages, hamlets and orchards all work the same way (Steve): seen into and out of, never through. They differ only
@@ -105,7 +109,8 @@ const PIECES = {
   mg42:     { name: 'MG 42 team', soft: 5, hard: 0, team: true, men: 3 },
   schreck:  { name: 'Panzerschreck team', soft: 0, hard: 2.5, team: true, men: 2, extraMove: 1 },   // both sides the same (Steve)
   pak:      { name: 'PaK 40 gun', soft: 0.5, hard: 3, team: true, fixed: true },
-  captain:  { name: 'Captain', soft: 1, hard: 0, men: 1 },   // his HQ's carbines and submachine guns (Steve: he can shoot)
+  // His HQ's carbines (Steve: he can shoot). smg: the dice of his submachine gun, at close range only (Steve)
+  captain:  { name: 'Captain', soft: 1, hard: 0, men: 1, smg: 3 },
 };
 
 // Hand to hand (a charge into the enemy, Steve): the two sides strike in turn, the attacker first, a die for each base

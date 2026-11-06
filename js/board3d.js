@@ -302,7 +302,7 @@ const Board = (() => {
       gun.model.visible = n > 0;
       gun.name.visible = n > 0;
       // Fired this hour: greyed out like a piece that has moved (Steve)
-      greyOut(gun.model, fired[side][which] ? (side === st.human ? 'green' : 'grey') : false);
+      greyOut(gun.model, fired[side][which] ? (side === 'us' ? 'green' : 'grey') : false);
     }
   }
 
@@ -837,8 +837,8 @@ const Board = (() => {
       const activeNow = st.drawn === st.human && st.activeId === u.id;
       // (in ambush it hasn't finished: it goes light green or grey once it has fired, Steve)
       const done = u.acted && !u.ambush && !movingNow && !activeNow && !h;
-      // Moved this round: yours light green, the enemy's grey (Steve)
-      const tint = done && u.x !== null ? (u.side === st.human ? 'green' : 'grey') : false;
+      // Moved this round: Americans light green, Germans grey (Steve), whichever side the player has
+      const tint = done && u.x !== null ? (u.side === 'us' ? 'green' : 'grey') : false;
       // A knocked-out tank stays on the table as its wreck (see updateWrecks)
       const wrecked = u.x === null && st.wrecks.some(w => w.id === u.id);
       if (g) { g.visible = h ? h.visible : u.x !== null || wrecked; greyOut(g, tint); }
@@ -957,17 +957,20 @@ const Board = (() => {
   // ---------- Highlights on the table ----------
   // Red diagonal hatching for the fields a Move & shoot can go to (fire from there)
   const hatchTex = {};
-  // Diagonal stripes: red for Move & shoot, blue for the village to take
-  function hatch(colour = 'rgba(232,53,42,.85)') {
-    if (!hatchTex[colour]) {
+  // Diagonal stripes: red for Move & shoot, blue for the village to take. crossed: stripes both ways, for a Move & shoot
+  // to where it has a shot at close range (Steve)
+  function hatch(colour = 'rgba(232,53,42,.85)', crossed = false) {
+    const key = colour + (crossed ? '/crossed' : '');
+    if (!hatchTex[key]) {
       const c = document.createElement('canvas'); c.width = c.height = 128;
       const g = c.getContext('2d');
       g.strokeStyle = colour; g.lineWidth = 10;
       for (let k = -128; k < 256; k += 32) { g.beginPath(); g.moveTo(k, 128); g.lineTo(k + 128, 0); g.stroke(); }
-      hatchTex[colour] = new T.CanvasTexture(c);
-      hatchTex[colour].wrapS = hatchTex[colour].wrapT = T.RepeatWrapping;
+      if (crossed) for (let k = -128; k < 256; k += 32) { g.beginPath(); g.moveTo(k, 0); g.lineTo(k + 128, 128); g.stroke(); }
+      hatchTex[key] = new T.CanvasTexture(c);
+      hatchTex[key].wrapS = hatchTex[key].wrapT = T.RepeatWrapping;
     }
-    return hatchTex[colour];
+    return hatchTex[key];
   }
   const MARK = { hatch: '#e8352a', goal: '#3c96ff', assault: '#ff2a1a', cover: '#7dff5a', line: '#7dff5a', move: '#7fc6e0', charge: '#e0705f', shoot: '#e6c95a', rally: '#8fd47a', fire: '#e8a05a', breach: '#c9a46a', attach: '#b9a0e0', select: '#fff6dc', hover: '#ffffff', blast: '#ff5a1e', splash: '#ff9a3c', reach: '#8fd47a' };
 
@@ -996,8 +999,9 @@ const Board = (() => {
       const p = Sim.placeXY(k === 'c' ? null : k), cx = x + 0.5 + p.x / 3, cz = y + 0.5 + p.y / 3;
       const shoots = spot.cells.includes(k);
       if (!shoots && !spot.canCharge) continue;
+      const close = shoots && (spot.closeCells || []).includes(k);
       const material = shoots
-        ? new T.MeshBasicMaterial({ map: hatch(), transparent: true, opacity: 0.8, depthWrite: false })
+        ? new T.MeshBasicMaterial({ map: hatch(undefined, close), transparent: true, opacity: close ? 0.95 : 0.8, depthWrite: false })
         : new T.MeshBasicMaterial({ color: new T.Color(MARK.charge), transparent: true, opacity: 0.16, depthWrite: false });
       const cell = new T.Mesh(new T.PlaneGeometry(1 / 3 - 0.02, 1 / 3 - 0.02), material);
       at(cell, cx, 0.004, cz, -Math.PI / 2, 0, 0); marks.add(cell);
