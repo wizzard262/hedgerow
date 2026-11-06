@@ -1,11 +1,10 @@
-// Hedgerow: things on the table just to look at (Steve): cows and sheep, parachutes caught in trees, lamp posts, poster columns
+// Hedgerow: things on the table just to look at (Steve): cows and sheep, lamp posts, poster columns
 // and market stalls. None of it touches the rules. Worked out from the game's seed, so a game looks the same all the way through,
 // without using the game's dice. No drawing here: js/board3d.js draws what list() says
 const Scenery = (() => {
   // How often each thing turns up
   const ANIMALS = { farm: 0.4, country: 0.12 };   // the share of plain fields with animals in, on the farm and elsewhere
   const SHEEP = 0.4;                              // the share of those that are sheep, not cows
-  const PARACHUTE = 0.3;                          // the share of orchards with a parachute caught in a tree
   const LAMP = 0.35, POSTERS = 0.15;              // the share of the city's streets with one, at a corner of the field
   const CORNERS = [[-0.45, -0.45], [0.45, -0.45], [-0.45, 0.45], [0.45, 0.45]];
   const CORNER_AREAS = [['nw', -1, -1], ['ne', 1, -1], ['sw', -1, 1], ['se', 1, 1]];
@@ -42,7 +41,6 @@ const Scenery = (() => {
     for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
       const tile = Sim.tileType(x, y), R = diceFor(st.seed, x, y);
       if (tile === 'field' && !Sim.featuresAt(st, x, y).length && R() < (onFarm ? ANIMALS.farm : ANIMALS.country)) herd(R() < SHEEP ? 'sheep' : 'cow', x, y, R, out);
-      if (tile === 'orchard' && R() < PARACHUTE) out.push({ kind: 'parachute', x, y, tree: Math.floor(R() * 6), seed: Math.floor(R() * 1000) });
       if (tile === 'square') stalls(st, x, y, R, out);
       if (inCity && tile === 'street') {
         const corner = CORNERS[Math.floor(R() * CORNERS.length)];

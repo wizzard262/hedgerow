@@ -360,12 +360,6 @@ const Board = (() => {
     sceneryGroups = [];
     const byField = new Map();
     for (const item of Scenery.list(st)) {
-      if (item.kind === 'parachute') {
-        // Up in one of the orchard's trees
-        const seed = item.x * 7 + item.y * 13, trees = orchardTrees(seed), [ox, oz] = trees[item.tree % trees.length];
-        built.add(at(Models.parachute(item.seed), item.x + ox, 0.2, item.y + oz));
-        continue;
-      }
       if (item.kind === 'lamp') { built.add(at(Models.lampPost(), item.x, 0, item.y)); continue; }
       if (item.kind === 'posters') { built.add(at(Models.posterColumn(item.seed), item.x, 0, item.y)); continue; }
       const MAKERS = { cow: Models.cow, sheep: Models.sheep, stall: Models.marketStall };

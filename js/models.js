@@ -1009,20 +1009,6 @@ const Models = (() => {
     return castAll(g);
   }
 
-  // A parachute caught in a tree: a torn white canopy draped over it, and a tangle of lines hanging down
-  function parachute(seed) {
-    const g = new T.Group(), R = seeded(seed + 7);
-    if (!M.silk) { M.silk = mat('#e6e1d3', 0.9); M.silkLine = mat('#b9b3a2', 1); }
-    const canopy = new T.Mesh(new T.SphereGeometry(0.085, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.55), M.silk);
-    canopy.scale.set(1, 0.55, 0.85);
-    g.add(at(canopy, 0, 0, 0, (R() - 0.5) * 0.7, R() * 6, (R() - 0.5) * 0.7));
-    for (let i = 0; i < 6; i++) {
-      const a = (i / 6) * Math.PI * 2;
-      g.add(at(cyl(0.0012, 0.0012, 0.09 + R() * 0.05, M.silkLine, 4), Math.cos(a) * 0.055, -0.05, Math.sin(a) * 0.05, (R() - 0.5) * 0.3, 0, (R() - 0.5) * 0.3));
-    }
-    return castAll(g);
-  }
-
   // A street lamp: a thin iron post, a lantern on top
   function lampPost() {
     const g = new T.Group();
@@ -1178,5 +1164,5 @@ const Models = (() => {
     return castAll(g);
   }
 
-  return { cow, sheep, parachute, lampPost, posterColumn, marketStall, cafe, barn, fountain, pond, reeds, BRIDGE_DECK, materials, M, mergeParts, eliteBand, water, bridge, soldier, squad, team, captain, pak, mortar, bomber, bomberOnStand, howitzer, round, coin, token, sherman, panther, panzer4, hedge, tree, house, die, table, field, lane, at };
+  return { cow, sheep, lampPost, posterColumn, marketStall, cafe, barn, fountain, pond, reeds, BRIDGE_DECK, materials, M, mergeParts, eliteBand, water, bridge, soldier, squad, team, captain, pak, mortar, bomber, bomberOnStand, howitzer, round, coin, token, sherman, panther, panzer4, hedge, tree, house, die, table, field, lane, at };
 })();

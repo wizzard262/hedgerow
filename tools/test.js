@@ -3344,7 +3344,7 @@ check('the scenery is only to look at: the same each time for a game, on the rig
         const fx = Math.floor(item.x), fy = Math.floor(item.y);
         assert(Sim.inside(fx, fy), `${map.id}: ${item.kind} off the board at ${item.x},${item.y}`);
         const tile = Sim.tileType(fx, fy);
-        const ground = { cow: 'field', sheep: 'field', parachute: 'orchard', lamp: 'street', posters: 'street', stall: 'square' }[item.kind];
+        const ground = { cow: 'field', sheep: 'field', lamp: 'street', posters: 'street', stall: 'square' }[item.kind];
         assert(tile === ground, `${map.id}: ${item.kind} on a ${tile}`);
         // Animals stay out of fields with a barn or a pond, and things that could be in a piece's way say which field
         if (item.kind === 'cow' || item.kind === 'sheep') assert(!Sim.featuresAt(again, fx, fy).length, `${map.id}: animals in a field with a building or a pond`);
@@ -3358,7 +3358,8 @@ check('the scenery is only to look at: the same each time for a game, on the rig
       }
     }
   }
-  for (const k of ['cow', 'sheep', 'parachute', 'lamp', 'posters', 'stall']) assert(kinds.has(k), `no ${k} anywhere`);
+  for (const k of ['cow', 'sheep', 'lamp', 'posters', 'stall']) assert(kinds.has(k), `no ${k} anywhere`);
+  assert(!kinds.has('parachute'), 'a parachute is back');
   Sim.newGame(1);
 });
 
