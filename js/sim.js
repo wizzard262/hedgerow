@@ -2368,12 +2368,14 @@ const Sim = (() => {
     st.timerDrawn = false;
     // Shaken Germans stay shaken until their captain rallies them (Steve: only a rally clears it)
     for (const u of st.units) { u.halfShot = false; u.mayAmbush = false; }
+    // Every gun with rounds left can fire again, either side, and has its token (Steve: a German gun that fired used to miss
+    // the next bag)
+    st.fired = { us: {}, de: {} };
     st.bag = { us: movable(st, 'us'), de: movable(st, 'de'), timer: ROUND_TIMER };
     // Tokens drawn so far this round (the timer can't be the first, Steve)
     st.drawnThisRound = 0;
     st.drawn = null;
     st.activeId = null;
-    st.fired.de = {};
     st.roundRep = [];
   }
 
@@ -2565,7 +2567,6 @@ const Sim = (() => {
       // Down in cover: it stays down through a round it misses, then gets up
       if (!missed) u.down = false;
     }
-    st.fired.us = {};
     // A new round: the bombers' compasses spin afresh
     st.spin = {};
   }

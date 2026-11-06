@@ -3006,5 +3006,22 @@ check('a tank fires with the bazooka\'s sound; the PaK keeps its cannon, the mac
   assert(Sim.fireSound(piece('A'), 'rifle', 'us') === 'rifle', 'the rifles changed');
 });
 
+check('a gun that fired has its token in the next round\'s bag, on both sides alike', () => {
+  for (const mode of ['us', 'de', 'none']) {
+    for (const side of ['us', 'de']) {
+      const st = Sim.newGame(9, mode);
+      Sim.startRound(st);
+      const full = st.bag[side];
+      st.fired[side].artillery = true;
+      st.ammo[side].artillery = 2;
+      Sim.endRound(st);
+      if (st.won || st.lost) continue;
+      Sim.startRound(st);
+      assert(!st.fired[side].artillery, `${mode}: ${side} artillery still marked as fired`);
+      assert(st.bag[side] === full, `${mode}: ${side} has ${st.bag[side]} tokens after firing, not ${full}`);
+    }
+  }
+});
+
 console.log(failed ? `\n${failed} failed` : '\nall passed');
 process.exit(failed ? 1 : 0);
