@@ -44,27 +44,22 @@ window.Game = (() => {
     UI.setState(st);
   }
 
-  // Which map (Steve): one of MAPS, or a new one at random each game; asked with the sides, and remembered on this computer
+  // Which battle (Steve): asked with the sides, and remembered on this computer; to begin with, the first of the campaign
   const MAP_KEY = 'hedgerow-map';
   function rememberedMap() {
     try {
       const saved = localStorage.getItem(MAP_KEY);
-      return saved === 'random' || MAPS.some(m => m.id === saved) ? saved : 'random';
-    } catch (e) { return 'random'; }
+      return MAPS.some(m => m.id === saved) ? saved : CAMPAIGN[0];
+    } catch (e) { return CAMPAIGN[0]; }
   }
   function rememberMap(choice) {
     try { localStorage.setItem(MAP_KEY, choice); } catch (e) { /* not remembered: this game still plays it */ }
   }
   let chosenMap = rememberedMap();
-  // The map for a game: the one chosen, or one picked at random
-  function mapFor(choice) {
-    if (choice !== 'random') return choice;
-    return MAPS[Math.floor(Math.random() * MAPS.length)].id;
-  }
 
-  // mode: who plays each side; left out, as now. mapId: one of MAPS or 'random'; left out, as chosen
+  // mode: who plays each side; left out, as now. mapId: one of MAPS; left out, as chosen
   function start(seed, mode, mapId) {
-    setTable(seed, mode || st.mode, mapFor(mapId || chosenMap));
+    setTable(seed, mode || st.mode, mapId || chosenMap);
     gameStarted = true;
     Sim.startRound(st);
     changed();
@@ -94,10 +89,9 @@ window.Game = (() => {
   // The fields your shot at the target under the pointer would land on, when it can hit more than one piece:
   // mortars the whole field, artillery the field and the four next to it, a tank's high explosive at men the whole field
   function blastFor(shooter, target) {
-    // The bomber: its line through the edge field under the pointer
+    // The bomber: its line through the field under the pointer, anywhere on the board
     if (UI.view.mode === 'fire:bomber') {
-      const onEdge = hover && Sim.bomberEdges().some(f => f.x === hover.x && f.y === hover.y);
-      if (!onEdge) return [];
+      if (!hover) return [];
       const line = Sim.bomberLine(hover.x, hover.y, Sim.bomberHeading(st, st.human));
       return line.map(f => ({ x: f.x, y: f.y, main: true }));
     }
@@ -125,8 +119,7 @@ window.Game = (() => {
   // The bomber's line to draw on the table: under your pointer while you aim, or the one theirs has chosen
   function flightLineNow() {
     if (UI.view.mode === 'fire:bomber') {
-      const onEdge = hover && Sim.bomberEdges().some(f => f.x === hover.x && f.y === hover.y);
-      return onEdge ? { x: hover.x, y: hover.y, heading: Sim.bomberHeading(st, st.human) } : null;
+      return hover ? { x: hover.x, y: hover.y, heading: Sim.bomberHeading(st, st.human) } : null;
     }
     const run = st.computer && st.computer.run;
     return run ? { x: run.x, y: run.y, heading: Sim.bomberHeading(st, Sim.computerSide(st)) } : null;
@@ -155,10 +148,8 @@ window.Game = (() => {
       if (computerPicked && st.computer) spots.push(...UI.moveSpotsFor(Sim.unitById(st, computerPicked)));
       const planned = st.computer && (st.computer.ask || st.computer.aim);
       let others = [];
-      // Their bomber: the edge fields while it chooses (as yours show), then its line, and any piece of yours asked
+      // Their bomber: nothing lit while it chooses (as with yours), then its line, and any piece of yours asked
       const bombing = planned && (planned.bomber || planned.bombed);
-      const deBomber = st.computer && st.computer.move && st.computer.move.gun === 'bomber';
-      if (deBomber && !st.computer.run && !st.computer.ask && !st.computer.aim) spots.push(...Sim.bomberEdges().map(f => ({ x: f.x, y: f.y, kind: 'fire' })));
       if (bombing && st.computer.run) {
         const line = Sim.bomberLine(st.computer.run.x, st.computer.run.y, Sim.bomberHeading(st, Sim.computerSide(st)));
         blast = line.map(f => ({ x: f.x, y: f.y, main: true }));
@@ -222,7 +213,8 @@ window.Game = (() => {
       if (more) dirty = true;
       const p = Board.screenPoint(st.objective.x + 0.5, st.objective.y, 0.35), r = board.getBoundingClientRect();
       Object.assign($('#label').style, { left: p.x - r.left + 'px', top: p.y - r.top + 'px' });
-      $('#label').textContent = `🎯 ${st.objective.name}`;
+      // Taken: the round it must be held through, so nobody has to remember
+      $('#label').textContent = st.holdUntil ? `🚩 ${st.objective.name}: hold all of round ${st.holdUntil}` : `🎯 ${st.objective.name}`;
     }
     requestAnimationFrame(frame);
   }
@@ -384,7 +376,7 @@ window.Game = (() => {
     const round = Sim.roundText(st.turn);
     if (st.lost) return { title: '🏆 The American company is destroyed', text: `🏆 Nothing is left of the Americans on the table, in ${round}. The attack has failed.` };
     const germansLeft = st.units.some(u => u.side === 'de' && u.x !== null);
-    if (germansLeft) return { title: `💀 ${st.objective.name} has fallen`, text: `💀 The Americans took ${st.objective.name} and held it at the end of ${round}.` };
+    if (germansLeft) return { title: `💀 ${st.objective.name} has fallen`, text: `💀 The Americans took ${st.objective.name} and held it for the whole of ${round}.` };
     return { title: '💀 Your company is wiped out', text: `💀 Every German on the field is destroyed, in ${round}.` };
   }
 
@@ -502,13 +494,16 @@ window.Game = (() => {
   function tooltip(e, f) {
     const tip = $('#tip');
     if (!f) { tip.style.display = 'none'; return; }
-    const NAMES = { field: 'Field', orchard: 'Orchard', village: 'Village', hamlet: 'Hamlet', river: 'River', street: 'Street', square: 'Square', yard: 'Railway tracks', bridge: 'Bridge', laneEW: 'Lane', laneNS: 'Lane', crossroads: 'Crossroads' };
+    const NAMES = { field: 'Field', orchard: 'Orchard', village: 'Village', hamlet: 'Hamlet', river: 'River', sea: 'Sea', beach: 'Beach', street: 'Street', square: 'Square', yard: 'Railway tracks', bridge: 'Bridge', laneEW: 'Lane', laneNS: 'Lane', crossroads: 'Crossroads' };
     const here = Sim.at(st, f.x, f.y);
     const lines = here.map(u => `${u.side === 'us' ? 'US' : 'German'} · ${u.name}${u.kind === 'company' ? ` · ${u.platoons} sections` : ''}${u.ambush ? ' · in ambush' : ''}${u.shocked ? ' · shaken' : ''}`);
     // A wreck in the field: it is there to be hidden behind
     if (Sim.wreckAt(st, f.x, f.y)) lines.push('Burnt-out tank: blocks the view, +1 cover past its corner');
     // A café, a barn, a fountain or a pond: what it takes, and whether it blocks the view
-    for (const thing of Sim.featuresAt(st, f.x, f.y)) lines.push(thing.blocksView ? `${thing.name}: blocks the view, +1 cover past its corner` : `${thing.name}: nobody can stand there`);
+    for (const thing of Sim.featuresAt(st, f.x, f.y)) {
+      const trap = FEATURES[thing.kind].stopsTanks;
+      lines.push(trap ? `${thing.name}: no tank can enter; men here +1 cover` : thing.blocksView ? `${thing.name}: blocks the view, +1 cover past its corner` : `${thing.name}: nobody can stand there`);
+    }
     const t = Sim.tileType(f.x, f.y);
     // Houses and trees: their cover (see PLACE_COVER), and the view
     const place = PLACE_COVER[t];
@@ -557,20 +552,27 @@ window.Game = (() => {
   for (const side of ['us', 'de']) for (const who of ['human', 'robot']) {
     $(`#${side}-${who}`).onclick = () => { picked[side] = who; lightSides(); };
   }
-  // A button for each map, and Random; what the one lit does is said under them
+  // A card for each map, in the campaign's order, with its picture (made by tools/map-pictures.js) and date; what the one
+  // lit does is said under them
   function lightMap() {
-    for (const b of document.querySelectorAll('#map-choice button')) b.className = b.dataset.map === chosenMap ? 'on' : '';
+    for (const b of document.querySelectorAll('#map-choice button')) b.classList.toggle('on', b.dataset.map === chosenMap);
     const map = MAPS.find(m => m.id === chosenMap);
-    $('#map-note').textContent = map ? map.note : 'A different map each game.';
+    $('#map-note').textContent = map.note;
   }
-  for (const choice of [{ id: 'random', name: 'Random' }, ...MAPS]) {
+  function mapCard(id, title, date, picture) {
     const b = document.createElement('button');
-    b.id = 'map-' + choice.id;
-    b.dataset.map = choice.id;
-    b.textContent = choice.name;
-    b.onclick = () => { chosenMap = choice.id; lightMap(); };
+    b.id = 'map-' + id;
+    b.className = 'map-card';
+    b.dataset.map = id;
+    b.innerHTML = `<img src="${picture}" alt=""><b>${title}</b><span class="map-date">${date}</span>`;
+    b.onclick = () => { chosenMap = id; lightMap(); };
     $('#map-choice').append(b);
   }
+  CAMPAIGN.forEach((id, i) => {
+    const map = MAPS.find(m => m.id === id);
+    mapCard(id, `${i + 1}. ${map.name}`, map.date, `assets/maps/${id}.jpg`);
+  });
+
   // The four variations, from the two choices
   function pickedMode() {
     if (picked.us === 'human') return picked.de === 'human' ? 'both' : 'us';
@@ -591,7 +593,7 @@ window.Game = (() => {
   Board.init(board);
   UI.init(changed);
   // The table waits behind the question (Steve: the game starts by asking which side)
-  setTable(undefined, rememberedMode(), mapFor(chosenMap));
+  setTable(undefined, rememberedMode(), chosenMap);
   changed();
   askSide();
   fit();

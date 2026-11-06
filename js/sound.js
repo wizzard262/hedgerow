@@ -1,6 +1,6 @@
 // Hedgerow: battle sounds. Real recordings (free to use, see assets/audio/CREDITS.md) for rifles, the two machine guns,
 // tank guns and explosions, with a deep thump added under the big ones; made on the spot with the Web Audio API for the
-// rest: bazookas, mortars and shells whistling in, armour struck, men running, tanks driving. A battle goes on in the
+// rest: bazookas, mortars and shells whistling in, men running, tanks driving. A battle goes on in the
 // distance all the while. Future City Battle's pick-up for choosing a piece. Off until the first click (browsers
 // insist), and can be muted
 
@@ -53,7 +53,6 @@ const Sound = (() => {
     rifle: ['rifle1.mp3', 'rifle2.mp3', 'rifle3.mp3', 'rifle4.mp3', 'rifle5.mp3', 'rifle6.mp3', 'rifle7.mp3', 'rifle8.mp3'],
     mg30: ['mg30a.mp3', 'mg30b.mp3'],
     mg42: ['mg42a.mp3', 'mg42b.mp3'],
-    cannon: ['cannon1.mp3', 'cannon2.mp3'],
     boom: ['boom1.mp3', 'boom3.mp3'],
     bigBoom: ['boom2.mp3'],
   };
@@ -194,25 +193,9 @@ const Sound = (() => {
     mg(t, big, rounds = 5) { burst(t, rounds, 0.115, 0.9); },
     // The German MG 42: a ripping tear, twenty rounds a second
     mg42(t, big, rounds = 5) { burst(t, rounds, 0.05, 0.85); },
-    // A bazooka or Panzerschreck, and a tank (Steve): the bang of the launch and the rocket's roar away
+    // A bazooka or Panzerschreck, a tank, the PaK and a gun bunker (Steve): the bang of the launch and the rocket's roar away
     // (Steve: a roar as it flies) a longer, louder rush under the launch
     rocket(t) { noise(t, 0.05, 2500, 0.5, 0.8, 'highpass'); noise(t, 0.9, 700, 0.6, 0.9, 'bandpass'); noise(t + 0.05, 0.6, 250, 0.4, 0.8, 'lowpass'); tone(t, 0.6, 300, 900, 0.12, 'sawtooth'); },
-    // The PaK (tanks fire with the bazooka's sound, Steve): a sharp crack, a huge ka-boom, and its echo rolling back off the hedges
-    gun(t) {
-      if (playFile('cannon', t, 1, 0.75 + Math.random() * 0.1)) {
-        // The recording, slowed to make it heavier, with a deep thump under it
-        tone(t, 1.3, 70, 24, 0.9);
-        noise(t, 1.2, 200, 0.3, 0.6);
-        return;
-      }
-      noise(t, 0.03, 3500, 0.4, 1, 'highpass');
-      tone(t, 1.5, 70, 24, 1);
-      tone(t, 0.3, 180, 55, 0.9, 'triangle');
-      noise(t, 1.8, 240, 0.3, 1);
-      noise(t + 0.02, 0.7, 900, 0.5, 0.55);
-      tone(t + 0.38, 1, 60, 25, 0.4);
-      noise(t + 0.38, 1.3, 260, 0.3, 0.35);
-    },
     // A mortar firing somewhere behind the lines: a hollow pop, and the bomb's rising whistle on the way up
     mortar(t) { tone(t, 0.2, 240, 120, 0.4, 'triangle'); noise(t, 0.15, 500, 0.6, 0.3); },
     // A round coming in: a falling whistle, getting louder, for as long as it takes to land
@@ -234,7 +217,6 @@ const Sound = (() => {
     distantGun(t) { tone(t, 0.6, 60, 30, 0.35); noise(t, 0.5, 300, 0.4, 0.25); },
     // Impacts: bullets kicking up dirt, a shell striking armour, high explosive going off
     bullets(t) { for (let k = 0; k < 6; k++) noise(t + k * 0.06 + Math.random() * 0.04, 0.06, 1400, 0.8, 0.2, 'bandpass'); },
-    clang(t) { tone(t, 0.7, 950, 720, 0.25, 'square'); tone(t, 0.9, 1430, 1300, 0.12, 'triangle'); noise(t, 0.2, 4000, 2, 0.45, 'bandpass'); },
     he(t, big) {
       if (playFile(big ? 'bigBoom' : 'boom', t, 1, 0.8 + Math.random() * 0.2)) { tone(t, 1.2, 65, 22, big ? 0.9 : 0.6); return; }
       blast(t, big ? 1 : 0.75);

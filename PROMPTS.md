@@ -1314,6 +1314,67 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - Steve: signals do not block line of sight. A signal still takes its area, but pieces can see and shoot past it
 - (v130 had a slip in the words for the map that stopped the game loading; v131 puts it right. Neither was pushed)
 
+## 222. The beach landing (v132)
+
+- Steve: landing craft in the water, the water animated moving in and out, much damage, tank traps, proper German gun bunkers. Asked how a bunker works, Steve picked: a fixed gun with a weak back. The Americans must capture the main bunker. Germans fewer, but with some loose MGs and infantry; no German tanks, but artillery
+- The beach is now four fields of sand deep (Steve: two fields longer). The board stays twelve fields wide, so the land is two fields shorter (assumption: "longer" means more sand to cross, not a bigger board)
+- The Americans all start in the sea, one landing craft to a field, and can only go forward. The surf runs in and out, with foam along its edge and smoke from the wrecks. Tank traps stop tanks, and men among them have one more to hit; lanes are always clear
+- The sea wall stands where the sand meets the land. A bunker is built into it, and the wall stops either side
+- Forces: the Germans lose the PaK, three MG teams' worth of pieces and the tanks, and have three bunkers on the sea wall, the main bunker, and more artillery. Measured over 80 games each: two robots, Americans 53%, Germans 30%, 18% unfinished after 30 rounds
+
+## 223. Bunkers you can see into (v132)
+
+- Steve: a U of concrete with a slit, an MG team or a PaK 40 to be seen inside. It must be obvious the sides are easier to shoot
+- The front is a thick, tall wall with a slit down it, the gun through the slit; the sides are thin and low; the back and top are open. Each is named for what is in it (MG bunker, PaK 40 bunker)
+- Painted on the ground round each: FRONT +3 in red, SIDE: EASY and BACK: EASY in green. The label on a shot says "+3 bunker front" or "+0 bunker side"
+- No hedge grows round a bunker's field, so its sides really are open to get at (assumption, to make the point clear)
+- Knocked out, it stays where it stands, scorched and burning, with nobody in it and no signs
+
+## 224. The campaign (v132)
+
+- Steve: order the levels as a campaign, a picture for each, in geographical order from the beach through the bocage and farms to the station and Paris. Remove Random. Two rows of pictures in a bigger dialog
+- Eight battles with dates, 6 June to 25 August 1944: Beach landing, Deep bocage, Hedge country, Open farmland, River crossing, Crossroads town, Train station, Paris. Any can be played, in any order (assumption: no locked levels). The pictures are made by tools/map-pictures.js
+
+## 225. Sherman 75mm and Sherman 76mm (v132)
+
+- Steve: rename the Firefly to Sherman 76mm, and give the first Sherman a name for its smaller gun. The Sherman is now the Sherman 75mm. Their dice and models are unchanged
+
+## 226. The Eiffel Tower (v132)
+
+- Steve: Paris needs an Eiffel Tower at the back of the map to capture; tall, but it cannot hide the board. Steve picked: over the target
+- It stands in the middle of the back row, always, on open paving with a street to it. The pieces stand between its legs, it takes none of the field's areas, it is open ironwork so it blocks no view, and men there have one more to hit
+- The camera backs off in Paris just enough for its top to show, in a window of any shape, and comes back on the next map. tools/check-page.js checks that
+
+## 227. A Hail Mary in weaker red (v132)
+
+- Steve: weaker red hatching where a piece would be moving to a shot that is a Hail Mary, if a Hail Mary is the only option from that space
+- An area is pale only if every shot from it would be a Hail Mary; one real shot from there and it is the usual red. If the whole field is pale, its rim is too
+
+## 228. No more old tank noises (v132)
+
+- Steve: the old tank shot noise is still there; make it like a bazooka. Then: it might be the tank being hit
+- v120 had changed only the tanks' own shots. The PaK and the new gun bunkers still used the old cannon, and a shell hitting a tank still used the old clang. Now every gun fires with the bazooka's sound, and a hit on a tank is the same burst as a bazooka's. The old cannon and clang are gone from the code (the two recordings stay in assets/audio, unused)
+
+## 229. Hold the goal for the whole of the next round (v132)
+
+- Steve: I moved into the depot on the last move of the round and won after holding it for one move. All goals must be held for the whole of the next round
+- Taking the goal at the end of a round now only starts the count. It must be held after every move of the next round (a rifle platoon in it, no Germans), and at that round's end you win. Lost at any moment, it must be taken and held all over again
+- The name over the goal says which round to hold it through. Both sides alike: a human German loses the same way
+
+## 230. The bomber aims anywhere (v132)
+
+- Steve: for a bomber, do not highlight the board edges; the mouse anywhere on the board draws the bomber line
+- Nothing is lit. The line runs through the field under the pointer, at the compass's heading, and a click anywhere flies it. Both sides alike: the computer's bomber chooses from every field too, and shows no lit edges while it chooses
+
+## 231. A bunker's arc is 120 degrees (v132)
+
+- Steve: bunkers can only fire like 120 degrees to the front. It was 90: now 60 either side of straight ahead. The thick front covers the same arc (assumption: where it can shoot is where its front faces), so the +3 and the no-charge rule use it too, and the sides are what is left
+
+## 232. The Eiffel Tower in the centre (v132)
+
+- Steve: move the Eiffel Tower to the centre of the board: at the top it wasted too much space; let's see how it looks. It now stands at field 6,4. Its top is always well inside the picture, so Paris has the same view as every other map, and the camera code for backing off (226) is gone
+- Its ironwork passes in front of the fields behind it. It still blocks no shots
+
 ## Sessions
 
 | # | Date | Length | What we did |
@@ -1322,4 +1383,4 @@ How the game was made: each prompt, what was built, and the assumptions made.
 | 2 | 2026-10-31 | about 7 hours | Prompts 85–124: small targets, houses +2, small houses round the square, stop at a wipe-out; shaken token on the base, shaken not pinned; captain's blue rally targets; no river; taking cover halves the dice; no pick-up sound; the timer token; brown German bases, Germans greyed out; no glare, rounds not hours; tokens fly back into the bag; one round per base, the rocket, tanks turn then fire in turn; tanks face the nearest enemy, side by side; no Pass button; hand to hand to the finish; take cover in a word bubble; rally offered after the captain moves; villages and orchards seen only at their edge; a clearer timer token, a matt coin; no crowding in a field, no token sound; German cards and pictures, shaken half moves, sounds back, timer in the middle, bubbles below at the top, bombers; the prompts page; German pick sounds, hops, the timer hovering, louder bombers; moved pieces green for yours, grey for theirs; the guns hop too; the elite token explained, each tank recoils on its own; hand to hand shown blow by blow, tinted only when the move is complete; the timer never first; German tanks back; pieces in a village see out; a German captain; Germans move by your rules, rallies shown; tanks drive men back, captains can die |
 | 3 | 2026-11-03 | about 11 hours | Prompts 125–187: rallies always work and are the only cure for shaken; the end waits for the last shot; elite gold band, grey German tanks; a cleaner sand-glass; PaK crew of three that turns to fire; no more ammo; the table lower; the timer checked fair; a longer board with the villages at the back; targets back on reselecting; one tank a unit; tanks drive in curves, no spinning; shaken, never pinned; the villages three fields nearer; only used tokens fly back; no stall at the start; the Germans show their aim; the label top to bottom; taking cover on the tag; the last roll in the corner; the .50 cal; seeing the whole board; orchards; three men a base, camouflage, Fallschirmjäger; a brighter elite ring; the red dice in the corner; German move fields; one cover rule for houses and trees; wire snags tanks; Rangers, round bases; shots and sounds a base; bazooka dice; Elite in the panel; tank armour shown; no hedges round villages and orchards; nine areas a field; sight by areas and hedge thirds; big pieces hide in the middle; the captain's rallies; the Germans take cover; corner to corner sight; tanks block sight; hatching by area; one arrow a label; take cover +2; tank dice; the captain done; menu Skip and Rally; a row of dice per piece shelled; corners of villages and orchards; bubbles clear of other targets; cross-hairs apart; only used tokens fly home; villages seen into at any angle; same village means same field; a tidy-up; Hail Mary; frame rate |
 | 4 | 2026-11-05 | about an hour | Prompts 198–199: burning wrecks: flames, smoke, a scorched hull, a wreck that blocks sight and leaves room for a platoon; big screens on small machines |
-| 5 | 2026-11-06 | about 6.5 hours | Prompts 200–221: playing as the Germans: the game asks which side at the start and under New game, the American computer attacks, the Germans win by destroying every American piece on the table; the captain's menu kept off his rally targets; the PaK moves within its field, faces out of its square, and can lie in ambush on the same go; a captain in cover can't rally; close range, −1 for every shot, with crossed hatching; the captains' submachine guns, close range only; a 1 always misses; moved colours by army; human or robot for each side, all four variations; shots drawn in order; the PaK round the large village; tank shots sound like the bazooka; a tidy; German guns get their token; more maps and a stone bridge; Paris, barns, a duck pond, reeds and cobbles; tanks go further on the road; cafés and barns of different lengths; things just to look at; the train station |
+| 5 | 2026-11-06 | about 8.5 hours | Prompts 200–232: playing as the Germans: the game asks which side at the start and under New game, the American computer attacks, the Germans win by destroying every American piece on the table; the captain's menu kept off his rally targets; the PaK moves within its field, faces out of its square, and can lie in ambush on the same go; a captain in cover can't rally; close range, −1 for every shot, with crossed hatching; the captains' submachine guns, close range only; a 1 always misses; moved colours by army; human or robot for each side, all four variations; shots drawn in order; the PaK round the large village; tank shots sound like the bazooka; a tidy; German guns get their token; more maps and a stone bridge; Paris, barns, a duck pond, reeds and cobbles; tanks go further on the road; cafés and barns of different lengths; things just to look at; the train station; the beach landing with U-shaped bunkers, the campaign of eight battles with pictures, Sherman 75mm and 76mm, the Eiffel Tower to capture, pale hatching for a Hail Mary, the old tank noises gone, the goal held for a whole round to win, the bomber aimed anywhere on the board |

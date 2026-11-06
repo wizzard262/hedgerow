@@ -63,6 +63,8 @@ const Board = (() => {
   function resize(w, h) {
     shownW = w; shownH = h;
     setResolution();
+    // (every fit from the plain camera: with the last shift still on, a resized window left the board higher up)
+    camera.clearViewOffset();
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
     const centre = new T.Vector3(COLS / 2, 0, ROWS / 2);
@@ -333,6 +335,7 @@ const Board = (() => {
       if (t === 'village' || t === 'hamlet') addHouses(x, y, seed);
     }
     if (st.map.joins) addTracks(st);
+    addSea(st);
     for (const f of st.features) addFeature(f);
     addScenery(st);
     // Fields, houses and trees never move: merged, they are drawn in a few goes
@@ -361,6 +364,7 @@ const Board = (() => {
     sceneryGroups = [];
     const byField = new Map();
     for (const item of Scenery.list(st)) {
+      if (item.kind === 'crater') { built.add(at(Models.crater(item.seed), item.x, 0, item.y)); continue; }
       if (item.kind === 'lamp') { built.add(at(Models.lampPost(), item.x, 0, item.y)); continue; }
       if (item.kind === 'posters') { built.add(at(Models.posterColumn(item.seed), item.x, 0, item.y)); continue; }
       const MAKERS = { cow: Models.cow, sheep: Models.sheep, stall: Models.marketStall };
@@ -410,6 +414,118 @@ const Board = (() => {
     }
   }
 
+  // ---------- The sea (Steve: the water moving in and out) ----------
+  // The sea's own surface over the first column, then the surf: a sheet of shallow water whose edge runs in and out over the
+  // sand, uneven along the shore, with a line of foam along that edge and another left behind it as it draws back. The landing
+  // craft ride on it. Moved every frame in moveSea
+  const SURF = { shore: 1, steps: 64, in: 0.2, slow: 0.65 };
+  let sea = null;
+  function ribbon(material, y) {
+    const geo = new T.PlaneGeometry(1, ROWS, 1, SURF.steps);
+    const mesh = new T.Mesh(geo, material);
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.set(0, y, ROWS / 2);
+    mesh.renderOrder = 1;
+    return mesh;
+  }
+  function addSea(st) {
+    if (sea) { scene.remove(sea.group); freeObject(sea.group); sea = null; }
+    if (!st.map.landing) return;
+    const group = new T.Group();
+    const R = seeded(st.seed + 5);
+    // The deep water, its ripples drifting back and forth
+    const c = document.createElement('canvas'); c.width = c.height = 256;
+    const g = c.getContext('2d');
+    g.fillStyle = '#2f5f68'; g.fillRect(0, 0, 256, 256);
+    for (let i = 0; i < 90; i++) {
+      g.strokeStyle = i % 3 ? 'rgba(170,215,220,.2)' : 'rgba(20,50,60,.35)';
+      g.lineWidth = 1 + R() * 2;
+      const x = R() * 256, y = R() * 256, tall = 14 + R() * 30;
+      g.beginPath(); g.moveTo(x, y); g.quadraticCurveTo(x + 6, y + tall / 2, x, y + tall); g.stroke();
+    }
+    const ripples = new T.CanvasTexture(c);
+    ripples.wrapS = ripples.wrapT = T.RepeatWrapping;
+    ripples.repeat.set(1, ROWS);
+    ripples.encoding = T.sRGBEncoding;
+    const deep = new T.Mesh(new T.PlaneGeometry(SURF.shore, ROWS), new T.MeshStandardMaterial({ map: ripples, roughness: 0.2, metalness: 0.15 }));
+    deep.rotation.x = -Math.PI / 2;
+    deep.position.set(SURF.shore / 2, 0.004, ROWS / 2);
+    deep.receiveShadow = true;
+    group.add(deep);
+    // Sand the water has just left, darker
+    const wet = new T.Mesh(new T.PlaneGeometry(0.42, ROWS), new T.MeshBasicMaterial({ color: 0x4d3f2b, transparent: true, opacity: 0.32, depthWrite: false }));
+    wet.rotation.x = -Math.PI / 2;
+    wet.position.set(SURF.shore + 0.13, 0.0035, ROWS / 2);
+    group.add(wet);
+    // The sheet of shallow water, and the two lines of foam
+    const sheet = ribbon(new T.MeshStandardMaterial({ color: 0x4f8f96, transparent: true, opacity: 0.72, roughness: 0.15, metalness: 0.1, depthWrite: false }), 0.006);
+    const foam = ribbon(new T.MeshBasicMaterial({ color: 0xf2f4ee, transparent: true, opacity: 0.92, depthWrite: false }), 0.0075);
+    const oldFoam = ribbon(new T.MeshBasicMaterial({ color: 0xe6e8e0, transparent: true, opacity: 0.45, depthWrite: false }), 0.007);
+    group.add(sheet, foam, oldFoam);
+    // A landing craft in each field of the sea
+    const craft = [];
+    for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
+      if (Sim.tileType(x, y) !== 'sea') continue;
+      const m = Models.mergeParts(Models.landingCraft());
+      group.add(at(m, x + 0.46, 0.006, y + 0.5));
+      craft.push({ mesh: m, phase: R() * 6.28 });
+    }
+    // Smoke rising from the wrecks
+    const plumes = [];
+    for (const f of st.features) {
+      if (f.kind !== 'hulk') continue;
+      for (let i = 0; i < 6; i++) {
+        const puff = new T.Sprite(new T.SpriteMaterial({ map: smokeTex(), color: 0x24211e, transparent: true, depthWrite: false }));
+        group.add(puff);
+        plumes.push({ puff, x: f.x + 0.5, z: f.y + (f.side === 'n' ? 0.2 : 0.8), phase: i / 6, drift: R() * 6.28 });
+      }
+    }
+    scene.add(group);
+    sea = { group, ripples, sheet, foam, oldFoam, craft, plumes };
+  }
+  // Where the water's edge is, along the shore, at a moment (t in seconds): the main surge in and out, with slower and quicker
+  // waves running along it so it is never a straight line
+  function surfEdge(z, t) {
+    const surge = Math.sin(t * SURF.slow) * SURF.in;
+    const along = Math.sin(z * 1.3 + t * 0.5) * 0.06 + Math.sin(z * 3.7 - t * 0.9) * 0.03 + Math.sin(z * 9.1 + t * 1.4) * 0.012;
+    return SURF.shore + 0.02 + surge + along;
+  }
+  // Set a ribbon between two lines, each given as x along the shore
+  function setRibbon(mesh, inner, outer) {
+    const p = mesh.geometry.attributes.position;
+    for (let i = 0; i < p.count; i++) {
+      // (a plane's vertices come in rows from one end to the other, two to a row: left, then right)
+      const row = Math.floor(i / 2), z = (row / SURF.steps) * ROWS;
+      p.setX(i, i % 2 === 0 ? inner(z) : outer(z));
+    }
+    p.needsUpdate = true;
+    mesh.geometry.computeBoundingSphere();
+  }
+  // One frame of the sea. Returns true if there is a sea
+  function moveSea(now) {
+    if (!sea) return false;
+    const t = now / 1000;
+    sea.ripples.offset.x = Math.sin(t * SURF.slow) * 0.06 + t * 0.012;
+    const edge = z => surfEdge(z, t);
+    // (the line left behind lags: where the water reached a moment ago, as it draws back)
+    const left = z => Math.max(surfEdge(z, t - 1.1), surfEdge(z, t)) + 0.006;
+    setRibbon(sea.sheet, () => SURF.shore - 0.32, edge);
+    setRibbon(sea.foam, z => edge(z) - 0.022 - Math.abs(Math.sin(z * 11 + t)) * 0.012, z => edge(z) + 0.004);
+    setRibbon(sea.oldFoam, z => left(z) - 0.008, z => left(z));
+    for (const c of sea.craft) {
+      c.mesh.position.y = 0.006 + Math.sin(t * 0.9 + c.phase) * 0.004;
+      c.mesh.rotation.z = Math.sin(t * 0.7 + c.phase) * 0.012;
+      c.mesh.rotation.x = Math.sin(t * 0.55 + c.phase * 2) * 0.01;
+    }
+    for (const p of sea.plumes) {
+      const age = (t * 0.14 + p.phase) % 1;
+      p.puff.position.set(p.x + Math.sin(p.drift + t * 0.3) * 0.02 + age * 0.12, 0.08 + age * 0.75, p.z - age * 0.05);
+      p.puff.scale.setScalar(0.1 + age * 0.34);
+      p.puff.material.opacity = (1 - age) * 0.55;
+    }
+    return true;
+  }
+
   // The railway yard's tracks: one along the north row of each field's areas and one along the south, a buffer stop where one
   // runs up against houses, and pieces of track where they join: within a field, or down to the track of the field below
   const TRACK_ROWS = [0.5 - 1 / 3, 0.5 + 1 / 3];
@@ -440,8 +556,10 @@ const Board = (() => {
   function addFeature(f) {
     const MAKERS = {
       cafe: Models.cafe, barn: Models.barn, fountain: Models.fountain, pond: Models.pond,
-      engine: Models.engine, carriage: Models.carriage, wagon: Models.wagon, signalbox: Models.signalbox, signal: Models.signal, watertower: Models.watertower, coal: Models.coal,
+      eiffel: Models.eiffel, tanktrap: Models.tankTrap, hulk: Models.hulk, engine: Models.engine, carriage: Models.carriage, wagon: Models.wagon, signalbox: Models.signalbox, signal: Models.signal, watertower: Models.watertower, coal: Models.coal,
     };
+    // The tower stands over its whole field, on no areas of its own
+    if (f.kind === 'eiffel') { built.add(at(MAKERS.eiffel(), f.x + 0.5, 0, f.y + 0.5)); return; }
     const spots = f.areas.map(k => Sim.placeXY(k === 'c' ? null : k));
     const midX = spots.reduce((n, p) => n + p.x, 0) / spots.length, midY = spots.reduce((n, p) => n + p.y, 0) / spots.length;
     const alongX = new Set(spots.map(p => p.y)).size === 1;
@@ -475,6 +593,16 @@ const Board = (() => {
     });
   }
 
+  // A field's stretch of the sea wall along its west edge; with a bunker built into it, only the wall beyond the bunker
+  function addSeaWall(st, x, y) {
+    const here = (st.units.some(u => u.x === x && u.y === y && Sim.isBunker(u))) || st.wrecks.some(w => w.x === x && w.y === y && PIECES[w.kind].bunker);
+    if (!here) { hedgeGroup.add(at(Models.seaWall(), x, 0, y + 0.5)); return; }
+    // The bunker covers the field's edge from BUNKER_GAP.from to .to
+    hedgeGroup.add(at(Models.seaWall(BUNKER_GAP.from), x, 0, y + BUNKER_GAP.from / 2));
+    hedgeGroup.add(at(Models.seaWall(1 - BUNKER_GAP.to), x, 0, y + (1 + BUNKER_GAP.to) / 2));
+  }
+  const BUNKER_GAP = { from: 0.06, to: 0.63 };
+
   // Hedges: every lump of foam on the table drawn as one instanced mesh (one for dark foam, one for light, one for the bases),
   // so the whole board stays quick to draw. Rebuilt when a hedge is cut
   function buildHedges(st) {
@@ -485,7 +613,11 @@ const Board = (() => {
     hedgeGroup = new T.Group();
     const runs = [];
     for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
-      if (x + 1 < COLS && Sim.hedge(st, x, y, x + 1, y)) runs.push({ cx: x + 1, cz: y + 0.5, along: 'z', seed: x * 31 + y });
+      if (x + 1 < COLS && Sim.hedge(st, x, y, x + 1, y)) {
+        // Where the sand meets the land it is the sea wall, not a hedge
+        if (Sim.tileType(x, y) === 'beach') addSeaWall(st, x + 1, y);
+        else runs.push({ cx: x + 1, cz: y + 0.5, along: 'z', seed: x * 31 + y });
+      }
       if (y + 1 < ROWS && Sim.hedge(st, x, y, x, y + 1)) runs.push({ cx: x + 0.5, cz: y + 1, along: 'x', seed: x * 17 + y * 5 + 3 });
     }
     const lumps = [[], []], bases = [];
@@ -503,6 +635,8 @@ const Board = (() => {
     }
     const ball = new T.SphereGeometry(1, 7, 5);
     [Models.M.foam, Models.M.foamLight].forEach((mat, i) => {
+      // (a map may have no hedges at all)
+      if (!lumps[i].length) return;
       const im = new T.InstancedMesh(ball, mat, lumps[i].length);
       lumps[i].forEach((mm, k) => im.setMatrixAt(k, mm));
       im.castShadow = im.receiveShadow = true;
@@ -557,6 +691,16 @@ const Board = (() => {
 
   // ---------- Pieces ----------
 
+  // A bunker: its concrete, with who is in it and the signs on the ground kept apart, as they go when it is knocked out
+  function bunkerBase(gun) {
+    const walls = Models.mergeParts(Models.bunker(gun));
+    markerSpots(walls);
+    walls.userData.crew = Models.mergeParts(Models.bunkerCrew(gun));
+    walls.userData.signs = Models.bunkerSigns();
+    walls.add(walls.userData.crew, walls.userData.signs);
+    return walls;
+  }
+
   // The model for a piece, made the first time it is needed
   // The models that make up a piece, each a base on the table, scaled: a rifle platoon's three section bases, a tank
   // (one to a unit, Steve), or a team's (or the captain's) one base. Used for the table and for the panel's picture
@@ -569,6 +713,7 @@ const Board = (() => {
       const make = { sherman: () => Models.sherman(Models.M.olive), firefly: () => Models.sherman(Models.M.olive, true), pz4: Models.panzer4, panther: Models.panther }[kind];
       return [0].map(() => { const m = Models.mergeParts(make()); markerSpots(m); m.scale.setScalar(TANKS); m.userData.slowTurn = true; return m; });
     }
+    if (PIECES[kind].bunker) return [bunkerBase(kind === 'bunker_gun')];
     const m = Models.mergeParts(kind === 'captain' ? Models.captain(side) : kind === 'pak' ? Models.pak() : Models.team(side, kind));
     markerSpots(m);
     m.scale.setScalar(kind === 'pak' ? TANKS * 1.3 : MEN);
@@ -1030,9 +1175,24 @@ const Board = (() => {
     }
   }
 
+  // A bunker knocked out: it stays where it stands, scorched and burning, with nobody in it and no signs. Returns the fire
+  function setBunkerWreck(w, g, hull) {
+    g.userData.way = null;
+    hull.visible = true;
+    hull.userData.crew.visible = false;
+    hull.userData.signs.visible = false;
+    Fire.scorch(hull);
+    const fire = Fire.make(Math.PI);
+    fire.position.set(w.x + hull.position.x, 0, w.y + hull.position.z);
+    fire.userData.wreck = w;
+    scene.add(fire);
+    return fire;
+  }
+
   // Scorch the hull, set it down in its corner, and light it. Returns the fire
   function setWreck(st, w, g) {
     const hull = g.userData.bases[0];
+    if (PIECES[w.kind].bunker) return setBunkerWreck(w, g, hull);
     // Square to the field: the way it faced, to the nearest quarter turn
     const quarter = Math.round(hull.rotation.y / (Math.PI / 2));
     const facing = quarter * (Math.PI / 2);
@@ -1083,7 +1243,8 @@ const Board = (() => {
   // Red diagonal hatching for the fields a Move & shoot can go to (fire from there)
   const hatchTex = {};
   // Diagonal stripes: red for Move & shoot, blue for the village to take. crossed: stripes both ways, for a Move & shoot
-  // to where it has a shot at close range (Steve)
+  // to where it has a shot at close range (Steve). HAIL_MARY_RED: weaker red, where its only shot would be a Hail Mary (Steve)
+  const HAIL_MARY_RED = 'rgba(232,53,42,.32)';
   function hatch(colour = 'rgba(232,53,42,.85)', crossed = false) {
     const key = colour + (crossed ? '/crossed' : '');
     if (!hatchTex[key]) {
@@ -1103,6 +1264,8 @@ const Board = (() => {
   // spot: a Move & shoot field's cells (Steve: only the areas it can fire from are hatched; the rest a Charge's wash if
   // it can charge there)
   function mark(x, y, kind, inset = 0.05, spot = null) {
+    // (a field that takes a click but shows nothing: the bomber's aim)
+    if (kind === 'unlit') return;
     const c = new T.Color(MARK[kind]);
     if (spot && spot.cells && kind === 'hatch') { markCells(x, y, spot); return; }
     const striped = kind === 'hatch' || kind === 'goal';
@@ -1125,14 +1288,17 @@ const Board = (() => {
       const shoots = spot.cells.includes(k);
       if (!shoots && !spot.canCharge) continue;
       const close = shoots && (spot.closeCells || []).includes(k);
+      const hailMary = shoots && (spot.hailCells || []).includes(k);
       const material = shoots
-        ? new T.MeshBasicMaterial({ map: hatch(undefined, close), transparent: true, opacity: close ? 0.95 : 0.8, depthWrite: false })
+        ? new T.MeshBasicMaterial({ map: hatch(hailMary ? HAIL_MARY_RED : undefined, close), transparent: true, opacity: close ? 0.95 : 0.8, depthWrite: false })
         : new T.MeshBasicMaterial({ color: new T.Color(MARK.charge), transparent: true, opacity: 0.16, depthWrite: false });
       const cell = new T.Mesh(new T.PlaneGeometry(1 / 3 - 0.02, 1 / 3 - 0.02), material);
       at(cell, cx, 0.004, cz, -Math.PI / 2, 0, 0); marks.add(cell);
     }
     const s = 0.45, pts = [[-s, -s], [s, -s], [s, s], [-s, s], [-s, -s]].map(([a, b]) => new T.Vector3(x + 0.5 + a, 0.006, y + 0.5 + b));
-    marks.add(new T.Line(new T.BufferGeometry().setFromPoints(pts), new T.LineBasicMaterial({ color: red, transparent: true, opacity: 0.95 })));
+    // (the rim as weak as the hatching, if nothing better than a Hail Mary is to be had anywhere in the field)
+    const onlyHail = spot.cells.length > 0 && spot.cells.every(k => (spot.hailCells || []).includes(k));
+    marks.add(new T.Line(new T.BufferGeometry().setFromPoints(pts), new T.LineBasicMaterial({ color: red, transparent: true, opacity: onlyHail ? 0.4 : 0.95 })));
   }
 
   // Over a field a piece can move to: where it would stand (by the hedge under the pointer, or in the open), and
@@ -1665,7 +1831,8 @@ const Board = (() => {
         const heard = f.weapon === 'gun' ? roundsOf(f) : 1;
         for (let k = 0; k < heard; k++) {
           Sound.play(Sim.fireSound(shooter, f.weapon, f.side), wait + k * TANK_GAP, false, roundsOf(f));
-          Sound.play(f.armour && f.weapon === 'gun' ? 'clang' : f.weapon === 'gun' || f.weapon === 'rocket' ? 'he' : 'bullets', wait + k * TANK_GAP + flight);
+          // (a hit on a tank too, Steve: the same burst as a bazooka's, not the old clang)
+          Sound.play(f.weapon === 'gun' || f.weapon === 'rocket' ? 'he' : 'bullets', wait + k * TANK_GAP + flight);
         }
       } else if (f.kind === 'shell') {
         // Fire support: the first round of a mission is heard fired and coming in; up to four rounds are heard landing
@@ -2213,7 +2380,7 @@ const Board = (() => {
     const firing = playShots(now);
     const flying = moveCoin(now) | moveHoming(now) | moveCompass(now);
     // Fires flicker all the time, but cast no shadows, so they don't count as busy
-    const burning = burnWrecks(st, now, dt);
+    const burning = burnWrecks(st, now, dt) | moveSea(now);
     // Shadows: worked out again only while something moves, and once more after it stops
     const busy = moving || hopping || firing || flying || shadowStale;
     renderer.shadowMap.needsUpdate = busy || wasBusy;
@@ -2361,6 +2528,7 @@ const Board = (() => {
       m.scale.setScalar(kind === 'artillery' ? TANKS * 1.7 : MEN * 1.3);
       bases = [m];
     } else bases = buildBases(side, kind, elite);
+    for (const b of bases) if (b.userData.signs) b.userData.signs.visible = false;
     if (elite) for (const b of bases) Models.eliteBand(b);
     const spots = kind === 'company' ? [[-0.11, -0.09], [0.11, -0.07], [0, 0.11]] : [[0, 0]];
     bases.forEach((b, i) => { b.position.set(spots[i][0], 0, spots[i][1]); g.add(b); });

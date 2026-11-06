@@ -802,7 +802,7 @@ check('the bomber flies a straight line: every field it crosses, in order, throu
   assert(east.length === COLS && east.every(f => f.y === 2), 'east did not fly along one row');
   assert(slant.length === 8 && slant.every(f => f.x + f.y === 7), `the 45° line crossed ${slant.length} fields`);
   // Every one of the sixteen headings through every edge field: unbroken, and through the chosen field
-  for (let heading = 0; heading < BOMBER.directions; heading++) for (const e of Sim.bomberEdges()) {
+  for (let heading = 0; heading < BOMBER.directions; heading++) for (const e of Sim.bomberAims()) {
     const line = Sim.bomberLine(e.x, e.y, heading);
     assert(line.some(f => f.x === e.x && f.y === e.y), `heading ${heading} missed its field`);
     for (let k = 1; k < line.length; k++) {
@@ -810,7 +810,7 @@ check('the bomber flies a straight line: every field it crosses, in order, throu
       assert(step >= 1 && step <= 2, `heading ${heading} from ${e.x},${e.y} jumped ${step}`);
     }
   }
-  assert(Sim.bomberEdges().length === 2 * COLS + 2 * ROWS - 4, 'not every edge field can be chosen');
+  assert(Sim.bomberAims().length === COLS * ROWS, 'not every field can be aimed through');
   assert(COMPASS_POINTS.length === BOMBER.directions, 'the compass does not have sixteen names');
 });
 
@@ -843,9 +843,8 @@ check('the bomber: a bomb at 5+ on every piece under the line, either side, plus
   assert(st.bag.us === pieces + 2, 'a bomber with no run left still has a token');
 });
 
-check('the bomber only goes through an edge field, on your token; the score adds cover and take cover', () => {
+check('the bomber flies on your token; the score adds cover and take cover', () => {
   const st = tableWith({ A: [7, 4] });
-  assert(!Sim.actFire(st, 'bomber', 5, 4).ok, 'it flew through a field in the middle of the board');
   const men = Sim.unitById(st, 'A');
   // Saint-Jean's fields are houses: +1 against bombs as against shells
   assert(Sim.bombNeed(st, men) === BOMBER.need + 1, `men in a village need ${Sim.bombNeed(st, men)}`);
@@ -2400,7 +2399,9 @@ check('playing the Germans: you lose if an American platoon holds the village at
   const o = start.objective;
   const st = tableAsGermans({ A: [o.x, o.y], d2: [0, 0] }, 5);
   Sim.finishRound(st);
-  assert(st.won && !st.lost, 'the Americans did not win by holding the village');
+  assert(!st.won && st.holdUntil === st.turn, 'taking the village should only start the count');
+  Sim.finishRound(st);
+  assert(st.won && !st.lost, 'the Americans did not win by holding the village for a whole round');
 });
 
 check('playing the Germans: your guns use German rounds, one fire a round, on your token only', () => {
@@ -2995,12 +2996,15 @@ check('the German computer\'s PaK goes across the large village when that is whe
   assert(pak.ambush, 'it did not lie in ambush there');
 });
 
-check('a tank fires with the bazooka\'s sound; the PaK keeps its cannon, the machine guns theirs', () => {
+check('tanks, the PaK and gun bunkers fire with the bazooka\'s sound; the machine guns keep theirs', () => {
   const st = Sim.newGame(5);
   const piece = id => Sim.unitById(st, id);
   for (const id of ['T1', 'T2', 'dt1', 'dt2']) assert(Sim.fireSound(piece(id), 'gun', piece(id).side) === 'rocket', `${id} has the wrong sound`);
   assert(Sim.fireSound(piece('bz1'), 'rocket', 'us') === 'rocket', 'the bazooka changed');
-  assert(Sim.fireSound(piece('pak1'), 'gun', 'de') === 'gun', 'the PaK changed');
+  assert(Sim.fireSound(piece('pak1'), 'gun', 'de') === 'rocket', 'the PaK has the old cannon');
+  const beach = Sim.newGame(5, 'us', 'beach');
+  assert(Sim.fireSound(Sim.unitById(beach, 'bk3'), 'gun', 'de') === 'rocket', 'a gun bunker has the old cannon');
+  Sim.newGame(5);
   assert(Sim.fireSound(piece('dmg1'), 'mg', 'de') === 'mg42', 'the MG 42 changed');
   assert(Sim.fireSound(piece('mg1'), 'mg', 'us') === 'mg', 'the .50 cal changed');
   assert(Sim.fireSound(piece('A'), 'rifle', 'us') === 'rifle', 'the rifles changed');
@@ -3031,10 +3035,10 @@ check('every map is the same size, has real tiles, and its villages are villages
     assert(played.rows.length === ROWS, `${map.id}: ${played.rows.length} rows`);
     for (const row of played.rows) {
       assert(row.length === COLS, `${map.id}: row "${row}"`);
-      assert(/^[.ovhr#=|+sqt]+$/.test(row), `${map.id}: odd tile in "${row}"`);
+      assert(/^[.ovhr#=|+sqtwb]+$/.test(row), `${map.id}: odd tile in "${row}"`);
     }
     assert(played.villages.length >= 1 && map.name && map.note, `${map.id}: not filled in`);
-    for (const v of played.villages) assert(Sim.tileType(v.x, v.y) === 'village', `${map.id}: ${v.name} is not in a village`);
+    if (!played.landing && played.generated !== 'city') for (const v of played.villages) assert(Sim.tileType(v.x, v.y) === 'village', `${map.id}: ${v.name} is not in a village`);
   }
   // Ids are all different
   assert(new Set(MAPS.map(m => m.id)).size === MAPS.length, 'two maps with the same id');
@@ -3153,9 +3157,12 @@ check('Paris: a new maze each game, the same for the same seed: every street joi
     assert(reached.size === paved.length, `seed ${seed}: streets cut off`);
     // No hedges or wire in the city
     assert(!Object.keys(again.hedges).length && !Object.keys(again.wire).length, `seed ${seed}: hedges in Paris`);
-    // The objective is houses on a street, towards the German end
+    // The objective is always the Eiffel Tower, in the centre of the board, on open paving with streets to it, and not in a little square
     const o = again.objective;
-    assert(Sim.tileType(o.x, o.y) === 'village' && o.x >= 6 && o.x <= 9, `seed ${seed}: objective at ${o.x},${o.y}`);
+    assert(o.name === 'Eiffel Tower' && o.x === 6 && o.y === 4 && Sim.tileType(o.x, o.y) === 'square', `seed ${seed}: objective ${o.name} at ${o.x},${o.y}`);
+    const here = Sim.featuresAt(again, o.x, o.y);
+    assert(here.length === 1 && here[0].kind === 'eiffel', `seed ${seed}: ${here.map(f => f.kind)} with the tower`);
+    assert(again.map.villages.length === 1, `seed ${seed}: more than one target`);
     // Every piece has a place
     for (const u of live(again)) assert(fieldOk(again, u.x, u.y), `seed ${seed}: too many in ${u.x},${u.y}`);
   }
@@ -3167,7 +3174,7 @@ check('Paris: each little square has a café and a fountain, with room left for 
   for (let seed = 1; seed <= 30; seed++) {
     const st = Sim.newGame(seed, 'us', 'paris');
     const squares = [];
-    for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) if (Sim.tileType(x, y) === 'square') squares.push({ x, y });
+    for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) if (Sim.tileType(x, y) === 'square' && !(x === st.objective.x && y === st.objective.y)) squares.push({ x, y });
     assert(squares.length === 3, `seed ${seed}: ${squares.length} squares`);
     for (const q of squares) {
       const here = Sim.featuresAt(st, q.x, q.y);
@@ -3344,7 +3351,7 @@ check('the scenery is only to look at: the same each time for a game, on the rig
         const fx = Math.floor(item.x), fy = Math.floor(item.y);
         assert(Sim.inside(fx, fy), `${map.id}: ${item.kind} off the board at ${item.x},${item.y}`);
         const tile = Sim.tileType(fx, fy);
-        const ground = { cow: 'field', sheep: 'field', lamp: 'street', posters: 'street', stall: 'square' }[item.kind];
+        const ground = { crater: 'beach', cow: 'field', sheep: 'field', lamp: 'street', posters: 'street', stall: 'square' }[item.kind];
         assert(tile === ground, `${map.id}: ${item.kind} on a ${tile}`);
         // Animals stay out of fields with a barn or a pond, and things that could be in a piece's way say which field
         if (item.kind === 'cow' || item.kind === 'sheep') assert(!Sim.featuresAt(again, fx, fy).length, `${map.id}: animals in a field with a building or a pond`);
@@ -3358,7 +3365,7 @@ check('the scenery is only to look at: the same each time for a game, on the rig
       }
     }
   }
-  for (const k of ['cow', 'sheep', 'lamp', 'posters', 'stall']) assert(kinds.has(k), `no ${k} anywhere`);
+  for (const k of ['crater', 'cow', 'sheep', 'lamp', 'posters', 'stall']) assert(kinds.has(k), `no ${k} anywhere`);
   assert(!kinds.has('parachute'), 'a parachute is back');
   Sim.newGame(1);
 });
@@ -3438,6 +3445,285 @@ check('railway tracks change nothing: as open ground for moving and for the view
   B.at = 'e'; d2.at = 'w'; B.platoons = 1; d2.platoons = 1;
   assert(!Sim.sight(st, B, d2), 'a truck did not block the view');
   Sim.newGame(1);
+});
+
+// ---------- The beach landing (Steve) ----------
+
+check('the beach: Americans start in the sea and can only leave it; Germans are few, with bunkers and no tanks', () => {
+  for (let seed = 1; seed <= 15; seed++) {
+    const st = Sim.newGame(seed, 'us', 'beach');
+    const us = live(st).filter(u => u.side === 'us'), de = live(st).filter(u => u.side === 'de');
+    assert(us.every(u => Sim.tileType(u.x, u.y) === 'sea'), `seed ${seed}: an American not in the sea`);
+    assert(!de.some(u => Sim.isTank(u)), `seed ${seed}: a German tank`);
+    assert(de.filter(u => Sim.isBunker(u)).length === 4, `seed ${seed}: not four bunkers`);
+    assert(de.some(u => u.kind === 'company') && de.some(u => u.kind === 'mg42'), `seed ${seed}: no loose infantry or MGs`);
+    assert(de.length < DE_START.length && us.length > de.length - 2, `seed ${seed}: the Germans are not fewer: ${de.length}`);
+    assert(st.ammo.de.artillery >= 3, 'the Germans have no extra artillery');
+    for (const u of us.concat(de)) assert(fieldOk(st, u.x, u.y), `seed ${seed}: too many in ${u.x},${u.y}`);
+    // The main bunker is the objective
+    const main = Sim.unitById(st, 'bk1');
+    assert(main.x === st.objective.x && main.y === st.objective.y && st.objective.name === 'Main bunker', 'the main bunker is not the objective');
+    // Into the sea, nobody: forward onto the sand, yes
+    const a = us.find(u => u.kind === 'company');
+    const spots = Sim.chargeSpots(st, a);
+    assert(spots.length && !spots.some(p => Sim.tileType(p.x, p.y) === 'sea'), `seed ${seed}: a platoon could go back to sea`);
+    assert(spots.some(p => Sim.tileType(p.x, p.y) === 'beach'), `seed ${seed}: a platoon could not reach the sand`);
+  }
+  Sim.newGame(1);
+});
+
+check('tank traps stop tanks, and men among them have cover; the lanes off the beach are always clear', () => {
+  for (let seed = 1; seed <= 15; seed++) {
+    const st = Sim.newGame(seed, 'us', 'beach');
+    for (const f of st.features) if (f.kind === 'tanktrap') assert(![2, 5].includes(f.y) && Sim.tileType(f.x, f.y) === 'beach', `seed ${seed}: a trap across a lane, or off the sand`);
+  }
+  const st = tableWith({ T1: [1, 3], B: [1, 4], d2: [11, 0] });
+  st.features = [{ x: 2, y: 3, kind: 'tanktrap', areas: ['ne', 'sw'], blocksView: false, name: 'Tank traps' }];
+  const T1 = Sim.unitById(st, 'T1'), B = Sim.unitById(st, 'B');
+  T1.at = null; B.at = null;
+  assert(!Sim.chargeSpots(st, T1).some(p => p.x === 2 && p.y === 3), 'a tank went into tank traps');
+  assert(Sim.chargeSpots(st, B).some(p => p.x === 2 && p.y === 3), 'men could not go among tank traps');
+  // Cover: +1 for men, nothing for a tank
+  B.x = 2; B.y = 3; B.at = null;
+  const shooter = Sim.unitById(st, 'd2');
+  assert(Sim.cover(st, null, B) === 1, 'men among tank traps had no cover');
+  T1.x = 2; T1.y = 3; T1.at = 'nw';
+  assert(Sim.cover(st, null, T1) === 0, 'a tank among tank traps had cover');
+  Sim.newGame(1);
+});
+
+check('a bunker: never moves, fires only out of its front', () => {
+  const st = Sim.newGame(5, 'de', 'beach');
+  for (const u of st.units) if (!['bk3', 'A', 'B'].includes(u.id)) u.x = u.y = null;
+  st.hedges = {}; st.wire = {};
+  const bunker = Sim.unitById(st, 'bk3'), A = Sim.unitById(st, 'A'), B = Sim.unitById(st, 'B');
+  bunker.x = 5; bunker.y = 5; bunker.at = 'nw+w';
+  // On the lane in front, and behind
+  A.x = 3; A.y = 5; A.at = null;
+  B.x = 7; B.y = 5; B.at = null;
+  assert(Sim.targets(st, bunker).includes(A), 'it could not fire out of its front');
+  assert(!Sim.targets(st, bunker).includes(B), 'it fired out of its back');
+  // Off to one side, more than 45°
+  B.x = 5; B.y = 3;
+  assert(!Sim.targets(st, bunker).includes(B), 'it fired out of its side');
+  Sim.startRound(st);
+  st.drawn = 'de';
+  assert(!Sim.chargeSpots(st, bunker).length && !Sim.moveShootSpots(st, bunker).length, 'a bunker could move');
+  assert(!Sim.lineSides(st, bunker).length && !Sim.actLine(st, bunker, 'se').ok, 'a bunker could shift in its field');
+  Sim.newGame(1);
+});
+
+check('a bunker: +3 from the front, none from the side or back; rifles only shake it; anti-tank weapons can kill it', () => {
+  const setUp = (shooterId, x, y) => {
+    const st = Sim.newGame(5, 'us', 'beach');
+    st.hedges = {}; st.wire = {};
+    for (const u of st.units) if (![shooterId, 'bk3'].includes(u.id)) u.x = u.y = null;
+    const b = Sim.unitById(st, 'bk3'), s = Sim.unitById(st, shooterId);
+    b.x = 5; b.y = 5; b.at = 'nw+w';
+    s.x = x; s.y = y; s.at = null;
+    return { st, b, s };
+  };
+  const front = setUp('B', 3, 5), back = setUp('B', 7, 5);
+  assert(Sim.needFor(front.st, front.s, front.b) === Sim.needFor(back.st, back.s, back.b) + BUNKER_FRONT, 'the front is not +3');
+  assert(Sim.needWhy(front.st, front.s, front.b).some(w => w.includes('bunker front')), 'the label does not say bunker front');
+  // Rifles, however many hits: only shaken
+  const rifles = setUp('B', 7, 5);
+  rifles.st.rand = () => 0.99;
+  for (let k = 0; k < 5; k++) Sim.fireAt(rifles.st, rifles.s, rifles.b);
+  assert(rifles.b.x !== null && rifles.b.shocked, 'rifles did not just shake a bunker');
+  // A bazooka from behind: shaken, then dead, leaving its shell
+  const baz = setUp('bz1', 7, 5);
+  baz.st.rand = () => 0.99;
+  for (let k = 0; k < 4 && baz.b.x !== null; k++) Sim.fireAt(baz.st, baz.s, baz.b);
+  assert(baz.b.x === null, 'a bazooka could not kill a bunker');
+  assert(baz.st.wrecks.some(w => w.id === 'bk3'), 'it left no shell');
+  // Shells: mortars only shake it, artillery can kill it; +3 either way
+  const shell = setUp('B', 0, 0);
+  shell.b.shocked = true;
+  assert(Sim.shellNeed(shell.st, shell.b) === TO_HIT + BUNKER_FRONT, 'shells do not need +3');
+  Sim.newGame(1);
+});
+
+check('a bunker: stormed from the side or back, never the front; it blocks the view; capturing the main one wins', () => {
+  const setUp = (x, y) => {
+    const st = Sim.newGame(5, 'us', 'beach');
+    st.hedges = {}; st.wire = {};
+    for (const u of st.units) if (!['B', 'bk1'].includes(u.id)) u.x = u.y = null;
+    st.features = [];
+    const b = Sim.unitById(st, 'bk1'), s = Sim.unitById(st, 'B');
+    s.x = x; s.y = y; s.at = null;
+    return { st, b, s };
+  };
+  const o = Sim.newGame(5, 'us', 'beach').objective;
+  const reaches = (st, s) => Sim.chargeSpots(st, s).some(p => p.x === o.x && p.y === o.y);
+  // (shaken, it only goes one field: with a full charge it could go round to the side)
+  const front = setUp(o.x - 1, o.y);
+  front.s.shocked = true;
+  assert(!reaches(front.st, front.s), 'a platoon charged a bunker from in front');
+  const side = setUp(o.x, o.y - 1);
+  assert(reaches(side.st, side.s), 'a platoon could not storm a bunker from the side');
+  const back = setUp(o.x + 1, o.y);
+  assert(reaches(back.st, back.s), 'a platoon could not storm a bunker from the back');
+  // It blocks the view
+  const look = Sim.newGame(5, 'us', 'beach');
+  look.hedges = {}; look.wire = {}; look.features = [];
+  for (const u of look.units) if (!['B', 'd2', 'bk4'].includes(u.id)) u.x = u.y = null;
+  const eye = Sim.unitById(look, 'B'), far = Sim.unitById(look, 'd2'), mid = Sim.unitById(look, 'bk4');
+  mid.x = 4; mid.y = 5; mid.at = 'n+c';
+  eye.x = 3; eye.y = 5; eye.at = 'n'; eye.platoons = 1;
+  far.x = 5; far.y = 5; far.at = 'n'; far.platoons = 1;
+  assert(!Sim.sight(look, eye, far), 'a bunker did not block the view');
+  // Holding it, the bunker gone: the Americans win; with the bunker still there, not
+  const hold = setUp(o.x, o.y);
+  Sim.finishRound(hold.st);
+  assert(!hold.st.won, 'the Americans won with the bunker still there');
+  // (a German elsewhere, so it is the bunker that wins it, not the last German gone)
+  const taken = setUp(o.x, o.y);
+  Sim.unitById(taken.st, 'dcap').x = 11; Sim.unitById(taken.st, 'dcap').y = 7;
+  Sim.remove(taken.st, taken.b);
+  Sim.finishRound(taken.st);
+  assert(!taken.st.won, 'taking the main bunker should only start the count');
+  Sim.finishRound(taken.st);
+  assert(taken.st.won, 'capturing the main bunker and holding it for a round did not win');
+  Sim.newGame(1);
+});
+
+check('the campaign has every map once, from the beach to Paris, each with a date and a picture', () => {
+  assert(CAMPAIGN.length === MAPS.length && new Set(CAMPAIGN).size === MAPS.length, 'not every map once');
+  for (const m of MAPS) {
+    assert(CAMPAIGN.includes(m.id), `${m.id} is not in the campaign`);
+    assert(/1944$/.test(m.date), `${m.id} has no date`);
+    assert(fs.existsSync(path.join(__dirname, '..', 'assets', 'maps', m.id + '.jpg')), `${m.id} has no picture`);
+  }
+  assert(CAMPAIGN[0] === 'beach' && CAMPAIGN[CAMPAIGN.length - 1] === 'paris', 'it does not run from the beach to Paris');
+  const at = id => CAMPAIGN.indexOf(id);
+  assert(at('deep') < at('farmland') && at('hedges') < at('farmland') && at('farmland') < at('station') && at('station') < at('paris'), 'the battles are out of order');
+  // The dates run in the same order
+  const when = CAMPAIGN.map(id => Date.parse(MAPS.find(m => m.id === id).date));
+  assert(when.every((d, i) => i === 0 || d > when[i - 1]), 'the dates are out of order');
+});
+
+check('the two Shermans go by their guns', () => {
+  const st = Sim.newGame(1);
+  assert(Sim.unitById(st, 'T1').name === 'Sherman 75mm' && Sim.unitById(st, 'T2').name === 'Sherman 76mm', 'wrong names');
+  assert(PIECES.firefly.name === 'Sherman 76mm' && PIECES.sherman.name === 'Sherman 75mm', 'wrong names in the list of pieces');
+  assert(PIECES.firefly.hard > PIECES.sherman.hard, 'the 76mm should be the better gun against tanks');
+});
+
+check('the Eiffel Tower: pieces stand under it, it blocks no view, and men there have one more to hit', () => {
+  const st = Sim.newGame(5, 'us', 'paris');
+  const tower = st.features.find(f => f.kind === 'eiffel');
+  assert(tower && tower.x === st.objective.x && tower.y === st.objective.y, 'the tower is not on the target');
+  assert(tower.areas.length === 0 && tower.blocksView === false, 'the tower takes room or blocks the view');
+  // A rifle platoon can stand there (one starts there, holding it)
+  const held = Sim.at(st, tower.x, tower.y, 'de').filter(u => u.kind === 'company');
+  assert(held.length === 1, 'no platoon holding the tower');
+  // The one more to hit
+  assert(Sim.cover(st, null, held[0]) === 1, 'no cover at the tower');
+  Sim.newGame(1);
+});
+
+check('the beach is four fields of sand deep, with the bunkers behind it and each named for what is in it', () => {
+  const st = Sim.newGame(5, 'us', 'beach');
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 1; x <= 4; x++) assert(Sim.tileType(x, y) === 'beach', `no sand at ${x},${y}`);
+    assert(Sim.tileType(5, y) !== 'beach', `too much sand in row ${y}`);
+  }
+  assert(Sim.unitById(st, 'bk1').x === 8 && Sim.unitById(st, 'bk2').x === 5 && Sim.unitById(st, 'bk3').x === 5, 'the bunkers are not behind the sand');
+  assert(Sim.unitById(st, 'bk3').name === 'PaK 40 bunker' && PIECES.bunker_mg.name === 'MG bunker', 'a bunker is not named for what is in it');
+  // No hedges round a bunker: its sides are open to get at
+  for (const id of ['bk1', 'bk2', 'bk3', 'bk4']) {
+    const b = Sim.unitById(st, id);
+    for (const [dx, dy] of [[0, -1], [0, 1], [1, 0]]) assert(!Sim.inside(b.x + dx, b.y + dy) || !Sim.hedge(st, b.x, b.y, b.x + dx, b.y + dy), `a hedge round ${id}`);
+  }
+  assert(!Sim.hedge(st, 7, 4, 8, 4), 'a hedge across the main bunker');
+  Sim.newGame(1);
+});
+
+check('the label on a shot at a bunker says front or side', () => {
+  const st = Sim.newGame(5, 'us', 'beach');
+  const bunker = Sim.unitById(st, 'bk3'), A = Sim.unitById(st, 'A');
+  A.x = bunker.x - 1; A.y = bunker.y; A.at = null;
+  assert(Sim.needWhy(st, A, bunker).includes('+3 bunker front'), 'from in front it does not say so');
+  A.x = bunker.x; A.y = bunker.y - 1;
+  const side = Sim.needWhy(st, A, bunker);
+  assert(side.includes('+0 bunker side') && !side.some(w => w.includes('front')), 'from the side it does not say so: ' + side);
+  Sim.newGame(1);
+});
+
+check('weak hatching: only the areas where a Hail Mary is the only shot', () => {
+  const st = Sim.newGame(5, 'us', 'beach');
+  const bunker = Sim.unitById(st, 'bk3'), A = Sim.unitById(st, 'A');
+  // Only the bunker to shoot at
+  for (const u of st.units) if (u.side === 'de' && u !== bunker) u.x = u.y = null;
+  st.hedges = {}; st.wire = {};
+  A.x = 1; A.y = bunker.y; A.at = null;
+  // Shaken and well out in front of it, on the move: every shot from there is past a 6
+  A.shocked = true;
+  const cells = Sim.shootCells(st, A, 2, bunker.y), hail = Sim.hailMaryCells(st, A, 2, bunker.y);
+  assert(cells.length > 0 && hail.length === cells.length, `well out in front: ${hail} of ${cells}`);
+  // Steady and right up to it: close range, one less to hit, so a real shot and not weak
+  A.shocked = false;
+  const near = Sim.hailMaryCells(st, A, 4, bunker.y);
+  assert(Sim.shootCells(st, A, 4, bunker.y).includes('e') && !near.includes('e'), `close range counted as a Hail Mary: ${near}`);
+  // Steady and beside it: nothing extra, so none of it is weak
+  const beside = Sim.hailMaryCells(st, A, bunker.x, bunker.y - 1);
+  assert(!beside.length, `beside it: ${beside}`);
+  // Trying them left it where it was
+  assert(A.x === 1 && A.y === bunker.y, 'trying the cells moved it');
+  Sim.newGame(1);
+});
+
+check('the goal must be held for the whole of the next round: taken on the last move wins nothing yet', () => {
+  const start = Sim.newGame(5, 'us');
+  const o = start.objective;
+  const st = tableWith({ A: [o.x, o.y], d2: [0, 0] }, 5);
+  const A = Sim.unitById(st, 'A');
+  const round = st.turn;
+  st.bag = { us: 3, de: 3, timer: 0 };
+  // Taken at the end of a round: not won yet, and it says which round it must be held through
+  Sim.finishRound(st);
+  assert(!st.won && st.turn === round + 1 && st.holdUntil === st.turn, `won ${st.won}, round ${st.turn}, hold until ${st.holdUntil}`);
+  assert(st.report.concat(st.roundRep || []).some(l => l.includes('Hold it for the whole')), 'it does not say to hold it');
+  // Lost during that round, even if back by its end: the count stops
+  const home = { x: A.x, y: A.y, at: A.at };
+  A.x = 0; A.y = 7;
+  st.bag = { us: 3, de: 3, timer: 0 };
+  st.roundRep = [];
+  Sim.drawToken(st);
+  st.computer = null;
+  assert(!st.holdUntil, 'leaving the goal did not stop the count');
+  A.x = home.x; A.y = home.y; A.at = home.at;
+  const turn = st.turn;
+  Sim.finishRound(st);
+  assert(!st.won && st.turn === turn + 1 && st.holdUntil === st.turn, 'back at the end of the round it should start the count again, not win');
+  // Held all through this next round: won
+  st.bag = { us: 3, de: 3, timer: 0 };
+  Sim.drawToken(st);
+  st.computer = null;
+  Sim.finishRound(st);
+  assert(st.won, 'held for a whole round did not win');
+  Sim.newGame(1);
+});
+
+check('the bomber can be sent through any field, and nothing has to be lit', () => {
+  const st = tableWith({ A: [3, 3], d2: [6, 4] }, 5);
+  st.bag = { us: 3, de: 3, timer: 0 };
+  st.drawn = 'us'; st.activeId = null; st.ammo.us.bomber = 1;
+  const r = Sim.actFire(st, 'bomber', 6, 4);
+  assert(r.ok && st.ammo.us.bomber === 0, 'the bomber would not fly through the middle of the board');
+  assert(st.fx.some(f => f.kind === 'flyover' && f.line.some(q => q.x === 6 && q.y === 4)), 'its line missed the field');
+  Sim.newGame(1);
+});
+
+check('a bunker fires across 120 degrees: 60 either side of straight ahead', () => {
+  const bunker = { x: 8, y: 4 };
+  // One field out: the fields beside straight ahead are in; two rows off is past 60 degrees
+  assert(Sim.inFrontOf(bunker, { x: 7, y: 4 }) && Sim.inFrontOf(bunker, { x: 7, y: 5 }) && !Sim.inFrontOf(bunker, { x: 7, y: 6 }), 'one field out');
+  // Two fields out: three rows off is inside 60 degrees, four is not
+  assert(Sim.inFrontOf(bunker, { x: 6, y: 7 }) && !Sim.inFrontOf(bunker, { x: 6, y: 8 }), 'two fields out');
+  // Its own column and behind it: never
+  assert(!Sim.inFrontOf(bunker, { x: 8, y: 3 }) && !Sim.inFrontOf(bunker, { x: 9, y: 4 }), 'beside or behind it');
 });
 
 console.log(failed ? `\n${failed} failed` : '\nall passed');

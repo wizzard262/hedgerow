@@ -5,6 +5,7 @@ const Scenery = (() => {
   // How often each thing turns up
   const ANIMALS = { farm: 0.4, country: 0.12 };   // the share of plain fields with animals in, on the farm and elsewhere
   const SHEEP = 0.4;                              // the share of those that are sheep, not cows
+  const CRATERS = 0.75;                           // the share of the beach's fields with a shell crater in them, or two
   const LAMP = 0.35, POSTERS = 0.15;              // the share of the city's streets with one, at a corner of the field
   const CORNERS = [[-0.45, -0.45], [0.45, -0.45], [-0.45, 0.45], [0.45, 0.45]];
   const CORNER_AREAS = [['nw', -1, -1], ['ne', 1, -1], ['sw', -1, 1], ['se', 1, 1]];
@@ -40,8 +41,14 @@ const Scenery = (() => {
     const inCity = st.map.id === 'paris';
     for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
       const tile = Sim.tileType(x, y), R = diceFor(st.seed, x, y);
-      if (tile === 'field' && !Sim.featuresAt(st, x, y).length && R() < (onFarm ? ANIMALS.farm : ANIMALS.country)) herd(R() < SHEEP ? 'sheep' : 'cow', x, y, R, out);
-      if (tile === 'square') stalls(st, x, y, R, out);
+      // Shell holes all over the beach, and a few just behind it
+      if (tile === 'beach' && R() < CRATERS) {
+        const holes = 1 + Math.floor(R() * 2);
+        for (let i = 0; i < holes; i++) out.push({ kind: 'crater', x: x + 0.12 + R() * 0.76, y: y + 0.12 + R() * 0.76, seed: Math.floor(R() * 1000) });
+      }
+      if (tile === 'field' && !st.map.landing && !Sim.featuresAt(st, x, y).length && R() < (onFarm ? ANIMALS.farm : ANIMALS.country)) herd(R() < SHEEP ? 'sheep' : 'cow', x, y, R, out);
+      // (no market stalls under the Eiffel Tower)
+      if (tile === 'square' && !Sim.featuresAt(st, x, y).some(f => f.kind === 'eiffel')) stalls(st, x, y, R, out);
       if (inCity && tile === 'street') {
         const corner = CORNERS[Math.floor(R() * CORNERS.length)];
         if (R() < LAMP) out.push({ kind: 'lamp', x: x + 0.5 + corner[0], y: y + 0.5 + corner[1] });

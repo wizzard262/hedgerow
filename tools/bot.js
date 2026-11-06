@@ -12,7 +12,9 @@ function actPiece(st, u) {
   if (!Sim.canAct(st, u)) return false;
   // (proper shots only: no Hail Marys while it can move up instead)
   const ts = Sim.mayFire(u) ? Sim.targets(st, u).filter(t => Sim.shotNeed(st, u, t) <= MAX_NEED) : [];
-  const weak = Sim.chargeSpots(st, u).find(p => Sim.at(st, p.x, p.y, 'de').some(g => g.shocked) && u.kind === 'company' && u.platoons >= 2);
+  // (standing in the objective it stays: it has a whole round to hold it)
+  const inGoal = u.x === st.objective.x && u.y === st.objective.y;
+  const weak = !inGoal && Sim.chargeSpots(st, u).find(p => Sim.at(st, p.x, p.y, 'de').some(g => g.shocked) && u.kind === 'company' && u.platoons >= 2);
   if (weak) return Sim.actCharge(st, u, weak.x, weak.y).ok;
   if (ts.length) return Sim.actShoot(st, u, ts[0]).ok;
   // Germans across a hedge: go to that hedge

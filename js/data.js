@@ -1,6 +1,7 @@
 // Hedgerow: the map and every number to tune
 
 // A board: one character per field. Each field is a tile; hedges grow on the edges between fields
+//   w  sea (pieces can leave it, never enter it)    b  beach (open sand)
 //   s  street (paved, in the city)    q  square (paved and open, in the city)    t  railway tracks (only to look at: as open ground)
 //   .  field        o  orchard (some cover)        h  hamlet: a few houses round a yard (good cover)
 //   v  village (good cover, no hedges round it)    r  river (nothing can enter it)    #  bridge (a lane across the river)
@@ -30,10 +31,16 @@ const FEATURES = {
   signal: { name: 'Signal', blocksView: false },   // (Steve: too thin to block the view)
   watertower: { name: 'Water tower', blocksView: true },
   coal: { name: 'Coal heap', blocksView: true },
+  // Tank traps (Steve): no tank can enter their field; men go between them, one more to hit
+  tanktrap: { name: 'Tank traps', blocksView: false, stopsTanks: true, cover: 1 },
+  hulk: { name: 'Burnt-out wreck', blocksView: true },
+  // The Eiffel Tower (Steve): the target in Paris. Pieces stand between its legs, so it takes no areas; open ironwork, so it
+  // blocks no view; men among its feet have one more to hit
+  eiffel: { name: 'Eiffel Tower', blocksView: false, cover: 1 },
 };
 const MAPS = [
   {
-    id: 'hedges', name: 'Hedge country', note: 'The usual battle: two villages, hedges and lanes.',
+    id: 'hedges', date: '11 July 1944', name: 'Hedge country', note: 'The usual battle: two villages, hedges and lanes.',
     rows: [
       '..|o.o...o.h',
       '..|.h..vv.o.',
@@ -47,7 +54,7 @@ const MAPS = [
     villages: [{ x: 7, y: 4, name: 'Saint-Jean' }, { x: 7, y: 1, name: 'La Haye' }],
   },
   {
-    id: 'river', name: 'River crossing', note: 'Two bridges are the only way over. The Americans have 2 bomber runs and a fourth artillery round; the Germans an extra MG 42 and no Panther.',
+    id: 'river', date: '7 August 1944', name: 'River crossing', note: 'Two bridges are the only way over. The Americans have 2 bomber runs and a fourth artillery round; the Germans an extra MG 42 and no Panther.',
     rows: [
       '..|.or.o..h.',
       '.o|..r.vv..o',
@@ -63,7 +70,7 @@ const MAPS = [
     de: { remove: ['dt2'], add: [{ id: 'dmg5', kind: 'mg42', name: 'MG 42 Team', reserve: true }] },
   },
   {
-    id: 'town', name: 'Crossroads town', note: 'A town on each side of the crossroads, and both sides start further forward. The Germans have a second PaK 40 and no Panzer IV; the Americans a third tank.',
+    id: 'town', date: '15 August 1944', name: 'Crossroads town', note: 'A town on each side of the crossroads, and both sides start further forward. The Germans have a second PaK 40 and no Panzer IV; the Americans a third tank.',
     rows: [
       '.o...|..o..h',
       '..h..|.....o',
@@ -76,11 +83,11 @@ const MAPS = [
     ],
     villages: [{ x: 7, y: 3, name: 'Saint-Martin' }, { x: 7, y: 5, name: 'Les Quatre-Routes' }],
     deploy: 0.3,
-    us: { add: [{ id: 'T3', kind: 'sherman', name: 'Sherman (2)' }] },
+    us: { add: [{ id: 'T3', kind: 'sherman', name: 'Sherman 75mm (2)' }] },
     de: { remove: ['dt1'], add: [{ id: 'pak2', kind: 'pak', name: 'PaK 40 (2)', post: [0, -1], garrison: true }] },
   },
   {
-    id: 'farmland', name: 'Open farmland', note: 'Few hedges and long shots, a few barns that block the view, and a duck pond. An extra tank each, and 2 bomber runs each.',
+    id: 'farmland', date: '25 July 1944', name: 'Open farmland', note: 'Few hedges and long shots, a few barns that block the view, and a duck pond. An extra tank each, and 2 bomber runs each.',
     rows: [
       '.....|.....h',
       '..o..|.vv...',
@@ -101,18 +108,18 @@ const MAPS = [
       { x: 3, y: 6, kind: 'pond', side: 's' },
     ],
     ammo: { us: { bomber: 2 }, de: { bomber: 2 } },
-    us: { add: [{ id: 'T3', kind: 'sherman', name: 'Sherman (2)' }] },
+    us: { add: [{ id: 'T3', kind: 'sherman', name: 'Sherman 75mm (2)' }] },
     de: { add: [{ id: 'dt3', kind: 'pz4', name: 'Panzer IV (2)', reserve: true }] },
   },
   {
-    id: 'paris', name: 'Paris', note: 'A tight city, a new maze of cobbled streets each game: houses, streets and little squares, each with a café and a fountain. Few tanks: no Firefly and no Panther; a second bazooka for the Americans, an extra MG 42 for the Germans.',
+    id: 'paris', date: '25 August 1944', name: 'Paris', note: 'A tight city, a new maze of cobbled streets each game: houses, streets and little squares, each with a café and a fountain. The Americans must capture the Eiffel Tower, in the centre of the city. Few tanks: no Sherman 76mm and no Panther; a second bazooka for the Americans, an extra MG 42 for the Germans.',
     generated: 'city',
     gap: 1, wire: 0,
     us: { remove: ['T2'], add: [{ id: 'bz2', kind: 'bazooka', name: 'Bazooka Team 2' }] },
     de: { remove: ['dt2'], add: [{ id: 'dmg5', kind: 'mg42', name: 'MG 42 Team', reserve: true }] },
   },
   {
-    id: 'station', name: 'Train station', note: 'Houses and tracks: a railway yard with tracks everywhere, joining and parting. One or two engines, carriages and goods wagons, some loaded with coal, wheat or timber, stand all over it, with signal boxes, water towers and coal heaps, all blocking the view like a tank, and signals, which can be seen past, in new places each game. The tracks themselves have no effect.',
+    id: 'station', date: '20 August 1944', name: 'Train station', note: 'Houses and tracks: a railway yard with tracks everywhere, joining and parting. One or two engines, carriages and goods wagons, some loaded with coal, wheat or timber, stand all over it, with signal boxes, water towers and coal heaps, all blocking the view like a tank, and signals, which can be seen past, in new places each game. The tracks themselves have no effect.',
     generated: 'yard',
     rows: [
       'tttttttttttt',
@@ -128,7 +135,34 @@ const MAPS = [
     gap: 1, wire: 0,
   },
   {
-    id: 'deep', name: 'Deep bocage', note: 'Hedges nearly everywhere and few lanes. More infantry and fewer tanks: no Firefly and no Panther; a fourth American platoon and second bazooka, a sixth German platoon and second Panzerschreck.',
+    id: 'beach', date: '6 June 1944', name: 'Beach landing', note: 'The Americans land from craft in the surf and must capture the main bunker and hold it. Each bunker is a U of concrete with an MG team or a PaK 40 inside, firing only out of the slit in its thick front. From the front you need 3 more to hit: get round to its thin sides or open back. Tank traps, a sea wall, wrecks on the sand. The Germans have fewer pieces and no tanks, but more artillery.',
+    generated: 'beach',
+    landing: true,
+    rows: [
+      'wbbbb..o.o.h',
+      'wbbbb.h...vo',
+      'wbbbb=======',
+      'wbbbb.o..h..',
+      'wbbbb.o....o',
+      'wbbbb=======',
+      'wbbbb.oo.h.h',
+      'wbbbb.o.h..o',
+    ],
+    villages: [{ x: 8, y: 4, name: 'Main bunker' }],
+    ammo: { us: { bomber: 2 }, de: { artillery: 3 } },
+    us: { add: [{ id: 'D', kind: 'company', name: '4th Platoon', quality: 'standard' }, { id: 'bz2', kind: 'bazooka', name: 'Bazooka Team 2' }] },
+    de: {
+      remove: ['pak1', 'dmg2', 'dmg4', 'dps1', 'd3', 'd5', 'dt1', 'dt2'],
+      add: [
+        { id: 'bk1', kind: 'bunker_gun', name: 'Main bunker', main: true },
+        { id: 'bk2', kind: 'bunker_mg', name: 'MG bunker', place: [5, 1] },
+        { id: 'bk3', kind: 'bunker_gun', name: 'PaK 40 bunker', place: [5, 3] },
+        { id: 'bk4', kind: 'bunker_mg', name: 'MG bunker', place: [5, 6] },
+      ],
+    },
+  },
+  {
+    id: 'deep', date: '20 June 1944', name: 'Deep bocage', note: 'Hedges nearly everywhere and few lanes. More infantry and fewer tanks: no Sherman 76mm and no Panther; a fourth American platoon and second bazooka, a sixth German platoon and second Panzerschreck.',
     rows: [
       '..|.o..o.h.o',
       'o.|...hvv...',
@@ -146,6 +180,8 @@ const MAPS = [
     de: { remove: ['dt2'], add: [{ id: 'd6', kind: 'company', name: '6. Zug', quality: 'standard', reserve: true }, { id: 'dps2', kind: 'schreck', name: 'Panzerschreck Team', reserve: true }] },
   },
 ];
+// The maps as a campaign (Steve): in order across France, from the beaches through the bocage and the farms to Paris
+const CAMPAIGN = ['beach', 'deep', 'hedges', 'farmland', 'river', 'town', 'station', 'paris'];
 const COLS = MAPS[0].rows[0].length, ROWS = MAPS[0].rows.length;
 // Sharing a field (Steve): each field is nine areas; pieces share it while their areas don't overlap (see footprint in
 // sim.js: most pieces one area, the PaK two, a tank or a platoon of two or three sections four)
@@ -200,6 +236,8 @@ const RANGES = {
 };
 // Close range (Steve): four areas across or less (a field is three), from whichever of their areas are nearest: one less
 // needed on the dice, for every shot; not mortars, artillery or bombs
+const BUNKER_ARC = 120;           // how wide a bunker's front is, in degrees, half each side of straight ahead (Steve)
+const BUNKER_FRONT = 3;          // more needed to hit a bunker from in front of it, or with shells or bombs (Steve)
 const CLOSE_RANGE = 4 / 3;       // in fields
 const CLOSE_BONUS = 1;           // taken off the score needed
 const ON_THE_MOVE = 1;           // added to the score needed when firing after a move (Steve: like range and cover, +1 each)
@@ -226,8 +264,8 @@ const PIECES = {
   // Tanks: one tank a unit (Steve). armour: added to the score anti-tank dice and shells need (the Panther's front is hard
   // to beat), shown in the panel and on the label.
   // cutter: drives straight through a hedge, leaving a gap (Steve: every tank does; no separate Break through for tanks)
-  sherman:  { name: 'Sherman', soft: 1.5, hard: 1, tank: true, armour: 0, cutter: true },
-  firefly:  { name: 'Firefly', soft: 1, hard: 2, tank: true, armour: 0, cutter: true },
+  sherman:  { name: 'Sherman 75mm', soft: 1.5, hard: 1, tank: true, armour: 0, cutter: true },
+  firefly:  { name: 'Sherman 76mm', soft: 1, hard: 2, tank: true, armour: 0, cutter: true },
   pz4:      { name: 'Panzer IV', soft: 1.5, hard: 1.5, tank: true, armour: 0, cutter: true },
   panther:  { name: 'Panther', soft: 1.5, hard: 3, tank: true, armour: 1, cutter: true },
   mg:       { name: '.50 cal team', soft: 5, hard: 0, team: true, men: 3 },        // machine guns fire 5 dice (Steve)
@@ -238,6 +276,9 @@ const PIECES = {
   schreck:  { name: 'Panzerschreck team', soft: 0, hard: 2.5, team: true, men: 2, extraMove: 1 },   // both sides the same (Steve)
   pak:      { name: 'PaK 40 gun', soft: 0.5, hard: 3, team: true, fixed: true },
   // His submachine gun (Steve): three dice, and closeOnly: he can't shoot beyond close range at all
+  // Bunkers (Steve): they can't move, take two areas, and fire only out of the front. BUNKER says how they are hurt
+  bunker_mg:  { name: 'MG bunker', soft: 5, hard: 0, team: true, fixed: true, bunker: true },
+  bunker_gun: { name: 'PaK 40 bunker', soft: 0.5, hard: 3, team: true, fixed: true, bunker: true },
   captain:  { name: 'Captain', soft: 3, hard: 0, men: 1, closeOnly: true },
 };
 
@@ -269,8 +310,8 @@ const US_START = [
   { id: 'B', kind: 'company', name: '2nd Platoon', quality: 'standard', x: 0, y: 4 },
   { id: 'C', kind: 'company', name: '3rd Platoon', quality: 'standard', x: 0, y: 6 },
   { id: 'cap', kind: 'captain', name: 'Captain (company HQ)', x: 0, y: 4 },   // one captain, with the company guidon
-  { id: 'T1', kind: 'sherman', name: 'Sherman', x: 1, y: 4 },
-  { id: 'T2', kind: 'firefly', name: 'Firefly', x: 0, y: 3 },
+  { id: 'T1', kind: 'sherman', name: 'Sherman 75mm', x: 1, y: 4 },
+  { id: 'T2', kind: 'firefly', name: 'Sherman 76mm', x: 0, y: 3 },
   { id: 'mg1', kind: 'mg', name: '.50 cal', x: 1, y: 4 },
   { id: 'bz1', kind: 'bazooka', name: 'Bazooka Team 1', x: 0, y: 5 },
   { id: 'sn1', kind: 'sniper', name: 'Sniper Team', x: 0, y: 1 },

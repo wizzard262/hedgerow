@@ -43,7 +43,13 @@ async function checkPlayers() {
     const hint = await page.textContent('#hint');
     console.log(`  token ${side}: human is ${await page.evaluate(() => Game.state.human)} | ${hint.slice(0, 50)}`);
     // Pass it, from a piece's menu
-    const p = await page.evaluate(() => { const st = Game.state; const u = st.units.find(o => o.side === st.human && Sim.canAct(st, o)); return Board.pieceScreen(u); });
+    // (a piece a click really lands on: in a shared field the click can pick one beside it that has already gone)
+    const p = await page.evaluate(() => {
+      const st = Game.state;
+      const ready = st.units.filter(o => o.side === st.human && o.x !== null && Sim.canAct(st, o));
+      const clean = ready.find(o => { const at = Board.pieceScreen(o); return Board.pieceAt(st, at.x, at.y, st.human) === o; });
+      return Board.pieceScreen(clean || ready[0]);
+    });
     await page.mouse.click(p.x, p.y);
     await page.waitForTimeout(400);
     const skip = page.locator('#menu button', { hasText: 'Skip turn' });
@@ -333,7 +339,48 @@ async function checkOrder() {
   await browser.close();
 }
 
+// The Eiffel Tower in Paris: its top on screen in wide and narrow windows, and the view put back on the next map
+async function checkTower() {
+  const browser = await chromium.launch({ headless: false, slowMo: 25 });
+  const page = await browser.newPage({ viewport: { width: 1600, height: 950 } });
+  const errors = [];
+  page.on('pageerror', e => errors.push(e.message));
+  await page.goto('http://localhost:8768/');
+  await page.waitForTimeout(800);
+  await page.click('#start-game');
+  await page.waitForTimeout(300);
+  const backEdge = () => page.evaluate(() => Math.round(Board.screenPoint(6, 0).y));
+  await page.evaluate(() => Game.restart(5, 'none', 'hedges'));
+  await page.waitForTimeout(400);
+  const usual = await backEdge();
+  for (const [width, height] of [[1600, 950], [2400, 800], [1000, 900], [1280, 640]]) {
+    await page.setViewportSize({ width, height });
+    await page.waitForTimeout(400);
+    await page.evaluate(() => Game.restart(5, 'none', 'paris'));
+    await page.waitForTimeout(500);
+    const seen = await page.evaluate(() => {
+      const o = Game.state.objective;
+      const p = Board.screenPoint(o.x + 0.5, o.y + 0.5, Models.EIFFEL_HEIGHT), r = document.querySelector('#board').getBoundingClientRect();
+      return { top: Math.round(p.y - r.top), left: Math.round(p.x - r.left), width: Math.round(r.width) };
+    });
+    const ok = seen.top >= 0 && seen.left >= 0 && seen.left <= seen.width;
+    console.log(`tower at ${width}x${height}: top of it ${seen.top}px below the top of the table's box: ${ok ? 'ok' : 'CUT OFF'}`);
+    if (!ok) process.exitCode = 1;
+  }
+  // Back on another map, in the first window, the view is as it was
+  await page.setViewportSize({ width: 1600, height: 950 });
+  await page.waitForTimeout(400);
+  await page.evaluate(() => Game.restart(5, 'none', 'hedges'));
+  await page.waitForTimeout(500);
+  const after = await backEdge();
+  console.log(`hedge country view: back edge at ${usual}, after Paris ${after}`);
+  if (Math.abs(after - usual) > 2) process.exitCode = 1;
+  if (errors.length) { process.exitCode = 1; console.log('ERRORS: ' + errors.join('; ')); } else console.log('no errors');
+  await browser.close();
+}
+
 (async () => {
+  await checkTower();
   await checkPlayers();
   await checkOrder();
 })().catch(e => { console.error(e); process.exit(1); });

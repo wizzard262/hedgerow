@@ -813,10 +813,13 @@ const Models = (() => {
   const texCache = {};
   const fieldMats = {};
   function field(type, wheat, seed) {
-    const key = type === 'village' ? 'v' : type === 'orchard' ? 'o' : type === 'street' ? 'st' : type === 'square' ? 'sq' : type === 'yard' ? 'yd' : wheat ? 'w' : 'g' + (seed % 3);
+    const key = type === 'village' ? 'v' : type === 'orchard' ? 'o' : type === 'street' ? 'st' : type === 'square' ? 'sq' : type === 'yard' ? 'yd' : type === 'beach' ? 'bc' : type === 'sea' ? 'se' : wheat ? 'w' : 'g' + (seed % 3);
     // The city's paving (Steve: cobbled): grey cobbles for the streets, big pale flagstones for the squares
     if (key === 'st' && !texCache.st) texCache.st = cobbleTex(['#6b675f', '#5d5a53', '#77736a', '#524f49', '#827d73'], 26, 26, [4, 4], 41);
     if (key === 'sq' && !texCache.sq) texCache.sq = cobbleTex(['#a39c8b', '#928c7d', '#b0a998', '#88826f', '#9b9585'], 64, 44, [3, 3], 43);
+    // Wet sand for the beach; under the water, just dark
+    if (key === 'bc' && !texCache.bc) texCache.bc = flockTex('#c9b589', ['#bda97e', '#d6c398', '#b09c72', '#ddcca4'], 67);
+    if (key === 'se' && !texCache.se) texCache.se = flockTex('#2f4f55', ['#28454b', '#35575d'], 71);
     // The railway yard: dark, oily ballast
     if (key === 'yd' && !texCache.yd) texCache.yd = flockTex('#57504a', ['#4a443f', '#625b53', '#3f3a36', '#6d665d'], 53);
     if (!texCache[key]) texCache[key] = key === 'o' ? orchardGrass() : key === 'v' ? flockTex('#7c7465', ['#6e675a', '#8a8272', '#5f584c', '#99907e'], 11) : key === 'w' ? flockTex('#9c8b55', WHEAT, 12) : flockTex(['#5f6d3c', '#647140', '#5a6838'][seed % 3], GRASS, 13 + seed % 3);
@@ -977,6 +980,232 @@ const Models = (() => {
       g.add(at(duck, x, 0.006, z, 0, ry, 0));
     }
     return castAll(g);
+  }
+
+  // ---------- The beach landing (Steve) ----------
+
+  // A landing craft, its ramp down towards the beach (+x): grey steel sides, open top
+  function landingCraft() {
+    const g = new T.Group();
+    if (!M.craft) { M.craft = mat('#5d6660', 0.7, 0.3); M.craftDark = mat('#3a403c', 0.8, 0.2); }
+    const long = 0.84, wide = 0.74, tall = 0.075;
+    g.add(at(box(long, 0.012, wide, M.craftDark), 0, 0.008, 0));
+    for (const s of [-1, 1]) g.add(at(box(long, tall, 0.018, M.craft), 0, tall / 2, s * (wide / 2)));
+    g.add(at(box(0.05, tall * 1.5, wide, M.craft), -long / 2, tall * 0.75, 0));
+    // The ramp, lowered into the surf
+    g.add(at(box(0.012, 0.09, wide - 0.05, M.craft), long / 2 + 0.03, 0.026, 0, 0, 0, -1.15));
+    return castAll(g);
+  }
+
+  // A steel tank trap: three crossed girders, in a loose row across the field
+  function tankTrap() {
+    const g = new T.Group();
+    if (!M.girder) M.girder = mat('#4a3f35', 0.8, 0.4);
+    const hedgehog = () => {
+      const h = new T.Group();
+      for (const [rx, rz] of [[0.6, 0.6], [-0.6, 0.6], [0, -0.85]]) h.add(at(box(0.008, 0.1, 0.012, M.girder), 0, 0.034, 0, rx, 0, rz));
+      return h;
+    };
+    for (const [x, z] of [[-0.3, -0.32], [-0.08, -0.14], [0.2, -0.3], [0.32, 0.06], [-0.28, 0.2], [0.02, 0.3], [0.3, 0.34]]) g.add(at(hedgehog(), x, 0, z, 0, x * 7, 0));
+    return castAll(g);
+  }
+
+  // A burnt-out wreck on the sand: a blackened landing craft or lorry, slewed round, with bits lying about. Along x
+  function hulk(length = 0.8, seed = 0) {
+    const g = new T.Group(), R = seeded(seed + 37);
+    if (!M.burnt) { M.burnt = mat('#1f1c1a', 1); M.burntRust = mat('#4a2f22', 1); M.burntAsh = mat('#3b3836', 1); }
+    const long = length * 0.86, wide = 0.2;
+    const body = new T.Group();
+    body.add(at(box(long, 0.02, wide, M.burnt), 0, 0.012, 0));
+    for (const s of [-1, 1]) body.add(at(box(long, 0.07 + R() * 0.02, 0.012, s > 0 ? M.burntRust : M.burnt), 0, 0.045, s * (wide / 2), (0.1 + R() * 0.2) * s, 0, 0));
+    body.add(at(box(0.016, 0.1, wide, M.burntRust), -long / 2, 0.05, 0, 0, 0, 0.15));
+    // Its ramp, dropped open and bent
+    body.add(at(box(0.012, 0.13, wide * 0.92, M.burntRust), long / 2 + 0.05, 0.03, 0, 0, 0, -1.15 - R() * 0.2));
+    g.add(at(body, 0, 0, 0, 0.05 + R() * 0.08, (R() - 0.5) * 0.65, 0.06));
+    for (let i = 0; i < 6; i++) g.add(at(box(0.02 + R() * 0.03, 0.006, 0.012 + R() * 0.02, i % 2 ? M.burnt : M.burntAsh), (R() - 0.5) * long, 0.004, (R() - 0.5) * 0.26, 0, R() * 3, 0));
+    return castAll(g);
+  }
+
+  // The Eiffel Tower (Steve): a thousand thin girders, all one shape so it is one thing to draw. Four legs lean in from the
+  // corners of its field and join into a single shaft, with open rings for platforms, so the pieces under it still show
+  const EIFFEL_HEIGHT = 2.8;
+  function eiffel() {
+    const g = new T.Group();
+    if (!M.eiffelIron) { M.eiffelIron = mat('#5c4f43', 0.85, 0.15); M.eiffelIron.side = T.DoubleSide; M.eiffelStone = mat('#a39a88', 1); }
+    const H = EIFFEL_HEIGHT;
+    const out = [];
+    // One girder from a to b: a four-sided bar, thick either side of its line
+    const girder = (a, b, thick) => {
+      const from = new T.Vector3(...a), to = new T.Vector3(...b);
+      const along = to.clone().sub(from).normalize();
+      const helper = Math.abs(along.y) > 0.9 ? new T.Vector3(1, 0, 0) : new T.Vector3(0, 1, 0);
+      const side = new T.Vector3().crossVectors(along, helper).normalize().multiplyScalar(thick);
+      const other = new T.Vector3().crossVectors(along, side).normalize().multiplyScalar(thick);
+      const corner = (end, s, o) => end.clone().addScaledVector(side, s).addScaledVector(other, o);
+      const round = [[1, 1], [-1, 1], [-1, -1], [1, -1]];
+      for (let k = 0; k < 4; k++) {
+        const [s1, o1] = round[k], [s2, o2] = round[(k + 1) % 4];
+        for (const p of [corner(from, s1, o1), corner(from, s2, o2), corner(to, s2, o2), corner(from, s1, o1), corner(to, s2, o2), corner(to, s1, o1)]) out.push(p.x, p.y, p.z);
+      }
+    };
+    // How far the tower reaches from its middle at a height (0 the ground, 1 the top): the curve it is famous for
+    const reach = t => 0.49 * Math.exp(-3.4 * t) + 0.004;
+    const JOIN = 0.35;     // where the four legs have become one
+    const PLATFORMS = [0.17, JOIN];
+    // A box frame between two heights: four corner posts, a ring at the top, and crossed bracing on each face.
+    // shape(t) gives its four corners at a height, in order round
+    const frame = (shape, t1, t2, post, brace) => {
+      const low = shape(t1), high = shape(t2);
+      for (let k = 0; k < 4; k++) {
+        const next = (k + 1) % 4;
+        girder(low[k], high[k], post);
+        girder(high[k], high[next], brace);
+        girder(low[k], high[next], brace);
+        girder(low[next], high[k], brace);
+      }
+    };
+    // The legs, one from each corner of the field
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+      const leg = t => {
+        const r = reach(t);
+        // Narrowest at the foot, so there is room for the pieces; at the join each leg fills a quarter of the shaft
+        const wide = 0.08 + (reach(JOIN) - 0.08) * (t / JOIN);
+        const y = t * H;
+        return [[sx * r, y, sz * r], [sx * (r - wide), y, sz * r], [sx * (r - wide), y, sz * (r - wide)], [sx * r, y, sz * (r - wide)]];
+      };
+      const STEPS = 8;
+      for (let i = 0; i < STEPS; i++) frame(leg, JOIN * i / STEPS, JOIN * (i + 1) / STEPS, 0.006, 0.0028);
+      // Its stone foot
+      g.add(at(box(0.11, 0.03, 0.11, M.eiffelStone), sx * 0.43, 0.015, sz * 0.43));
+    }
+    // The shaft, up to the top
+    const shaft = t => { const r = reach(t), y = t * H; return [[r, y, r], [-r, y, r], [-r, y, -r], [r, y, -r]]; };
+    const SHAFT_STEPS = 14, TOP = 0.95;
+    for (let i = 0; i < SHAFT_STEPS; i++) {
+      const t1 = JOIN + (TOP - JOIN) * i / SHAFT_STEPS, t2 = JOIN + (TOP - JOIN) * (i + 1) / SHAFT_STEPS;
+      frame(shaft, t1, t2, 0.0055 * (1 - t1 * 0.6), 0.0024);
+    }
+    // The big arch on each side, between the legs under the first platform
+    for (const face of [0, 1, 2, 3]) {
+      const point = a => {
+        // a runs from one leg to the other
+        const t = 0.135 * Math.sin(a * Math.PI) + 0.012;
+        const r = reach(t), along = (a * 2 - 1) * (r - 0.05), out2 = r;
+        const y = t * H;
+        if (face === 0) return [along, y, out2];
+        if (face === 1) return [along, y, -out2];
+        if (face === 2) return [out2, y, along];
+        return [-out2, y, along];
+      };
+      for (let i = 0; i < 14; i++) girder(point(i / 14), point((i + 1) / 14), 0.0065);
+    }
+    // The platforms: open rings of girders round the tower
+    for (const t of PLATFORMS) {
+      const y = t * H, outer = reach(t) + 0.035, inner = reach(t) - 0.03;
+      const ring = r => [[r, y, r], [-r, y, r], [-r, y, -r], [r, y, -r]];
+      const o = ring(outer), n = ring(inner);
+      for (let k = 0; k < 4; k++) {
+        const next = (k + 1) % 4;
+        girder(o[k], o[next], 0.0095);
+        girder(n[k], n[next], 0.006);
+        // Cross pieces between the two rings along this side
+        for (let i = 0; i <= 8; i++) {
+          const f = i / 8;
+          const mix = (p, q) => [p[0] + (q[0] - p[0]) * f, y, p[2] + (q[2] - p[2]) * f];
+          girder(mix(o[k], o[next]), mix(n[k], n[next]), 0.003);
+        }
+      }
+    }
+    const geometry = new T.BufferGeometry();
+    geometry.setAttribute('position', new T.BufferAttribute(new Float32Array(out), 3));
+    geometry.computeVertexNormals();
+    const iron = new T.Mesh(geometry, M.eiffelIron);
+    iron.userData.keep = true;
+    g.add(iron);
+    // The third platform and the top
+    g.add(at(box(reach(0.86) * 2 + 0.05, 0.016, reach(0.86) * 2 + 0.05, M.eiffelIron), 0, 0.86 * H, 0));
+    g.add(at(cyl(0.012, reach(TOP) + 0.006, 0.05, M.eiffelIron, 8), 0, TOP * H + 0.025, 0));
+    g.add(at(cyl(0.002, 0.005, H * (1 - TOP) - 0.05, M.eiffelIron, 6), 0, TOP * H + 0.05 + (H * (1 - TOP) - 0.05) / 2, 0));
+    return castAll(g);
+  }
+
+  // A shell crater on the sand: a dark scorched hole with a raised rim
+  function crater(seed = 0) {
+    const g = new T.Group(), R = seeded(seed + 41);
+    if (!M.craterRim) { M.craterRim = mat('#a8966f', 1); M.craterHole = mat('#3d352a', 1); }
+    const size = 0.06 + R() * 0.05;
+    const rim = cyl(size * 1.3, size * 1.5, 0.01, M.craterRim, 16);
+    g.add(at(rim, 0, 0.004, 0));
+    g.add(at(cyl(size, size, 0.003, M.craterHole, 16), 0, 0.0095, 0));
+    for (const m of g.children) m.receiveShadow = true;
+    return g;
+  }
+
+  // A stretch of the sea wall, one field long, along z: rough stone with a capping
+  function seaWall(length = 1.02) {
+    bridgeMaterials();
+    const g = new T.Group();
+    g.add(at(box(0.1, 0.1, length, M.bridgeStone), 0, 0.05, 0));
+    g.add(at(box(0.12, 0.014, length, M.bridgeCap), 0, 0.106, 0));
+    return castAll(g);
+  }
+
+  // A bunker (Steve): a U of concrete, open at the back and to the sky so you can see who is in it. The front (+x) is a thick,
+  // tall wall with a slit down it; the sides are thin and low, to show it is the place to hit it. Long along z, two areas of a
+  // field. gun: a wider slit, for the PaK 40
+  const BUNKER = { deep: 0.38, wide: 0.56, tall: 0.13, low: 0.065, front: 0.055, side: 0.014, sill: 0.035, slitGun: 0.11, slitMg: 0.08 };
+  function bunker(gun) {
+    const g = new T.Group(), B = BUNKER;
+    if (!M.concrete) { M.concrete = mat('#a9a79c', 0.95); M.concreteDark = mat('#6b6a62', 1); M.concreteThin = mat('#8f8d82', 1); }
+    const frontX = B.deep / 2 - B.front / 2;
+    // The floor
+    g.add(at(box(B.deep, 0.006, B.wide, M.concreteDark), 0, 0.003, 0));
+    // The front: a sill right across, then a thick wall either side of the slit, with a darker cap
+    g.add(at(box(B.front, B.sill, B.wide, M.concrete), frontX, B.sill / 2, 0));
+    const slit = gun ? B.slitGun : B.slitMg, length = (B.wide - slit) / 2, height = B.tall - B.sill;
+    for (const s of [-1, 1]) {
+      const z = s * (slit / 2 + length / 2);
+      g.add(at(box(B.front, height, length, M.concrete), frontX, B.sill + height / 2, z));
+      g.add(at(box(B.front + 0.012, 0.012, length, M.concreteDark), frontX, B.tall + 0.006, z));
+      // The thin low sides
+      g.add(at(box(B.deep - B.front, B.low, B.side, M.concreteThin), -B.front / 2, B.low / 2, s * (B.wide / 2 - B.side / 2)));
+    }
+    return castAll(g);
+  }
+  // Who is in it, gun through the slit: a PaK 40 and its crew, or an MG team
+  function bunkerCrew(gun) {
+    const g = new T.Group();
+    if (gun) { const pakGun = pak(); pakGun.scale.setScalar(1.35); g.add(at(pakGun, 0, 0, 0)); }
+    else { const mgTeam = team('de', 'mg42'); mgTeam.scale.setScalar(2); g.add(at(mgTeam, -0.02, 0, 0)); }
+    return castAll(g);
+  }
+  // Painted on the ground round it, so it is plain where it is strong and where it is weak (Steve). The bunker faces west, so
+  // each is spun to read the right way up. Flat, and not there to be clicked
+  function bunkerSign(text, colour) {
+    const c = document.createElement('canvas'); c.width = 256; c.height = 64;
+    const paint = c.getContext('2d');
+    paint.beginPath(); paint.roundRect(3, 3, 250, 58, 12);
+    paint.fillStyle = colour; paint.fill();
+    paint.lineWidth = 3; paint.strokeStyle = 'rgba(255,245,225,.9)'; paint.stroke();
+    paint.font = 'bold 38px Georgia, serif'; paint.fillStyle = '#fff8ea';
+    paint.textAlign = 'center'; paint.textBaseline = 'middle';
+    paint.fillText(text, 128, 34);
+    const map = new T.CanvasTexture(c);
+    map.encoding = T.sRGBEncoding;
+    const sign = new T.Mesh(new T.PlaneGeometry(0.44, 0.11), new T.MeshBasicMaterial({ map, transparent: true, depthWrite: false }));
+    sign.raycast = () => {};
+    sign.userData.keep = true;
+    return sign;
+  }
+  function bunkerSigns() {
+    const g = new T.Group(), B = BUNKER, flat = 0.018;
+    const place = (text, colour, x, z) => g.add(at(bunkerSign(text, colour), x, flat, z, -Math.PI / 2, 0, Math.PI));
+    const STRONG = 'rgba(160,26,20,.95)', WEAK = 'rgba(38,120,40,.95)';
+    place('FRONT +3', STRONG, B.deep / 2 + 0.25, 0);
+    place('SIDE: EASY', WEAK, 0, B.wide / 2 + 0.075);
+    place('SIDE: EASY', WEAK, 0, -(B.wide / 2 + 0.075));
+    place('BACK: EASY', WEAK, -(B.deep / 2 + 0.26), 0);
+    return g;
   }
 
   // ---------- The railway (Steve) ----------
@@ -1396,5 +1625,5 @@ const Models = (() => {
     return castAll(g);
   }
 
-  return { track, bufferStop, engine, carriage, wagon, signalbox, signal, watertower, coal, cow, sheep, lampPost, posterColumn, marketStall, cafe, barn, fountain, pond, reeds, BRIDGE_DECK, materials, M, mergeParts, eliteBand, water, bridge, soldier, squad, team, captain, pak, mortar, bomber, bomberOnStand, howitzer, round, coin, token, sherman, panther, panzer4, hedge, tree, house, die, table, field, lane, at };
+  return { EIFFEL_HEIGHT, eiffel, landingCraft, tankTrap, hulk, crater, seaWall, bunker, bunkerCrew, bunkerSigns, BUNKER, track, bufferStop, engine, carriage, wagon, signalbox, signal, watertower, coal, cow, sheep, lampPost, posterColumn, marketStall, cafe, barn, fountain, pond, reeds, BRIDGE_DECK, materials, M, mergeParts, eliteBand, water, bridge, soldier, squad, team, captain, pak, mortar, bomber, bomberOnStand, howitzer, round, coin, token, sherman, panther, panzer4, hedge, tree, house, die, table, field, lane, at };
 })();
