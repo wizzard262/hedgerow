@@ -15,7 +15,9 @@
 //   us, de: { add: pieces more, remove: ids of pieces less }            ammo: { us: {...}, de: {...} } rounds and bomber runs
 //   features: things standing in fields, see FEATURES                   generated: a new board each game (rows, villages and features come from sim.js)
 // Things that stand in a field and take some of its nine areas (Steve). A building (blocksView) blocks the view like a tank.
-// side: along that side of the field, three areas, leaving a block free opposite for a platoon or a tank. area: one area
+// side: along that side of the field, three areas. areas: the very areas it takes (Steve: not all the full length, and some in
+// the middle of the field). With the middle free a platoon or a tank can stand beside it; a building in the middle leaves room
+// only for smaller pieces, and big ones go past. area: one area
 const FEATURES = {
   cafe: { name: 'Café', blocksView: true },
   barn: { name: 'Barn', blocksView: true },
@@ -86,9 +88,9 @@ const MAPS = [
     gap: 0.8, wire: 0.2,
     features: [
       { x: 3, y: 3, kind: 'barn', side: 'n' },
-      { x: 9, y: 5, kind: 'barn', side: 'w' },
-      { x: 4, y: 0, kind: 'barn', side: 's' },
-      { x: 8, y: 7, kind: 'barn', side: 'e' },
+      { x: 9, y: 5, kind: 'barn', areas: ['nw', 'w'] },
+      { x: 4, y: 0, kind: 'barn', areas: ['c', 'e'] },
+      { x: 8, y: 7, kind: 'barn', areas: ['c', 's'] },
       { x: 3, y: 6, kind: 'pond', side: 's' },
     ],
     ammo: { us: { bomber: 2 }, de: { bomber: 2 } },

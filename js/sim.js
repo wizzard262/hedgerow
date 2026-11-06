@@ -194,7 +194,8 @@ const Sim = (() => {
   // a hand-to-hand fight
   function roomFor(st, unit, x, y, leaving = []) {
     const here = at(st, x, y).filter(u => !leaving.includes(u) && u !== unit);
-    if (!here.length) return true;
+    // (a building in the field may leave no room for a big piece)
+    if (!here.length && !featuresAt(st, x, y).length) return true;
     if (here.some(u => u.side !== unit.side)) return false;
     return anchorsFor(unit).some(a => fitsAt(st, unit, x, y, a, leaving));
   }
@@ -296,7 +297,9 @@ const Sim = (() => {
   // A post given from the objective: the field there, or the nearest one that isn't river and no other unit has
   function postField(st, [dx, dy], taken = []) {
     const want = { x: Math.max(0, Math.min(COLS - 1, st.objective.x + dx)), y: Math.max(0, Math.min(ROWS - 1, st.objective.y + dy)) };
-    const free = (x, y) => inside(x, y) && tileType(x, y) !== 'river' && !taken.some(t => t.x === x && t.y === y);
+    // (a building in the middle of a field leaves no room for a garrison's big pieces)
+    const noRoom = (x, y) => st.features.some(f => f.x === x && f.y === y && f.areas.includes('c'));
+    const free = (x, y) => inside(x, y) && tileType(x, y) !== 'river' && !noRoom(x, y) && !taken.some(t => t.x === x && t.y === y);
     let best = null, bestD = Infinity;
     for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
       const d = Math.abs(x - want.x) + Math.abs(y - want.y) + (x < st.objective.x ? 0.1 : 0);
@@ -308,13 +311,13 @@ const Sim = (() => {
   // A thing standing in a field, with the areas it takes (see FEATURES)
   const SIDE_AREAS = { n: ['nw', 'n', 'ne'], s: ['sw', 's', 'se'], e: ['ne', 'e', 'se'], w: ['nw', 'w', 'sw'] };
   function placedFeature(f) {
-    const areas = f.side ? SIDE_AREAS[f.side] : [f.area];
+    const areas = f.areas || (f.side ? SIDE_AREAS[f.side] : [f.area]);
     return Object.assign({}, f, { areas, blocksView: FEATURES[f.kind].blocksView, name: FEATURES[f.kind].name });
   }
 
   // The city (Steve: Paris): a maze of streets through houses, new each game. Crossing points every two fields, joined by a
   // maze that reaches them all, then a few more streets so there is more than one way round. Some crossing points become
-  // little squares, each with a café along one side and a fountain in a far corner
+  // little squares, each with a café (along one side, the full length or shorter, or in the middle) and a fountain
   const CITY_NAMES = ['Saint-Germain', 'La Bastille', 'Montmartre', 'Le Marais', 'Belleville', 'La Cité'];
   const CITY_SQUARES = 3;
   const CITY_EXTRA_STREETS = 0.3;
@@ -351,11 +354,9 @@ const Sim = (() => {
     const features = [];
     for (const p of shuffled(inner).slice(0, CITY_SQUARES)) {
       tiles[p.y][p.x] = 'q';
-      const side = shuffled(['n', 'e', 's', 'w'])[0];
-      features.push({ x: p.x, y: p.y, kind: 'cafe', side });
-      // The fountain in a corner on the far side, leaving a block free for a platoon or a tank
-      const far = { n: ['sw', 'se'], s: ['nw', 'ne'], e: ['nw', 'sw'], w: ['ne', 'se'] }[side];
-      features.push({ x: p.x, y: p.y, kind: 'fountain', area: far[Math.floor(R() * 2)] });
+      const areas = cafeAreas(R);
+      features.push({ x: p.x, y: p.y, kind: 'cafe', areas });
+      features.push({ x: p.x, y: p.y, kind: 'fountain', area: fountainCorner(areas, R) });
     }
     // The villages to take: houses towards the German end, on a street
     const onStreet = (x, y) => NEIGHBOURS.some(([dx, dy]) => inside(x + dx, y + dy) && tiles[y + dy][x + dx] !== 'v');
@@ -364,6 +365,26 @@ const Sim = (() => {
     const names = shuffled(CITY_NAMES);
     const villages = shuffled(places).slice(0, 2).map((p, i) => ({ x: p.x, y: p.y, name: names[i] }));
     return { rows: tiles.map(row => row.join('')), villages, features };
+  }
+
+  // Where a café stands in its square (Steve): one way in three each, along a whole side, along part of a side, or in the middle
+  function cafeAreas(R) {
+    const way = R(), side = ['n', 'e', 's', 'w'][Math.floor(R() * 4)], end = Math.floor(R() * 2);
+    const row = SIDE_AREAS[side];
+    if (way < 1 / 3) return row;
+    // Part of a side: its middle and one corner
+    if (way < 2 / 3) return end ? [row[0], row[1]] : [row[1], row[2]];
+    // The middle, and the area on one side of it
+    return ['c', side];
+  }
+
+  // A corner for the fountain, clear of the café; and, if the café leaves the middle free, clear of a block for a big piece
+  function fountainCorner(cafe, R) {
+    const free = CORNERS.filter(k => !cafe.includes(k));
+    const blockFree = k => ![k, k[0], k[1], 'c'].some(a => cafe.includes(a));
+    const kept = free.find(blockFree);
+    const choices = free.filter(k => k !== kept);
+    return choices[Math.floor(R() * choices.length)];
   }
 
   // There are no hours, only rounds (Steve)
@@ -1384,8 +1405,8 @@ const Sim = (() => {
           const path = here.path.concat([{ x, y }]);
           routeTo[key] = path;
           open.push({ x, y, cost, path });
-        } else if (at(st, x, y).length) {
-          // Friends there: pass through, but not stop
+        } else if (at(st, x, y).length || featuresAt(st, x, y).length) {
+          // Friends there, or a building with no room left beside it: pass through, but not stop
           open.push({ x, y, cost, path: here.path.concat([{ x, y, pass: true }]) });
         }
       }

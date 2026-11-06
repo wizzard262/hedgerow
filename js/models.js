@@ -869,8 +869,8 @@ const Models = (() => {
   // ---------- Things standing in fields (Steve) ----------
   // Each is built along x, with its back to the edge of the field and its front facing +z; the table turns it to its side
 
-  // A café: cream walls and a slate roof, a striped awning over the front, and little tables on the pavement
-  function cafe() {
+  // A café: cream walls and a slate roof, a striped awning over the front, and little tables on the pavement. length: along x
+  function cafe(length = 0.9) {
     const g = new T.Group();
     if (!M.cafeWall) {
       M.cafeWall = mat('#d9cdb0', 0.95);
@@ -881,29 +881,33 @@ const Models = (() => {
       M.awningWhite = mat('#e8e1cf', 0.9);
       M.cafeTable = mat('#2c2b28', 0.6, 0.3);
     }
-    const length = 0.9, depth = 0.2, height = 0.17;
+    const depth = 0.2, height = 0.17;
     g.add(at(box(length, height, depth, M.cafeWall), 0, height / 2, -0.04));
     g.add(at(box(length + 0.02, 0.05, depth + 0.02, M.cafeRoof), 0, height + 0.025, -0.04));
     // Windows and a door along the front
-    for (let i = -3; i <= 3; i++) {
+    const bays = Math.floor((length - 0.06) / 0.25);
+    for (let i = -bays; i <= bays; i++) {
       const doorway = i === 0;
       g.add(at(box(0.075, doorway ? 0.1 : 0.06, 0.004, doorway ? M.cafeDoor : M.cafeGlass), i * 0.125, doorway ? 0.05 : 0.075, 0.062));
     }
     // The awning in red and white stripes, sloping out over the pavement
-    for (let i = 0; i < 14; i++) {
-      const x = -0.42 + (i + 0.5) * (0.84 / 14);
-      g.add(at(box(0.84 / 14, 0.005, 0.07, i % 2 ? M.awningWhite : M.awningRed), x, 0.118, 0.092, 0.45, 0, 0));
+    const awning = length - 0.06, stripes = Math.max(4, Math.round(awning / 0.06));
+    for (let i = 0; i < stripes; i++) {
+      const x = -awning / 2 + (i + 0.5) * (awning / stripes);
+      g.add(at(box(awning / stripes, 0.005, 0.07, i % 2 ? M.awningWhite : M.awningRed), x, 0.118, 0.092, 0.45, 0, 0));
     }
     // Round tables out in front
-    for (const x of [-0.31, -0.11, 0.11, 0.31]) {
+    const tables = Math.max(1, Math.round(length / 0.22));
+    for (let i = 0; i < tables; i++) {
+      const x = -length / 2 + ((i + 0.5) / tables) * length;
       g.add(at(cyl(0.022, 0.022, 0.004, M.cafeTable, 12), x, 0.042, 0.14));
       g.add(at(cyl(0.003, 0.003, 0.04, M.cafeTable, 6), x, 0.02, 0.14));
     }
     return castAll(g);
   }
 
-  // A barn: weathered red boards, a dark steep roof and big doors
-  function barn() {
+  // A barn: weathered red boards, a dark steep roof and big doors. length: along x
+  function barn(length = 0.9) {
     const g = new T.Group();
     if (!M.barnWall) {
       M.barnWall = mat('#6e3a2a', 1);
@@ -911,7 +915,7 @@ const Models = (() => {
       M.barnDoor = mat('#4a2a1e', 1);
       M.barnTrim = mat('#b8ab90', 1);
     }
-    const length = 0.9, depth = 0.25, height = 0.15;
+    const depth = 0.25, height = 0.15;
     g.add(at(box(length, height, depth, M.barnWall), 0, height / 2, 0));
     // The roof, two slopes meeting along the ridge
     for (const s of [-1, 1]) g.add(at(box(length + 0.03, 0.012, depth * 0.62, M.barnRoof), 0, height + 0.04, s * depth * 0.25, s * 0.55, 0, 0));
@@ -920,7 +924,8 @@ const Models = (() => {
     g.add(at(box(0.008, 0.125, 0.005, M.barnTrim), 0, 0.0625, depth / 2 + 0.004));
     for (const s of [-1, 1]) g.add(at(box(0.2, 0.006, 0.005, M.barnTrim), 0, 0.0625, depth / 2 + 0.004, 0, 0, s * 0.55));
     // Boards up and down the walls
-    for (let i = -8; i <= 8; i++) if (Math.abs(i) > 1) g.add(at(box(0.004, height, 0.003, M.barnDoor), i * 0.052, height / 2, depth / 2 + 0.001));
+    const boards = Math.floor(length / 2 / 0.052) - 1;
+    for (let i = -boards; i <= boards; i++) if (Math.abs(i) > 1) g.add(at(box(0.004, height, 0.003, M.barnDoor), i * 0.052, height / 2, depth / 2 + 0.001));
     return castAll(g);
   }
 

@@ -375,13 +375,16 @@ const Board = (() => {
     }
   }
 
-  // A café, a barn, a fountain or a pond in its field. One along a side stands in the middle of the areas of that side, its
-  // front facing into the field; one in an area stands in that area
+  // A café, a barn, a fountain or a pond in its field: in the middle of the areas it takes, as long as they are (a third of a
+  // field each, less a little), running the way they run, its front facing into the field
   function addFeature(f) {
     const MAKERS = { cafe: Models.cafe, barn: Models.barn, fountain: Models.fountain, pond: Models.pond };
-    const FACING = { n: 0, s: Math.PI, e: -Math.PI / 2, w: Math.PI / 2 };
-    const p = Sim.placeXY(f.side || f.area);
-    built.add(at(MAKERS[f.kind](), f.x + 0.5 + p.x / 3, 0, f.y + 0.5 + p.y / 3, 0, f.side ? FACING[f.side] : 0, 0));
+    const spots = f.areas.map(k => Sim.placeXY(k === 'c' ? null : k));
+    const midX = spots.reduce((n, p) => n + p.x, 0) / spots.length, midY = spots.reduce((n, p) => n + p.y, 0) / spots.length;
+    const alongX = new Set(spots.map(p => p.y)).size === 1;
+    const facing = alongX ? (midY > 0 ? Math.PI : 0) : (midX > 0 ? -Math.PI / 2 : Math.PI / 2);
+    const length = f.areas.length / 3 - 0.1;
+    built.add(at(MAKERS[f.kind](length), f.x + 0.5 + midX / 3, 0, f.y + 0.5 + midY / 3, 0, facing, 0));
   }
 
   function addHouses(x, y, seed) {

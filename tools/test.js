@@ -3172,16 +3172,19 @@ check('Paris: each little square has a café and a fountain, with room left for 
     for (const q of squares) {
       const here = Sim.featuresAt(st, q.x, q.y);
       const cafe = here.find(f => f.kind === 'cafe'), fountain = here.find(f => f.kind === 'fountain');
-      assert(cafe && cafe.areas.length === 3 && cafe.blocksView, `seed ${seed}: no café`);
+      assert(cafe && cafe.areas.length >= 2 && cafe.blocksView, `seed ${seed}: no café`);
       assert(fountain && fountain.areas.length === 1 && !fountain.blocksView, `seed ${seed}: no fountain`);
       assert(!fountain.areas.some(a => cafe.areas.includes(a)), `seed ${seed}: the fountain is in the café`);
-      // Empty the square: a platoon fits, and a tank
+      // Empty the square: a platoon fits, and a tank, unless the café is in the middle; smaller pieces always do
+      const inMiddle = cafe.areas.includes('c');
       const platoon = st.units.find(u => u.kind === 'company'), tank = st.units.find(u => Sim.isTank(u));
-      for (const big of [platoon, tank]) {
-        const others = st.units.filter(u => u !== big && u.x === q.x && u.y === q.y);
+      const team = st.units.find(u => u.kind === 'mg');
+      for (const piece of [platoon, tank, team]) {
+        const others = st.units.filter(u => u !== piece && u.x === q.x && u.y === q.y);
         const saved = others.map(u => [u.x, u.y]);
         others.forEach(u => { u.x = u.y = null; });
-        assert(Sim.roomFor(st, big, q.x, q.y), `seed ${seed}: no room for ${big.name} in a square`);
+        const should = piece === team || !inMiddle;
+        assert(Sim.roomFor(st, piece, q.x, q.y) === should, `seed ${seed}: room for ${piece.name} in a square with the café at ${cafe.areas}`);
         others.forEach((u, i) => { [u.x, u.y] = saved[i]; });
       }
     }
@@ -3234,7 +3237,7 @@ check('Open farmland has its barns and duck pond, in fields with room round them
       const others = st.units.filter(u => u !== tank && u.x === f.x && u.y === f.y);
       const saved = others.map(u => [u.x, u.y]);
       others.forEach(u => { u.x = u.y = null; });
-      assert(Sim.roomFor(st, tank, f.x, f.y), `no room for a tank beside the ${f.name}`);
+      assert(Sim.roomFor(st, tank, f.x, f.y) === !f.areas.includes('c'), `room for a tank beside the ${f.name} at ${f.areas}`);
       others.forEach((u, i) => { [u.x, u.y] = saved[i]; });
     }
     for (const u of live(st)) assert(fieldOk(st, u.x, u.y), `seed ${seed}: too many in ${u.x},${u.y}`);
@@ -3287,6 +3290,41 @@ check('a tank goes one field further if it starts, stays and ends on road or lan
     if (Sim.tileType(x, y) === 'square') square = Sim.isRoad(x, y);
   }
   assert(street && square, 'city streets and squares are not road');
+  Sim.newGame(1);
+});
+
+check('cafés and barns come in different lengths and places, and a big piece gets past one in the middle', () => {
+  // Over many games of Paris: the full length, shorter, and in the middle
+  const seen = { long: 0, short: 0, middle: 0 };
+  for (let seed = 1; seed <= 40; seed++) {
+    for (const f of Sim.newGame(seed, 'us', 'paris').features) {
+      if (f.kind !== 'cafe') continue;
+      if (f.areas.includes('c')) seen.middle++;
+      else if (f.areas.length === 3) seen.long++;
+      else seen.short++;
+    }
+  }
+  assert(seen.long && seen.short && seen.middle, `cafés: ${JSON.stringify(seen)}`);
+  const farm = Sim.newGame(1, 'us', 'farmland').features.filter(f => f.kind === 'barn');
+  assert(farm.some(f => f.areas.includes('c')) && farm.some(f => f.areas.length === 2 && !f.areas.includes('c')) && farm.some(f => f.areas.length === 3), 'the barns are not varied');
+  // A big piece can't stop beside a building in the middle, but goes past it; a team can stop there
+  const st = tableWith({ B: [2, 5], cap: [2, 5], d2: [11, 0] });
+  st.features = [{ x: 3, y: 5, kind: 'cafe', areas: ['c', 'n'], blocksView: true, name: 'Café' }];
+  const B = Sim.unitById(st, 'B'), cap = Sim.unitById(st, 'cap');
+  B.at = null; cap.at = 'nw';
+  const spots = Sim.chargeSpots(st, B);
+  assert(!spots.some(p => p.x === 3 && p.y === 5), 'a platoon could stop in a field with a building in the middle');
+  assert(spots.some(p => p.x === 4 && p.y === 5), 'a platoon could not go past a building in the middle');
+  assert(Sim.chargeSpots(st, cap).some(p => p.x === 3 && p.y === 5), 'the captain could not stop beside it');
+  // The garrison never starts in such a field
+  for (let seed = 1; seed <= 40; seed++) {
+    const city = Sim.newGame(seed, 'us', 'paris');
+    for (const u of live(city)) assert(fieldOk(city, u.x, u.y), `seed ${seed}: too many in ${u.x},${u.y}`);
+    for (const f of city.features) {
+      if (!f.areas.includes('c')) continue;
+      for (const u of Sim.at(city, f.x, f.y)) assert(Sim.sizeOf(u) === 1, `seed ${seed}: ${u.name} started beside a building in the middle`);
+    }
+  }
   Sim.newGame(1);
 });
 
