@@ -7,9 +7,9 @@ window.Game = (() => {
   // viewChanged: what is marked on the table has changed, not just the cross-hairs' pulse. gameChanged: the game itself has
   let viewChanged = true, gameChanged = true;
   function redraw() { dirty = true; viewChanged = true; }
-  // The German move just made ({ id or gun, what }), kept on the table for GERMAN_MOVE_SHOWN ms after its token ends
+  // The German move just made ({ id or gun, what }), kept on the table for COMPUTER_MOVE_SHOWN ms after its token ends
   let shownMove = null;
-  const GERMAN_MOVE_SHOWN = 2200;
+  const COMPUTER_MOVE_SHOWN = 2200;
   const $ = s => document.querySelector(s);
   const board = $('#board');
 
@@ -20,11 +20,22 @@ window.Game = (() => {
     setTimeout(() => { if (game === gameNumber) fn(); }, ms);
   }
 
-  function start(seed) {
+  // The side the player commands: chosen under New game, and remembered on this computer
+  const SIDE_KEY = 'hedgerow-side';
+  function rememberedSide() {
+    try { return localStorage.getItem(SIDE_KEY) === 'de' ? 'de' : 'us'; } catch (e) { return 'us'; }
+  }
+  function rememberSide(side) {
+    try { localStorage.setItem(SIDE_KEY, side); } catch (e) { /* not remembered: this game still plays that side */ }
+  }
+
+  // side: which side the player commands; left out, the side they had last
+  function start(seed, side) {
+    const human = side || (st ? st.human : rememberedSide());
     gameNumber++;
-    drawing = false; germanPicked = null; shownMove = null; resultWaiting = false;
+    drawing = false; computerPicked = null; shownMove = null; resultWaiting = false;
     Board.reset();
-    st = Sim.newGame(seed);
+    st = Sim.newGame(seed, human);
     G.state = st;
     UI.closeMenu();
     UI.setState(st);
@@ -60,15 +71,17 @@ window.Game = (() => {
     if (UI.view.mode === 'fire:bomber') {
       const onEdge = hover && Sim.bomberEdges().some(f => f.x === hover.x && f.y === hover.y);
       if (!onEdge) return [];
-      const line = Sim.bomberLine(hover.x, hover.y, Sim.bomberHeading(st, 'us'));
+      const line = Sim.bomberLine(hover.x, hover.y, Sim.bomberHeading(st, st.human));
       return line.map(f => ({ x: f.x, y: f.y, main: true }));
     }
     // Nothing under the pointer, or it has left the table
     if (!target || target.x === null) return [];
     const mode = UI.view.mode || '';
+    // German mortars drop on the one piece (Steve: the differences between the sides stay)
+    if (mode === 'fire:mortars' && st.human === 'de') return [];
     // Mortars or artillery chosen
-    if (mode.startsWith('fire:')) return Sim.shellFields(mode.slice(5), target.x, target.y);
-    // A tank shooting at men: its burst catches every other German piece on foot in that field
+    if (mode.startsWith('fire:')) return Sim.shellFields(mode.slice(5), target.x, target.y, st.human);
+    // A tank shooting at men: its burst catches every other enemy piece on foot in that field
     if (shooter && Sim.isTank(shooter) && !Sim.isTank(target)) return [{ x: target.x, y: target.y, main: true }];
     // Every other weapon hits only the one piece
     return [];
@@ -76,9 +89,9 @@ window.Game = (() => {
 
   // The compass to show now, and which way it points: your bomber being aimed, or theirs on its token; null if neither
   function compassNow() {
-    if (UI.view.mode === 'fire:bomber') return Sim.bomberHeading(st, 'us');
-    const move = st.de && st.de.move;
-    if (move && move.gun === 'bomber') return Sim.bomberHeading(st, 'de');
+    if (UI.view.mode === 'fire:bomber') return Sim.bomberHeading(st, st.human);
+    const move = st.computer && st.computer.move;
+    if (move && move.gun === 'bomber') return Sim.bomberHeading(st, Sim.computerSide(st));
     return null;
   }
 
@@ -86,10 +99,10 @@ window.Game = (() => {
   function flightLineNow() {
     if (UI.view.mode === 'fire:bomber') {
       const onEdge = hover && Sim.bomberEdges().some(f => f.x === hover.x && f.y === hover.y);
-      return onEdge ? { x: hover.x, y: hover.y, heading: Sim.bomberHeading(st, 'us') } : null;
+      return onEdge ? { x: hover.x, y: hover.y, heading: Sim.bomberHeading(st, st.human) } : null;
     }
-    const run = st.de && st.de.run;
-    return run ? { x: run.x, y: run.y, heading: Sim.bomberHeading(st, 'de') } : null;
+    const run = st.computer && st.computer.run;
+    return run ? { x: run.x, y: run.y, heading: Sim.bomberHeading(st, Sim.computerSide(st)) } : null;
   }
 
   // Draw the table whenever something changed or pieces are still gliding; place the hamlet's name over it
@@ -112,15 +125,15 @@ window.Game = (() => {
       // its red cross-hair with the score needed. German mortars: the line comes from their mortar off the board.
       // Aiming (before it fires): every target it could hit, with its score and why, as yours show (Steve)
       // A German piece just picked: where it could go, as yours show (Steve)
-      if (germanPicked && st.de) spots.push(...UI.moveSpotsFor(Sim.unitById(st, germanPicked)));
-      const planned = st.de && (st.de.ask || st.de.aim);
+      if (computerPicked && st.computer) spots.push(...UI.moveSpotsFor(Sim.unitById(st, computerPicked)));
+      const planned = st.computer && (st.computer.ask || st.computer.aim);
       let others = [];
       // Their bomber: the edge fields while it chooses (as yours show), then its line, and any piece of yours asked
       const bombing = planned && (planned.bomber || planned.bombed);
-      const deBomber = st.de && st.de.move && st.de.move.gun === 'bomber';
-      if (deBomber && !st.de.run && !st.de.ask && !st.de.aim) spots.push(...Sim.bomberEdges().map(f => ({ x: f.x, y: f.y, kind: 'fire' })));
-      if (bombing && st.de.run) {
-        const line = Sim.bomberLine(st.de.run.x, st.de.run.y, Sim.bomberHeading(st, 'de'));
+      const deBomber = st.computer && st.computer.move && st.computer.move.gun === 'bomber';
+      if (deBomber && !st.computer.run && !st.computer.ask && !st.computer.aim) spots.push(...Sim.bomberEdges().map(f => ({ x: f.x, y: f.y, kind: 'fire' })));
+      if (bombing && st.computer.run) {
+        const line = Sim.bomberLine(st.computer.run.x, st.computer.run.y, Sim.bomberHeading(st, Sim.computerSide(st)));
         blast = line.map(f => ({ x: f.x, y: f.y, main: true }));
         if (planned.bombed) {
           const t = Sim.unitById(st, planned.target);
@@ -142,7 +155,7 @@ window.Game = (() => {
           // A German tank's high explosive: the whole field
           blast = Sim.isTank(s) && !Sim.isTank(t) ? [{ x: t.x, y: t.y, main: true }] : [];
           // Still aiming: the other pieces it could have fired on, each with its score
-          if (st.de.aim) others = Sim.targets(st, s).filter(o => o.id !== t.id).map(o => {
+          if (st.computer.aim) others = Sim.targets(st, s).filter(o => o.id !== t.id).map(o => {
             o.needNow = Sim.needFor(st, s, o, moving) + Sim.armourOf(o);
             o.needWhy = Sim.needWhy(st, s, o, moving);
             return o;
@@ -152,23 +165,23 @@ window.Game = (() => {
           t.needWhy = Sim.shellWhy(st, t);
           mortarAim = t;
           aimWhich = shot.artillery ? 'artillery' : 'mortars';
-          // German guns: the field and the four round it. Their mortar drops on the one piece only
+          // Shells on a whole field: where they will fall. German mortars drop on the one piece only
           // (a piece asked may not be the target: they fall round the target)
-          const centre = st.de.shelling || t;
-          blast = shot.artillery ? Sim.shellFields('artillery', centre.x, centre.y, 'de') : [];
+          const shelling = st.computer.shelling;
+          blast = shelling ? Sim.shellFields(shelling.which, shelling.x, shelling.y, Sim.computerSide(st)) : [];
         }
         targets = [t, ...others];
         // The one it picked stands out, as the target under your pointer does
-        if (st.de.aim && others.length) aimedAt = t;
+        if (st.computer.aim && others.length) aimedAt = t;
       }
       // Green rings under pieces that can still act this round, grey under those that have
-      const ready = st.de || st.won || st.lost ? null : u => Sim.canAct(st, u) || Sim.captainCanRally(st, u);
-      const guns = st.de || st.won || st.lost ? null : UI.supportState();
+      const ready = st.computer || st.won || st.lost ? null : u => Sim.canAct(st, u) || Sim.captainCanRally(st, u);
+      const guns = st.computer || st.won || st.lost ? null : UI.supportState();
       // Something done during the draw (a token landing starts the Germans' move) asks for another draw: keep that
       dirty = false;
       const same = !viewChanged, stateChanged = gameChanged;
       viewChanged = false; gameChanged = false;
-      const more = Board.render(st, { same, stateChanged, spots, selected: UI.selected(), hover, targets, hotTarget: aimedAt || hotTarget, ready, shooter, mortarAim, aimWhich, guns, blast, rallies: UI.rallies(), deMove: (st.de && st.de.move) || shownMove, fireFrom: (UI.view.mode || '').startsWith('fire:') ? UI.view.mode.slice(5) : null, compass: compassNow(), flightLine: flightLineNow() });
+      const more = Board.render(st, { same, stateChanged, spots, selected: UI.selected(), hover, targets, hotTarget: aimedAt || hotTarget, ready, shooter, mortarAim, aimWhich, guns, blast, rallies: UI.rallies(), computerMove: (st.computer && st.computer.move) || shownMove, fireFrom: (UI.view.mode || '').startsWith('fire:') ? UI.view.mode.slice(5) : null, compass: compassNow(), flightLine: flightLineNow() });
       if (more) dirty = true;
       const p = Board.screenPoint(st.objective.x + 0.5, st.objective.y, 0.35), r = board.getBoundingClientRect();
       Object.assign($('#label').style, { left: p.x - r.left + 'px', top: p.y - r.top + 'px' });
@@ -202,9 +215,9 @@ window.Game = (() => {
       return;
     }
     UI.flyToken(side, () => {
-      if (side === 'de') return chooseGerman();
+      if (side !== st.human) return chooseComputer();
       // No American piece able to move on it: the token is used up
-      if (!Sim.usCanMove(st)) { Sim.passToken(st); Board.clearToken(); changed(); later(drawNext, 600); return; }
+      if (!Sim.humanCanMove(st)) { Sim.passToken(st); Board.clearToken(); changed(); later(drawNext, 600); return; }
       changed();
     });
   }
@@ -223,7 +236,7 @@ window.Game = (() => {
 
   // Pass on an American token (no button for it now, Steve: each piece has Skip turn; the screenshot tool still uses it)
   function pass() {
-    if (st.won || st.lost || st.drawn !== 'us') return;
+    if (st.won || st.lost || st.drawn !== st.human) return;
     UI.closeMenu();
     UI.view.mode = null;
     Sim.passToken(st);
@@ -235,41 +248,41 @@ window.Game = (() => {
   // The computer picks its German piece as you would (Steve): the pick-up sound and the ring round it, then a moment
   // later it moves (its moving sounds are the same as yours: men running, tanks driving)
   // (and, as yours show when picked, where it could go: Steve)
-  const GERMAN_PICK_PAUSE = 1300;
-  let germanPicked = null;           // the German piece picked, until it moves: its moves show on the table
-  function chooseGerman() {
-    const move = st.de && st.de.move;
+  const COMPUTER_PICK_PAUSE = 1300;
+  let computerPicked = null;           // the German piece picked, until it moves: its moves show on the table
+  function chooseComputer() {
+    const move = st.computer && st.computer.move;
     // A piece, or their mortars or artillery off the board
-    if (move && move.id) { Sound.play('select'); Board.bounce(Sim.unitById(st, move.id)); germanPicked = move.id; }
-    if (move && move.gun) { Sound.play('select'); Board.bounceGun('de', move.gun); }
+    if (move && move.id) { Sound.play('select'); Board.bounce(Sim.unitById(st, move.id)); computerPicked = move.id; }
+    if (move && move.gun) { Sound.play('select'); Board.bounceGun(Sim.computerSide(st), move.gun); }
     // The dice of the last attack go once the next piece is chosen (Steve), theirs as yours
     Board.clearDice();
     changed();
-    later(runGermans, GERMAN_PICK_PAUSE);
+    later(runComputer, COMPUTER_PICK_PAUSE);
   }
 
   // The German piece moves; before it fires, its targets show as yours do (Steve), then if it fires on a piece that
   // could take cover, ask first
-  const GERMAN_AIM_SHOWN = 1400;
+  const COMPUTER_AIM_SHOWN = 1400;
   // A Move & shoot: the piece gets there before its shot is aimed at for that long
-  const GERMAN_ARRIVES = 1100;
-  function runGermans() {
-    germanPicked = null;
-    const r = Sim.germanStep(st, true);
+  const COMPUTER_ARRIVES = 1100;
+  function runComputer() {
+    computerPicked = null;
+    const r = Sim.computerStep(st, true);
     if (r.aim) {
       changed();
-      const arriving = r.aim.moving ? GERMAN_ARRIVES : 0;
-      later(runGermans, GERMAN_AIM_SHOWN + arriving + Board.busyFor());
+      const arriving = r.aim.moving ? COMPUTER_ARRIVES : 0;
+      later(runComputer, COMPUTER_AIM_SHOWN + arriving + Board.busyFor());
       return;
     }
     if (r.ask) return ask(r.ask);
     // Keep what it did on the table a moment after the token ends, so you can see it (Steve)
-    shownMove = st.de && st.de.move;
-    Sim.endGermanToken(st);
+    shownMove = st.computer && st.computer.move;
+    Sim.endComputerToken(st);
     changed();
     // The Germans' move wiped one side out: the game is over
     if (st.won || st.lost) return showResult();
-    later(() => { shownMove = null; redraw(); Board.clearToken(); later(drawNext, 400); }, GERMAN_MOVE_SHOWN + Board.busyFor());
+    later(() => { shownMove = null; redraw(); Board.clearToken(); later(drawNext, 400); }, COMPUTER_MOVE_SHOWN + Board.busyFor());
   }
 
   // A piece of yours under fire: Stand fast or Take cover, in a word bubble by it (Steve: no dialog)
@@ -285,7 +298,7 @@ window.Game = (() => {
     Sim.answer(st, pull);
     changed();
     // A moment to see the dice before the Germans carry on
-    later(runGermans, 350);
+    later(runComputer, 350);
   }
 
   // The game is over: the message waits until the table has shown the last shot landing (Steve: it came up before the
@@ -302,14 +315,30 @@ window.Game = (() => {
 
   function openResult() {
     resultWaiting = false;
-    // How it ended: a side wiped out, the village taken, or time run out
+    const ending = st.human === 'de' ? germanEnding() : americanEnding();
+    $('#result-title').textContent = ending.title;
+    $('#result-text').textContent = ending.text;
+    $('#result').hidden = false;
+  }
+
+  // How it ended for a player commanding the Americans: a side wiped out, the village taken, or time run out
+  function americanEnding() {
     const germansLeft = st.units.some(u => u.side === 'de' && u.x !== null);
     const usLeft = st.units.some(u => u.side === 'us' && u.x !== null);
     const winTitle = germansLeft ? `🏆 ${st.objective.name} is ours` : '🏆 The Germans are wiped out';
     const loseTitle = usLeft ? '⌛ The attack has failed' : '💀 The company is wiped out';
-    $('#result-title').textContent = st.draw ? '🤝 A draw' : st.won ? winTitle : loseTitle;
-    $('#result-text').textContent = st.report[0];
-    $('#result').hidden = false;
+    return { title: st.draw ? '🤝 A draw' : st.won ? winTitle : loseTitle, text: st.report[0] };
+  }
+
+  // How it ended for a player commanding the Germans: every American piece gone (their guns off the table don't count),
+  // or the village lost, or every German gone
+  function germanEnding() {
+    if (st.draw) return { title: '🤝 A draw', text: st.report[0] };
+    const round = Sim.roundText(st.turn);
+    if (st.lost) return { title: '🏆 The American company is destroyed', text: `🏆 Nothing is left of the Americans on the table, in ${round}. The attack has failed.` };
+    const germansLeft = st.units.some(u => u.side === 'de' && u.x !== null);
+    if (germansLeft) return { title: `💀 ${st.objective.name} has fallen`, text: `💀 The Americans took ${st.objective.name} and held it at the end of ${round}.` };
+    return { title: '💀 Your company is wiped out', text: `💀 Every German on the field is destroyed, in ${round}.` };
   }
 
   // ---------- Input ----------
@@ -317,7 +346,8 @@ window.Game = (() => {
   board.addEventListener('click', e => {
     if (e.target.closest('#menu')) return;
     // Waiting for Stand fast or Take cover: the rest of the table waits too
-    if (st.de && st.de.ask) return;
+    if (st.computer && st.computer.ask) return;
+    const enemy = Sim.computerSide(st);
     UI.closeMenu();
     // The captain rallying: the blue target nearest the click (Steve)
     const rallied = Board.targetAt(UI.rallies(), e.clientX, e.clientY);
@@ -326,9 +356,9 @@ window.Game = (() => {
     const aimed = Board.targetAt(UI.targets(), e.clientX, e.clientY);
     if (aimed && UI.shootTarget(aimed)) { hotTarget = null; changed(); offerRally(); if (st.won || st.lost) showResult(); return; }
     // Your mortars or artillery off the board: choose them like a piece
-    const gun = !st.de && Board.gunAt(e.clientX, e.clientY);
+    const gun = !st.computer && Board.gunAt(e.clientX, e.clientY, st.human);
     if (gun) {
-      Sound.play('select'); Board.bounceGun('us', gun); Board.clearDice(); UI.selectSupport(gun);
+      Sound.play('select'); Board.bounceGun(st.human, gun); Board.clearDice(); UI.selectSupport(gun);
       // Picked again: the compass spins again, to the same direction (Steve)
       if (gun === 'bomber') Board.respinCompass();
       changed();
@@ -339,14 +369,14 @@ window.Game = (() => {
     }
     const f = Board.fieldAt(e.clientX, e.clientY);
     if (!f) return;
-    // A German piece clicked, when the click isn't the chosen piece's action: ring it and show what it is (Steve).
-    // Its model under the pointer, or the nearest German in a field with none of yours
+    // The enemy's piece clicked, when the click isn't the chosen piece's action: ring it and show what it is (Steve).
+    // Its model under the pointer, or the nearest of them in a field with none of yours
     const under = Board.pieceUnder(st, e.clientX, e.clientY);
-    const foeField = !Sim.at(st, f.x, f.y, 'us').length && Sim.at(st, f.x, f.y, 'de').length;
-    const foe = under && under.side === 'de' ? under : !under && foeField ? Board.pieceAt(st, e.clientX, e.clientY, 'de') : null;
+    const foeField = !Sim.at(st, f.x, f.y, st.human).length && Sim.at(st, f.x, f.y, enemy).length;
+    const foe = under && under.side === enemy ? under : !under && foeField ? Board.pieceAt(st, e.clientX, e.clientY, enemy) : null;
     if (foe && !UI.actsOn(f.x, f.y)) { Sound.play('select'); Board.bounce(foe); UI.inspect(foe); changed(); return; }
     // The one piece under the pointer (the nearest in the field if the click misses the models)
-    const mine = UI.clickField(f.x, f.y, Board.pieceAt(st, e.clientX, e.clientY), f.side);
+    const mine = UI.clickField(f.x, f.y, Board.pieceAt(st, e.clientX, e.clientY, st.human), f.side);
     changed();
     // Your pieces there: open their menu by the click
     // Picking the next piece clears the last shots' dice off the table
@@ -398,7 +428,7 @@ window.Game = (() => {
   }
 
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape' && !(st.de && st.de.ask)) { UI.view.mode = null; UI.closeMenu(); changed(); }
+    if (e.key === 'Escape' && !(st.computer && st.computer.ask)) { UI.view.mode = null; UI.closeMenu(); changed(); }
   });
   $('#help-btn').onclick = openHelp;
   // The rules all on the screen at once: the text gets a little smaller until it fits (Steve: no scrolling)
@@ -414,7 +444,20 @@ window.Game = (() => {
   $('#sound-btn').onclick = () => { Sound.wake(); Sound.toggle(); soundIcon(); };
   soundIcon();
   $('#help [data-close]').onclick = () => { $('#help').hidden = true; };
-  $('#new-btn').onclick = () => { if (confirm('Start a new game?')) start(); };
+  // New game: which side (Steve: the player can be the Germans); the one they have now is lit
+  $('#new-btn').onclick = () => {
+    $('#side-us').className = st.human === 'us' ? 'on' : '';
+    $('#side-de').className = st.human === 'de' ? 'on' : '';
+    $('#newgame').hidden = false;
+  };
+  function startAs(side) {
+    $('#newgame').hidden = true;
+    rememberSide(side);
+    start(undefined, side);
+  }
+  $('#side-us').onclick = () => startAs('us');
+  $('#side-de').onclick = () => startAs('de');
+  $('#newgame [data-close]').onclick = () => { $('#newgame').hidden = true; };
   $('#again-btn').onclick = () => { $('#result').hidden = true; start(); };
   window.addEventListener('resize', fit);
 

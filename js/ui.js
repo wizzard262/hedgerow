@@ -13,6 +13,10 @@ const UI = (() => {
 
   function setState(s) { st = s; view.sel = null; view.mode = null; view.log = []; view.support = null; }
 
+  // The other side, for the words and the checks: the side the player isn't
+  const enemy = () => Sim.enemyOf(st.human);
+  const foes = () => (st.human === 'us' ? 'Germans' : 'Americans');
+
   // ---------- Your mortars and artillery, off the board ----------
   // Clicking one chooses it like a piece (Steve): its targets show at once if it can fire this round
   const canFire = which => Sim.canFire(st, which);
@@ -24,22 +28,25 @@ const UI = (() => {
   // For the rings under the guns
   function supportState() {
     const out = {};
-    for (const which of ['mortars', 'artillery', 'bomber']) out[which] = { ready: canFire(which), chosen: view.support === which, present: st.ammo[which] > 0 };
+    for (const which of ['mortars', 'artillery', 'bomber']) out[which] = { ready: canFire(which), chosen: view.support === which, present: Sim.ammoOf(st, st.human)[which] > 0 };
     return out;
   }
   const selected = () => (view.sel ? Sim.unitById(st, view.sel) : null);
   // A gun's name and its state, for its menu and its card
-  const GUN_TITLES = { mortars: '💥 US mortars', artillery: '💣 US artillery', bomber: `✈️ ${BOMBER_NAMES.us} bomber` };
+  const GUN_TITLES = {
+    us: { mortars: '💥 US mortars', artillery: '💣 US artillery', bomber: `✈️ ${BOMBER_NAMES.us} bomber` },
+    de: { mortars: '💥 German mortars', artillery: '💣 German artillery', bomber: `✈️ ${BOMBER_NAMES.de} bomber` },
+  };
   function gunState(which) {
     if (canFire(which)) return '<span class="pill ready">Ready</span>';
-    if (st.ammo[which] <= 0) return `<span class="pill bad">${which === 'bomber' ? 'Flown' : 'No rounds'}</span>`;
+    if (Sim.ammoOf(st, st.human)[which] <= 0) return `<span class="pill bad">${which === 'bomber' ? 'Flown' : 'No rounds'}</span>`;
     return `<span class="pill done">✓ ${which === 'bomber' ? 'Stayed away' : 'Fired'} this round</span>`;
   }
   // What the bomber does, one fact a line
   function bomberFacts() {
-    const facts = [`${st.ammo.bomber} run left`];
+    const facts = [`${Sim.ammoOf(st, st.human).bomber} run left`];
     // The compass only spins when it can fly
-    if (canFire('bomber')) facts.push(`🧭 Flies ${COMPASS_POINTS[Sim.bomberHeading(st, 'us')]}`);
+    if (canFire('bomber')) facts.push(`🧭 Flies ${COMPASS_POINTS[Sim.bomberHeading(st, st.human)]}`);
     facts.push(`💣 ${BOMBER.need}+ on each piece under it, yours too`);
     return facts;
   }
@@ -52,7 +59,7 @@ const UI = (() => {
     if (view.mode === 'fire:bomber') return Sim.bomberEdges().map(f => ({ x: f.x, y: f.y, kind: 'fire' }));
     if (view.mode && view.mode.startsWith('fire:')) {
       const out = [];
-      for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) if (Sim.canCallFire(st, x, y) && Sim.at(st, x, y, 'de').length) out.push({ x, y, kind: 'fire' });
+      for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) if (Sim.canCallFire(st, x, y) && Sim.at(st, x, y, enemy()).length) out.push({ x, y, kind: 'fire' });
       return out;
     }
     if (!u || !view.mode) return [];
@@ -81,7 +88,7 @@ const UI = (() => {
     if (view.mode === 'shoot' || view.mode === 'halfShot') list = fields(Sim.targets(st, u, view.mode === 'halfShot'));
     if (view.mode === 'rally') list = fields(Sim.rallyTargets(st, u));
     // A charge into a field the Germans hold is a hand-to-hand fight: marked differently
-    const marked = uniq(list).map(p => Object.assign(p, { kind: view.mode === 'charge' && Sim.at(st, p.x, p.y, 'de').length ? 'assault' : kind }));
+    const marked = uniq(list).map(p => Object.assign(p, { kind: view.mode === 'charge' && Sim.at(st, p.x, p.y, enemy()).length ? 'assault' : kind }));
     // Move & shoot: only the areas it could fire from are hatched (Steve)
     if (view.mode === 'moveShoot') for (const p of marked) p.cells = Sim.shootCells(st, u, p.x, p.y);
     // Charging: its own field is marked too, to go and line another of its hedges (the old Line a hedge, Steve: implicit)
@@ -89,7 +96,8 @@ const UI = (() => {
     // Rallying: every field the captain's voice reaches, faintly, round the pieces he can rally (Steve)
     if (view.mode === 'rally') marked.push(...rallyReach(u, marked));
     // A rifle platoon that can reach the village to take: that field in blue hatching (Steve), so it's clear
-    if (u.kind === 'company' && ['charge', 'moveShoot'].includes(view.mode)) {
+    // (only the Americans have to take it)
+    if (st.human === 'us' && u.kind === 'company' && ['charge', 'moveShoot'].includes(view.mode)) {
       for (const p of marked) if (p.x === st.objective.x && p.y === st.objective.y && p.kind !== 'line') p.kind = 'goal';
     }
     return marked;
@@ -110,14 +118,14 @@ const UI = (() => {
   function targets() {
     // The bomber aims at a field on the edge, not at a piece
     if (view.mode === 'fire:bomber') return [];
-    // Mortars or guns chosen: every German piece in a field they can be called on to, with the score their dice need
+    // Mortars or guns chosen: every enemy piece in a field they can be called on to, with the score their dice need
     if (view.mode && view.mode.startsWith('fire:')) {
-      const inReach = st.units.filter(t => t.side === 'de' && t.x !== null && Sim.canCallFire(st, t.x, t.y));
+      const inReach = st.units.filter(t => t.side === enemy() && t.x !== null && Sim.canCallFire(st, t.x, t.y));
       return inReach.map(t => {
         t.needNow = Sim.shellNeed(st, t);
         t.needWhy = Sim.shellWhy(st, t);
         // Artillery: your own pieces in a field next to it would be in the blast
-        const friendsNear = view.mode === 'fire:artillery' && st.units.some(f => f.side === 'us' && f.x !== null && Math.abs(f.x - t.x) + Math.abs(f.y - t.y) === 1);
+        const friendsNear = view.mode === 'fire:artillery' && st.units.some(f => f.side === st.human && f.x !== null && Math.abs(f.x - t.x) + Math.abs(f.y - t.y) === 1);
         if (friendsNear) t.needWhy = t.needWhy.concat(['⚠ your men in the blast']);
         return t;
       });
@@ -154,7 +162,7 @@ const UI = (() => {
   function rallies() {
     const u = selected();
     // Only the captain, in your move, not while he is aiming a shot
-    if (!u || u.kind !== 'captain' || st.de) return [];
+    if (!u || u.kind !== 'captain' || st.computer) return [];
     if (view.mode && !['go', 'rally'].includes(view.mode)) return [];
     // Nobody in reach, or no rallies left: no targets
     if (!Sim.captainCanRally(st, u)) return [];
@@ -176,7 +184,7 @@ const UI = (() => {
   function shootTarget(t) {
     // Mortars or guns: the fire mission lands on the target's field
     if (t && view.mode && view.mode.startsWith('fire:')) {
-      const fired = Sim.actFire(st, view.mode.slice(5), t.x, t.y);
+      const fired = Sim.actFire(st, view.mode.slice(5), t.x, t.y, t);
       if (fired.ok) { view.log.push(...fired.lines); view.mode = null; }
       return fired.ok;
     }
@@ -200,14 +208,14 @@ const UI = (() => {
   // A click on the table: carry out the chosen action on a highlighted field, or choose the piece clicked (one piece,
   // not the whole field). Returns that piece, for its menu
   function clickField(x, y, picked, side) {
-    if (st.won || st.lost || st.de) return null;
+    if (st.won || st.lost || st.computer) return null;
     const u = selected();
     let spot = spots().find(p => p.x === x && p.y === y);
     // Both ways shown: a click on the very area another of your pieces stands in, one that can still act, picks it
     // instead. A click on a free area moves there, beside whoever else is in the field (Steve: it picked the other
     // piece, and the move couldn't be made)
     const there = Sim.occupant(st, x, y, side);
-    const onReady = there && there.side === 'us' && there !== u && Sim.canAct(st, there);
+    const onReady = there && there.side === st.human && there !== u && Sim.canAct(st, there);
     if (view.mode === 'go' && spot && spot.kind !== 'assault' && onReady) spot = null;
     // Which action the click means. On a Move & shoot field, an area it couldn't fire from is a Charge there (if it can
     // charge there), or nothing
@@ -233,7 +241,7 @@ const UI = (() => {
           else {
             view.mode = null;
             // (a machine gun can't fire after moving at all, so there is nothing to say)
-            if (Sim.firesOnTheMove(u)) view.log.push(`No Germans in reach for ${u.name} to shoot from here.`);
+            if (Sim.firesOnTheMove(u)) view.log.push(`No ${foes()} in reach for ${u.name} to shoot from here.`);
           }
         } else view.mode = null;
       }
@@ -245,8 +253,8 @@ const UI = (() => {
     if (!picked) { view.sel = null; return null; }
     view.sel = picked.id;
     // Moved with Move & shoot and still to fire (Steve): picked again, its red targets show again
-    if (picked.side === 'us' && picked.halfShot) view.mode = 'halfShot';
-    else if (picked.side === 'us' && Sim.canAct(st, picked)) view.mode = 'go';
+    if (picked.side === st.human && picked.halfShot) view.mode = 'halfShot';
+    else if (picked.side === st.human && Sim.canAct(st, picked)) view.mode = 'go';
     return [picked];
   }
 
@@ -287,7 +295,7 @@ const UI = (() => {
     const menu = document.querySelector('#menu');
     menu.innerHTML = '';
     // Its state: ready, out of rounds, or already fired this round
-    menu.append(el('div', 'mhead', `<b>${GUN_TITLES[which]}</b><span>${gunState(which)}</span>`));
+    menu.append(el('div', 'mhead', `<b>${GUN_TITLES[st.human][which]}</b><span>${gunState(which)}</span>`));
     // Skip turn: hold fire this round, using the token
     const skip = el('button', '', '⏭️ Skip turn');
     skip.disabled = !canFire(which);
@@ -420,8 +428,8 @@ const UI = (() => {
       b.push({ mode: 'selfRally', label: '📣 Rally itself', ok: true, title: 'Its move: it shakes it off (a rally always works)', run: () => Sim.actSelfRally(st, u) });
     }
     if (u.kind === 'company' || Sim.isTank(u)) {
-      const fight = Sim.chargeSpots(st, u).some(p => Sim.at(st, p.x, p.y, 'de').length);
-      add('charge', fight ? '⚔️ Charge (hand to hand)' : '⚔️ Charge', Sim.chargeSpots(st, u).length > 0, 'Up to three fields without shooting (men climbing a hedge or cutting wire use one more); hand to hand if the Germans hold the field it ends in');
+      const fight = Sim.chargeSpots(st, u).some(p => Sim.at(st, p.x, p.y, enemy()).length);
+      add('charge', fight ? '⚔️ Charge (hand to hand)' : '⚔️ Charge', Sim.chargeSpots(st, u).length > 0, 'Up to three fields without shooting (men climbing a hedge or cutting wire use one more); hand to hand if the enemy holds the field it ends in');
       add('moveShoot', '➡️ Move & shoot', Sim.moveShootSpots(st, u).length > 0, 'Up to two fields to where it can fire (the red-hatched fields), then fire needing one more on the dice');
       add('shoot', '🎯 Shoot', Sim.targets(st, u).length > 0, 'Fire with every die');
     } else if (u.kind === 'captain') {
@@ -479,12 +487,15 @@ const UI = (() => {
     box.innerHTML = '';
     // A gun chosen: what it is, rounds left, whether it can fire this round, and its Fire button
     if (!u && view.support) {
-      const which = view.support, S = which === 'mortars' ? MORTARS : ARTILLERY;
-      picture(box, 'us', which);
-      box.append(el('div', 'name', GUN_TITLES[which]));
+      const which = view.support, S = Sim.gunStats(which, st.human);
+      picture(box, st.human, which);
+      box.append(el('div', 'name', GUN_TITLES[st.human][which]));
       box.append(el('div', 'sub', which === 'bomber' ? 'Off the board' : `${S.name}, off the board`));
       // What a mission does, one fact a line (Steve): where it can fire, the dice on the field, and the blast round it
-      const does = which === 'bomber' ? bomberFacts() : [`${st.ammo[which]} rounds left`, '🎯 Fires on a field your troops can see', `🎲 ${S.dice} dice on each German piece there`];
+      // (German mortars drop on the one piece, Steve: the differences between the sides stay)
+      const onOnePiece = which === 'mortars' && st.human === 'de';
+      const diceFact = onOnePiece ? `🎲 ${S.dice} dice on the one piece` : `🎲 ${S.dice} dice on each ${foes().slice(0, -1)} piece there`;
+      const does = which === 'bomber' ? bomberFacts() : [`${Sim.ammoOf(st, st.human)[which]} rounds left`, '🎯 Fires on a field your troops can see', diceFact];
       // One anti-tank die: artillery as any other hit, mortars only shaking a tank (Steve)
       if (which === 'mortars') does.push(`🛡️ ${S.hard} die on a tank: only shakes it, or kills it if already shaken`);
       if (which === 'artillery') does.push(`🛡️ ${S.hard} die on a tank`);
@@ -505,7 +516,7 @@ const UI = (() => {
     }
     if (!u || u.x === null) {
       box.className = '';
-      box.innerHTML = '<div class="sub">Click one of your pieces on the table (or a German one to see what it is).</div>';
+      box.innerHTML = `<div class="sub">Click one of your pieces on the table (or ${st.human === 'us' ? 'a German' : 'an American'} one to see what it is).</div>`;
       return;
     }
     // Its picture on the left (Steve), for your pieces and the Germans'
@@ -520,11 +531,12 @@ const UI = (() => {
     box.append(el('div', 'name', `${u.name}${u.quality === 'elite' ? ' ★' : ''}`));
     // Elite troops say so (Steve): Rangers or Fallschirmjäger, one less needed to hit
     const elite = u.quality === 'elite' ? ` · <b class="elite">Elite</b> (${u.side === 'us' ? 'Rangers' : 'Fallschirmjäger'}: −1 to hit)` : '';
-    box.append(el('div', 'sub', `${u.side === 'de' ? 'German · ' : ''}${KIND[u.kind]}${elite}${Sim.hasCutters(u) ? ' · hedge cutters' : ''}`));
+    const nation = u.side === st.human ? '' : u.side === 'de' ? 'German · ' : 'American · ';
+    box.append(el('div', 'sub', `${nation}${KIND[u.kind]}${elite}${Sim.hasCutters(u) ? ' · hedge cutters' : ''}`));
     const where = u.kind === 'pak' ? '' : `📍 At ${Sim.placeName(u.at)}`;
     box.append(el('div', 'stats', [strength, dice, armour, where, status].filter(Boolean).map(s => `<span>${s}</span>`).join('')));
-    // A German piece: just what it is (Steve), no actions
-    if (u.side !== 'us') return;
+    // The enemy's piece: just what it is (Steve), no actions
+    if (u.side !== st.human) return;
     const acts = el('div'); acts.id = 'actions'; acts.style.marginTop = '6px';
     // (Ambush is in the piece's pop-up menu only, Steve: the panel has no room for a fifth button)
     for (const a of actionButtons(u).filter(o => o.mode !== 'ambush')) {
@@ -538,14 +550,16 @@ const UI = (() => {
 
   function hint() {
     const u = selected();
-    const text = !view.mode ? (st.drawn === 'de' ? 'German token: a German piece moves…' : st.drawn === 'us' ? (st.activeId ? 'Finish its move (or Skip in its menu).' : 'Your token: pick one piece and give it its move (or Skip turn in its menu).') : 'Drawing a token…')
+    const computerToken = st.drawn && st.drawn !== st.human;
+    const theirToken = st.human === 'us' ? 'German token: a German piece moves…' : 'American token: an American piece moves…';
+    const text = !view.mode ? (computerToken ? theirToken : st.drawn === st.human ? (st.activeId ? 'Finish its move (or Skip in its menu).' : 'Your token: pick one piece and give it its move (or Skip turn in its menu).') : 'Drawing a token…')
       : view.mode === 'fire:bomber' ? 'Point at a lit field on the edge of the board to see the line; click it to send the bomber through.'
-      : view.mode.startsWith('fire:') ? 'Click a red target, or a field with Germans your troops can see.'
+      : view.mode.startsWith('fire:') ? `Click a red target, or a field with ${foes()} your troops can see.`
       : view.mode === 'halfShot' ? 'Moved. Click a red target to fire on it (one more needed on the move), or Esc to hold fire.'
       : view.mode === 'shoot' ? 'Click a red target to fire on it. Esc cancels.'
       : view.mode === 'rally' ? `Bright green: pieces he can rally; click one. Pale green: how far he reaches (${RALLY_RANGE} fields). Esc cancels.`
-      : view.mode === 'go' ? `${targets().length ? 'Red targets: shoot from here. ' : ''}Red hatching: Move & shoot. Other marked fields: Charge. Blue: the village. Click where in the field to stand: a corner, an edge (lining its hedge) or the middle. Or use the menu.`
-      : view.mode === 'charge' ? 'Blue hatching: the village to take. Click where in a field to go: by a hedge to line it (green: cover), or the middle for the open. Bright red fields are held by the Germans: a hand-to-hand fight. Its own field (green): line another hedge. Esc cancels.'
+      : view.mode === 'go' ? `${targets().length ? 'Red targets: shoot from here. ' : ''}Red hatching: Move & shoot. Other marked fields: Charge. ${st.human === 'us' ? 'Blue: the village. ' : ''}Click where in the field to stand: a corner, an edge (lining its hedge) or the middle. Or use the menu.`
+      : view.mode === 'charge' ? `${st.human === 'us' ? 'Blue hatching: the village to take. ' : ''}Click where in a field to go: by a hedge to line it (green: cover), or the middle for the open. Bright red fields are held by the ${foes()}: a hand-to-hand fight. Its own field (green): line another hedge. Esc cancels.`
       : view.mode === 'moveShoot' ? `Click where in a red-hatched field to go (by a hedge to line it, green: cover): ${u ? u.name : 'the piece'} moves there and can fire. Esc cancels.`
       : `Click a highlighted field for ${u ? u.name : 'the piece'}. Esc cancels.`;
     $('#hint').textContent = text;
@@ -553,7 +567,9 @@ const UI = (() => {
 
   function update() {
     $('#clock').innerHTML = `<b>Round ${st.turn}</b>${TURNS ? ` of ${TURNS}` : ''} · ${START_DATE}`;
-    $('#goal').textContent = `🎯 Take ${st.objective.name} and hold it at the end of a round, or destroy every German${TURNS ? `, within ${TURNS} rounds` : ' (no time limit for now)'}.`;
+    $('#goal').textContent = st.human === 'de'
+      ? `🎯 Destroy every American piece on the table (guns and bomber off it don't count). Don't let them hold ${st.objective.name} at a round's end.`
+      : `🎯 Take ${st.objective.name} and hold it at the end of a round, or destroy every German${TURNS ? `, within ${TURNS} rounds` : ' (no time limit for now)'}.`;
     card(); hint(); bag();
   }
 

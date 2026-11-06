@@ -168,6 +168,8 @@ const Sim = (() => {
   // A small target (Steve): a piece of two men or fewer (the sniper, a bazooka team, the captain), one more to hit
   const smallTarget = u => !!u.kind && (PIECES[u.kind].men || 99) <= 2;
   const enemyOf = side => (side === 'us' ? 'de' : 'us');
+  // The side the computer plays: whichever the player doesn't (Steve: the player can be the Germans)
+  const computerSide = st => enemyOf(st.human);
   const adjacent = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y) === 1;
 
   // Is there room for a unit in a field? (Steve: the nine areas decide, see footprint.) Never with the enemy, except in
@@ -180,11 +182,13 @@ const Sim = (() => {
   }
 
 
-  function newGame(seed) {
+  // human: the side the player commands, 'us' or 'de'. st.won means the Americans won and st.lost the Germans did,
+  // whichever side the player has: the page turns that into a win or a loss for the player
+  function newGame(seed, human = 'us') {
     seed = seed || (Date.now() % 1e9);
     const R = rng(seed);
     const st = {
-      seed, turn: 1, hedges: {}, wire: {}, units: [], wrecks: [], report: [], fx: [],
+      seed, human, turn: 1, hedges: {}, wire: {}, units: [], wrecks: [], report: [], fx: [],
       fired: {},          // fire support used this hour (the mortars and the guns each fire once an hour)
       ammo: { mortars: MORTARS.ammo, artillery: ARTILLERY.ammo, bomber: BOMBER.ammo },
       deMortarAmmo: DE_MORTAR.ammo, deArtilleryAmmo: DE_ARTILLERY.ammo, deBomberAmmo: BOMBER.ammo, won: false, lost: false,
@@ -280,8 +284,8 @@ const Sim = (() => {
     if (!st.activated.some(same)) st.activated.push(who);
   }
 
-  // With the bag (the page plays this way): an American piece moves only on an American token, and only one piece a token
-  const tokenAllows = (st, u) => !st.tokens || (st.drawn === 'us' && (!st.activeId || st.activeId === u.id));
+  // With the bag (the page plays this way): the player's piece moves only on the player's token, and only one piece a token
+  const tokenAllows = (st, u) => !st.tokens || (st.drawn === st.human && (!st.activeId || st.activeId === u.id));
 
   // ---------- Seeing ----------
 
@@ -754,8 +758,8 @@ const Sim = (() => {
 
   function fireAt(st, shooter, target, power, withdraw = false, moving = false, blast = false) {
     const f = firepower(st, shooter);
-    // A German piece fired on takes cover when it is wise to (Steve), as you can
-    if (!withdraw && target.side === 'de' && germanTakesCover(st, target, menDice(f) * power, needFor(st, shooter, target, moving))) withdraw = true;
+    // The computer's piece fired on takes cover when it is wise to (Steve), as you can
+    if (!withdraw && target.side !== st.human && computerTakesCover(st, target, menDice(f) * power, needFor(st, shooter, target, moving))) withdraw = true;
     // Taking cover happens before the dice roll: its men are already down (and two more are needed)
     const pre = withdraw ? takeCover(st, target) : null;
     const need = needFor(st, shooter, target, moving);
@@ -800,7 +804,7 @@ const Sim = (() => {
   // Does a German piece about to be fired on (dice at it, each needing `need`) take cover? When it is wise (Steve):
   // a shaken piece, where one more hit kills, as soon as a hit is likely; a weakened one against a fair volley; a
   // whole one only against a heavy one. Taking cover costs its move this round, so only a piece that still has it
-  function germanTakesCover(st, t, diceAt, need) {
+  function computerTakesCover(st, t, diceAt, need) {
     if (!canReact(st, t) || isTank(t)) return false;
     const expected = diceAt * hitChance(need);
     const whole = t.platoons >= (t.kind === 'company' ? 3 : 1);
@@ -817,7 +821,7 @@ const Sim = (() => {
   }
 
   // Can this piece react now: a piece not already down in cover, that hasn't moved this round (Steve: taking cover
-  // uses the move it still has). You are asked; the Germans decide for themselves (germanTakesCover)
+  // uses the move it still has). You are asked; the Germans decide for themselves (computerTakesCover)
   function canReact(st, u) {
     // Tanks can't take cover (Steve): they just take it
     return u.x !== null && !isTank(u) && !PIECES[u.kind].fixed && !u.spentNext && !u.down && !u.acted;
@@ -1039,7 +1043,7 @@ const Sim = (() => {
   // Each returns { ok, lines } and spends a command point when it works. A piece acts once an hour
 
   function canAct(st, u) {
-    return !!u && u.side === 'us' && u.x !== null && !st.won && !st.lost && !st.de && !u.acted && tokenAllows(st, u);
+    return !!u && u.side === st.human && u.x !== null && !st.won && !st.lost && !st.computer && !u.acted && tokenAllows(st, u);
   }
 
   // The captain's rallies (Steve): two a round if he stays put or charges, in any order (two then the charge, one
@@ -1047,7 +1051,7 @@ const Sim = (() => {
   // them all, he uses Skip turn. u.fired: he has shot (or moved and shot) this round
   const ralliesAllowed = cap => (cap.fired ? CAPTAIN_RALLIES.fired : CAPTAIN_RALLIES.still);
   function canRally(st, cap) {
-    if (!cap || cap.kind !== 'captain' || cap.side !== 'us' || cap.x === null || st.won || st.lost || st.de || !tokenAllows(st, cap)) return false;
+    if (!cap || cap.kind !== 'captain' || cap.side !== st.human || cap.x === null || st.won || st.lost || st.computer || !tokenAllows(st, cap)) return false;
     if (cap.skipped) return false;
     return (cap.rallied || 0) < ralliesAllowed(cap);
   }
@@ -1252,8 +1256,8 @@ const Sim = (() => {
   // this field, not lining any hedge in it
   function springAmbushes(st, mover, lines, passing = false) {
     let stopped = false;
-    // (the Germans' moves are reported on their list)
-    const report = mover.side === 'de' && st.de ? st.de.rep : lines;
+    // (the computer's moves are reported on its list)
+    const report = mover.side !== st.human && st.computer ? st.computer.rep : lines;
     const place = mover.at;
     if (passing) mover.at = null;
     const waiting = st.units.filter(a => a.ambush && a.side !== mover.side && a.x !== null);
@@ -1333,12 +1337,19 @@ const Sim = (() => {
     const route = canAct(st, u) && chargeRoutes(st, u).find(r => r[r.length - 1].x === x && r[r.length - 1].y === y);
     if (!route) return { ok: false };
     spend(st, u);
+    const lines = chargeAlong(st, u, route, side);
+    return { ok: true, lines: [lines.join(', ') + '.'] };
+  }
+
+  // A charge along its route, either side: it stands where it was sent (side), if it gets there. Returns the lines to report
+  function chargeAlong(st, u, route, side) {
+    const goal = route[route.length - 1], x = goal.x, y = goal.y;
     const lines = [];
     // The fields before the goal are crossed on the way
     const home = { x: u.x, y: u.y, at: u.at };
     lines.push(...followRoute(st, u, route));
     // Snagged on wire on the way, or stopped by an ambush: it gets no further
-    if (u.snagged) return { ok: true, lines: [lines.join(', ') + '.'] };
+    if (u.snagged) return lines;
     const empty = !at(st, x, y, enemyOf(u.side)).length;
     lines.push(...charge(st, u, x, y));
     // Arrived (not beaten back): it stands where it was sent, and the table shows the way it came
@@ -1349,7 +1360,7 @@ const Sim = (() => {
     if (route.some(p => p.pass && p.x === u.x && p.y === u.y)) {
       u.x = home.x; u.y = home.y; u.at = home.at;
     }
-    return { ok: true, lines: [lines.join(', ') + '.'] };
+    return lines;
   }
 
   // The other places in its own field a piece could move to (not where it is; where it fits among the others)
@@ -1384,7 +1395,7 @@ const Sim = (() => {
 
   // A shaken piece uses its move to pull itself together (Steve: pieces can rally themselves; a rally always works)
   function canSelfRally(st, u) {
-    return !!u && u.side === 'us' && u.x !== null && u.shocked && !u.acted && !st.won && !st.lost && !st.de && u.kind !== 'captain' && tokenAllows(st, u);
+    return !!u && u.side === st.human && u.x !== null && u.shocked && !u.acted && !st.won && !st.lost && !st.computer && u.kind !== 'captain' && tokenAllows(st, u);
   }
   // Can the captain rally now and is there anyone in reach to rally, himself included (Steve: otherwise no Rally, no waiting)
   function captainCanRally(st, cap) {
@@ -1428,15 +1439,21 @@ const Sim = (() => {
     return { ok: true, lines };
   }
 
-  // Fields the battalion can call fire on: seen, with no Americans in them
+  // Fields the player can call fire on: seen by their pieces, with none of their own in them
   function canCallFire(st, x, y) {
-    return inside(x, y) && sees(st, 'us', x, y) && at(st, x, y, 'us').length === 0;
+    return inside(x, y) && sees(st, st.human, x, y) && at(st, x, y, st.human).length === 0;
+  }
+
+  // A side's mortars or artillery: their numbers (Steve: the differences between the sides stay)
+  function gunStats(which, side) {
+    if (which === 'mortars') return side === 'de' ? DE_MORTAR : MORTARS;
+    return side === 'de' ? DE_ARTILLERY : ARTILLERY;
   }
 
   // The fields a fire mission's shells fall on (Steve: shown round the target before firing): the target's field (main),
   // and for guns with splash the four fields next to it
   function shellFields(which, x, y, side = 'us') {
-    const S = which === 'mortars' ? MORTARS : side === 'de' ? DE_ARTILLERY : ARTILLERY;
+    const S = gunStats(which, side);
     // The target's field always
     const fields = [{ x, y, main: true }];
     // Mortars stop there; the guns' blast reaches the fields next to it
@@ -1447,15 +1464,15 @@ const Sim = (() => {
 
   // A fire mission from the mortars or the guns: dice on every piece in the field, and a few on the fields round it
   function fireMission(st, which, x, y, side = 'us') {
-    const S = which === 'mortars' ? MORTARS : side === 'de' ? DE_ARTILLERY : ARTILLERY;
+    const S = gunStats(which, side);
     const lines = [];
     // Round the target the shells fall on friend and foe alike (Steve): artillery can hit your own pieces there
     const hitField = (fx, fy, n, splash = false) => {
       const caught = splash ? at(st, fx, fy) : at(st, fx, fy, enemyOf(side));
       for (const t of caught) {
         if (t.x === null) continue;
-        // Your shells on a German piece: it takes cover first if it is wise to (Steve); then what each die needs
-        if (side === 'us' && t.side === 'de' && germanTakesCover(st, t, n, shellNeed(st, t))) { const pre = takeCover(st, t); lines.push(pre.line); }
+        // The player's shells on the computer's piece: it takes cover first if it is wise to (Steve); then what each die needs
+        if (side === st.human && t.side !== st.human && computerTakesCover(st, t, n, shellNeed(st, t))) { const pre = takeCover(st, t); lines.push(pre.line); }
         const need = shellNeed(st, t);
         const faces = [];
         // Against a tank only the anti-tank dice count (its armour is in need); against men every die
@@ -1477,17 +1494,25 @@ const Sim = (() => {
     return lines;
   }
 
-  function actFire(st, which, x, y) {
+  // The player's mortars or artillery. target: the piece clicked, for German mortars, which drop on one piece only
+  function actFire(st, which, x, y, target) {
     // The bomber has its own way of going in
     if (which === 'bomber') return actBomb(st, x, y);
-    if (st.won || st.lost || st.de || st.fired[which] || st.ammo[which] <= 0 || !canCallFire(st, x, y)) return { ok: false };
-    // With the bag: on an American token not yet used by a piece; firing uses the token (Steve: the guns are in the bag)
-    if (st.tokens && (st.drawn !== 'us' || st.activeId)) return { ok: false };
-    if (st.tokens) { st.activeId = 'gun:' + which; activated(st, { side: 'us', gun: which }); }
-    st.fired[which] = true;
-    st.ammo[which]--;
-    const S = which === 'mortars' ? MORTARS : ARTILLERY;
-    const lines = fireMission(st, which, x, y);
+    const side = st.human;
+    if (st.won || st.lost || st.computer || firedOf(st, side)[which] || ammoOf(st, side)[which] <= 0 || !canCallFire(st, x, y)) return { ok: false };
+    // German mortars need a piece to drop on: the one clicked, or the first in the field
+    const onOnePiece = which === 'mortars' && side === 'de';
+    const piece = onOnePiece ? target || at(st, x, y, enemyOf(side))[0] : null;
+    if (onOnePiece && !piece) return { ok: false };
+    // With the bag: on the player's token not yet used by a piece; firing uses the token (Steve: the guns are in the bag)
+    if (st.tokens && (st.drawn !== side || st.activeId)) return { ok: false };
+    if (st.tokens) { st.activeId = 'gun:' + which; activated(st, { side, gun: which }); }
+    firedOf(st, side)[which] = true;
+    useRound(st, side, which);
+    const S = gunStats(which, side);
+    // The American computer's piece takes cover first if it is wise to, as it does under your other weapons
+    const ducks = onOnePiece && computerTakesCover(st, piece, S.dice, shellNeed(st, piece));
+    const lines = onOnePiece ? mortarOnOnePiece(st, piece, ducks) : fireMission(st, which, x, y, side);
     return { ok: true, lines: [`💥 ${S.name} fire on the field: ${lines.length ? lines.join(', ') : 'no hits'}.`] };
   }
 
@@ -1563,8 +1588,8 @@ const Sim = (() => {
     st.fx.push({ kind: 'flyover', side, x, y, heading, line });
     for (const field of line) {
       for (const t of at(st, field.x, field.y)) {
-        // Your bomb on a German piece: it takes cover first if it is wise to, as under shells
-        const ducks = side === 'us' && t.side === 'de' && germanTakesCover(st, t, BOMBER.dice, bombNeed(st, t));
+        // The player's bomb on the computer's piece: it takes cover first if it is wise to, as under shells
+        const ducks = side === st.human && t.side !== st.human && computerTakesCover(st, t, BOMBER.dice, bombNeed(st, t));
         if (ducks) lines.push(takeCover(st, t).line);
         // The score it needs, after any taking cover
         const need = bombNeed(st, t);
@@ -1604,14 +1629,15 @@ const Sim = (() => {
   // Your bomber sent through a field on the edge of the board
   function actBomb(st, x, y) {
     const onEdge = bomberEdges().some(f => f.x === x && f.y === y);
-    if (st.won || st.lost || st.de || st.fired.bomber || st.ammo.bomber <= 0 || !onEdge) return { ok: false };
-    // With the bag: on an American token not yet used by a piece; flying uses the token
-    if (st.tokens && (st.drawn !== 'us' || st.activeId)) return { ok: false };
-    if (st.tokens) { st.activeId = 'gun:bomber'; activated(st, { side: 'us', gun: 'bomber' }); }
-    st.fired.bomber = true;
-    st.ammo.bomber--;
-    const lines = dropBombs(st, 'us', x, y);
-    return { ok: true, lines: [`✈️ The ${BOMBER_NAMES.us} flies over: ${lines.length ? lines.join(', ') : 'no hits'}.`] };
+    const side = st.human;
+    if (st.won || st.lost || st.computer || firedOf(st, side).bomber || ammoOf(st, side).bomber <= 0 || !onEdge) return { ok: false };
+    // With the bag: on the player's token not yet used by a piece; flying uses the token
+    if (st.tokens && (st.drawn !== side || st.activeId)) return { ok: false };
+    if (st.tokens) { st.activeId = 'gun:bomber'; activated(st, { side, gun: 'bomber' }); }
+    firedOf(st, side).bomber = true;
+    useRound(st, side, 'bomber');
+    const lines = dropBombs(st, side, x, y);
+    return { ok: true, lines: [`✈️ The ${BOMBER_NAMES[side]} flies over: ${lines.length ? lines.join(', ') : 'no hits'}.`] };
   }
 
   // ---------- The Germans ----------
@@ -1631,7 +1657,8 @@ const Sim = (() => {
   }
 
   // Where a German piece is heading: its post, or (reserves) the objective if nobody holds it, else the nearest American
-  function germanGoal(st, u) {
+  function computerGoal(st, u) {
+    if (u.side === 'us') return americanGoal(st, u);
     // On the way to its post, or back to it
     if (u.post && !u.reserve) return u.post;
     // A reserve rifle platoon goes to hold the objective if no platoon does
@@ -1647,9 +1674,10 @@ const Sim = (() => {
   // +1 for moving, the nearer its goal the better. null if it has none, or if it stands in the objective: it holds that
   function bestMoveShoot(st, u) {
     if (u.x === st.objective.x && u.y === st.objective.y) return null;
-    const routes = moveShootRoutes(st, u);
+    // (the American computer keeps the village's yard free for its rifle platoons)
+    const routes = moveShootRoutes(st, u).filter(route => !blocksTheVillage(st, u, route[route.length - 1]));
     if (!routes.length) return null;
-    const goal = germanGoal(st, u);
+    const goal = computerGoal(st, u);
     const home = { x: u.x, y: u.y, at: u.at };
     let best = null;
     // For each field it could reach
@@ -1678,8 +1706,8 @@ const Sim = (() => {
     if (u.x === null) return null;
     const t = bestTarget(st, u, true);
     // Stopped short with nothing it can hit
-    if (!t) { deSays(st, moved); return null; }
-    deSays(st, `${moved}, fires on ${t.name}`);
+    if (!t) { computerSays(st, moved); return null; }
+    computerSays(st, `${moved}, fires on ${t.name}`);
     return { shooter: u.id, target: t.id, moving: true };
   }
 
@@ -1691,58 +1719,63 @@ const Sim = (() => {
     let best = null, bestD = far(u);
     for (const route of routesFor(st, u, reach(u, CHARGE_MOVES), false)) {
       const end = route[route.length - 1];
+      if (blocksTheVillage(st, u, end)) continue;
       if (far(end) < bestD) { bestD = far(end); best = route; }
     }
     return best;
   }
 
   // The German hour runs a piece at a time, so it can stop and ask the player whether a piece being fired on pulls back.
-  // st.de holds the hour in progress: who still has to act, the report so far, and any question waiting for an answer
+  // st.computer holds the hour in progress: who still has to act, the report so far, and any question waiting for an answer
   function startGermanHour(st) {
     // Shaken Germans stay shaken until their captain rallies them (Steve: only a rally clears it)
     for (const u of st.units) u.halfShot = false;
     st.fx = [];
-    st.de = { queue: st.units.filter(u => u.side === 'de' && u.x !== null).map(u => u.id), mortar: st.deMortarAmmo > 0, artillery: st.deArtilleryAmmo > 0, rep: [], ask: null };
+    st.computer = { queue: st.units.filter(u => u.side === 'de' && u.x !== null).map(u => u.id), mortar: st.deMortarAmmo > 0, artillery: st.deArtilleryAmmo > 0, rep: [], ask: null };
   }
 
-  // What one German piece does: throw Americans out of the hamlet, counterattack a shaken company, shoot, or (reserves) move up.
-  // Returns a planned shot { shooter, target } instead of firing, so the target can be offered a chance to pull back
-  function germanAct(st, u) {
-    const rep = st.de.rep;
-    // Until it does something else, it holds its ground (what the table's word bubble says, Steve)
-    deSays(st, 'Holds its ground');
-    // Their captain (Steve): first he rallies the nearest shaken German in reach, himself too
+  // The rallying on the computer's token, either side. Returns true if that was the piece's go
+  function computerRallies(st, u) {
+    const rep = st.computer.rep;
+    const far = t => Math.abs(t.x - u.x) + Math.abs(t.y - u.y);
+    // The captain (Steve): first he rallies the nearest shaken piece of his in reach, himself too
     if (u.kind === 'captain') {
-      const far = t => Math.abs(t.x - u.x) + Math.abs(t.y - u.y);
-      const shaken = st.units.filter(t => t.side === 'de' && t.x !== null && t.shocked && far(t) <= RALLY_RANGE).sort((a, b) => far(a) - far(b));
+      const shaken = st.units.filter(t => t.side === u.side && t.x !== null && t.shocked && far(t) <= RALLY_RANGE).sort((a, b) => far(a) - far(b));
       if (shaken.length) {
         const t = shaken[0];
         // A rally always works (Steve)
         t.shocked = false;
         rallyShown(st, t);
-        deSays(st, `Rallies ${t === u ? 'himself' : t.name}`);
+        computerSays(st, `Rallies ${t === u ? 'himself' : t.name}`);
         rep.push(`📣 ${u.name} rallies ${t.name}.`);
-        return null;
+        return true;
       }
     }
-    const inHamlet = at(st, st.objective.x, st.objective.y, 'us').length > 0;
     // A shaken piece can use its move to rally itself, as yours can (Steve: the same rules). It does, unless it has a shot
     // and its captain is near enough to rally it for it
-    if (u.shocked && u.kind !== 'captain') {
-      const captain = st.units.find(c => c.side === 'de' && c.kind === 'captain' && c.x !== null);
-      const captainNear = captain && Math.abs(captain.x - u.x) + Math.abs(captain.y - u.y) <= RALLY_RANGE;
-      if (!captainNear || !bestTarget(st, u)) {
-        u.shocked = false;
-        rallyShown(st, u);
-        deSays(st, 'Pulls itself together');
-        rep.push(`📣 ${u.name} pulls itself together.`);
-        return null;
-      }
-    }
+    if (!u.shocked || u.kind === 'captain') return false;
+    const captain = st.units.find(c => c.side === u.side && c.kind === 'captain' && c.x !== null);
+    const captainNear = captain && far(captain) <= RALLY_RANGE;
+    if (captainNear && bestTarget(st, u)) return false;
+    u.shocked = false;
+    rallyShown(st, u);
+    computerSays(st, 'Pulls itself together');
+    rep.push(`📣 ${u.name} pulls itself together.`);
+    return true;
+  }
+
+  // What one German piece does: throw Americans out of the hamlet, counterattack a shaken company, shoot, or (reserves) move up.
+  // Returns a planned shot { shooter, target } instead of firing, so the target can be offered a chance to pull back
+  function germanAct(st, u) {
+    const rep = st.computer.rep;
+    // Until it does something else, it holds its ground (what the table's word bubble says, Steve)
+    computerSays(st, 'Holds its ground');
+    if (computerRallies(st, u)) return null;
+    const inHamlet = at(st, st.objective.x, st.objective.y, 'us').length > 0;
     // (wire stops their men as it stops yours, Steve)
     const noWire = o => !wire(st, u.x, u.y, o.x, o.y);
     if (inHamlet && !u.shocked && fightsHandToHand(u) && adjacent(u, st.objective) && noWire(st.objective)) {
-      deSays(st, `Charges into ${st.objective.name}`);
+      computerSays(st, `Charges into ${st.objective.name}`);
       // Setting off in sight of an ambush: stopped, it gets no further
       if (springAmbushes(st, u, [])) return null;
       rep.push('🔺 ' + charge(st, u, st.objective.x, st.objective.y).join(', ') + '.');
@@ -1750,17 +1783,17 @@ const Sim = (() => {
     }
     const weak = st.units.find(t => t.side === 'us' && t.x !== null && t.kind === 'company' && adjacent(u, t) && noWire(t) && t.shocked);
     if (u.kind === 'company' && !u.shocked && u.platoons >= 2 && weak && st.rand() < 0.5) {
-      deSays(st, `Charges ${weak.name}`);
+      computerSays(st, `Charges ${weak.name}`);
       if (springAmbushes(st, u, [])) return null;
       rep.push('🔺 ' + charge(st, u, weak.x, weak.y).join(', ') + '.');
       return null;
     }
     const t = bestTarget(st, u);
-    if (t) { deSays(st, `Fires on ${t.name}`); return { shooter: u.id, target: t.id }; }
+    if (t) { computerSays(st, `Fires on ${t.name}`); return { shooter: u.id, target: t.id }; }
     // Americans just across a hedge it isn't lining: go to that hedge
     const across = st.units.find(o => o.side === 'us' && o.x !== null && acrossHedge(st, u, o) && !atHedge(u, o));
     if (across && !PIECES[u.kind].fixed) {
-      deSays(st, `Lines the hedge facing ${across.name}`);
+      computerSays(st, `Lines the hedge facing ${across.name}`);
       u.at = freePlace(st, u, u.x, u.y, dirTo(u, across));
       springAmbushes(st, u, []);
       // As with yours, it may fire from the hedge, one more needed for moving
@@ -1776,39 +1809,130 @@ const Sim = (() => {
     // On the way to its post: march there and dig in
     if (u.post && !u.reserve && (u.x !== u.post.x || u.y !== u.post.y)) {
       const route = routeToward(st, u, u.post);
-      if (route) { deSays(st, 'Marches to its post'); germanMove(st, u, route); return null; }
+      if (route) { computerSays(st, 'Marches to its post'); computerMove(st, u, route); return null; }
     }
     // Reserves: a company goes to hold the hamlet if nobody does; the rest move up towards the nearest Americans
     if (u.reserve) {
       const holding = u.x === st.objective.x && u.y === st.objective.y && u.kind === 'company';
-      if (holding) deSays(st, `Holds ${st.objective.name}`);
+      if (holding) computerSays(st, `Holds ${st.objective.name}`);
       const garrison = at(st, st.objective.x, st.objective.y, 'de').some(g => g.kind === 'company');
       const us = st.units.filter(o => o.side === 'us' && o.x !== null);
       const near = us.sort((a, b) => (Math.abs(a.x - u.x) + Math.abs(a.y - u.y)) - (Math.abs(b.x - u.x) + Math.abs(b.y - u.y)))[0];
       const goal = (!garrison && u.kind === 'company') || !near ? st.objective : near;
       const route = holding ? null : routeToward(st, u, goal);
-      if (route) { deSays(st, goal === st.objective ? `Moves up to hold ${st.objective.name}` : `Moves up towards ${near.name}`); germanMove(st, u, route); return null; }
+      if (route) { computerSays(st, goal === st.objective ? `Moves up to hold ${st.objective.name}` : `Moves up towards ${near.name}`); computerMove(st, u, route); return null; }
     }
     // Nothing better to do: a Hail Mary, if it has anyone in reach
     const longShot = targets(st, u)[0];
-    if (longShot) { deSays(st, `Hail Mary at ${longShot.name}`); return { shooter: u.id, target: longShot.id }; }
+    if (longShot) { computerSays(st, `Hail Mary at ${longShot.name}`); return { shooter: u.id, target: longShot.id }; }
     // No one in reach and nowhere to go: it lies in wait
     if (mayFire(u)) {
       u.ambush = true;
-      deSays(st, 'Lies in ambush');
+      computerSays(st, 'Lies in ambush');
       rep.push(`🪤 ${u.name} lies in ambush.`);
     }
     return null;
   }
 
-  // What the German piece or gun on this token is doing, in a few words, for its word bubble on the table (Steve)
-  function deSays(st, what) {
-    if (st.de && st.de.move) st.de.move.what = what;
+  // ---------- The American computer (Steve: the player can be the Germans) ----------
+
+  // Where an American piece is heading: a rifle platoon to the village, the captain after his strongest platoon, the
+  // rest at the nearest German
+  function americanGoal(st, u) {
+    if (u.kind === 'company') return st.objective;
+    const far = o => Math.abs(o.x - u.x) + Math.abs(o.y - u.y);
+    if (u.kind === 'captain') {
+      const platoons = st.units.filter(o => o.side === 'us' && o.x !== null && o.kind === 'company').sort((a, b) => b.platoons - a.platoons);
+      if (platoons.length) return platoons[0];
+    }
+    const germans = st.units.filter(o => o.side === 'de' && o.x !== null).sort((a, b) => far(a) - far(b));
+    return germans[0] || st.objective;
+  }
+
+  // Would this field shut the American computer's rifle platoons out of the village? Only a platoon takes it (Steve), so
+  // nothing else stops there
+  function blocksTheVillage(st, u, field) {
+    return u.side === 'us' && u.kind !== 'company' && field.x === st.objective.x && field.y === st.objective.y;
+  }
+
+  // The charge a rifle platoon of the American computer would make: into the village if nobody is there or it has more
+  // bases than they have, or at any field it outnumbers. Standing in the village, it stays and holds it. null if none
+  function americanCharge(st, u) {
+    if (u.kind !== 'company') return null;
+    const inVillage = u.x === st.objective.x && u.y === st.objective.y;
+    if (inVillage) return null;
+    const endOf = route => route[route.length - 1];
+    const basesAt = field => at(st, field.x, field.y, 'de').reduce((n, g) => n + g.platoons, 0);
+    const routes = chargeRoutes(st, u);
+    const intoVillage = routes.find(r => endOf(r).x === st.objective.x && endOf(r).y === st.objective.y);
+    if (intoVillage) {
+      const held = basesAt(endOf(intoVillage));
+      if (!held) return { route: intoVillage, what: `Charges into ${st.objective.name}` };
+      if (!u.shocked && u.platoons > held) return { route: intoVillage, what: `Storms ${st.objective.name}` };
+    }
+    if (u.shocked) return null;
+    const weak = routes.find(r => basesAt(endOf(r)) > 0 && basesAt(endOf(r)) < u.platoons);
+    if (!weak) return null;
+    const names = at(st, endOf(weak).x, endOf(weak).y, 'de').map(g => g.name).join(' and ');
+    return { route: weak, what: `Charges ${names}` };
+  }
+
+  // What one American piece does on the computer's token: rally, charge, shoot from here, line a hedge, Move & shoot,
+  // march on its goal; a Hail Mary or an ambush with nothing better. Returns a planned shot, as germanAct does
+  function americanAct(st, u) {
+    const rep = st.computer.rep;
+    computerSays(st, 'Holds its ground');
+    if (computerRallies(st, u)) return null;
+    const attack = americanCharge(st, u);
+    if (attack) {
+      computerSays(st, attack.what);
+      rep.push('🔺 ' + chargeAlong(st, u, attack.route).join(', ') + '.');
+      return null;
+    }
+    const t = bestTarget(st, u);
+    if (t) { computerSays(st, `Fires on ${t.name}`); return { shooter: u.id, target: t.id }; }
+    // Germans just across a hedge it isn't lining: go to that hedge, and it may fire from there
+    const across = st.units.find(o => o.side === 'de' && o.x !== null && acrossHedge(st, u, o) && !atHedge(u, o));
+    if (across && !PIECES[u.kind].fixed) {
+      u.at = freePlace(st, u, u.x, u.y, dirTo(u, across));
+      springAmbushes(st, u, []);
+      return shotAfterMove(st, u, `Lines the hedge facing ${across.name}`);
+    }
+    // No shot from here, but a Move & shoot would give it one
+    const plan = bestMoveShoot(st, u);
+    if (plan) {
+      const lines = moveToShoot(st, u, plan.route, plan.place);
+      rep.push('🔺 ' + lines.join(', ') + '.');
+      return shotAfterMove(st, u, 'Moves up');
+    }
+    // On towards its goal
+    const goal = computerGoal(st, u);
+    const route = routeToward(st, u, goal);
+    if (route) {
+      computerSays(st, goal === st.objective ? `Moves up towards ${st.objective.name}` : `Moves up towards ${goal.name}`);
+      computerMove(st, u, route);
+      return null;
+    }
+    // Nothing better to do: a Hail Mary, if it has anyone in reach
+    const longShot = targets(st, u)[0];
+    if (longShot) { computerSays(st, `Hail Mary at ${longShot.name}`); return { shooter: u.id, target: longShot.id }; }
+    // No one in reach and nowhere to go: it lies in wait
+    if (mayFire(u)) {
+      u.ambush = true;
+      computerSays(st, 'Lies in ambush');
+      rep.push(`🪤 ${u.name} lies in ambush.`);
+    }
+    return null;
+  }
+
+  // What the computer's piece or gun on this token is doing, in a few words, for its word bubble on the table (Steve)
+  function computerSays(st, what) {
+    if (st.computer && st.computer.move) st.computer.move.what = what;
   }
 
   // A German piece goes along its route, as yours do: climbing hedge banks on foot, a tank driving through and leaving
   // a gap; the table shows the way it went
-  function germanMove(st, u, route) {
+  function computerMove(st, u, route) {
     followRoute(st, u, route);
     if (u.snagged) return;
     const goal = route[route.length - 1];
@@ -1821,21 +1945,48 @@ const Sim = (() => {
   // The German mortar picks the strongest American company next to a German field
   // The German artillery's target: the American piece in a field the Germans can see with the most Americans in and round
   // it, and no Germans in or next to it (they don't shell their own men)
-  function germanArtilleryTarget(st) {
+  // (either side: the American computer's artillery chooses the same way)
+  function artilleryTarget(st, side) {
     const near = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y) <= 1;
-    const us = st.units.filter(t => t.side === 'us' && t.x !== null);
-    const de = st.units.filter(g => g.side === 'de' && g.x !== null);
-    const ts = us.filter(t => sees(st, 'de', t.x, t.y) && !de.some(g => near(g, t)));
-    const score = t => us.filter(o => near(o, t)).reduce((n, o) => n + o.platoons, 0);
+    const enemies = st.units.filter(t => t.side === enemyOf(side) && t.x !== null);
+    const friends = st.units.filter(g => g.side === side && g.x !== null);
+    const ts = enemies.filter(t => sees(st, side, t.x, t.y) && !friends.some(g => near(g, t)));
+    const score = t => enemies.filter(o => near(o, t)).reduce((n, o) => n + o.platoons, 0);
     return ts.sort((a, b) => score(b) - score(a))[0] || null;
   }
 
   // A tank too (Steve: all mortars have an anti-tank die): first of all one already shaken, as a hit kills it; otherwise
   // only when there is no platoon to fire on
-  function germanMortarTarget(st) {
-    const ts = st.units.filter(t => t.side === 'us' && t.x !== null && (t.kind === 'company' || isTank(t)) && st.units.some(g => g.side === 'de' && g.x !== null && adjacent(g, t)));
+  // The American computer's mortars aren't tied to a piece next to the target (they fire as a player's do): any German
+  // it can see, in a field with no Americans
+  function mortarTarget(st, side) {
+    const inReach = side === 'de'
+      ? t => st.units.some(g => g.side === 'de' && g.x !== null && adjacent(g, t))
+      : t => sees(st, 'us', t.x, t.y) && !at(st, t.x, t.y, 'us').length;
+    const ts = st.units.filter(t => t.side === enemyOf(side) && t.x !== null && (t.kind === 'company' || isTank(t)) && inReach(t));
     const worth = t => (isTank(t) ? (t.shocked ? 9 : 0) : t.platoons);
     return ts.sort((a, b) => worth(b) - worth(a))[0] || null;
+  }
+
+  // German mortars drop on one piece (Steve: the differences between the sides stay), with or without its men getting
+  // down first. Returns the lines to report
+  function mortarOnOnePiece(st, t, withdraw) {
+    // (who it is at: the table keeps that piece on show until the bomb lands, Steve)
+    const fx = { x: t.x, y: t.y, kind: 'shell', support: 'mortars', to: { id: t.id } };
+    // Taking cover from the mortar: its men get down before the bombs land
+    const pre = withdraw ? takeCover(st, t) : null;
+    const need = shellNeed(st, t);
+    const faces = [];
+    // One anti-tank die on a tank, which it can only shake (or kill if already shaken); all the dice on men
+    const onTank = isTank(t);
+    const hits = roll(st, onTank ? DE_MORTAR.hard : DE_MORTAR.dice, need, faces);
+    fx.faces = faces; fx.need = need; fx.side = 'de'; fx.tookCover = !!pre;
+    const before = t.platoons, wasShaken = t.shocked;
+    const hurt = onTank ? damage(st, t, 0, hits, false, true) : damage(st, t, hits, 0);
+    const lost = before - (t.x === null ? 0 : t.platoons);
+    fx.result = t.x === null ? 'Wiped out' : lost ? 'Section lost' : t.shocked && !wasShaken ? 'Shaken' : hits ? 'No effect' : 'Missed';
+    st.fx.push(fx);
+    return (pre ? [pre.line] : []).concat(hurt);
   }
 
   // Carry out a planned German shot (or mortar mission), with or without the target pulling back
@@ -1845,34 +1996,19 @@ const Sim = (() => {
     // A piece under the German bomber's line or their shells: it only chooses whether to get down; they land once all
     // have chosen
     if (shot.bombed || shot.shelled) {
-      if (withdraw) st.de.rep.push(`${takeCover(st, t).line}.`);
+      if (withdraw) st.computer.rep.push(`${takeCover(st, t).line}.`);
       return;
     }
     if (shot.mortar) {
-      st.deMortarAmmo--;
-      // (who it is at: the table keeps that piece on show until the bomb lands, Steve)
-      const fx = { x: t.x, y: t.y, kind: 'shell', support: 'mortars', to: { id: t.id } };
-      // Taking cover from the mortar: its men get down before the bombs land
-      const pre = withdraw ? takeCover(st, t) : null;
-      const need = shellNeed(st, t);
-      const faces = [];
-      // One anti-tank die on a tank, which it can only shake (or kill if already shaken); all the dice on men
-      const onTank = isTank(t);
-      const hits = roll(st, onTank ? DE_MORTAR.hard : DE_MORTAR.dice, need, faces);
-      fx.faces = faces; fx.need = need; fx.side = 'de'; fx.tookCover = !!pre;
-      const before = t.platoons, wasShaken = t.shocked;
-      const hurt = onTank ? damage(st, t, 0, hits, false, true) : damage(st, t, hits, 0);
-      const lines = (pre ? [pre.line] : []).concat(hurt);
-      const lost = before - (t.x === null ? 0 : t.platoons);
-      fx.result = t.x === null ? 'Wiped out' : lost ? 'Section lost' : t.shocked && !wasShaken ? 'Shaken' : hits ? 'No effect' : 'Missed';
-      st.fx.push(fx);
-      st.de.rep.push(`🔺 German mortars on ${t.name}: ${lines.length ? lines.join(', ') : 'no hits'}.`);
+      useRound(st, 'de', 'mortars');
+      const lines = mortarOnOnePiece(st, t, withdraw);
+      st.computer.rep.push(`🔺 German mortars on ${t.name}: ${lines.length ? lines.join(', ') : 'no hits'}.`);
       return;
     }
     const u = unitById(st, shot.shooter);
     if (u.x === null) return;
     const fired = shot.moving ? 'moves and fires on' : 'fires on';
-    st.de.rep.push(`🔺 ${u.name} ${fired} ${t.name}: ` + fireAt(st, u, t, 1, withdraw, !!shot.moving).join(', ') + '.');
+    st.computer.rep.push(`🔺 ${u.name} ${fired} ${t.name}: ` + fireAt(st, u, t, 1, withdraw, !!shot.moving).join(', ') + '.');
     // Shooting gives it away to any ambush that can see it (Steve)
     springAmbushes(st, u, []);
   }
@@ -1880,105 +2016,109 @@ const Sim = (() => {
   // Run the German hour until it ends or a question needs the player. Returns { ask } or { done: true }
   // showAim (the page, Steve: the Germans show their targeting as yours do): each shot first comes back as { aim }, so
   // the table can show its targets and the score needed; the next call fires it (or asks its target first)
-  function germanStep(st, showAim = false) {
-    if (!st.de || st.won || st.lost) return { done: true };
-    if (st.de.ask) return { ask: st.de.ask };
+  function computerStep(st, showAim = false) {
+    if (!st.computer || st.won || st.lost) return { done: true };
+    if (st.computer.ask) return { ask: st.computer.ask };
     // A shot shown on the table last step: now it fires, or its target is asked first
-    if (st.de.aim) {
-      const shot = st.de.aim;
-      st.de.aim = null;
-      // (the bomber's line, or the artillery's target, has been shown: they carry on below)
-      if (!shot.bomber && !shot.artillery) {
-        if (canReact(st, unitById(st, shot.target))) { st.de.ask = shot; return { ask: shot }; }
+    if (st.computer.aim) {
+      const shot = st.computer.aim;
+      st.computer.aim = null;
+      // (the bomber's line, or the target of shells on a whole field, has been shown: they carry on below)
+      if (!shot.bomber && !shot.fieldMission) {
+        if (canReact(st, unitById(st, shot.target))) { st.computer.ask = shot; return { ask: shot }; }
         resolveShot(st, shot, false);
       }
     }
     // Aim it (shown first on the page), or straight on to firing it
     const plan = shot => {
-      if (showAim) { st.de.aim = shot; return { aim: shot }; }
-      if (canReact(st, unitById(st, shot.target))) { st.de.ask = shot; return { ask: shot }; }
+      if (showAim) { st.computer.aim = shot; return { aim: shot }; }
+      if (canReact(st, unitById(st, shot.target))) { st.computer.ask = shot; return { ask: shot }; }
       resolveShot(st, shot, false);
       return null;
     };
-    while (st.de.queue.length) {
-      const u = unitById(st, st.de.queue.shift());
+    while (st.computer.queue.length) {
+      const u = unitById(st, st.computer.queue.shift());
       if (u.x === null) continue;
       if (st.won || st.lost) break;
-      const shot = germanAct(st, u);
+      const shot = u.side === 'us' ? americanAct(st, u) : germanAct(st, u);
       if (!shot) continue;
       const r = plan(shot);
       if (r) return r;
     }
     // A side wiped out: nothing more happens
     if (st.won || st.lost) return { done: true };
-    if (st.de.artillery) {
-      st.de.artillery = false;
-      const t = germanArtilleryTarget(st);
-      deSays(st, t ? `Shells ${t.name}` : 'Holds fire: no target');
+    const side = computerSide(st);
+    // Shells on a whole field: the artillery, and the American mortars (German mortars drop on one piece, further down)
+    const fieldGun = st.computer.artillery ? 'artillery' : st.computer.mortar && side === 'us' ? 'mortars' : null;
+    if (fieldGun) {
+      st.computer.artillery = false;
+      if (side === 'us') st.computer.mortar = false;
+      const t = fieldGun === 'artillery' ? artilleryTarget(st, side) : mortarTarget(st, side);
+      computerSays(st, t ? `Shells ${t.name}` : 'Holds fire: no target');
       if (t) {
-        // Every piece of yours the shells will fall on is asked first (Steve: as the Germans all decide under yours)
-        const under = shellFields('artillery', t.x, t.y, 'de').flatMap(f => at(st, f.x, f.y, 'us'));
-        st.de.shelling = { x: t.x, y: t.y, target: t.id, asks: under.map(u => u.id) };
+        // Every piece of yours the shells will fall on is asked first (Steve: as the computer's all decide under yours)
+        const under = shellFields(fieldGun, t.x, t.y, side).flatMap(f => at(st, f.x, f.y, st.human));
+        st.computer.shelling = { which: fieldGun, x: t.x, y: t.y, target: t.id, asks: under.map(u => u.id) };
         // On the page, the target shows first
-        if (showAim) { st.de.aim = { artillery: true, target: t.id }; return { aim: st.de.aim }; }
+        if (showAim) { st.computer.aim = { fieldMission: true, artillery: fieldGun === 'artillery', target: t.id }; return { aim: st.computer.aim }; }
       }
     }
-    if (st.de.shelling) {
-      const shelling = st.de.shelling;
+    if (st.computer.shelling) {
+      const shelling = st.computer.shelling;
       while (shelling.asks.length) {
         const id = shelling.asks.shift();
-        if (canReact(st, unitById(st, id))) { st.de.ask = { shelled: true, artillery: true, target: id }; return { ask: st.de.ask }; }
+        if (canReact(st, unitById(st, id))) { st.computer.ask = { shelled: true, artillery: shelling.which === 'artillery', target: id }; return { ask: st.computer.ask }; }
       }
       // All have chosen: the shells land
-      st.de.shelling = null;
-      st.deArtilleryAmmo--;
-      const lines = fireMission(st, 'artillery', shelling.x, shelling.y, 'de');
-      st.de.rep.push(`🔺 German artillery on ${unitById(st, shelling.target).name}: ${lines.length ? lines.join(', ') : 'no hits'}.`);
+      st.computer.shelling = null;
+      useRound(st, side, shelling.which);
+      const lines = fireMission(st, shelling.which, shelling.x, shelling.y, side);
+      st.computer.rep.push(`🔺 ${side === 'de' ? 'German' : 'American'} ${shelling.which} on ${unitById(st, shelling.target).name}: ${lines.length ? lines.join(', ') : 'no hits'}.`);
       if (st.won || st.lost) return { done: true };
     }
-    if (st.de.mortar) {
-      st.de.mortar = false;
-      const t = germanMortarTarget(st);
-      deSays(st, t ? `Mortars ${t.name}` : 'Holds fire: no target');
+    if (st.computer.mortar) {
+      st.computer.mortar = false;
+      const t = mortarTarget(st, 'de');
+      computerSays(st, t ? `Mortars ${t.name}` : 'Holds fire: no target');
       if (t) {
         const r = plan({ mortar: true, target: t.id });
         if (r) return r;
       }
     }
     // Their bomber picked: the best line by its compass, or it stays away this round
-    if (st.de.bomber) {
-      st.de.bomber = false;
-      const run = bestBomberRun(st, 'de');
-      deSays(st, run ? 'Flies in' : 'Stays away: nothing worth bombing');
+    if (st.computer.bomber) {
+      st.computer.bomber = false;
+      const run = bestBomberRun(st, side);
+      computerSays(st, run ? 'Flies in' : 'Stays away: nothing worth bombing');
       if (run) {
         // Your pieces under the line are each asked before it arrives (Steve); its own men aren't, as under your bomber
-        const under = bomberLine(run.x, run.y, bomberHeading(st, 'de')).flatMap(f => at(st, f.x, f.y, 'us'));
-        st.de.run = { x: run.x, y: run.y, asks: under.map(u => u.id) };
+        const under = bomberLine(run.x, run.y, bomberHeading(st, side)).flatMap(f => at(st, f.x, f.y, st.human));
+        st.computer.run = { x: run.x, y: run.y, asks: under.map(u => u.id) };
         // On the page, the line shows first
-        if (showAim) { st.de.aim = { bomber: true }; return { aim: st.de.aim }; }
+        if (showAim) { st.computer.aim = { bomber: true }; return { aim: st.computer.aim }; }
       }
     }
-    if (st.de.run) {
-      const run = st.de.run;
+    if (st.computer.run) {
+      const run = st.computer.run;
       // Each piece of yours under the line that can still get down
       while (run.asks.length) {
         const id = run.asks.shift();
-        if (canReact(st, unitById(st, id))) { st.de.ask = { bombed: true, target: id }; return { ask: st.de.ask }; }
+        if (canReact(st, unitById(st, id))) { st.computer.ask = { bombed: true, target: id }; return { ask: st.computer.ask }; }
       }
       // All have chosen: it flies
-      st.de.run = null;
-      st.deBomberAmmo--;
-      const lines = dropBombs(st, 'de', run.x, run.y);
-      st.de.rep.push(`🔺 The ${BOMBER_NAMES.de} flies over: ${lines.length ? lines.join(', ') : 'no hits'}.`);
+      st.computer.run = null;
+      useRound(st, side, 'bomber');
+      const lines = dropBombs(st, side, run.x, run.y);
+      st.computer.rep.push(`🔺 The ${BOMBER_NAMES[side]} flies over: ${lines.length ? lines.join(', ') : 'no hits'}.`);
     }
     return { done: true };
   }
 
   // The player's answer to "pull back?"
   function answer(st, withdraw) {
-    if (!st.de || !st.de.ask) return;
-    const shot = st.de.ask;
-    st.de.ask = null;
+    if (!st.computer || !st.computer.ask) return;
+    const shot = st.computer.ask;
+    st.computer.ask = null;
     resolveShot(st, shot, withdraw);
   }
 
@@ -1990,20 +2130,34 @@ const Sim = (() => {
   // Everything of a side's off the board, and what each has left
   const SUPPORT = ['artillery', 'mortars', 'bomber'];
   const ammoOf = (st, side) => (side === 'us' ? st.ammo : { mortars: st.deMortarAmmo, artillery: st.deArtilleryAmmo, bomber: st.deBomberAmmo });
+  // Which of a side's guns have fired this round (marks can be added to it)
+  function firedOf(st, side) {
+    if (side === 'us') return st.fired;
+    st.deFired = st.deFired || {};
+    return st.deFired;
+  }
+  // One round, or the bomber's run, gone
+  function useRound(st, side, which) {
+    if (side === 'us') { st.ammo[which]--; return; }
+    if (which === 'mortars') st.deMortarAmmo--;
+    if (which === 'artillery') st.deArtilleryAmmo--;
+    if (which === 'bomber') st.deBomberAmmo--;
+  }
 
   // Pieces of a side that can still move this round, and its mortars and artillery that still have rounds and haven't
   // fired (Steve: out of rounds, they come out of the bag)
   function movable(st, side) {
     const pieces = st.units.filter(u => u.side === side && u.x !== null && !u.acted).length;
     const ammo = ammoOf(st, side);
-    const fired = side === 'us' ? st.fired : (st.deFired || {});
+    const fired = firedOf(st, side);
     const guns = SUPPORT.filter(w => ammo[w] > 0 && !fired[w]).length;
     return pieces + guns;
   }
 
   // Can your mortars or artillery fire now: rounds left, not fired this round, and (with the bag) on an unused token of yours
   function canFire(st, which) {
-    return st.ammo[which] > 0 && !st.fired[which] && !st.won && !st.lost && !st.de && (!st.tokens || (st.drawn === 'us' && !st.activeId));
+    const side = st.human;
+    return ammoOf(st, side)[which] > 0 && !firedOf(st, side)[which] && !st.won && !st.lost && !st.computer && (!st.tokens || (st.drawn === side && !st.activeId));
   }
 
   // Skip a turn (Steve: anyone can): the piece, or the gun, gives up its move this round and the token is used
@@ -2024,9 +2178,9 @@ const Sim = (() => {
 
   function skipSupport(st, which) {
     if (!canFire(st, which)) return { ok: false };
-    st.fired[which] = true;
-    if (st.tokens) { st.activeId = 'gun:' + which; activated(st, { side: 'us', gun: which }); }
-    if (which === 'bomber') return { ok: true, lines: [`⏭️ The ${BOMBER_NAMES.us} stays away this round.`] };
+    firedOf(st, st.human)[which] = true;
+    if (st.tokens) { st.activeId = 'gun:' + which; activated(st, { side: st.human, gun: which }); }
+    if (which === 'bomber') return { ok: true, lines: [`⏭️ The ${BOMBER_NAMES[st.human]} stays away this round.`] };
     return { ok: true, lines: [`⏭️ The ${which === 'mortars' ? 'mortars' : 'artillery'} hold fire this round.`] };
   }
 
@@ -2078,7 +2232,7 @@ const Sim = (() => {
   }
 
   // Draw a token: 'us', 'de', 'timer' or null when the bag is empty. The timer (Steve) empties the bag: the round ends
-  // there and then, so the next draw is null. On a German token the Germans' move is set up (see germanStep):
+  // there and then, so the next draw is null. On a German token the Germans' move is set up (see computerStep):
   // one of their pieces, or their mortar or artillery
   function drawToken(st) {
     if (st.won || st.lost) return null;
@@ -2107,46 +2261,49 @@ const Sim = (() => {
     st.activeId = null;
     st.fx = [];
     for (const u of st.units) u.halfShot = false;
-    if (side === 'de') {
-      const pick = pickGerman(st);
+    if (side !== st.human) {
+      const pick = pickComputer(st);
       if (pick.gun) {
-        st.deFired[pick.gun] = true;
-        activated(st, { side: 'de', gun: pick.gun });
-        st.de = { queue: [], mortar: pick.gun === 'mortars', artillery: pick.gun === 'artillery', bomber: pick.gun === 'bomber', rep: st.roundRep, ask: null, move: { gun: pick.gun, what: '' } };
+        firedOf(st, side)[pick.gun] = true;
+        activated(st, { side, gun: pick.gun });
+        st.computer = { queue: [], mortar: pick.gun === 'mortars', artillery: pick.gun === 'artillery', bomber: pick.gun === 'bomber', rep: st.roundRep, ask: null, move: { gun: pick.gun, what: '' } };
       } else {
         pick.unit.acted = true;
-        activated(st, { side: 'de', id: pick.unit.id });
-        st.de = { queue: [pick.unit.id], mortar: false, artillery: false, bomber: false, rep: st.roundRep, ask: null, move: { id: pick.unit.id, what: '' } };
+        activated(st, { side, id: pick.unit.id });
+        st.computer = { queue: [pick.unit.id], mortar: false, artillery: false, bomber: false, rep: st.roundRep, ask: null, move: { id: pick.unit.id, what: '' } };
       }
     }
     return side;
   }
 
-  // What moves on a German token: their guns if they have a target, then a piece with someone to shoot, then one that
+  // What moves on the computer's token: its guns if they have a target, then a piece with someone to shoot, then one that
   // could move and shoot, then any
-  function pickGerman(st) {
-    const options = st.units.filter(u => u.side === 'de' && u.x !== null && !u.acted).map(u => ({ unit: u, score: germanEagerness(st, u) + st.rand() }));
-    if (st.deMortarAmmo > 0 && !st.deFired.mortars) options.push({ gun: 'mortars', score: (germanMortarTarget(st) ? 2.5 : -1) + st.rand() });
-    if (st.deArtilleryAmmo > 0 && !st.deFired.artillery) options.push({ gun: 'artillery', score: (germanArtilleryTarget(st) ? 2.5 : -1) + st.rand() });
-    if (st.deBomberAmmo > 0 && !st.deFired.bomber) options.push({ gun: 'bomber', score: (bestBomberRun(st, 'de') ? 2.5 : -1) + st.rand() });
+  function pickComputer(st) {
+    const side = computerSide(st), ammo = ammoOf(st, side), fired = firedOf(st, side);
+    const options = st.units.filter(u => u.side === side && u.x !== null && !u.acted).map(u => ({ unit: u, score: eagerness(st, u) + st.rand() }));
+    if (ammo.mortars > 0 && !fired.mortars) options.push({ gun: 'mortars', score: (mortarTarget(st, side) ? 2.5 : -1) + st.rand() });
+    if (ammo.artillery > 0 && !fired.artillery) options.push({ gun: 'artillery', score: (artilleryTarget(st, side) ? 2.5 : -1) + st.rand() });
+    if (ammo.bomber > 0 && !fired.bomber) options.push({ gun: 'bomber', score: (bestBomberRun(st, side) ? 2.5 : -1) + st.rand() });
     return options.sort((a, b) => b.score - a.score)[0];
   }
 
-  // How keen a German piece is to go on this token: 2 with a shot from where it stands, 1 with one after a move
-  function germanEagerness(st, u) {
+  // How keen the computer's piece is to go on this token: 2 with a shot from where it stands, 1 with one after a move;
+  // an American platoon with a charge to make goes first of all
+  function eagerness(st, u) {
+    if (u.side === 'us' && americanCharge(st, u)) return 3;
     if (bestTarget(st, u)) return 2;
     return bestMoveShoot(st, u) ? 1 : 0;
   }
 
-  // The German move is over (germanStep said done): back to the bag
-  function endGermanToken(st) {
-    st.de = null;
+  // The computer's move is over (computerStep said done): back to the bag
+  function endComputerToken(st) {
+    st.computer = null;
     st.drawn = null;
   }
 
-  // Is the American token used up: its piece has moved and has nothing more it can do?
+  // Is the player's token used up: its piece has moved and has nothing more it can do?
   function activationOver(st) {
-    if (!st.tokens || st.drawn !== 'us' || !st.activeId) return false;
+    if (!st.tokens || st.drawn !== st.human || !st.activeId) return false;
     // A gun has fired (or held fire): done
     if (st.activeId.startsWith('gun:')) return true;
     const u = unitById(st, st.activeId);
@@ -2155,7 +2312,7 @@ const Sim = (() => {
     return !canAct(st, u) && !u.halfShot && !rallyLeft;
   }
 
-  // Pass on an American token, or finish with it
+  // Pass on the player's token, or finish with it
   function passToken(st) {
     // The token's piece has had its go this round, whatever it did (Steve: a captain who only rallied looked as if he
     // could still act, and could take a second token): it is done, and shows so on the table
@@ -2166,12 +2323,12 @@ const Sim = (() => {
     for (const u of st.units) u.halfShot = false;
   }
 
-  // Can any American piece move on this token?
-  const usCanMove = st => SUPPORT.some(w => canFire(st, w)) || st.units.some(u => u.side === 'us' && u.x !== null && (canAct(st, u) || canSelfRally(st, u) || (u.kind === 'captain' && captainCanRally(st, u))));
+  // Can any of the player's pieces move on this token?
+  const humanCanMove = st => SUPPORT.some(w => canFire(st, w)) || st.units.some(u => u.side === st.human && u.x !== null && (canAct(st, u) || canSelfRally(st, u) || (u.kind === 'captain' && captainCanRally(st, u))));
 
   // The bag is empty: the round (the hour) ends: has the village fallen, are the Germans gone? Then the next round
   function endRound(st) {
-    st.de = null;
+    st.computer = null;
     st.drawn = null;
     finishHour(st);
   }
@@ -2210,18 +2367,18 @@ const Sim = (() => {
   }
 
   // End the American hour and play the German one. decide(shot) answers each "pull back?" question (headless play);
-  // the page instead calls startGermanHour, germanStep and answer itself, then finishHour
+  // the page instead calls startGermanHour, computerStep and answer itself, then finishHour
   function endTurn(st, decide = () => false) {
     if (st.won || st.lost) return;
     startGermanHour(st);
-    for (let r = germanStep(st); !r.done; r = germanStep(st)) answer(st, decide(r.ask));
+    for (let r = computerStep(st); !r.done; r = computerStep(st)) answer(st, decide(r.ask));
     finishHour(st);
   }
 
   // After the German hour: has the hamlet fallen, has the battalion gone, has time run out? Then a new hour
   function finishHour(st) {
-    const rep = st.de ? st.de.rep : (st.roundRep || []);
-    st.de = null;
+    const rep = st.computer ? st.computer.rep : (st.roundRep || []);
+    st.computer = null;
     // Already over: one side was wiped out during the round
     if (st.won || st.lost) return;
     const germansLeft = st.units.some(u => u.side === 'de' && u.x !== null);
@@ -2236,7 +2393,8 @@ const Sim = (() => {
     } else if (!st.units.some(u => u.side === 'us' && u.x !== null)) {
       st.lost = true;
       rep.unshift('💀 Nothing is left of the company. The attack has failed.');
-    } else if (cannotWin(st)) {
+    } else if (st.human === 'us' && cannotWin(st)) {
+      // (playing the Germans, you win only by destroying every American piece, Steve; guns off the table don't count)
       st.lost = true;
       rep.unshift('⌛ No rifle platoon is left to take the village, and nothing is left that can hurt the German tanks. The attack has failed.');
     } else if (TURNS && st.turn >= TURNS) {
@@ -2268,10 +2426,10 @@ const Sim = (() => {
 
   return {
     firesOnTheMove, canAmbush, actAmbush, bestMoveShoot, bomberHeading, bomberEdges, bomberLine, bombNeed, bombWhy, bestBomberRun,
-    wreckAt, remove,
+    wreckAt, remove, computerSide, enemyOf, ammoOf, firedOf, gunStats,
     newGame, roll, endTurn, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, chargeSpots,
     rallyTargets, canAct, canReact, firepower, canCallFire, holdsObjective, roundText, roomFor,
-    startGermanHour, germanStep, answer, finishHour, startRound, drawToken, endGermanToken, activationOver, passToken, usCanMove, endRound, canFire, actSkip, actSkipShot, skipSupport,
+    startGermanHour, computerStep, answer, finishHour, startRound, drawToken, endComputerToken, activationOver, passToken, humanCanMove, endRound, canFire, actSkip, actSkipShot, skipSupport,
     smallTarget, menDice, armourOf, shotNeed, mayFire, shootCells, tokensHome, captainCanRally, fireAt, actShoot, actMoveShoot, moveShootSpots, chargeRoutes, DIRS, needWhy, shellNeed, shellWhy, shellFields, canRally, needFor, canSelfRally, actSelfRally, actHalfShot, actCharge, actRally, actFire, sight, isSmall, cover, wire, lineSides, actLine, atHedge, acrossHedge, SIDE_NAMES, PLACES, placeXY, placeName, lines, sizeOf, footprint, spotXY, occupant, fitsAt, freePlace,
     hasCutters: u => cutter(u),
   };

@@ -89,8 +89,8 @@ function playRound(st, bot) {
       Sim.passToken(st);
       continue;
     }
-    for (let r = Sim.germanStep(st); !r.done; r = Sim.germanStep(st)) Sim.answer(st, bot ? decide(st, r.ask) : false);
-    Sim.endGermanToken(st);
+    for (let r = Sim.computerStep(st); !r.done; r = Sim.computerStep(st)) Sim.answer(st, bot ? decide(st, r.ask) : false);
+    Sim.endComputerToken(st);
   }
   Sim.endRound(st);
 }
@@ -102,10 +102,73 @@ function play(seed, bot, maxRounds = 20) {
   return st;
 }
 
+// ---------- Playing the Germans, with the computer as the Americans ----------
+
+// One German token for the test player: guns first, then the captain's rallies, then the first piece that can shoot,
+// or Move & shoot; the rest stay where they are
+function deToken(st) {
+  const de = st.units.filter(u => u.side === 'de' && u.x !== null);
+  if (Sim.canFire(st, 'bomber')) {
+    const run = Sim.bestBomberRun(st, 'de');
+    if (run && Sim.actFire(st, 'bomber', run.x, run.y).ok) return;
+  }
+  for (const which of ['artillery', 'mortars']) {
+    if (!Sim.canFire(st, which)) continue;
+    const seen = st.units.filter(a => a.side === 'us' && a.x !== null && Sim.canCallFire(st, a.x, a.y));
+    const t = seen.sort((a, b) => b.platoons - a.platoons)[0];
+    if (t && Sim.actFire(st, which, t.x, t.y, t).ok) return;
+  }
+  const cap = de.find(u => u.kind === 'captain');
+  if (cap && Sim.captainCanRally(st, cap)) {
+    while (Sim.captainCanRally(st, cap)) {
+      const t = Sim.rallyTargets(st, cap)[0];
+      if (!Sim.actRally(st, cap, t).ok) break;
+    }
+    return;
+  }
+  const pieces = de.filter(u => Sim.canAct(st, u)).sort((a, b) => Sim.targets(st, b).length - Sim.targets(st, a).length);
+  for (const u of pieces) {
+    const proper = Sim.mayFire(u) ? Sim.targets(st, u).filter(t => Sim.shotNeed(st, u, t) <= MAX_NEED) : [];
+    if (proper.length) { if (Sim.actShoot(st, u, proper[0]).ok) return; }
+    const m = Sim.moveShootSpots(st, u)[0];
+    if (m && Sim.actMoveShoot(st, u, m.x, m.y).ok) {
+      const t = Sim.targets(st, u, true).sort((a, b) => Sim.shotNeed(st, u, a, true) - Sim.shotNeed(st, u, b, true))[0];
+      if (t) Sim.actHalfShot(st, u, t);
+      return;
+    }
+  }
+}
+
+// One round with the player as the Germans. bot false: the Germans do nothing
+function playRoundAsGermans(st, bot) {
+  Sim.startRound(st);
+  for (let side = Sim.drawToken(st); side; side = Sim.drawToken(st)) {
+    if (side === 'timer') break;
+    if (side === 'de') {
+      if (bot) deToken(st);
+      Sim.passToken(st);
+      continue;
+    }
+    for (let r = Sim.computerStep(st); !r.done; r = Sim.computerStep(st)) Sim.answer(st, bot ? decide(st, r.ask) : false);
+    Sim.endComputerToken(st);
+  }
+  Sim.endRound(st);
+}
+
+// A game with the player as the Germans: st.lost means the Germans (the player) won, st.won the American computer
+function playAsGermans(seed, bot, maxRounds = 20) {
+  const st = Sim.newGame(seed, 'de');
+  while (!st.won && !st.lost && st.turn <= maxRounds) playRoundAsGermans(st, bot);
+  return st;
+}
+
 if (require.main === module) {
   const n = +process.argv[2] || 100;
   let wins = 0, idle = 0, turns = 0;
   for (let s = 1; s <= n; s++) { const st = play(s, true); if (st.won) { wins++; turns += st.turn; } if (play(s, false).won) idle++; }
   console.log(`attacking bot wins ${Math.round(wins / n * 100)}% (avg round ${wins ? (turns / wins).toFixed(1) : '-'}), idle wins ${Math.round(idle / n * 100)}%`);
+  let german = 0, americans = 0;
+  for (let s = 1; s <= n; s++) { const st = playAsGermans(s, true); if (st.lost && !st.draw) german++; if (st.won) americans++; }
+  console.log(`as the Germans: the test player wins ${Math.round(german / n * 100)}%, the American computer ${Math.round(americans / n * 100)}%`);
 }
-module.exports = { play, playRound };
+module.exports = { play, playRound, playAsGermans };

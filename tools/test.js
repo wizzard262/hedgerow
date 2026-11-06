@@ -2,7 +2,7 @@
 const fs = require('fs'), vm = require('vm'), path = require('path');
 const load = f => vm.runInThisContext(fs.readFileSync(path.join(__dirname, '..', 'js', f), 'utf8'));
 load('data.js'); load('sim.js');
-const { play } = require('./bot.js');
+const { play, playAsGermans } = require('./bot.js');
 
 let failed = 0;
 function check(name, fn) {
@@ -216,7 +216,7 @@ check('taking cover: no moving, +2 to hit, misses the next move unless the capta
   for (let h = 0; h < 8 && !st.won && !st.lost; h++) {
     Sim.startGermanHour(st);
     const down = [];
-    for (let r = Sim.germanStep(st); !r.done; r = Sim.germanStep(st)) {
+    for (let r = Sim.computerStep(st); !r.done; r = Sim.computerStep(st)) {
       const t = Sim.unitById(st, r.ask.target), where = [t.x, t.y];
       Sim.answer(st, true);
       if (t.x !== null) { assert(t.x === where[0] && t.y === where[1], `${t.name} moved when taking cover`); assert(t.down, `${t.name} is not down in cover`); down.push(t); }
@@ -323,7 +323,7 @@ check('a new round knows who a token activated and what stayed in the bag (Steve
   while ((side = Sim.drawToken(st)) && side !== 'timer') {
     draws++;
     if (side === 'us') { const u = st.units.find(o => o.side === 'us' && o.x !== null && Sim.canAct(st, o) && o.kind !== 'captain'); Sim.actSkip(st, u); }
-    else { let r = Sim.germanStep(st); while (r && r.ask) { Sim.answer(st, false); r = Sim.germanStep(st); } Sim.endGermanToken(st); }
+    else { let r = Sim.computerStep(st); while (r && r.ask) { Sim.answer(st, false); r = Sim.computerStep(st); } Sim.endComputerToken(st); }
     Sim.passToken(st);
     if (draws >= 2 && side) break;
   }
@@ -341,11 +341,11 @@ check('on the page, each German shot is aimed (shown) first, then fired; headles
   for (let seed = 1; seed <= 20; seed++) {
     const st = Sim.newGame(seed);
     Sim.startGermanHour(st);
-    for (let r = Sim.germanStep(st, true), n = 0; !r.done && n < 200; r = Sim.germanStep(st, true), n++) {
-      if (r.aim) { aimed++; assert(st.de.aim === r.aim, `seed ${seed}: the aimed shot was not kept`); continue; }
+    for (let r = Sim.computerStep(st, true), n = 0; !r.done && n < 200; r = Sim.computerStep(st, true), n++) {
+      if (r.aim) { aimed++; assert(st.computer.aim === r.aim, `seed ${seed}: the aimed shot was not kept`); continue; }
       if (r.ask) Sim.answer(st, false);
     }
-    assert(!st.de || !st.de.aim, `seed ${seed}: a shot was left aimed but never fired`);
+    assert(!st.computer || !st.computer.aim, `seed ${seed}: a shot was left aimed but never fired`);
   }
   assert(aimed > 0, 'no German shot was ever aimed');
 });
@@ -699,11 +699,11 @@ check('a German mortar bomb says who it is at, so the piece stays on the table u
   const st = Sim.newGame(3);
   st.drawn = 'de'; st.activeId = null;
   const A = Sim.unitById(st, 'A');
-  st.de = { queue: [], mortar: true, artillery: false, rep: [], ask: null, move: { gun: 'mortars', what: '' } };
+  st.computer = { queue: [], mortar: true, artillery: false, rep: [], ask: null, move: { gun: 'mortars', what: '' } };
   st.rand = () => 0.999;
   A.platoons = 1; A.shocked = true;
   st.fx = [];
-  st.de.ask = { mortar: true, target: A.id };
+  st.computer.ask = { mortar: true, target: A.id };
   Sim.answer(st, false);
   const f = st.fx.find(o => o.kind === 'shell');
   assert(f && f.to && f.to.id === A.id && f.result === 'Wiped out', 'the bomb did not name its target and what it did');
@@ -721,7 +721,7 @@ check('nobody down in cover moves on their own, either side, in whole games', ()
       const down = s.units.filter(u => u.side === 'de' && u.x !== null && u.down);
       downSeen += down.length;
       const side = drawToken(s);
-      if (side === 'de' && s.de.move && s.de.move.id) assert(!down.some(u => u.id === s.de.move.id), `seed ${seed}: ${s.de.move.id} was given a move while down in cover`);
+      if (side === 'de' && s.computer.move && s.computer.move.id) assert(!down.some(u => u.id === s.computer.move.id), `seed ${seed}: ${s.computer.move.id} was given a move while down in cover`);
       return side;
     };
     try { while (!st.won && !st.lost && st.turn <= 12) playRound(st, true); } finally { Sim.drawToken = drawToken; }
@@ -863,15 +863,15 @@ check('the German bomber: your pieces under the line are each asked, then it fli
   st.spin.de = 0;
   st.deFired = {};
   st.drawn = 'de';
-  st.de = { queue: [], mortar: false, artillery: false, bomber: true, rep: [], ask: null, move: { gun: 'bomber', what: '' } };
+  st.computer = { queue: [], mortar: false, artillery: false, bomber: true, rep: [], ask: null, move: { gun: 'bomber', what: '' } };
   const asked = [];
-  let r = Sim.germanStep(st);
+  let r = Sim.computerStep(st);
   while (r.ask) {
     assert(r.ask.bombed, 'it asked about something else');
     assert(st.deBomberAmmo === 1, 'the bombs fell before everyone was asked');
     asked.push(r.ask.target);
     Sim.answer(st, r.ask.target === 'B');
-    r = Sim.germanStep(st);
+    r = Sim.computerStep(st);
   }
   assert(r.done, 'the run did not end');
   assert(asked.length === 3 && asked.includes('A') && asked.includes('B') && asked.includes('C'), `asked ${asked.join(', ')}`);
@@ -884,8 +884,8 @@ check('the German bomber: your pieces under the line are each asked, then it fli
   const quiet = tableWith({ A: [3, 7], d1: [9, 1] });
   Sim.startRound(quiet);
   quiet.spin.de = 0;
-  quiet.de = { queue: [], mortar: false, artillery: false, bomber: true, rep: [], ask: null, move: { gun: 'bomber', what: '' } };
-  assert(Sim.germanStep(quiet).done && quiet.deBomberAmmo === 1, 'it flew for one piece');
+  quiet.computer = { queue: [], mortar: false, artillery: false, bomber: true, rep: [], ask: null, move: { gun: 'bomber', what: '' } };
+  assert(Sim.computerStep(quiet).done && quiet.deBomberAmmo === 1, 'it flew for one piece');
 });
 
 check('the computer never flies a line that catches more of its own than the enemy', () => {
@@ -992,8 +992,8 @@ check('ambush: an enemy shooting in its sight sets it off, and its token is over
   Sim.actAmbush(st, mg);
   d1.acted = true;
   d1.post = { x: 3, y: 5 };
-  st.de = { queue: ['d1'], mortar: false, artillery: false, bomber: false, rep: [], ask: null, move: { id: 'd1', what: '' } };
-  for (let r = Sim.germanStep(st); !r.done; r = Sim.germanStep(st)) Sim.answer(st, false);
+  st.computer = { queue: ['d1'], mortar: false, artillery: false, bomber: false, rep: [], ask: null, move: { id: 'd1', what: '' } };
+  for (let r = Sim.computerStep(st); !r.done; r = Sim.computerStep(st)) Sim.answer(st, false);
   assert(st.fx.some(f => f.from && f.from.id === 'd1'), 'the German did not fire');
   assert(st.fx.some(f => f.from && f.from.id === 'mg1'), 'the ambush did not answer');
   assert(!mg.ambush && mg.acted, 'it is still waiting, or could act again');
@@ -1003,10 +1003,10 @@ check('ambush: it ends with the round; the Germans lie in wait with nothing bett
   const st = tableWith({ A: [0, 7], d1: [11, 0] });
   const d1 = Sim.unitById(st, 'd1');
   d1.post = { x: 11, y: 0 }; d1.reserve = false; d1.acted = true;
-  st.de = { queue: ['d1'], mortar: false, artillery: false, bomber: false, rep: [], ask: null, move: { id: 'd1', what: '' } };
-  for (let r = Sim.germanStep(st); !r.done; r = Sim.germanStep(st)) Sim.answer(st, false);
-  assert(d1.ambush && st.de.move.what === 'Lies in ambush', `the German ${st.de.move.what}`);
-  st.de = null;
+  st.computer = { queue: ['d1'], mortar: false, artillery: false, bomber: false, rep: [], ask: null, move: { id: 'd1', what: '' } };
+  for (let r = Sim.computerStep(st); !r.done; r = Sim.computerStep(st)) Sim.answer(st, false);
+  assert(d1.ambush && st.computer.move.what === 'Lies in ambush', `the German ${st.computer.move.what}`);
+  st.computer = null;
   Sim.endRound(st);
   assert(!d1.ambush && !d1.acted, 'the ambush carried over to the next round');
 });
@@ -1025,8 +1025,8 @@ check('the Germans: their men do not charge across barbed wire', () => {
     d2.x = edge[0] + 1; d2.y = edge[1]; d2.at = null; d2.post = { x: d2.x, y: d2.y }; d2.acted = true;
     st.objective = { x: edge[0], y: edge[1], name: 'Here' };
     st.rand = (s => () => (s = (s * 16807) % 2147483647) / 2147483647)(seed * 7919 + 1);
-    st.de = { queue: ['d2'], mortar: false, artillery: false, bomber: false, rep: [], ask: null, move: { id: 'd2', what: '' } };
-    for (let r = Sim.germanStep(st); !r.done; r = Sim.germanStep(st)) Sim.answer(st, false);
+    st.computer = { queue: ['d2'], mortar: false, artillery: false, bomber: false, rep: [], ask: null, move: { id: 'd2', what: '' } };
+    for (let r = Sim.computerStep(st); !r.done; r = Sim.computerStep(st)) Sim.answer(st, false);
     assert(!st.fx.some(f => f.kind === 'melee'), `seed ${seed}: they charged across the wire`);
   }
 });
@@ -1034,9 +1034,9 @@ check('the Germans: their men do not charge across barbed wire', () => {
 check('the Germans: every American under their artillery is asked, then it fires once', () => {
   const st = tableWith({ A: [3, 5], B: [3, 4], C: [0, 0], d2: [9, 5], dcap: [11, 7] });
   const before = st.deArtilleryAmmo;
-  st.de = { queue: [], mortar: false, artillery: true, bomber: false, rep: [], ask: null, move: { gun: 'artillery', what: '' } };
+  st.computer = { queue: [], mortar: false, artillery: true, bomber: false, rep: [], ask: null, move: { gun: 'artillery', what: '' } };
   const asked = [];
-  for (let r = Sim.germanStep(st); !r.done; r = Sim.germanStep(st)) {
+  for (let r = Sim.computerStep(st); !r.done; r = Sim.computerStep(st)) {
     assert(st.deArtilleryAmmo === before, 'it fired before everyone was asked');
     asked.push(r.ask.target);
     Sim.answer(st, r.ask.target !== asked[0]);
@@ -1052,8 +1052,8 @@ check('the Germans: every American under their artillery is asked, then it fires
 check('the Germans: a shaken piece rallies itself, unless it has a shot and its captain is near', () => {
   const run = (st, id) => {
     Sim.unitById(st, id).acted = true;
-    st.de = { queue: [id], mortar: false, artillery: false, bomber: false, rep: [], ask: null, move: { id, what: '' } };
-    for (let r = Sim.germanStep(st); !r.done; r = Sim.germanStep(st)) Sim.answer(st, false);
+    st.computer = { queue: [id], mortar: false, artillery: false, bomber: false, rep: [], ask: null, move: { id, what: '' } };
+    for (let r = Sim.computerStep(st); !r.done; r = Sim.computerStep(st)) Sim.answer(st, false);
   };
   // No captain: it rallies, even with a shot
   const alone = tableWith({ A: [5, 5], d2: [7, 5] });
@@ -1336,13 +1336,13 @@ check('destroying every German wins, even with no rifle platoons; losing everyth
   const st = Sim.newGame(6);
   for (const u of st.units) if (u.side === 'de' || u.kind === 'company') { u.x = null; u.y = null; }
   Sim.startGermanHour(st);
-  for (let r = Sim.germanStep(st); !r.done; r = Sim.germanStep(st)) Sim.answer(st, false);
+  for (let r = Sim.computerStep(st); !r.done; r = Sim.computerStep(st)) Sim.answer(st, false);
   Sim.finishHour(st);
   assert(st.won, 'wiping out the Germans did not win');
   const st2 = Sim.newGame(6);
   for (const u of st2.units) if (u.kind === 'company' && u.side === 'us') { u.x = null; u.y = null; }
   Sim.startGermanHour(st2);
-  for (let r = Sim.germanStep(st2); !r.done; r = Sim.germanStep(st2)) Sim.answer(st2, false);
+  for (let r = Sim.computerStep(st2); !r.done; r = Sim.computerStep(st2)) Sim.answer(st2, false);
   Sim.finishHour(st2);
   assert(!st2.lost || !st2.units.some(u => u.side === 'us' && u.x !== null), 'the game was lost with pieces still on the table');
 });
@@ -1399,8 +1399,8 @@ check('the Germans take a Hail Mary only when they have nothing better to do', (
   mg.post = null; mg.reserve = false; mg.x = 5; mg.y = 4; mg.at = null;
   A.x = 7; A.y = 4; A.at = 'w'; A.down = true; A.acted = true;
   Sim.startGermanHour(st);
-  st.de.queue = [mg.id]; st.de.mortar = false; st.de.artillery = false;
-  const r = Sim.germanStep(st);
+  st.computer.queue = [mg.id]; st.computer.mortar = false; st.computer.artillery = false;
+  const r = Sim.computerStep(st);
   assert(A.x === null || st.fx.some(f => f.need > MAX_NEED), `the MG did not fire its Hail Mary: ${JSON.stringify(r)}`);
 });
 
@@ -1433,7 +1433,7 @@ check('the German artillery shells Americans it can see, clear of its own men, a
   B.x = 0; B.y = 2; B.at = null; de.x = 3; de.y = 2; de.at = null;
   const before = st.deArtilleryAmmo;
   Sim.startGermanHour(st);
-  for (let r = Sim.germanStep(st); !r.done; r = Sim.germanStep(st)) Sim.answer(st, false);
+  for (let r = Sim.computerStep(st); !r.done; r = Sim.computerStep(st)) Sim.answer(st, false);
   assert(st.deArtilleryAmmo === before - 1, 'the German artillery did not fire');
   assert(st.fx.some(f => f.support === 'artillery' && f.side === 'de'), 'no German shells landed');
   // Every German shell, even on an empty field round the target, flies from the German guns (Steve)
@@ -1449,12 +1449,12 @@ check('every German move says which piece or gun it is and what it does', () => 
     for (let side = Sim.drawToken(st); side; side = Sim.drawToken(st)) {
       if (side === 'us') { Sim.passToken(st); continue; }
       if (side === 'timer') continue;
-      for (let r = Sim.germanStep(st); !r.done; r = Sim.germanStep(st)) Sim.answer(st, false);
-      const m = st.de.move;
+      for (let r = Sim.computerStep(st); !r.done; r = Sim.computerStep(st)) Sim.answer(st, false);
+      const m = st.computer.move;
       assert(m && (m.id || m.gun), `seed ${seed}: a German move named no piece or gun`);
       assert(m.what, `seed ${seed}: ${m.id || m.gun} moved without saying what it did`);
       moves++;
-      Sim.endGermanToken(st);
+      Sim.endComputerToken(st);
     }
   }
   assert(moves > 10, `only ${moves} German moves were checked`);
@@ -1502,8 +1502,8 @@ check('the blind bag: a token for each piece, one piece a token, the round ends 
   for (let side = Sim.drawToken(st); side; side = Sim.drawToken(st)) {
     draws++;
     if (side === 'de') {
-      for (let r = Sim.germanStep(st); !r.done; r = Sim.germanStep(st)) Sim.answer(st, false);
-      Sim.endGermanToken(st);
+      for (let r = Sim.computerStep(st); !r.done; r = Sim.computerStep(st)) Sim.answer(st, false);
+      Sim.endComputerToken(st);
     } else {
       // Only one piece may move on a token
       const mine = st.units.filter(u => u.side === 'us' && Sim.canAct(st, u));
@@ -1531,8 +1531,8 @@ check('out of rounds, a gun leaves the bag; any piece can skip its turn', () => 
   assert(st.bag.us === pieces + 2, 'the mortars with no rounds still had a token');
   // Draw until an American token, then skip with a piece: the token is used and the piece has given up its move
   for (let side = Sim.drawToken(st); side && side !== 'us'; side = Sim.drawToken(st)) {
-    for (let r = Sim.germanStep(st); !r.done; r = Sim.germanStep(st)) Sim.answer(st, false);
-    Sim.endGermanToken(st);
+    for (let r = Sim.computerStep(st); !r.done; r = Sim.computerStep(st)) Sim.answer(st, false);
+    Sim.endComputerToken(st);
   }
   if (st.drawn === 'us') {
     const u = st.units.find(o => o.side === 'us' && Sim.canAct(st, o));
@@ -1682,8 +1682,8 @@ check('the timer token: one in the bag; drawn, it ends the round there and then'
         break;
       }
       if (side === 'us') { Sim.passToken(st); continue; }
-      for (let r = Sim.germanStep(st); !r.done; r = Sim.germanStep(st)) Sim.answer(st, false);
-      Sim.endGermanToken(st);
+      for (let r = Sim.computerStep(st); !r.done; r = Sim.computerStep(st)) Sim.answer(st, false);
+      Sim.endComputerToken(st);
     }
   }
   assert(timers > 5, `the timer came out only ${timers} times in 20 rounds`);
@@ -1843,11 +1843,11 @@ check('the Germans have a captain who rallies their shaken pieces', () => {
   for (let k = 0; k < 20; k++) {
     const d = st.units.find(u => u.side === 'de' && u.kind === 'company' && u.x === cap.x && u.y === cap.y);
     d.shocked = true;
-    st.de = { queue: [cap.id], mortar: false, artillery: false, rep: [], ask: null, move: { id: cap.id, what: '' } };
-    Sim.germanStep(st);
-    assert(/rall/i.test(st.de.move.what), `the captain did not try to rally (${st.de.move.what})`);
+    st.computer = { queue: [cap.id], mortar: false, artillery: false, rep: [], ask: null, move: { id: cap.id, what: '' } };
+    Sim.computerStep(st);
+    assert(/rall/i.test(st.computer.move.what), `the captain did not try to rally (${st.computer.move.what})`);
     if (!d.shocked) rallied++;
-    st.de = null;
+    st.computer = null;
   }
   assert(rallied > 5, `the German captain rallied only ${rallied} of 20 times`);
 });
@@ -1861,7 +1861,7 @@ check('German moves follow your rules: men climb hedges (the hedge stays) and ne
       const hedges = Object.keys(st.hedges).length, wire = Object.keys(st.wire).length;
       const men = st.units.filter(u => u.side === 'de' && u.x !== null && !Sim.isTank(u)).map(u => [u, u.x, u.y]);
       Sim.startGermanHour(st);
-      for (let r = Sim.germanStep(st); !r.done; r = Sim.germanStep(st)) Sim.answer(st, false);
+      for (let r = Sim.computerStep(st); !r.done; r = Sim.computerStep(st)) Sim.answer(st, false);
       Sim.finishHour(st);
       // Only tanks take hedges down (and flatten wire)
       assert(Object.keys(st.hedges).length === hedges, `seed ${seed}: German infantry knocked down a hedge`);
@@ -1960,9 +1960,9 @@ function moveShootBoard(seed, kind) {
 // Give one German piece its token and run it to the end, standing fast. Returns the first plan aimed
 function germanToken(st, u, showAim = false) {
   Sim.startGermanHour(st);
-  st.de.queue = [u.id]; st.de.mortar = st.de.artillery = st.de.bomber = false; st.de.move = { id: u.id, what: '' };
+  st.computer.queue = [u.id]; st.computer.mortar = st.computer.artillery = st.computer.bomber = false; st.computer.move = { id: u.id, what: '' };
   let aimed = null;
-  for (let r = Sim.germanStep(st, showAim), n = 0; !r.done && n < 20; r = Sim.germanStep(st, showAim), n++) {
+  for (let r = Sim.computerStep(st, showAim), n = 0; !r.done && n < 20; r = Sim.computerStep(st, showAim), n++) {
     if (r.aim && !aimed) aimed = r.aim;
     if (r.ask) { aimed = aimed || r.ask; Sim.answer(st, false); }
   }
@@ -1994,14 +1994,14 @@ check('a German shot after a move needs exactly one more than the same shot stan
 check('on the page a German Move & shoot is aimed first, showing the +1, and only then fired', () => {
   const { st, u, A } = moveShootBoard(5, 'company');
   Sim.startGermanHour(st);
-  st.de.queue = [u.id]; st.de.mortar = st.de.artillery = st.de.bomber = false; st.de.move = { id: u.id, what: '' };
+  st.computer.queue = [u.id]; st.computer.mortar = st.computer.artillery = st.computer.bomber = false; st.computer.move = { id: u.id, what: '' };
   st.fx = [];
-  const r = Sim.germanStep(st, true);
+  const r = Sim.computerStep(st, true);
   assert(r.aim && r.aim.moving && r.aim.target === A.id, `not aimed: ${JSON.stringify(r)}`);
   assert(u.y > 0, 'it should have moved before aiming');
   assert(!st.fx.some(f => f.from && f.from.id === u.id), 'it fired before it aimed');
   assert(String(Sim.needWhy(st, u, A, true)).includes('moving'), 'the label does not say it is moving');
-  assert(st.de.move.what.includes(A.name), `the word bubble says "${st.de.move.what}"`);
+  assert(st.computer.move.what.includes(A.name), `the word bubble says "${st.computer.move.what}"`);
 });
 
 check("the Germans don't Move & shoot where you can't: machine guns and the PaK, or a shot that would be a Hail Mary", () => {
@@ -2078,11 +2078,11 @@ check('in whole games the Germans fire on the move, and it never leaves pieces o
       Sim.startRound(st);
       for (let side = Sim.drawToken(st); side && side !== 'timer'; side = Sim.drawToken(st)) {
         if (side === 'us') { Sim.passToken(st); continue; }
-        for (let r = Sim.germanStep(st, true); !r.done; r = Sim.germanStep(st, true)) {
+        for (let r = Sim.computerStep(st, true); !r.done; r = Sim.computerStep(st, true)) {
           if (r.aim && r.aim.moving) moved++;
           if (r.ask) Sim.answer(st, false);
         }
-        Sim.endGermanToken(st);
+        Sim.endComputerToken(st);
       }
       for (const u of live(st)) assert(fieldOk(st, u.x, u.y), `seed ${seed}: pieces overlap at ${u.x},${u.y}`);
       Sim.endRound(st);
@@ -2154,8 +2154,8 @@ function mortarOnTank(seed, side, shaken) {
     assert(Sim.actFire(st, 'mortars', 5, 3).ok, 'your mortars would not fire on a tank');
   } else {
     Sim.startGermanHour(st);
-    st.de.queue = []; st.de.artillery = false; st.de.bomber = false; st.de.mortar = true; st.de.move = { gun: 'mortars', what: '' };
-    for (let r = Sim.germanStep(st); !r.done; r = Sim.germanStep(st)) if (r.ask) Sim.answer(st, false);
+    st.computer.queue = []; st.computer.artillery = false; st.computer.bomber = false; st.computer.mortar = true; st.computer.move = { gun: 'mortars', what: '' };
+    for (let r = Sim.computerStep(st); !r.done; r = Sim.computerStep(st)) if (r.ask) Sim.answer(st, false);
   }
   const shell = st.fx.find(f => f.kind === 'shell' && f.to && f.to.id === tank.id);
   return { tank, shell };
@@ -2215,8 +2215,8 @@ check("the German mortar goes for a shaken tank first, a platoon next, an unshak
   de.x = 5; de.y = 3; tank.x = 5; tank.y = 4; A.x = 5; A.y = 2;
   const firstShot = () => {
     Sim.startGermanHour(st);
-    st.de.queue = []; st.de.artillery = false; st.de.bomber = false; st.de.mortar = true; st.de.move = { gun: 'mortars', what: '' };
-    const r = Sim.germanStep(st, true);
+    st.computer.queue = []; st.computer.artillery = false; st.computer.bomber = false; st.computer.mortar = true; st.computer.move = { gun: 'mortars', what: '' };
+    const r = Sim.computerStep(st, true);
     return r.aim ? r.aim.target : null;
   };
   tank.shocked = false;
@@ -2316,6 +2316,191 @@ check('the table is drawn with no more pixels than the budget on a big screen, a
   assert(pixelRatioFor(800, 600, 3, PIXELS.start) === 1.5, 'a small sharp screen went above 1.5');
   // At the floor it never asks for more than the floor
   assert(Math.abs(drawn(3840, 2160, 1, PIXELS.least) - PIXELS.least) < 1, 'the floor is not kept');
+});
+
+// ---------- Playing the Germans (Steve) ----------
+
+// The table with the player as the Germans
+function tableAsGermans(places, seed = 3) {
+  const st = tableWith(places, seed);
+  st.human = 'de';
+  return st;
+}
+// A token of a given side, as the bag would give it (no guns left, so it goes to a piece)
+function tokenFor(st, side) {
+  st.ammo = { mortars: 0, artillery: 0, bomber: 0 };
+  Sim.startRound(st);
+  st.bag = { us: side === 'us' ? 9 : 0, de: side === 'de' ? 9 : 0, timer: 0 };
+  assert(Sim.drawToken(st) === side, `no ${side} token`);
+}
+// Run the computer's token, answering each question; returns the questions asked
+function runComputerToken(st, answer = false) {
+  const asked = [];
+  for (let r = Sim.computerStep(st); !r.done; r = Sim.computerStep(st)) { asked.push(r.ask); Sim.answer(st, answer); }
+  Sim.endComputerToken(st);
+  return asked;
+}
+
+check('a new game has the player as the Americans unless asked otherwise', () => {
+  assert(Sim.newGame(5).human === 'us', 'not the Americans by default');
+  assert(Sim.newGame(5, 'de').human === 'de', 'not the Germans when asked');
+  assert(Sim.computerSide(Sim.newGame(5, 'de')) === 'us', 'the computer should play the Americans');
+});
+
+check('playing the Germans: only German pieces act, and only on a German token', () => {
+  const st = Sim.newGame(5, 'de');
+  const german = st.units.find(u => u.side === 'de' && u.kind === 'company');
+  const american = st.units.find(u => u.side === 'us' && u.kind === 'company');
+  Sim.startRound(st);
+  st.drawn = 'de';
+  assert(Sim.canAct(st, german), 'a German piece could not act on a German token');
+  assert(!Sim.canAct(st, american), 'an American piece could act for the player');
+  st.drawn = 'us';
+  assert(!Sim.canAct(st, german), 'a German piece could act on an American token');
+});
+
+check('playing the Germans: killing every American piece wins, whatever guns and bomber they have left', () => {
+  const st = tableAsGermans({ A: [3, 3], d1: [9, 3] });
+  assert(st.ammo.mortars > 0 && st.ammo.artillery > 0 && st.ammo.bomber > 0, 'this needs American guns still to fire');
+  Sim.remove(st, Sim.unitById(st, 'A'));
+  assert(st.lost && !st.won && !st.draw, 'the Germans did not win with only guns left against them');
+});
+
+check('playing the Germans: an American piece left means no win yet, even with nothing that can hurt your tanks', () => {
+  const st = tableAsGermans({ mg1: [1, 1], dt1: [9, 3] });
+  st.ammo.mortars = st.ammo.artillery = st.ammo.bomber = 0;
+  Sim.finishHour(st);
+  assert(!st.won && !st.lost, 'the game ended with an American piece still on the table');
+  // Playing the Americans the same table is a loss, as it always was
+  const us = tableWith({ mg1: [1, 1], dt1: [9, 3] });
+  us.ammo.mortars = us.ammo.artillery = us.ammo.bomber = 0;
+  Sim.finishHour(us);
+  assert(us.lost, 'the Americans should still lose here');
+});
+
+check('playing the Germans: you lose if an American platoon holds the village at the end of a round', () => {
+  const start = Sim.newGame(5, 'de');
+  const o = start.objective;
+  const st = tableAsGermans({ A: [o.x, o.y], d2: [0, 0] }, 5);
+  Sim.finishHour(st);
+  assert(st.won && !st.lost, 'the Americans did not win by holding the village');
+});
+
+check('playing the Germans: your guns use German rounds, one fire a round, on your token only', () => {
+  const st = tableAsGermans({ A: [8, 3], d1: [9, 3] });
+  const us = { ...st.ammo };
+  Sim.startRound(st);
+  st.drawn = 'us';
+  assert(!Sim.canFire(st, 'artillery'), 'your guns could fire on the computer\'s token');
+  st.drawn = 'de';
+  const before = st.deArtilleryAmmo;
+  assert(Sim.canFire(st, 'artillery'), 'your guns could not fire on your token');
+  const r = Sim.actFire(st, 'artillery', 8, 3);
+  assert(r.ok, 'the German battery would not fire on an American in plain view');
+  assert(st.deArtilleryAmmo === before - 1, 'it did not use a German round');
+  assert(st.ammo.artillery === us.artillery, 'it used an American round');
+  assert(st.deFired.artillery && !st.fired.artillery, 'it was marked on the wrong side');
+  st.activeId = null;
+  assert(!Sim.canFire(st, 'artillery'), 'it could fire twice in a round');
+});
+
+check('playing the Germans: your mortars drop on the one piece, three dice, as the computer\'s always have', () => {
+  const st = tableAsGermans({ A: [8, 3], B: [8, 3], d1: [9, 3] });
+  const A = Sim.unitById(st, 'A'), B = Sim.unitById(st, 'B');
+  A.at = 'nw'; B.at = 'se';
+  Sim.startRound(st);
+  st.drawn = 'de';
+  const before = st.deMortarAmmo;
+  const r = Sim.actFire(st, 'mortars', 8, 3, B);
+  assert(r.ok, 'the mortars would not fire');
+  assert(st.deMortarAmmo === before - 1, 'it did not use a mortar round');
+  const shells = st.fx.filter(f => f.kind === 'shell' && f.to);
+  assert(shells.length === 1 && shells[0].to.id === 'B', 'it fell on more than the piece chosen');
+  assert(shells[0].faces.length === DE_MORTAR.dice, 'it did not roll the German mortar\'s dice');
+  assert(st.activeId === 'gun:mortars', 'it did not use the token');
+});
+
+check('the American computer: a piece fired on is yours to ask, and the shot uses its own weapons', () => {
+  // An American platoon, far from the village, with a German platoon along the lane: its token fires, and you are asked first
+  const st = tableAsGermans({ A: [1, 5], d2: [3, 5] });
+  tokenFor(st, 'us');
+  assert(st.computer && st.computer.move.id, 'it did not pick a piece');
+  const asked = runComputerToken(st, true);
+  const d2 = Sim.unitById(st, 'd2');
+  assert(asked.length === 1 && asked[0].target === 'd2', 'you were not asked about your piece');
+  assert(d2.down || d2.x === null, 'taking cover did not count');
+});
+
+check('the American computer: its shells ask every German piece under them, and use American rounds', () => {
+  // (along the lane, so the American platoon sees them)
+  const st = tableAsGermans({ A: [0, 2], d1: [6, 2], d2: [6, 3] });
+  Sim.startRound(st);
+  st.drawn = 'us';
+  st.fired = {};
+  st.computer = { queue: [], mortar: false, artillery: true, bomber: false, rep: [], ask: null, move: { gun: 'artillery', what: '' } };
+  const before = st.ammo.artillery, german = st.deArtilleryAmmo;
+  const asked = runComputerToken(st);
+  assert(st.ammo.artillery === before - 1, 'it did not fire once');
+  assert(st.deArtilleryAmmo === german, 'it used a German round');
+  assert(asked.length === 2 && asked.every(a => a.shelled && Sim.unitById(st, a.target).side === 'de'), 'it did not ask both your pieces');
+});
+
+check('the American computer: a rifle platoon charges an empty village in reach; nothing else stops in it', () => {
+  const home = Sim.newGame(5, 'de'), o = home.objective;
+  const st = tableAsGermans({ A: [o.x - 1, o.y], d2: [0, 0] }, 5);
+  tokenFor(st, 'us');
+  runComputerToken(st);
+  const A = Sim.unitById(st, 'A');
+  assert(A.x === o.x && A.y === o.y, `the platoon went to ${A.x},${A.y}, not the village`);
+  // A tank next to the village, with a German beyond it, doesn't park in the yard
+  const tank = tableAsGermans({ T1: [o.x - 1, o.y], d2: [o.x + 3, o.y] }, 5);
+  tokenFor(tank, 'us');
+  runComputerToken(tank);
+  const T1 = Sim.unitById(tank, 'T1');
+  assert(T1.x !== o.x || T1.y !== o.y, 'the tank stopped in the village');
+});
+
+check('the American computer: it storms the village only when it outnumbers who is there', () => {
+  const home = Sim.newGame(5, 'de'), o = home.objective;
+  // Three sections against one MG team: in it goes
+  const few = tableAsGermans({ A: [o.x - 1, o.y], dmg1: [o.x, o.y] }, 5);
+  Sim.unitById(few, 'A').at = 'e'; Sim.unitById(few, 'dmg1').at = 'w';
+  tokenFor(few, 'us');
+  assert(few.computer.move.id === 'A', 'it did not pick the platoon');
+  Sim.computerStep(few);
+  assert(few.fx.some(f => f.kind === 'assault'), 'three sections did not storm one team');
+  // One section against three: it doesn't
+  const many = tableAsGermans({ A: [o.x - 1, o.y], d2: [o.x, o.y] }, 5);
+  Sim.unitById(many, 'A').platoons = 1;
+  tokenFor(many, 'us');
+  Sim.computerStep(many);
+  assert(!many.fx.some(f => f.kind === 'assault'), 'one section stormed three');
+});
+
+check('playing the Germans: doing nothing never wins, and the American computer takes the village inside 20 rounds', () => {
+  for (let seed = 1; seed <= 30; seed++) {
+    const st = playAsGermans(seed, false);
+    assert(!st.lost || st.draw, `seed ${seed}: the Germans won by doing nothing`);
+    assert(st.won, `seed ${seed}: the American computer did not beat Germans doing nothing in 20 rounds`);
+  }
+});
+
+check('playing the Germans: nothing goes negative, out of range or crowded in 40 games, with the same seed the same game', () => {
+  const a = playAsGermans(7, true), b = playAsGermans(7, true);
+  assert(JSON.stringify(a.units) === JSON.stringify(b.units) && a.turn === b.turn, 'two games with seed 7 ended differently');
+  let germanWins = 0;
+  for (let seed = 1; seed <= 40; seed++) {
+    const st = playAsGermans(seed, true);
+    if (st.lost && !st.draw) germanWins++;
+    for (const u of live(st)) {
+      assert(u.platoons > 0 && Sim.inside(u.x, u.y), `seed ${seed}: ${u.name} at ${u.x},${u.y} with ${u.platoons}`);
+      assert(fieldOk(st, u.x, u.y), `seed ${seed}: too many units share ${u.x},${u.y}`);
+    }
+    for (const n of [st.ammo.mortars, st.ammo.artillery, st.ammo.bomber, st.deMortarAmmo, st.deArtilleryAmmo, st.deBomberAmmo]) assert(n >= 0, `seed ${seed}: negative ammunition`);
+    // A German win means no American left on the table
+    if (st.lost && !st.draw) assert(!live(st).some(u => u.side === 'us'), `seed ${seed}: a German win with Americans left`);
+  }
+  assert(germanWins > 0, 'the Germans can never win');
 });
 
 console.log(failed ? `\n${failed} failed` : '\nall passed');

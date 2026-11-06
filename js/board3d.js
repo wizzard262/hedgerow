@@ -143,26 +143,26 @@ const Board = (() => {
     }
   }
 
-  // Which of your mortars or artillery is under a point on the page: the model, or the table close round it
-  function gunAt(clientX, clientY) {
+  // Which of a side's mortars or artillery is under a point on the page: the model, or the table close round it
+  function gunAt(clientX, clientY, side) {
     if (!support) return null;
     const r = renderer.domElement.getBoundingClientRect();
     ray.setFromCamera(new T.Vector2((clientX - r.left) / r.width * 2 - 1, -(clientY - r.top) / r.height * 2 + 1), camera);
-    for (const which of SUPPORT) if (support.us[which].model.visible && ray.intersectObject(support.us[which].model, true).length) return which;
+    for (const which of SUPPORT) if (support[side][which].model.visible && ray.intersectObject(support[side][which].model, true).length) return which;
     const p = new T.Vector3();
     if (!ray.ray.intersectPlane(table, p)) return null;
     for (const which of SUPPORT) {
-      const spot = GUNS.us[which];
-      if (support.us[which].model.visible && Math.hypot(p.x - spot.x, p.z - spot.z) < 0.45) return which;
+      const spot = GUNS[side][which];
+      if (support[side][which].model.visible && Math.hypot(p.x - spot.x, p.z - spot.z) < 0.45) return which;
     }
     return null;
   }
 
   // A ring under each of your guns, like the pieces: green if it can still fire this hour, grey if not, white if chosen
-  function gunRings(state) {
+  function gunRings(state, side) {
     if (!state) return;
     for (const which of SUPPORT) {
-      const spot = GUNS.us[which], s = state[which];
+      const spot = GUNS[side][which], s = state[which];
       if (!s.present) continue;
       const colour = s.chosen ? 0xfff6dc : s.ready ? 0x7fd06a : 0x77776f;
       const ring = new T.Mesh(new T.RingGeometry(0.3, s.chosen ? 0.36 : 0.335, 48), new T.MeshBasicMaterial({ color: colour, transparent: true, opacity: 0.85, depthWrite: false }));
@@ -302,7 +302,7 @@ const Board = (() => {
       gun.model.visible = n > 0;
       gun.name.visible = n > 0;
       // Fired this hour: greyed out like a piece that has moved (Steve)
-      greyOut(gun.model, fired[side][which] ? (side === 'us' ? 'green' : 'grey') : false);
+      greyOut(gun.model, fired[side][which] ? (side === st.human ? 'green' : 'grey') : false);
     }
   }
 
@@ -833,12 +833,12 @@ const Board = (() => {
       const h = holding(u.id);
       // Tinted only once its move is complete (Steve): not while its token is still in play (a German making its move,
       // one of yours with a shot or a rally still to come), nor while its fight or shot is still being shown
-      const movingNow = st.de && st.de.move && st.de.move.id === u.id;
-      const activeNow = st.drawn === 'us' && st.activeId === u.id;
+      const movingNow = st.computer && st.computer.move && st.computer.move.id === u.id;
+      const activeNow = st.drawn === st.human && st.activeId === u.id;
       // (in ambush it hasn't finished: it goes light green or grey once it has fired, Steve)
       const done = u.acted && !u.ambush && !movingNow && !activeNow && !h;
-      // Moved this round: yours light green, the Germans' grey (Steve)
-      const tint = done && u.x !== null ? (u.side === 'us' ? 'green' : 'grey') : false;
+      // Moved this round: yours light green, the enemy's grey (Steve)
+      const tint = done && u.x !== null ? (u.side === st.human ? 'green' : 'grey') : false;
       // A knocked-out tank stays on the table as its wreck (see updateWrecks)
       const wrecked = u.x === null && st.wrecks.some(w => w.id === u.id);
       if (g) { g.visible = h ? h.visible : u.x !== null || wrecked; greyOut(g, tint); }
@@ -1424,7 +1424,7 @@ const Board = (() => {
     // At the end, who won, over the field
     const tEnd = t - f.strikes.length * MELEE_BLOW;
     if (tEnd >= 0 && tEnd < 1.6) {
-      const ours = f.side === 'us';
+      const ours = f.side === playerSide;
       const text = f.won ? (ours ? 'Field taken!' : 'Overrun!') : (ours ? 'Charge beaten' : 'Charge beaten off');
       const w = add(word(text, f.won === ours ? '#9fe08a' : '#ff6a50', true));
       w.material.opacity = Math.min(1, 2 * (1.6 - tEnd));
@@ -1866,7 +1866,8 @@ const Board = (() => {
   function shotTagText(st, f) {
     const shooter = f.from ? st.units.find(u => u.id === f.from.id) : null;
     const gunName = f.support === 'bomber' ? BOMBER_NAMES[f.side] : f.support === 'artillery' ? 'artillery' : 'mortars';
-    const who = shooter ? shooter.name : `${f.side === 'de' ? 'German' : 'Our'} ${gunName}`;
+    const whose = f.side === st.human ? 'Our' : f.side === 'de' ? 'German' : 'American';
+    const who = shooter ? shooter.name : `${whose} ${gunName}`;
     const need = f.need > MAX_NEED ? 'HAIL MARY: 6, then 6' : `needs ${f.need}+`;
     const hits = f.faces.filter(r => r.hit).length;
     // Taking cover (Steve: the tag says so; its +2 is in the score needed)
@@ -1933,12 +1934,13 @@ const Board = (() => {
 
   // The German move on show: an orange ring under the piece (or their gun off the board) and a grey word bubble over it
   // with its name and what it does, e.g. "1. Fallschirmjäger-Zug · Fires on 2nd Platoon"
-  function germanMoveMark(st, m) {
+  function computerMoveMark(st, m) {
     let spot, name, big;
+    const side = Sim.computerSide(st);
     if (m.gun) {
       // Their mortars or artillery, off the board
-      const g = GUNS.de[m.gun];
-      spot = new T.Vector3(g.x, 0, g.z); name = GUN_NAMES.de[m.gun]; big = true;
+      const g = GUNS[side][m.gun];
+      spot = new T.Vector3(g.x, 0, g.z); name = GUN_NAMES[side][m.gun]; big = true;
     } else {
       // A piece: gone from the table (wiped out in a fight) means nothing to ring
       const u = Sim.unitById(st, m.id);
@@ -1952,16 +1954,17 @@ const Board = (() => {
     // Over the piece, or below it when over it would go off the top of the screen (Steve)
     const over = new T.Vector3(m.gun ? spot.x - 1.1 : spot.x, 0.32, spot.z);
     const below = offTop(over);
-    const bubble = diceTag([name, m.what], 'de', below);
+    const bubble = diceTag([name, m.what], side, below);
     // A gun's bubble sits a little in from the table's edge, so it stays on the screen
     if (below) bubble.position.set(over.x, 0.05, spot.z + 0.3); else bubble.position.copy(over);
     keepInSide(bubble);
     bubble.renderOrder = 7; marks.add(bubble);
   }
 
-  // view: { spots: [{ x, y, kind }], selected: piece, hover: { x, y }, blast: [{ x, y, main }], deMove: { id | gun, what } }. dt: seconds since the last frame.
+  // view: { spots: [{ x, y, kind }], selected: piece, hover: { x, y }, blast: [{ x, y, main }], computerMove: { id | gun, what } }. dt: seconds since the last frame.
   // Returns true while pieces are still gliding, so the page keeps drawing
   let lastT = 0, onlyFires = false, drawingOn = false;
+  let playerSide = 'us';             // the side the player commands, for what the table says about a fight
   const FIRE_FRAME = 33;             // milliseconds between frames when only fires are moving (about 30 a second)
   // Free what an object made for itself (geometry, materials), not what it shares: textures, sprites' common shape, the
   // models' own materials
@@ -1994,6 +1997,7 @@ const Board = (() => {
   }
 
   function render(st, view = {}) {
+    playerSide = st.human;
     const now = performance.now();
     // Nothing happening on the table but fires flickering: they don't need every frame the screen can show
     if (onlyFires && view.same && now - lastT < FIRE_FRAME) return true;
@@ -2079,7 +2083,7 @@ const Board = (() => {
     for (const b of view.blast || []) mark(b.x, b.y, b.main ? 'blast' : 'splash', 0.03);
     if (view.flightLine) markFlightLine(view.flightLine);
     showStand(st, view);
-    gunRings(view.guns);
+    gunRings(view.guns, st.human);
     if (view.selected && view.selected.x !== null && pieces[view.selected.id]) {
       const p = pieceCentre(view.selected), big = view.selected.kind === 'company' || Sim.isTank(view.selected);
       const ring = new T.Mesh(new T.RingGeometry(big ? 0.34 : 0.21, big ? 0.39 : 0.25, 56), new T.MeshBasicMaterial({ color: 0xfff6dc, transparent: true, opacity: 0.95, depthWrite: false }));
@@ -2088,16 +2092,16 @@ const Board = (() => {
     if (view.targets && view.targets.length) markTargets(view.targets, view.hotTarget);
     if (view.rallies && view.rallies.length) markRallies(view.rallies);
     // The German piece or gun moving now: a ring round it and a word bubble saying what it does (Steve)
-    if (view.deMove) germanMoveMark(st, view.deMove);
+    if (view.computerMove) computerMoveMark(st, view.computerMove);
     // Shooting: a line of sight from the shooter to each target it can see
     if (view.shooter && view.shooter.x !== null && pieces[view.shooter.id]) sightLines(view.shooter, view.targets || [], view.hotTarget);
     // German mortars ranging on a piece: a line from their mortar off the board
-    if (view.mortarAim && pieces[view.mortarAim.id]) marks.add(fireArc({ side: 'de', support: view.aimWhich || 'mortars' }, view.mortarAim, true));
+    if (view.mortarAim && pieces[view.mortarAim.id]) marks.add(fireArc({ side: Sim.computerSide(st), support: view.aimWhich || 'mortars' }, view.mortarAim, true));
     // Your mortars or artillery choosing a target: an arc from the gun to each one, the one under the pointer brighter
-    if (view.fireFrom) for (const t of view.targets || []) if (pieces[t.id]) marks.add(fireArc({ side: 'us', support: view.fireFrom }, t, view.hotTarget && view.hotTarget.id === t.id));
+    if (view.fireFrom) for (const t of view.targets || []) if (pieces[t.id]) marks.add(fireArc({ side: st.human, support: view.fireFrom }, t, view.hotTarget && view.hotTarget.id === t.id));
     for (const u of st.units) if (u.ambush && u.x !== null && pieces[u.id]) markAmbush(u);
     if (view.ready) for (const u of st.units) {
-      if (u.side !== 'us' || u.x === null || !pieces[u.id] || u.ambush) continue;
+      if (u.side !== st.human || u.x === null || !pieces[u.id] || u.ambush) continue;
       const can = view.ready(u);
       if (!can && !u.acted) continue;
       const p = pieceCentre(u), big = u.kind === 'company' || Sim.isTank(u);
@@ -2122,8 +2126,8 @@ const Board = (() => {
     return { x, y, side };
   }
 
-  // Which of your pieces is under a point on the page: the model the ray hits first, or else the nearest piece in that field
-  function pieceAt(st, clientX, clientY, side = 'us') {
+  // Which of a side's pieces is under a point on the page: the model the ray hits first, or else the nearest piece in that field
+  function pieceAt(st, clientX, clientY, side) {
     const r = renderer.domElement.getBoundingClientRect();
     ray.setFromCamera(new T.Vector2((clientX - r.left) / r.width * 2 - 1, -(clientY - r.top) / r.height * 2 + 1), camera);
     const mine = st.units.filter(u => u.side === side && u.x !== null && pieces[u.id] && pieces[u.id].visible);

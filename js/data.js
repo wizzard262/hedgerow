@@ -118,7 +118,7 @@ const HAND_TO_HAND_LIMIT = 40;
 // hard: its dice against a tank. A mortar's (Steve) only shakes a tank, or kills one already shaken: see damage in sim.js
 const MORTARS = { name: '81 mm mortars', dice: 4, splash: 0, ammo: 6, hard: 1 };
 const ARTILLERY = { name: '105 mm battery', dice: 5, splash: 1, ammo: 3, hard: 1 };
-const DE_MORTAR = { dice: 3, ammo: 8, hard: 1 };   // the Germans' own mortar, one mission a turn while ammo lasts
+const DE_MORTAR = { name: '8 cm mortars', dice: 3, splash: 0, ammo: 8, hard: 1 };   // the Germans' own mortar: drops on one piece, one mission a turn while ammo lasts
 const DE_ARTILLERY = { name: '10.5 cm battery', dice: 5, splash: 1, ammo: 2, hard: 1 };   // the Germans' guns: like ours, fewer rounds
 // The bomber (Steve): the same for both sides. One run a game; a compass spin says which way it flies; it goes straight
 // through a field chosen on the edge of the board and drops one bomb on every piece in every field under it, friend or foe.
