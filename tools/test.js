@@ -2981,5 +2981,16 @@ check('the German computer\'s PaK goes across the large village when that is whe
   assert(pak.ambush, 'it did not lie in ambush there');
 });
 
+check('a tank fires with the bazooka\'s sound; the PaK keeps its cannon, the machine guns theirs', () => {
+  const st = Sim.newGame(5);
+  const piece = id => Sim.unitById(st, id);
+  for (const id of ['T1', 'T2', 'dt1', 'dt2']) assert(Sim.fireSound(piece(id), 'gun', piece(id).side) === 'rocket', `${id} has the wrong sound`);
+  assert(Sim.fireSound(piece('bz1'), 'rocket', 'us') === 'rocket', 'the bazooka changed');
+  assert(Sim.fireSound(piece('pak1'), 'gun', 'de') === 'gun', 'the PaK changed');
+  assert(Sim.fireSound(piece('dmg1'), 'mg', 'de') === 'mg42', 'the MG 42 changed');
+  assert(Sim.fireSound(piece('mg1'), 'mg', 'us') === 'mg', 'the .50 cal changed');
+  assert(Sim.fireSound(piece('A'), 'rifle', 'us') === 'rifle', 'the rifles changed');
+});
+
 console.log(failed ? `\n${failed} failed` : '\nall passed');
 process.exit(failed ? 1 : 0);

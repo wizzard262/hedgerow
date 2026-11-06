@@ -194,10 +194,10 @@ const Sound = (() => {
     mg(t, big, rounds = 5) { burst(t, rounds, 0.115, 0.9); },
     // The German MG 42: a ripping tear, twenty rounds a second
     mg42(t, big, rounds = 5) { burst(t, rounds, 0.05, 0.85); },
-    // A bazooka or Panzerschreck: the bang of the launch and the rocket's roar away
+    // A bazooka or Panzerschreck, and a tank (Steve): the bang of the launch and the rocket's roar away
     // (Steve: a roar as it flies) a longer, louder rush under the launch
     rocket(t) { noise(t, 0.05, 2500, 0.5, 0.8, 'highpass'); noise(t, 0.9, 700, 0.6, 0.9, 'bandpass'); noise(t + 0.05, 0.6, 250, 0.4, 0.8, 'lowpass'); tone(t, 0.6, 300, 900, 0.12, 'sawtooth'); },
-    // A tank or anti-tank gun: a sharp crack, a huge ka-boom, and its echo rolling back off the hedges
+    // The PaK (tanks fire with the bazooka's sound, Steve): a sharp crack, a huge ka-boom, and its echo rolling back off the hedges
     gun(t) {
       if (playFile('cannon', t, 1, 0.75 + Math.random() * 0.1)) {
         // The recording, slowed to make it heavier, with a deep thump under it

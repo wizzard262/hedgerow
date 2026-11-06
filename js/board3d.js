@@ -1557,7 +1557,7 @@ const Board = (() => {
         // (Steve: as many as the table shows); other weapons once
         const heard = f.weapon === 'gun' ? roundsOf(f) : 1;
         for (let k = 0; k < heard; k++) {
-          Sound.play(f.weapon === 'mg' && f.side === 'de' ? 'mg42' : f.weapon, wait + k * TANK_GAP, false, roundsOf(f));
+          Sound.play(Sim.fireSound(shooter, f.weapon, f.side), wait + k * TANK_GAP, false, roundsOf(f));
           Sound.play(f.armour && f.weapon === 'gun' ? 'clang' : f.weapon === 'gun' || f.weapon === 'rocket' ? 'he' : 'bullets', wait + k * TANK_GAP + flight);
         }
       } else if (f.kind === 'shell') {

@@ -792,6 +792,13 @@ const Sim = (() => {
   // `blast` is set for the other pieces caught in a tank's high-explosive burst (they don't spread it again)
   const weaponOf = u => (isTank(u) || u.kind === 'pak' ? 'gun' : u.kind === 'mg' || u.kind === 'mg42' ? 'mg' : u.kind === 'bazooka' || u.kind === 'schreck' ? 'rocket' : 'rifle');
 
+  // The sound a shot makes as it is fired (Steve: a tank's is the bazooka's; the PaK keeps its cannon)
+  function fireSound(shooter, weapon, side) {
+    if (shooter && isTank(shooter)) return 'rocket';
+    if (weapon === 'mg' && side === 'de') return 'mg42';
+    return weapon;
+  }
+
   function fireAt(st, shooter, target, power, withdraw = false, moving = false, blast = false) {
     const f = firepower(st, shooter);
     // The computer's piece fired on takes cover when it is wise to (Steve), as you can
@@ -2617,7 +2624,7 @@ const Sim = (() => {
 
   return {
     firesOnTheMove, canAmbush, actAmbush, bestMoveShoot, bomberHeading, bomberEdges, bomberLine, bombNeed, bombWhy, bestBomberRun,
-    wreckAt, remove, computerSide, isRobot, piecesToAsk, takeCover, enemyOf, ammoOf, firedOf, gunStats, edgeKey, atCloseRange, closeCells,
+    fireSound, wreckAt, remove, computerSide, isRobot, piecesToAsk, takeCover, enemyOf, ammoOf, firedOf, gunStats, edgeKey, atCloseRange, closeCells,
     newGame, roll, endTurn, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, chargeSpots,
     rallyTargets, canAct, canReact, firepower, canCallFire, holdsObjective, roundText, roomFor,
     startGermanHour, computerStep, answer, finishHour, startRound, drawToken, endComputerToken, activationOver, passToken, humanCanMove, endRound, canFire, actSkip, actSkipShot, skipSupport,
