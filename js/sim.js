@@ -273,7 +273,7 @@ const Sim = (() => {
   function spend(st, u) {
     u.acted = true;
     if (st.tokens) { st.activeId = u.id; activated(st, { side: u.side, id: u.id }); }
-    for (const o of st.units) o.halfShot = false;
+    for (const o of st.units) { o.halfShot = false; o.mayAmbush = false; }
   }
 
   // Note who a token activated this round, once each: a piece ({ side, id }) or a gun ({ side, gun }). At the next round
@@ -1235,8 +1235,10 @@ const Sim = (() => {
 
   // ---------- Ambush (Steve) ----------
 
-  // Can this piece go into ambush now: on its token, with its move still to make, and able to fire
+  // Can this piece go into ambush now: on its token, with its move still to make, and able to fire. The PaK also straight
+  // after moving within its field, on the same token (Steve)
   function canAmbush(st, u) {
+    if (u.mayAmbush && !st.computer && st.activeId === u.id) return true;
     return canAct(st, u) && mayFire(u);
   }
 
@@ -1363,25 +1365,61 @@ const Sim = (() => {
     return lines;
   }
 
-  // The other places in its own field a piece could move to (not where it is; where it fits among the others)
+  // The other places in its own field a piece could move to (not where it is; where it fits among the others). The PaK
+  // too (Steve): it never leaves its field, but it can be moved about in it
   function lineSides(st, u) {
-    if (PIECES[u.kind].fixed) return [];
     return anchorsFor(u).filter(p => p !== u.at && fitsAt(st, u, u.x, u.y, p));
+  }
+
+  // The eight ways out of a field, as angles on the table (Steve: the PaK faces out of its square)
+  const FACING = { e: 0, ne: Math.PI / 4, n: Math.PI / 2, nw: 3 * Math.PI / 4, w: Math.PI, sw: -3 * Math.PI / 4, s: -Math.PI / 2, se: -Math.PI / 4 };
+
+  // Which way out of its field the PaK faces, standing in a pair of areas: the area clicked, if that is one of them and
+  // not the middle; otherwise the pair's corner, or its edge
+  function faceOut(place, clicked) {
+    const areas = place.split('+');
+    if (clicked && clicked !== 'c' && areas.includes(clicked)) return FACING[clicked];
+    const corner = areas.find(k => CORNERS.includes(k));
+    return FACING[corner || areas.find(k => k !== 'c')];
+  }
+
+  // The PaK sent to the middle of its field faces the way it came from (Steve), to the nearest of the eight ways
+  function faceWayItCame(u, from) {
+    const was = spotXY(u, from);
+    const angle = Math.atan2(0 - was.y, was.x);
+    return Math.round(angle / (Math.PI / 4)) * (Math.PI / 4);
+  }
+
+  // Where the PaK goes for an area clicked: a free pair with that area in it, so every click on its field moves it and
+  // every way out can be faced; if none is free, the nearest place it fits. For the middle, the pair nearest where it was
+  function pakPlaceFor(st, u, side) {
+    const wanted = side || 'c';
+    const was = spotXY(u);
+    const farFromHere = p => { const q = spotXY(u, p); return Math.hypot(q.x - was.x, q.y - was.y); };
+    const pairs = lineSides(st, u).filter(p => p.split('+').includes(wanted));
+    if (wanted === 'c') pairs.sort((a, b) => farFromHere(a) - farFromHere(b));
+    return pairs[0] || freePlace(st, u, u.x, u.y, side);
   }
 
   // Move to another area of its own field (Steve: north hedge to south hedge, say): the piece's move for the round, and
   // like a Move & shoot it may fire after, one more needed for moving. The area clicked, or the nearest place it fits
   function actLine(st, u, side) {
     if (!canAct(st, u) || !lineSides(st, u).length) return { ok: false };
-    const to = freePlace(st, u, u.x, u.y, side);
+    const isPak = !!PIECES[u.kind].fixed;
+    const to = isPak ? pakPlaceFor(st, u, side) : freePlace(st, u, u.x, u.y, side);
     if (to === u.at || !lineSides(st, u).includes(to)) return { ok: false };
     spend(st, u);
+    // The PaK faces out of its square, one of eight ways, until it next fires (Steve); sent to the middle, the way it came
+    const toMiddle = !side || side === 'c';
+    if (isPak) u.aim = toMiddle ? faceWayItCame(u, u.at) : faceOut(to, side);
     // (a move that may fire after, like a Move & shoot: the captain can still fire only with a rally to spare)
     if (u.kind === 'captain' && mayFire(u)) u.fired = true;
     standAt(st, u, to);
     const lines = [`🌳 ${u.name} moves to ${placeName(u.at)}`];
     springAmbushes(st, u, lines);
     u.halfShot = u.x !== null && firesOnTheMove(u) && targets(st, u, true).length > 0;
+    // The PaK can't fire after moving, but it can lie in ambush on the same go (Steve)
+    u.mayAmbush = u.x !== null && !!PIECES[u.kind].fixed;
     return { ok: true, lines: [lines.join(', ') + '.'] };
   }
 
@@ -1711,6 +1749,19 @@ const Sim = (() => {
     return { shooter: u.id, target: t.id, moving: true };
   }
 
+  // A place in its own field from which a piece would have a proper shot; null if there is none
+  function placeWithAShot(st, u) {
+    const home = u.at;
+    let found = null;
+    for (const place of lineSides(st, u)) {
+      u.at = place;
+      if (bestTarget(st, u)) { found = place; break; }
+    }
+    // (only tried out: it goes back to where it stands)
+    u.at = home;
+    return found;
+  }
+
   // Where a German piece moves towards a goal (Steve: the same rules as yours): any route a Charge of yours could take,
   // as far, staying out of American fields; men climb hedge banks (the hedge stays) and are stopped by wire, tanks
   // drive through. The route that ends nearest the goal, if it gets any nearer
@@ -1790,6 +1841,20 @@ const Sim = (() => {
     }
     const t = bestTarget(st, u);
     if (t) { computerSays(st, `Fires on ${t.name}`); return { shooter: u.id, target: t.id }; }
+    // The PaK with no shot from here (Steve: it can move within its field): to a place in the field that has one. It
+    // can't fire after moving, but it lies in ambush there on the same go
+    if (PIECES[u.kind].fixed) {
+      const place = placeWithAShot(st, u);
+      if (place) {
+        u.at = place;
+        u.aim = faceOut(place);
+        computerSays(st, 'Moves its gun and lies in ambush');
+        rep.push(`🌳 ${u.name} moves to ${placeName(u.at)} and lies in ambush.`);
+        springAmbushes(st, u, []);
+        if (u.x !== null) u.ambush = true;
+        return null;
+      }
+    }
     // Americans just across a hedge it isn't lining: go to that hedge
     const across = st.units.find(o => o.side === 'us' && o.x !== null && acrossHedge(st, u, o) && !atHedge(u, o));
     if (across && !PIECES[u.kind].fixed) {
@@ -2171,8 +2236,9 @@ const Sim = (() => {
   }
   // Moved with Move & shoot but not firing after all (Steve: no Pass button): the shot is given up and the token is done
   function actSkipShot(st, u) {
-    if (!u || !u.halfShot) return { ok: false };
+    if (!u || (!u.halfShot && !u.mayAmbush)) return { ok: false };
     u.halfShot = false;
+    u.mayAmbush = false;
     return { ok: true, lines: [`⏭️ ${u.name} holds its fire.`] };
   }
 
@@ -2194,7 +2260,7 @@ const Sim = (() => {
     st.leftInBag = null;
     st.timerDrawn = false;
     // Shaken Germans stay shaken until their captain rallies them (Steve: only a rally clears it)
-    for (const u of st.units) u.halfShot = false;
+    for (const u of st.units) { u.halfShot = false; u.mayAmbush = false; }
     st.bag = { us: movable(st, 'us'), de: movable(st, 'de'), timer: ROUND_TIMER };
     // Tokens drawn so far this round (the timer can't be the first, Steve)
     st.drawnThisRound = 0;
@@ -2260,7 +2326,7 @@ const Sim = (() => {
     st.drawn = side;
     st.activeId = null;
     st.fx = [];
-    for (const u of st.units) u.halfShot = false;
+    for (const u of st.units) { u.halfShot = false; u.mayAmbush = false; }
     if (side !== st.human) {
       const pick = pickComputer(st);
       if (pick.gun) {
@@ -2309,7 +2375,7 @@ const Sim = (() => {
     const u = unitById(st, st.activeId);
     if (u.x === null) return true;
     const rallyLeft = u.kind === 'captain' && captainCanRally(st, u);
-    return !canAct(st, u) && !u.halfShot && !rallyLeft;
+    return !canAct(st, u) && !u.halfShot && !u.mayAmbush && !rallyLeft;
   }
 
   // Pass on the player's token, or finish with it
@@ -2320,7 +2386,7 @@ const Sim = (() => {
     if (done && done.x !== null) { done.acted = true; if (done.kind === 'captain') done.skipped = true; }
     st.drawn = null;
     st.activeId = null;
-    for (const u of st.units) u.halfShot = false;
+    for (const u of st.units) { u.halfShot = false; u.mayAmbush = false; }
   }
 
   // Can any of the player's pieces move on this token?
@@ -2426,7 +2492,7 @@ const Sim = (() => {
 
   return {
     firesOnTheMove, canAmbush, actAmbush, bestMoveShoot, bomberHeading, bomberEdges, bomberLine, bombNeed, bombWhy, bestBomberRun,
-    wreckAt, remove, computerSide, enemyOf, ammoOf, firedOf, gunStats,
+    wreckAt, remove, computerSide, enemyOf, ammoOf, firedOf, gunStats, edgeKey,
     newGame, roll, endTurn, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, chargeSpots,
     rallyTargets, canAct, canReact, firepower, canCallFire, holdsObjective, roundText, roomFor,
     startGermanHour, computerStep, answer, finishHour, startRound, drawToken, endComputerToken, activationOver, passToken, humanCanMove, endRound, canFire, actSkip, actSkipShot, skipSupport,

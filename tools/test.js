@@ -2503,5 +2503,122 @@ check('playing the Germans: nothing goes negative, out of range or crowded in 40
   assert(germanWins > 0, 'the Germans can never win');
 });
 
+check('the PaK moves within its field, on its own move: it never leaves the field and can\'t fire after', () => {
+  const st = tableAsGermans({ pak1: [9, 3], A: [0, 0] });
+  const pak = Sim.unitById(st, 'pak1');
+  pak.at = 'n+c';
+  assert(!Sim.chargeSpots(st, pak).length && !Sim.moveShootSpots(st, pak).length, 'the PaK could leave its field');
+  assert(Sim.lineSides(st, pak).length > 0, 'the PaK had nowhere to go in its field');
+  Sim.startRound(st);
+  st.drawn = 'de';
+  const r = Sim.actLine(st, pak, 'se');
+  assert(r.ok, 'the PaK would not move within its field');
+  assert(pak.x === 9 && pak.y === 3, 'it left its field');
+  assert(pak.at !== 'n+c' && pak.at.split('+').includes('se'), `it went to ${pak.at}`);
+  assert(pak.acted && !pak.halfShot, 'it should have used its move, with no shot after');
+  assert(!Sim.actShoot(st, pak, Sim.unitById(st, 'A')).ok, 'it fired after moving');
+  // It keeps clear of whoever else is in the field
+  const shared = tableAsGermans({ pak1: [9, 3], dmg1: [9, 3], A: [0, 0] });
+  const gun = Sim.unitById(shared, 'pak1'), mg = Sim.unitById(shared, 'dmg1');
+  gun.at = 'n+c'; mg.at = 'se';
+  assert(!Sim.lineSides(shared, gun).some(p => p.split('+').includes('se')), 'it could stand on the machine gun');
+});
+
+check('the German computer\'s PaK moves within its field only when that gives it a shot', () => {
+  // Over a hedge neither is touching: from a place in its field beside that hedge it can fire
+  const st = tableWith({ pak1: [9, 7], A: [8, 7] });
+  const pak = Sim.unitById(st, 'pak1'), A = Sim.unitById(st, 'A');
+  st.hedges[Sim.edgeKey(8, 7, 9, 7)] = true;
+  pak.at = 'ne+e'; A.at = null;
+  assert(!Sim.targets(st, pak).length, 'this needs a PaK with no shot from where it stands');
+  Sim.startRound(st);
+  st.computer = { queue: [pak.id], mortar: false, artillery: false, bomber: false, rep: [], ask: null, move: { id: pak.id, what: '' } };
+  for (let r = Sim.computerStep(st); !r.done; r = Sim.computerStep(st)) Sim.answer(st, false);
+  assert(pak.x === 9 && pak.y === 7, 'it left its field');
+  assert(pak.at !== 'ne+e', 'it stayed where it had no shot');
+  assert(Sim.targets(st, pak).includes(A), 'where it went gave it no shot');
+  assert(!st.fx.some(f => f.from && f.from.id === pak.id), 'it fired after moving');
+  assert(pak.ambush, 'it did not lie in ambush where it went');
+  // A shot from where it stands: it stays and fires
+  const open = tableWith({ pak1: [9, 7], A: [8, 7] });
+  const gun = Sim.unitById(open, 'pak1');
+  gun.at = 'w+c';
+  Sim.startRound(open);
+  open.computer = { queue: [gun.id], mortar: false, artillery: false, bomber: false, rep: [], ask: null, move: { id: gun.id, what: '' } };
+  const place = gun.at;
+  for (let r = Sim.computerStep(open); !r.done; r = Sim.computerStep(open)) Sim.answer(open, false);
+  assert(gun.at === place, 'it moved with a shot from where it stood');
+});
+
+check('the PaK can move within its field and lie in ambush on the same go, or not', () => {
+  const setUp = () => {
+    const st = tableAsGermans({ pak1: [9, 3], A: [0, 0], d2: [11, 0] });
+    const pak = Sim.unitById(st, 'pak1');
+    pak.at = 'n+c';
+    Sim.startRound(st);
+    st.drawn = 'de';
+    assert(Sim.actLine(st, pak, 'se').ok, 'the PaK would not move');
+    return { st, pak };
+  };
+  // Moved: the token stays open, with the ambush on offer and nothing else
+  const { st, pak } = setUp();
+  assert(pak.mayAmbush && !Sim.activationOver(st), 'the token ended before the ambush was offered');
+  assert(Sim.canAmbush(st, pak) && Sim.actAmbush(st, pak).ok, 'it could not lie in ambush after moving');
+  assert(pak.ambush && Sim.activationOver(st), 'the ambush did not end the token');
+  // Not wanted: the token ends with no ambush
+  const no = setUp();
+  assert(Sim.actSkipShot(no.st, no.pak).ok && !no.pak.ambush && Sim.activationOver(no.st), 'turning it down did not end the token');
+  assert(!Sim.canAmbush(no.st, no.pak), 'the offer stayed open');
+  // The token passing takes the offer with it
+  const passed = setUp();
+  Sim.passToken(passed.st);
+  assert(!passed.pak.mayAmbush, 'the offer outlived the token');
+  // Only the PaK: a platoon moving within its field fires or doesn't, as before
+  const other = tableAsGermans({ d2: [9, 3], A: [0, 0] });
+  const d2 = Sim.unitById(other, 'd2');
+  d2.at = 'nw';
+  Sim.startRound(other);
+  other.drawn = 'de';
+  assert(Sim.actLine(other, d2, 'se').ok && !d2.mayAmbush && !Sim.canAmbush(other, d2), 'a platoon got the PaK\'s ambush');
+});
+
+check('the PaK faces out of its square when it moves: eight ways, the way clicked', () => {
+  const eighth = Math.PI / 4;
+  const ways = { e: 0, ne: eighth, n: 2 * eighth, nw: 3 * eighth, w: 4 * eighth, sw: -3 * eighth, s: -2 * eighth, se: -eighth };
+  // Wherever it starts, a click on any of the eight areas moves it and faces it that way
+  for (const start of ['nw+w', 'n+c', 'c+e', 's+se']) {
+    for (const area in ways) {
+      const st = tableAsGermans({ pak1: [9, 3], A: [0, 0] });
+      const pak = Sim.unitById(st, 'pak1');
+      pak.at = start;
+      Sim.startRound(st);
+      st.drawn = 'de';
+      assert(Sim.actLine(st, pak, area).ok, `from ${start}, a click on ${area} did nothing`);
+      assert(pak.at !== start && pak.at.split('+').includes(area), `from ${start}, a click on ${area} went to ${pak.at}`);
+      assert(Math.abs(pak.aim - ways[area]) < 1e-9, `from ${start}, a click on ${area} faced ${pak.aim}`);
+    }
+  }
+  // The middle of the field: it faces the way it came from
+  const cameFrom = { 'nw+n': 'nw', 'nw+w': 'nw', 'n+ne': 'ne', 'ne+e': 'ne', 'w+sw': 'sw', 'sw+s': 'sw', 's+se': 'se', 'e+se': 'se', 'n+c': 'n', 'w+c': 'w', 'c+e': 'e', 'c+s': 's' };
+  for (const start in cameFrom) {
+    const st = tableAsGermans({ pak1: [9, 3], A: [0, 0] });
+    const pak = Sim.unitById(st, 'pak1');
+    pak.at = start;
+    Sim.startRound(st);
+    st.drawn = 'de';
+    assert(Sim.actLine(st, pak, null).ok && pak.at.split('+').includes('c') && pak.at !== start, `from ${start}, a click on the middle went to ${pak.at}`);
+    assert(Math.abs(pak.aim - ways[cameFrom[start]]) < 1e-9, `from ${start}, in the middle it faced ${pak.aim}, not back ${cameFrom[start]}`);
+  }
+  // Other pieces keep the old way of moving within a field
+  const d = tableAsGermans({ d2: [9, 3], A: [0, 0] });
+  const d2 = Sim.unitById(d, 'd2');
+  d2.at = 'nw';
+  const aimBefore = d2.aim;
+  Sim.startRound(d);
+  d.drawn = 'de';
+  Sim.actLine(d, d2, 'se');
+  assert(d2.aim === aimBefore, 'a platoon was turned as the PaK is');
+});
+
 console.log(failed ? `\n${failed} failed` : '\nall passed');
 process.exit(failed ? 1 : 0);

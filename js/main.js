@@ -20,7 +20,7 @@ window.Game = (() => {
     setTimeout(() => { if (game === gameNumber) fn(); }, ms);
   }
 
-  // The side the player commands: chosen under New game, and remembered on this computer
+  // The side the player commands: asked when the page opens and under New game, and remembered on this computer
   const SIDE_KEY = 'hedgerow-side';
   function rememberedSide() {
     try { return localStorage.getItem(SIDE_KEY) === 'de' ? 'de' : 'us'; } catch (e) { return 'us'; }
@@ -29,9 +29,8 @@ window.Game = (() => {
     try { localStorage.setItem(SIDE_KEY, side); } catch (e) { /* not remembered: this game still plays that side */ }
   }
 
-  // side: which side the player commands; left out, the side they had last
-  function start(seed, side) {
-    const human = side || (st ? st.human : rememberedSide());
+  // A fresh table, with nothing moving yet
+  function setTable(seed, human) {
     gameNumber++;
     drawing = false; computerPicked = null; shownMove = null; resultWaiting = false;
     Board.reset();
@@ -39,6 +38,12 @@ window.Game = (() => {
     G.state = st;
     UI.closeMenu();
     UI.setState(st);
+  }
+
+  // side: which side the player commands; left out, the side they have now
+  function start(seed, side) {
+    setTable(seed, side || st.human);
+    gameStarted = true;
     Sim.startRound(st);
     changed();
     // The first round's tokens fly into the bag once the pieces are on the table
@@ -390,6 +395,12 @@ window.Game = (() => {
   // with Rally by him and blue targets on who he can rally
   function offerRally() {
     const cap = UI.selected();
+    // The PaK has just moved within its field: its menu by it, to lie in ambush on the same go (Steve)
+    if (cap && cap.mayAmbush && st.activeId === cap.id) {
+      const box = board.getBoundingClientRect(), spot = Board.pieceScreen(cap);
+      UI.openMenu([cap], spot.x - box.left, spot.y - box.top, box);
+      return;
+    }
     // Only the captain, after his move, on his own token, with someone to rally
     if (!cap || cap.kind !== 'captain' || !cap.acted || st.activeId !== cap.id || !Sim.captainCanRally(st, cap)) return;
     const r = board.getBoundingClientRect(), p = Board.pieceScreen(cap);
@@ -444,12 +455,16 @@ window.Game = (() => {
   $('#sound-btn').onclick = () => { Sound.wake(); Sound.toggle(); soundIcon(); };
   soundIcon();
   $('#help [data-close]').onclick = () => { $('#help').hidden = true; };
-  // New game: which side (Steve: the player can be the Germans); the one they have now is lit
-  $('#new-btn').onclick = () => {
+  // Which side (Steve: the player can be the Germans); the one they have now is lit. Before the first game there is
+  // nothing to cancel back to
+  let gameStarted = false;
+  function askSide() {
     $('#side-us').className = st.human === 'us' ? 'on' : '';
     $('#side-de').className = st.human === 'de' ? 'on' : '';
+    $('#newgame [data-close]').hidden = !gameStarted;
     $('#newgame').hidden = false;
-  };
+  }
+  $('#new-btn').onclick = askSide;
   function startAs(side) {
     $('#newgame').hidden = true;
     rememberSide(side);
@@ -464,7 +479,10 @@ window.Game = (() => {
   // ---------- Start ----------
   Board.init(board);
   UI.init(changed);
-  start();
+  // The table waits behind the question (Steve: the game starts by asking which side)
+  setTable(undefined, rememberedSide());
+  changed();
+  askSide();
   fit();
   // The rules don't open at the start (Steve): How to play opens them
   requestAnimationFrame(frame);

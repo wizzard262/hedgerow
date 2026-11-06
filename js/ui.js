@@ -366,11 +366,11 @@ const UI = (() => {
     drawTail(best, left, top);
   }
 
-  // The fields lit up for the chosen piece (moves, charges, targets) and the targets' score bubbles, as boxes on the
-  // screen inside the table's box
+  // The fields lit up for the chosen piece (moves, charges, targets, the pieces the captain can rally) and the targets'
+  // score bubbles, as boxes on the screen inside the table's box
   function litFieldRects(box) {
     const aims = targets();
-    const fields = spots().concat(aims).map(f => {
+    const fields = spots().concat(aims, rallies()).map(f => {
       // The field's four corners on the table, seen through the camera
       const corners = [[0, 0], [1, 0], [1, 1], [0, 1]].map(([dx, dy]) => Board.screenPoint(f.x + dx, f.y + dy));
       const xs = corners.map(p => p.x - box.left), ys = corners.map(p => p.y - box.top);
@@ -413,7 +413,10 @@ const UI = (() => {
     const canSkip = Sim.canAct(st, u) || (u.kind === 'captain' && Sim.canRally(st, u));
     // Any piece can lie in ambush instead (Steve): it gives up its move and waits, until it fires or the round ends
     b.push({ mode: 'ambush', label: '🪤 Ambush', ok: Sim.canAmbush(st, u), title: 'Give up its move and wait: it fires as soon as an enemy moves or shoots in its sight, if it can hit on 6 or less. Ends with the round', run: () => Sim.actAmbush(st, u) });
-    b.push({ mode: 'skip', label: '⏭️ Skip turn', ok: canSkip, title: 'Give up its move this round (the token is used)', run: () => Sim.actSkip(st, u) });
+    // (the PaK just moved within its field has used its move: it has No ambush instead, below)
+    if (!u.mayAmbush) b.push({ mode: 'skip', label: '⏭️ Skip turn', ok: canSkip, title: 'Give up its move this round (the token is used)', run: () => Sim.actSkip(st, u) });
+    // The PaK has just moved within its field and needn't lie in ambush: the token is done
+    if (u.mayAmbush) b.push({ mode: 'skipShot', label: '⏭️ No ambush', ok: true, title: 'Don\'t lie in ambush; the token is used', run: () => Sim.actSkipShot(st, u) });
     // Moved with Move & shoot and not wanting to fire (Steve: no Pass button): skip the shot, and the token is done
     if (u.halfShot) b.push({ mode: 'skipShot', label: '⏭️ Skip the shot', ok: true, title: 'Don\'t fire after moving; the token is used', run: () => Sim.actSkipShot(st, u) });
     return b;
@@ -533,7 +536,7 @@ const UI = (() => {
     const elite = u.quality === 'elite' ? ` · <b class="elite">Elite</b> (${u.side === 'us' ? 'Rangers' : 'Fallschirmjäger'}: −1 to hit)` : '';
     const nation = u.side === st.human ? '' : u.side === 'de' ? 'German · ' : 'American · ';
     box.append(el('div', 'sub', `${nation}${KIND[u.kind]}${elite}${Sim.hasCutters(u) ? ' · hedge cutters' : ''}`));
-    const where = u.kind === 'pak' ? '' : `📍 At ${Sim.placeName(u.at)}`;
+    const where = `📍 At ${Sim.placeName(u.at)}`;
     box.append(el('div', 'stats', [strength, dice, armour, where, status].filter(Boolean).map(s => `<span>${s}</span>`).join('')));
     // The enemy's piece: just what it is (Steve), no actions
     if (u.side !== st.human) return;
