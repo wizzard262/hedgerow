@@ -1269,9 +1269,32 @@ const Sim = (() => {
   // Every piece but a dug-in gun can charge; captains and teams only into empty fields. A shaken piece charges half as
   // far (Steve)
   function chargeRoutes(st, u) {
-    if (PIECES[u.kind].fixed) return [];
+    // The PaK: only to another field of the large village it stands in (Steve), straight there
+    if (PIECES[u.kind].fixed) return villageFieldsFor(st, u).map(f => [{ x: f.x, y: f.y }]);
     // (routesFor decides who can go into an enemy's field: a rifle platoon to fight, a tank to drive the men out)
     return routesFor(st, u, reach(u, CHARGE_MOVES), true);
+  }
+
+  // The fields of the village a field belongs to, joined side by side (a lane between two villages parts them)
+  function villageBlock(x, y) {
+    if (tileType(x, y) !== 'village') return [];
+    const block = [{ x, y }];
+    for (let i = 0; i < block.length; i++) {
+      for (const [dx, dy] of NEIGHBOURS) {
+        const nx = block[i].x + dx, ny = block[i].y + dy;
+        if (!inside(nx, ny) || tileType(nx, ny) !== 'village' || block.some(f => f.x === nx && f.y === ny)) continue;
+        block.push({ x: nx, y: ny });
+      }
+    }
+    return block;
+  }
+
+  // The other fields a PaK can move to (Steve): only in the large village of four fields, and only those with room for it
+  // and no enemy in them
+  function villageFieldsFor(st, u) {
+    const block = villageBlock(u.x, u.y);
+    if (block.length !== PAK_VILLAGE_FIELDS) return [];
+    return block.filter(f => (f.x !== u.x || f.y !== u.y) && roomFor(st, u, f.x, f.y));
   }
 
   // How far a piece can go (Steve): a shaken piece can always move or charge, but only half as far (at least one field)
@@ -1391,7 +1414,14 @@ const Sim = (() => {
     const route = canAct(st, u) && chargeRoutes(st, u).find(r => r[r.length - 1].x === x && r[r.length - 1].y === y);
     if (!route) return { ok: false };
     spend(st, u);
+    const from = { x: u.x, y: u.y };
     const lines = chargeAlong(st, u, route, side);
+    // The PaK moved to another field of its village: it faces as it does moving within a field, and can lie in ambush
+    if (PIECES[u.kind].fixed && u.x !== null) {
+      const toMiddle = !side || side === 'c';
+      u.aim = toMiddle ? faceBackTo(u, from) : faceOut(u.at, side);
+      u.mayAmbush = true;
+    }
     return { ok: true, lines: [lines.join(', ') + '.'] };
   }
 
@@ -1439,6 +1469,12 @@ const Sim = (() => {
   function faceWayItCame(u, from) {
     const was = spotXY(u, from);
     const angle = Math.atan2(0 - was.y, was.x);
+    return Math.round(angle / (Math.PI / 4)) * (Math.PI / 4);
+  }
+
+  // The same from another field: the way it came, to the nearest of the eight ways
+  function faceBackTo(u, from) {
+    const angle = Math.atan2(u.y - from.y, from.x - u.x);
     return Math.round(angle / (Math.PI / 4)) * (Math.PI / 4);
   }
 
@@ -1815,16 +1851,24 @@ const Sim = (() => {
     return { shooter: u.id, target: t.id, moving: true };
   }
 
-  // A place in its own field from which a piece would have a proper shot; null if there is none
+  // A place from which the PaK would have a proper shot, { x, y, place }: in its own field, or another of its large village
+  // (Steve); null if there is none
   function placeWithAShot(st, u) {
-    const home = u.at;
+    const home = { x: u.x, y: u.y, at: u.at };
     let found = null;
-    for (const place of lineSides(st, u)) {
-      u.at = place;
-      if (bestTarget(st, u)) { found = place; break; }
+    const fields = [{ x: u.x, y: u.y }, ...villageFieldsFor(st, u)];
+    for (const f of fields) {
+      u.x = f.x; u.y = f.y;
+      for (const place of anchorsFor(u)) {
+        const samePlace = f.x === home.x && f.y === home.y && place === home.at;
+        if (samePlace || !fitsAt(st, u, f.x, f.y, place)) continue;
+        u.at = place;
+        if (bestTarget(st, u)) { found = { x: f.x, y: f.y, place }; break; }
+      }
+      if (found) break;
     }
     // (only tried out: it goes back to where it stands)
-    u.at = home;
+    u.x = home.x; u.y = home.y; u.at = home.at;
     return found;
   }
 
@@ -1910,10 +1954,12 @@ const Sim = (() => {
     // The PaK with no shot from here (Steve: it can move within its field): to a place in the field that has one. It
     // can't fire after moving, but it lies in ambush there on the same go
     if (PIECES[u.kind].fixed) {
-      const place = placeWithAShot(st, u);
-      if (place) {
-        u.at = place;
-        u.aim = faceOut(place);
+      const spot = placeWithAShot(st, u);
+      if (spot) {
+        // (to another field of its village, if that is where the shot is)
+        if (spot.x !== u.x || spot.y !== u.y) step(st, u, spot.x, spot.y);
+        u.at = spot.place;
+        u.aim = faceOut(spot.place);
         computerSays(st, 'Moves its gun and lies in ambush');
         rep.push(`🌳 ${u.name} moves to ${placeName(u.at)} and lies in ambush.`);
         springAmbushes(st, u, []);

@@ -514,7 +514,14 @@ const Board = (() => {
     const houses = ['village', 'hamlet'].includes(Sim.tileType(x, y));
     const reach = !houses ? OPEN : Sim.wreckAt(st, x, y) ? YARD_WITH_WRECK : YARD;
     for (const u of here) {
-      const g = model(u), p = Sim.spotXY(u);
+      const g = model(u);
+      // A piece being shot stays where it stands until the shot lands (Steve: a platoon down to one section takes one area
+      // at the hedge, and it went there before the shot arrived)
+      const field = x + ',' + y;
+      const keepsPlace = holding(u.id) && g.userData.spotField === field && g.userData.spot;
+      const p = keepsPlace ? g.userData.spot : Sim.spotXY(u);
+      g.userData.spot = p;
+      g.userData.spotField = field;
       if (u.kind === 'company') {
         // Pulled in a little from the edge, so the bases sit just inside the hedge
         const cx = 0.5 + p.x * reach.platoon, cz = 0.5 + p.y * reach.platoon;
@@ -700,7 +707,10 @@ const Board = (() => {
     scene.traverse(o => {
       // On a longer move, through each field of the way in turn
       const way = o.userData.way;
-      if (way && way.length && Math.hypot(way[0].x - o.position.x, way[0].z - o.position.z) < 0.12) way.shift();
+      // (an ambush shot on the way: it waits at that point until the shot has landed)
+      const waiting = way && way.length && way[0].holdUntil && performance.now() < way[0].holdUntil;
+      if (waiting) moving = true;
+      if (way && way.length && !waiting && Math.hypot(way[0].x - o.position.x, way[0].z - o.position.z) < 0.12) way.shift();
       const to = way && way.length ? Object.assign({}, way[0], { ry: o.userData.to.ry }) : o.userData.to;
       if (!to) return;
       // A tank drives there instead of sliding
@@ -874,7 +884,15 @@ const Board = (() => {
       }
       g.userData.way = way;
       g.userData.newTrail = null;
+      // Where an ambush shoots it on the way, it stops until the shot lands: where it set off, or a field it passes
+      for (const stop of g.userData.stops || []) {
+        if (stop.n === 0) { way.unshift({ x: g.position.x, z: g.position.z, y: 0, holdUntil: stop.until }); continue; }
+        const entry = way.find(w => Math.abs(w.x - (stop.x + offX)) < 1e-6 && Math.abs(w.z - (stop.y + offZ)) < 1e-6);
+        if (entry) entry.holdUntil = Math.max(entry.holdUntil || 0, stop.until);
+      }
     }
+    // (used, or for a piece that never set off)
+    for (const u of st.units) if (pieces[u.id]) pieces[u.id].userData.stops = null;
     for (const u of st.units) {
       if (!pieces[u.id]) continue;
       marker(u, ':shock', '#9b2a22', '!', u.shocked, 'back');
@@ -1446,7 +1464,48 @@ const Board = (() => {
   // How many rounds a shot sends (one from each base, five from an MG), as counted when it is fired
   const roundsOf = f => (f.weapon === 'mg' ? 5 : Math.max(1, f.bases || 1));
 
+  // An ambush on a piece on the move (Steve: it moved, then was shot, out of order): the shot waits until the piece has
+  // got to where it was seen. The rules have worked it all out at once; this only puts it on the table in order
+  const FIELD_TIME = { men: 0.5, tank: 0.7 };   // seconds to cross a field, a little over, so it gets there first
+  const STOP_AFTER_LANDING = 350;               // how long it stays there after the shot lands, in milliseconds
+  let stopsNow = new Map();                     // this batch of shots: piece id → { n, delay, until }
+
+  // When the shot at a piece on the move should go, in seconds from now, and which field along its way that is
+  function ambushStop(st, f) {
+    const none = { delay: 0 };
+    const g = f.midMove && f.to && pieces[f.to.id];
+    const u = g && st.units.find(o => o.id === f.to.id);
+    if (!u || !g.userData.field) return none;
+    const [fromX, fromY] = g.userData.field.split(',').map(Number);
+    const seen = { x: f.x, y: f.y };
+    const dead = u.x === null;
+    // The fields it goes through: to where it now stands, or, killed on the way, to where it was seen
+    const fields = dead ? [{ x: fromX, y: fromY }, seen] : [{ x: fromX, y: fromY }, ...(u.trail || []), { x: u.x, y: u.y }];
+    const n = Math.max(0, fields.findIndex(p => p.x === seen.x && p.y === seen.y));
+    // Killed on the way: it still goes there, to be shot where it was seen
+    if (dead && n > 0) {
+      const to = g.userData.to;
+      g.userData.to = { x: to.x + seen.x - fromX, z: to.z + seen.y - fromY, ry: to.ry };
+    }
+    const perField = Sim.isTank(u) ? FIELD_TIME.tank : FIELD_TIME.men;
+    const before = stopsNow.get(u.id);
+    let delay = n * perField;
+    if (before) delay = n === before.n ? before.delay : Math.max(delay, (before.until - performance.now()) / 1000 + (n - before.n) * perField);
+    return { delay, n, seen, last: fields.length - 1, id: u.id, g };
+  }
+
+  // The piece waits there until the shot has landed (at the end of its way it just stands)
+  function noteStop(stop, until) {
+    if (!stop.g) return;
+    const ends = until + STOP_AFTER_LANDING;
+    const before = stopsNow.get(stop.id);
+    stopsNow.set(stop.id, { n: stop.n, delay: stop.delay, until: Math.max(ends, before && before.n === stop.n ? before.until : 0) });
+    if (stop.n >= stop.last) return;
+    stop.g.userData.stops = (stop.g.userData.stops || []).concat([{ n: stop.n, x: stop.seen.x, y: stop.seen.y, until: ends }]);
+  }
+
   function startShots(st) {
+    stopsNow = new Map();
     for (const f of st.fx) {
       if (seenFx.has(f)) continue;
       seenFx.add(f);
@@ -1471,7 +1530,9 @@ const Board = (() => {
       // How many bases fire it: one round each (Steve)
       f.bases = shooter && pieces[shooter.id] ? pieces[shooter.id].userData.bases.filter(b => b.visible).length : 1;
       // (bombs keep to the plane's own time)
-      const t0 = f.kind === 'bomb' ? performance.now() : performance.now() + shots.filter(s => performance.now() - s.t0 < 300).length * 180 + turning;
+      // (an ambush on a piece on the move waits for it to get there)
+      const stop = ambushStop(st, f);
+      const t0 = f.kind === 'bomb' ? performance.now() : performance.now() + shots.filter(s => performance.now() - s.t0 < 300).length * 180 + turning + stop.delay * 1000;
       shots.push({ f, t0, objs: [] });
       // The target keeps its bases (or stays on the table) until this shot lands
       const target = f.to && pieces[f.to.id];
@@ -1480,6 +1541,7 @@ const Board = (() => {
         const lastRound = f.weapon === 'gun' ? (roundsOf(f) - 1) * TANK_GAP : 0;
         const land = f.from ? (f.weapon === 'gun' ? 0.25 : f.weapon === 'rocket' ? 0.45 : 0.35) + lastRound : f.kind === 'shell' || f.kind === 'bomb' ? shellFlight(f) : 0;
         const until = t0 + (land + 0.15) * 1000;
+        noteStop(stop, until);
         const before = held[f.to.id];
         held[f.to.id] = {
           until: Math.max(until, before ? before.until : 0),
@@ -1532,8 +1594,13 @@ const Board = (() => {
   // Where a shot leaves from and lands: the middle of the pieces' bases, a little above the table
   function shotEnds(f) {
     const tu = { id: f.to && f.to.id, x: f.x, y: f.y, kind: f.armour ? 'sherman' : 'company' };
-    // (an ambush on a piece on the move lands where it was seen, not where it is going)
-    const to = pieces[tu.id] && !f.midMove ? pieceCentre(tu) : new T.Vector3(f.x + 0.5, 0, f.y + 0.5);
+    // (an ambush on a piece on the move lands where it was seen, not where it is going: the same place in that field)
+    let to = new T.Vector3(f.x + 0.5, 0, f.y + 0.5);
+    if (pieces[tu.id]) {
+      to = pieceCentre(tu);
+      const g = pieces[tu.id];
+      if (f.midMove && g.userData.to) to = new T.Vector3(f.x + to.x - g.userData.to.x, to.y, f.y + to.z - g.userData.to.z);
+    }
     let from = null;
     if (f.from) from = pieces[f.from.id] ? pieceCentre({ id: f.from.id, x: f.from.x, y: f.from.y }) : new T.Vector3(f.from.x + 0.5, 0, f.from.y + 0.5);
     return { from, to };
@@ -2216,5 +2283,13 @@ const Board = (() => {
     return { x: r.left + (p.x + 1) / 2 * r.width, y: r.top + (1 - p.y) / 2 * r.height };
   }
 
-  return { reset, diceLeft, labelReport: () => labelReport, init, resize, render, fieldAt, pieceAt, pieceUnder, portrait, bounce, bounceGun, busyFor, settledIn, gunAt, targetAt, screenPoint, pieceScreen, labelBox, clearDice, respinCompass, flyToken, clearToken, returnTokens, canvas: () => renderer.domElement };
+  // Where a piece's first base is on the table this moment (for the checks in a browser)
+  function whereNow(id) {
+    const g = pieces[id];
+    if (!g) return null;
+    const b = g.userData.bases.find(o => o.visible) || g.userData.bases[0];
+    return { x: g.position.x + b.position.x, z: g.position.z + b.position.z, visible: g.visible, bases: g.userData.bases.filter(o => o.visible).length };
+  }
+
+  return { whereNow, reset, diceLeft, labelReport: () => labelReport, init, resize, render, fieldAt, pieceAt, pieceUnder, portrait, bounce, bounceGun, busyFor, settledIn, gunAt, targetAt, screenPoint, pieceScreen, labelBox, clearDice, respinCompass, flyToken, clearToken, returnTokens, canvas: () => renderer.domElement };
 })();

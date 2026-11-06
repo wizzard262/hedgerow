@@ -48,6 +48,7 @@ const CLIMB = 1;                 // extra moves it costs men to climb a hedge ba
 const SHAKEN_SHOOT = 1;          // a shaken piece needs one more to hit
 const SHAKEN_MOVE = 0.5;         // a shaken piece still moves and charges, but only half as far (rounded down, at least one field)
 const MIN_NEED = 2;              // no shot needs less than this (Steve): a 1 always misses
+const PAK_VILLAGE_FIELDS = 4;    // a village this big (Steve): the PaK can move about all of it
 const MAX_NEED = 6;              // past this a shot is a Hail Mary (Steve): throw a 6, then throw another 6 to hit, about 3%
 const WOUND_CHANCE = 0.5;        // each hit is a coin toss: heads it wounds (a section, a team or a tank lost); every hit shakes
 const QUALITY = { elite: { name: 'Elite', shoot: 1, assault: 1.3 }, standard: { name: 'Standard', shoot: 0, assault: 1 } };

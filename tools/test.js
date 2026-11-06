@@ -2932,5 +2932,54 @@ check('two humans: taking cover counts in the dice, and the German must still de
   assert(!last.won && !last.lost, 'the game ended with an American piece still on the table');
 });
 
+check('the PaK in the large village can move all round it; anywhere else it stays in its field', () => {
+  // The four fields of the large village: x 7 and 8, y 3 and 4
+  const st = tableAsGermans({ pak1: [8, 4], A: [0, 0] });
+  const pak = Sim.unitById(st, 'pak1');
+  pak.at = 'n+c';
+  const spots = Sim.chargeSpots(st, pak).map(p => `${p.x},${p.y}`).sort();
+  assert(spots.join(' ') === '7,3 7,4 8,3', `it could go to ${spots}`);
+  assert(!Sim.moveShootSpots(st, pak).length, 'it could fire after moving');
+  Sim.startRound(st);
+  st.drawn = 'de';
+  // Across the corner, straight there, facing the way clicked, its move used, and the ambush on offer
+  assert(Sim.actCharge(st, pak, 7, 3, 'nw').ok, 'it would not go across the village');
+  assert(pak.x === 7 && pak.y === 3 && pak.acted && pak.mayAmbush && !pak.halfShot, 'it did not arrive as it should');
+  assert(pak.at.split('+').includes('nw') && Math.abs(pak.aim - 3 * Math.PI / 4) < 1e-9, `it stands at ${pak.at} facing ${pak.aim}`);
+  assert(Sim.actAmbush(st, pak).ok && pak.ambush, 'it could not lie in ambush after going there');
+  // To the middle of another field: it faces back the way it came
+  const back = tableAsGermans({ pak1: [8, 4], A: [0, 0] });
+  const gun = Sim.unitById(back, 'pak1');
+  gun.at = 'n+c';
+  Sim.startRound(back);
+  back.drawn = 'de';
+  assert(Sim.actCharge(back, gun, 7, 4, null).ok, 'it would not go next door');
+  assert(Math.abs(gun.aim) < 1e-9, `going west to the middle it faced ${gun.aim}, not back east`);
+  // Not into a field the enemy holds
+  const held = tableAsGermans({ pak1: [8, 4], A: [7, 4], B: [0, 0] });
+  const spot2 = Sim.chargeSpots(held, Sim.unitById(held, 'pak1')).map(p => `${p.x},${p.y}`);
+  assert(!spot2.includes('7,4'), 'it could go into a field the Americans hold');
+  // Not in the small village, or out in a field
+  const small = tableAsGermans({ pak1: [8, 1], A: [0, 0] });
+  assert(!Sim.chargeSpots(small, Sim.unitById(small, 'pak1')).length, 'it could leave its field in the small village');
+  const open = tableAsGermans({ pak1: [9, 4], A: [0, 0] });
+  assert(!Sim.chargeSpots(open, Sim.unitById(open, 'pak1')).length, 'it could leave an open field');
+});
+
+check('the German computer\'s PaK goes across the large village when that is where a shot is', () => {
+  // Along the lane above the village, in sight only from its top fields
+  const st = tableWith({ pak1: [8, 4], A: [5, 2] });
+  st.objective = { x: 7, y: 1, name: 'Test' };
+  const pak = Sim.unitById(st, 'pak1'), A = Sim.unitById(st, 'A');
+  pak.at = 's+c'; A.at = null;
+  assert(!Sim.targets(st, pak).length, 'this needs no shot from where it stands');
+  Sim.startRound(st);
+  st.computer = { queue: [pak.id], mortar: false, artillery: false, bomber: false, rep: [], ask: null, move: { id: pak.id, what: '' } };
+  for (let r = Sim.computerStep(st); !r.done; r = Sim.computerStep(st)) Sim.answer(st, false);
+  assert(Sim.tileType(pak.x, pak.y) === 'village' && pak.x >= 7 && pak.x <= 8 && pak.y >= 3 && pak.y <= 4, `it left the village for ${pak.x},${pak.y}`);
+  assert(Sim.targets(st, pak).includes(A), 'where it went gave it no shot');
+  assert(pak.ambush, 'it did not lie in ambush there');
+});
+
 console.log(failed ? `\n${failed} failed` : '\nall passed');
 process.exit(failed ? 1 : 0);
