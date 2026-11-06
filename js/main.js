@@ -20,29 +20,33 @@ window.Game = (() => {
     setTimeout(() => { if (game === gameNumber) fn(); }, ms);
   }
 
-  // The side the player commands: asked when the page opens and under New game, and remembered on this computer
-  const SIDE_KEY = 'hedgerow-side';
-  function rememberedSide() {
-    try { return localStorage.getItem(SIDE_KEY) === 'de' ? 'de' : 'us'; } catch (e) { return 'us'; }
+  // Who plays each side: asked when the page opens and under New game, and remembered on this computer (see Sim.newGame)
+  const MODE_KEY = 'hedgerow-side';
+  const MODES = ['us', 'de', 'both', 'none'];
+  function rememberedMode() {
+    try {
+      const saved = localStorage.getItem(MODE_KEY);
+      return MODES.includes(saved) ? saved : 'us';
+    } catch (e) { return 'us'; }
   }
-  function rememberSide(side) {
-    try { localStorage.setItem(SIDE_KEY, side); } catch (e) { /* not remembered: this game still plays that side */ }
+  function rememberMode(mode) {
+    try { localStorage.setItem(MODE_KEY, mode); } catch (e) { /* not remembered: this game still plays that way */ }
   }
 
   // A fresh table, with nothing moving yet
-  function setTable(seed, human) {
+  function setTable(seed, mode) {
     gameNumber++;
-    drawing = false; computerPicked = null; shownMove = null; resultWaiting = false;
+    drawing = false; computerPicked = null; shownMove = null; resultWaiting = false; asking = false;
     Board.reset();
-    st = Sim.newGame(seed, human);
+    st = Sim.newGame(seed, mode);
     G.state = st;
     UI.closeMenu();
     UI.setState(st);
   }
 
-  // side: which side the player commands; left out, the side they have now
-  function start(seed, side) {
-    setTable(seed, side || st.human);
+  // mode: who plays each side; left out, as now
+  function start(seed, mode) {
+    setTable(seed, mode || st.mode);
     gameStarted = true;
     Sim.startRound(st);
     changed();
@@ -180,8 +184,8 @@ window.Game = (() => {
         if (st.computer.aim && others.length) aimedAt = t;
       }
       // Green rings under pieces that can still act this round, grey under those that have
-      const ready = st.computer || st.won || st.lost ? null : u => Sim.canAct(st, u) || Sim.captainCanRally(st, u);
-      const guns = st.computer || st.won || st.lost ? null : UI.supportState();
+      const ready = st.computer || st.won || st.lost || st.mode === 'none' ? null : u => Sim.canAct(st, u) || Sim.captainCanRally(st, u);
+      const guns = st.computer || st.won || st.lost || st.mode === 'none' ? null : UI.supportState();
       // Something done during the draw (a token landing starts the Germans' move) asks for another draw: keep that
       dirty = false;
       const same = !viewChanged, stateChanged = gameChanged;
@@ -213,6 +217,8 @@ window.Game = (() => {
     if (flying > 0) { later(drawNext, flying + 150); return; }
     const side = Sim.drawToken(st);
     if (!side) return nextRound();
+    // Two humans: the last player's choice goes with their token
+    if (st.mode === 'both') { UI.view.sel = null; UI.view.support = null; UI.view.mode = null; }
     changed();
     // The timer token (Steve): it lands on the table, and the round ends at once
     if (side === 'timer') {
@@ -220,7 +226,7 @@ window.Game = (() => {
       return;
     }
     UI.flyToken(side, () => {
-      if (side !== st.human) return chooseComputer();
+      if (Sim.isRobot(st, side)) return chooseComputer();
       // No American piece able to move on it: the token is used up
       if (!Sim.humanCanMove(st)) { Sim.passToken(st); Board.clearToken(); changed(); later(drawNext, 600); return; }
       changed();
@@ -241,7 +247,7 @@ window.Game = (() => {
 
   // Pass on an American token (no button for it now, Steve: each piece has Skip turn; the screenshot tool still uses it)
   function pass() {
-    if (st.won || st.lost || st.drawn !== st.human) return;
+    if (st.won || st.lost || st.computer || st.drawn !== st.human) return;
     UI.closeMenu();
     UI.view.mode = null;
     Sim.passToken(st);
@@ -320,10 +326,19 @@ window.Game = (() => {
 
   function openResult() {
     resultWaiting = false;
-    const ending = st.human === 'de' ? germanEnding() : americanEnding();
+    const twoAlike = st.mode === 'both' || st.mode === 'none';
+    const ending = twoAlike ? plainEnding() : st.mode === 'de' ? germanEnding() : americanEnding();
     $('#result-title').textContent = ending.title;
     $('#result-text').textContent = ending.text;
     $('#result').hidden = false;
+  }
+
+  // How it ended with no one player to win or lose it: two humans, or two robots
+  function plainEnding() {
+    if (st.draw) return { title: '🤝 A draw', text: st.report[0] };
+    if (st.lost) return { title: '🏆 The Germans win', text: st.report[0] };
+    const germansLeft = st.units.some(u => u.side === 'de' && u.x !== null);
+    return { title: germansLeft ? `🏆 The Americans take ${st.objective.name}` : '🏆 The Americans win', text: st.report[0] };
   }
 
   // How it ended for a player commanding the Americans: a side wiped out, the village taken, or time run out
@@ -348,10 +363,30 @@ window.Game = (() => {
 
   // ---------- Input ----------
 
+  // Two humans (Steve): each piece under fire is asked in turn, Stand fast or Take cover, by the other player; then the shot
+  let asking = false;
+  function askThenFire(pieces, fire) {
+    if (!pieces.length) { asking = false; fire(); return; }
+    asking = true;
+    const t = pieces.shift();
+    UI.closeMenu();
+    changed();
+    requestAnimationFrame(() => requestAnimationFrame(() => UI.openAsk(t, pull => {
+      if (pull) Sim.takeCover(st, t);
+      askThenFire(pieces, fire);
+    })));
+  }
+
   board.addEventListener('click', e => {
     if (e.target.closest('#menu')) return;
     // Waiting for Stand fast or Take cover: the rest of the table waits too
-    if (st.computer && st.computer.ask) return;
+    if ((st.computer && st.computer.ask) || asking) return;
+    // Two robots: nothing to command, any piece clicked just shows what it is
+    if (st.mode === 'none') {
+      const piece = Board.pieceUnder(st, e.clientX, e.clientY);
+      if (piece) { Sound.play('select'); Board.bounce(piece); UI.inspect(piece); changed(); }
+      return;
+    }
     const enemy = Sim.computerSide(st);
     UI.closeMenu();
     // The captain rallying: the blue target nearest the click (Steve)
@@ -359,7 +394,16 @@ window.Game = (() => {
     if (rallied && UI.rallyTarget(rallied)) { changed(); return; }
     // Shooting: the red cross-hair nearest the click, even one over a house
     const aimed = Board.targetAt(UI.targets(), e.clientX, e.clientY);
-    if (aimed && UI.shootTarget(aimed)) { hotTarget = null; changed(); offerRally(); if (st.won || st.lost) showResult(); return; }
+    const shotAsks = aimed ? UI.asksForShot(aimed) : null;
+    if (shotAsks) {
+      askThenFire(shotAsks, () => {
+        if (UI.shootTarget(aimed)) hotTarget = null;
+        changed();
+        offerRally();
+        if (st.won || st.lost) showResult();
+      });
+      return;
+    }
     // Your mortars or artillery off the board: choose them like a piece
     const gun = !st.computer && Board.gunAt(e.clientX, e.clientY, st.human);
     if (gun) {
@@ -380,16 +424,25 @@ window.Game = (() => {
     const foeField = !Sim.at(st, f.x, f.y, st.human).length && Sim.at(st, f.x, f.y, enemy).length;
     const foe = under && under.side === enemy ? under : !under && foeField ? Board.pieceAt(st, e.clientX, e.clientY, enemy) : null;
     if (foe && !UI.actsOn(f.x, f.y)) { Sound.play('select'); Board.bounce(foe); UI.inspect(foe); changed(); return; }
+    // A click on a lit field that fires: the other player is asked first, then the click goes through
+    const clicked = { x: e.clientX, y: e.clientY };
+    const fieldAsks = UI.asksForField(f.x, f.y);
+    if (fieldAsks && fieldAsks.length) { askThenFire(fieldAsks, () => clickOnField(f, clicked)); return; }
+    clickOnField(f, clicked);
+  });
+
+  // A click on a field: the chosen piece's action there, or the piece under the pointer chosen
+  function clickOnField(f, clicked) {
     // The one piece under the pointer (the nearest in the field if the click misses the models)
-    const mine = UI.clickField(f.x, f.y, Board.pieceAt(st, e.clientX, e.clientY, st.human), f.side);
+    const mine = UI.clickField(f.x, f.y, Board.pieceAt(st, clicked.x, clicked.y, st.human), f.side);
     changed();
     // Your pieces there: open their menu by the click
     // Picking the next piece clears the last shots' dice off the table
     // The pick-up sound as you choose it (Steve)
-    if (mine) { Sound.play('select'); Board.bounce(mine[0]); Board.clearDice(); const r = board.getBoundingClientRect(); UI.openMenu(mine, e.clientX - r.left, e.clientY - r.top, r); $('#tip').style.display = 'none'; }
+    if (mine) { Sound.play('select'); Board.bounce(mine[0]); Board.clearDice(); const r = board.getBoundingClientRect(); UI.openMenu(mine, clicked.x - r.left, clicked.y - r.top, r); $('#tip').style.display = 'none'; }
     else offerRally();
     if (st.won || st.lost) showResult();
-  });
+  }
 
   // The captain has moved or fired and can still rally someone (himself too): offer it straight away (Steve), his menu
   // with Rally by him and blue targets on who he can rally
@@ -439,7 +492,7 @@ window.Game = (() => {
   }
 
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape' && !(st.computer && st.computer.ask)) { UI.view.mode = null; UI.closeMenu(); changed(); }
+    if (e.key === 'Escape' && !(st.computer && st.computer.ask) && !asking) { UI.view.mode = null; UI.closeMenu(); changed(); }
   });
   $('#help-btn').onclick = openHelp;
   // The rules all on the screen at once: the text gets a little smaller until it fits (Steve: no scrolling)
@@ -455,23 +508,36 @@ window.Game = (() => {
   $('#sound-btn').onclick = () => { Sound.wake(); Sound.toggle(); soundIcon(); };
   soundIcon();
   $('#help [data-close]').onclick = () => { $('#help').hidden = true; };
-  // Which side (Steve: the player can be the Germans); the one they have now is lit. Before the first game there is
-  // nothing to cancel back to
+  // Who plays each side (Steve: human or robot, all four variations); what they had last is lit. Before the first game
+  // there is nothing to cancel back to
   let gameStarted = false;
+  const picked = { us: 'human', de: 'robot' };
+  function lightSides() {
+    for (const side of ['us', 'de']) for (const who of ['human', 'robot']) $(`#${side}-${who}`).className = picked[side] === who ? 'on' : '';
+  }
   function askSide() {
-    $('#side-us').className = st.human === 'us' ? 'on' : '';
-    $('#side-de').className = st.human === 'de' ? 'on' : '';
+    const mode = st.mode;
+    picked.us = mode === 'us' || mode === 'both' ? 'human' : 'robot';
+    picked.de = mode === 'de' || mode === 'both' ? 'human' : 'robot';
+    lightSides();
     $('#newgame [data-close]').hidden = !gameStarted;
     $('#newgame').hidden = false;
   }
   $('#new-btn').onclick = askSide;
-  function startAs(side) {
-    $('#newgame').hidden = true;
-    rememberSide(side);
-    start(undefined, side);
+  for (const side of ['us', 'de']) for (const who of ['human', 'robot']) {
+    $(`#${side}-${who}`).onclick = () => { picked[side] = who; lightSides(); };
   }
-  $('#side-us').onclick = () => startAs('us');
-  $('#side-de').onclick = () => startAs('de');
+  // The four variations, from the two choices
+  function pickedMode() {
+    if (picked.us === 'human') return picked.de === 'human' ? 'both' : 'us';
+    return picked.de === 'human' ? 'de' : 'none';
+  }
+  $('#start-game').onclick = () => {
+    const mode = pickedMode();
+    $('#newgame').hidden = true;
+    rememberMode(mode);
+    start(undefined, mode);
+  };
   $('#newgame [data-close]').onclick = () => { $('#newgame').hidden = true; };
   $('#again-btn').onclick = () => { $('#result').hidden = true; start(); };
   window.addEventListener('resize', fit);
@@ -480,7 +546,7 @@ window.Game = (() => {
   Board.init(board);
   UI.init(changed);
   // The table waits behind the question (Steve: the game starts by asking which side)
-  setTable(undefined, rememberedSide());
+  setTable(undefined, rememberedMode());
   changed();
   askSide();
   fit();

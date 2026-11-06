@@ -1870,7 +1870,9 @@ const Board = (() => {
   function shotTagText(st, f) {
     const shooter = f.from ? st.units.find(u => u.id === f.from.id) : null;
     const gunName = f.support === 'bomber' ? BOMBER_NAMES[f.side] : f.support === 'artillery' ? 'artillery' : 'mortars';
-    const whose = f.side === st.human ? 'Our' : f.side === 'de' ? 'German' : 'American';
+    // ("Our" only with one human playing: two humans, or two robots, have no "our")
+    const onePlayer = st.mode === 'us' || st.mode === 'de';
+    const whose = onePlayer && f.side === st.human ? 'Our' : f.side === 'de' ? 'German' : 'American';
     const who = shooter ? shooter.name : `${whose} ${gunName}`;
     const need = f.need > MAX_NEED ? 'HAIL MARY: 6, then 6' : `needs ${f.need}+`;
     const hits = f.faces.filter(r => r.hit).length;
@@ -1940,7 +1942,8 @@ const Board = (() => {
   // with its name and what it does, e.g. "1. Fallschirmjäger-Zug · Fires on 2nd Platoon"
   function computerMoveMark(st, m) {
     let spot, name, big;
-    const side = Sim.computerSide(st);
+    // (the move remembers its side: it stays on show after its token has ended)
+    const side = m.side || Sim.computerSide(st);
     if (m.gun) {
       // Their mortars or artillery, off the board
       const g = GUNS[side][m.gun];

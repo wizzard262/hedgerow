@@ -168,8 +168,10 @@ const Sim = (() => {
   // A small target (Steve): a piece of two men or fewer (the sniper, a bazooka team, the captain), one more to hit
   const smallTarget = u => !!u.kind && (PIECES[u.kind].men || 99) <= 2;
   const enemyOf = side => (side === 'us' ? 'de' : 'us');
-  // The side the computer plays: whichever the player doesn't (Steve: the player can be the Germans)
-  const computerSide = st => enemyOf(st.human);
+  // Is a side played by the computer? (Steve: each side can be a human or a robot)
+  const isRobot = (st, side) => st.players[side] === 'robot';
+  // The side the computer is playing now: the one on its token; otherwise whichever the player isn't
+  const computerSide = st => (st.computer && st.computer.side) || enemyOf(st.human);
   const adjacent = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y) === 1;
 
   // Is there room for a unit in a field? (Steve: the nine areas decide, see footprint.) Never with the enemy, except in
@@ -182,13 +184,17 @@ const Sim = (() => {
   }
 
 
-  // human: the side the player commands, 'us' or 'de'. st.won means the Americans won and st.lost the Germans did,
-  // whichever side the player has: the page turns that into a win or a loss for the player
-  function newGame(seed, human = 'us') {
+  // mode: who plays (Steve: all four variations): 'us' a human as the Americans, 'de' a human as the Germans, 'both' two
+  // humans, 'none' two robots. st.human is the side a person is commanding now: with two humans it changes with each
+  // token; with two robots nobody acts on it. st.won means the Americans won and st.lost the Germans did, whoever plays
+  // them: the page turns that into a win or a loss for the player
+  function newGame(seed, mode = 'us') {
     seed = seed || (Date.now() % 1e9);
+    const human = mode === 'de' ? 'de' : 'us';
+    const players = { us: mode === 'us' || mode === 'both' ? 'human' : 'robot', de: mode === 'de' || mode === 'both' ? 'human' : 'robot' };
     const R = rng(seed);
     const st = {
-      seed, human, turn: 1, hedges: {}, wire: {}, units: [], wrecks: [], report: [], fx: [],
+      seed, mode, human, players, turn: 1, hedges: {}, wire: {}, units: [], wrecks: [], report: [], fx: [],
       fired: {},          // fire support used this hour (the mortars and the guns each fire once an hour)
       ammo: { mortars: MORTARS.ammo, artillery: ARTILLERY.ammo, bomber: BOMBER.ammo },
       deMortarAmmo: DE_MORTAR.ammo, deArtilleryAmmo: DE_ARTILLERY.ammo, deBomberAmmo: BOMBER.ammo, won: false, lost: false,
@@ -789,7 +795,7 @@ const Sim = (() => {
   function fireAt(st, shooter, target, power, withdraw = false, moving = false, blast = false) {
     const f = firepower(st, shooter);
     // The computer's piece fired on takes cover when it is wise to (Steve), as you can
-    if (!withdraw && target.side !== st.human && computerTakesCover(st, target, menDice(f) * power, needFor(st, shooter, target, moving))) withdraw = true;
+    if (!withdraw && isRobot(st, target.side) && computerTakesCover(st, target, menDice(f) * power, needFor(st, shooter, target, moving))) withdraw = true;
     // Taking cover happens before the dice roll: its men are already down (and two more are needed)
     const pre = withdraw ? takeCover(st, target) : null;
     const need = needFor(st, shooter, target, moving);
@@ -1305,7 +1311,7 @@ const Sim = (() => {
   function springAmbushes(st, mover, lines, passing = false) {
     let stopped = false;
     // (the computer's moves are reported on its list)
-    const report = mover.side !== st.human && st.computer ? st.computer.rep : lines;
+    const report = isRobot(st, mover.side) && st.computer ? st.computer.rep : lines;
     const place = mover.at;
     if (passing) mover.at = null;
     const waiting = st.units.filter(a => a.ambush && a.side !== mover.side && a.x !== null);
@@ -1555,8 +1561,8 @@ const Sim = (() => {
       const caught = splash ? at(st, fx, fy) : at(st, fx, fy, enemyOf(side));
       for (const t of caught) {
         if (t.x === null) continue;
-        // The player's shells on the computer's piece: it takes cover first if it is wise to (Steve); then what each die needs
-        if (side === st.human && t.side !== st.human && computerTakesCover(st, t, n, shellNeed(st, t))) { const pre = takeCover(st, t); lines.push(pre.line); }
+        // Shells on a robot's piece: it takes cover first if it is wise to (Steve); then what each die needs
+        if (t.side !== side && isRobot(st, t.side) && computerTakesCover(st, t, n, shellNeed(st, t))) { const pre = takeCover(st, t); lines.push(pre.line); }
         const need = shellNeed(st, t);
         const faces = [];
         // Against a tank only the anti-tank dice count (its armour is in need); against men every die
@@ -1578,6 +1584,20 @@ const Sim = (() => {
     return lines;
   }
 
+  // Two humans (Steve): the other player's pieces a shot or a gun is about to fall on, to be asked Stand fast or Take cover
+  // before it does. which: 'shot', 'artillery', 'mortars' or 'bomber'. None when the other side is a robot: it decides
+  // for itself as the dice are thrown
+  function piecesToAsk(st, which, x, y, target) {
+    const foe = enemyOf(st.human);
+    if (isRobot(st, foe)) return [];
+    let pieces = [];
+    const oneOnly = which === 'shot' || (which === 'mortars' && st.human === 'de');
+    if (oneOnly) pieces = target ? [target] : [];
+    else if (which === 'bomber') pieces = bomberLine(x, y, bomberHeading(st, st.human)).flatMap(f => at(st, f.x, f.y, foe));
+    else pieces = shellFields(which, x, y, st.human).flatMap(f => at(st, f.x, f.y, foe));
+    return pieces.filter(p => canReact(st, p));
+  }
+
   // The player's mortars or artillery. target: the piece clicked, for German mortars, which drop on one piece only
   function actFire(st, which, x, y, target) {
     // The bomber has its own way of going in
@@ -1595,7 +1615,7 @@ const Sim = (() => {
     useRound(st, side, which);
     const S = gunStats(which, side);
     // The American computer's piece takes cover first if it is wise to, as it does under your other weapons
-    const ducks = onOnePiece && computerTakesCover(st, piece, S.dice, shellNeed(st, piece));
+    const ducks = onOnePiece && isRobot(st, piece.side) && computerTakesCover(st, piece, S.dice, shellNeed(st, piece));
     const lines = onOnePiece ? mortarOnOnePiece(st, piece, ducks) : fireMission(st, which, x, y, side);
     return { ok: true, lines: [`💥 ${S.name} fire on the field: ${lines.length ? lines.join(', ') : 'no hits'}.`] };
   }
@@ -1672,8 +1692,8 @@ const Sim = (() => {
     st.fx.push({ kind: 'flyover', side, x, y, heading, line });
     for (const field of line) {
       for (const t of at(st, field.x, field.y)) {
-        // The player's bomb on the computer's piece: it takes cover first if it is wise to, as under shells
-        const ducks = side === st.human && t.side !== st.human && computerTakesCover(st, t, BOMBER.dice, bombNeed(st, t));
+        // A bomb on a robot's piece: it takes cover first if it is wise to, as under shells
+        const ducks = t.side !== side && isRobot(st, t.side) && computerTakesCover(st, t, BOMBER.dice, bombNeed(st, t));
         if (ducks) lines.push(takeCover(st, t).line);
         // The score it needs, after any taking cover
         const need = bombNeed(st, t);
@@ -2112,7 +2132,9 @@ const Sim = (() => {
     }
     if (shot.mortar) {
       useRound(st, 'de', 'mortars');
-      const lines = mortarOnOnePiece(st, t, withdraw);
+      // (the American robot's piece decides for itself)
+      const ducks = withdraw || (isRobot(st, t.side) && computerTakesCover(st, t, DE_MORTAR.dice, shellNeed(st, t)));
+      const lines = mortarOnOnePiece(st, t, ducks);
       st.computer.rep.push(`🔺 German mortars on ${t.name}: ${lines.length ? lines.join(', ') : 'no hits'}.`);
       return;
     }
@@ -2123,6 +2145,9 @@ const Sim = (() => {
     // Shooting gives it away to any ambush that can see it (Steve)
     springAmbushes(st, u, []);
   }
+
+  // Is a person to be asked about this piece? It can still take cover, and a human commands it (a robot's decides for itself)
+  const askable = (st, u) => !isRobot(st, u.side) && canReact(st, u);
 
   // Run the German hour until it ends or a question needs the player. Returns { ask } or { done: true }
   // showAim (the page, Steve: the Germans show their targeting as yours do): each shot first comes back as { aim }, so
@@ -2136,14 +2161,14 @@ const Sim = (() => {
       st.computer.aim = null;
       // (the bomber's line, or the target of shells on a whole field, has been shown: they carry on below)
       if (!shot.bomber && !shot.fieldMission) {
-        if (canReact(st, unitById(st, shot.target))) { st.computer.ask = shot; return { ask: shot }; }
+        if (askable(st, unitById(st, shot.target))) { st.computer.ask = shot; return { ask: shot }; }
         resolveShot(st, shot, false);
       }
     }
     // Aim it (shown first on the page), or straight on to firing it
     const plan = shot => {
       if (showAim) { st.computer.aim = shot; return { aim: shot }; }
-      if (canReact(st, unitById(st, shot.target))) { st.computer.ask = shot; return { ask: shot }; }
+      if (askable(st, unitById(st, shot.target))) { st.computer.ask = shot; return { ask: shot }; }
       resolveShot(st, shot, false);
       return null;
     };
@@ -2168,7 +2193,7 @@ const Sim = (() => {
       computerSays(st, t ? `Shells ${t.name}` : 'Holds fire: no target');
       if (t) {
         // Every piece of yours the shells will fall on is asked first (Steve: as the computer's all decide under yours)
-        const under = shellFields(fieldGun, t.x, t.y, side).flatMap(f => at(st, f.x, f.y, st.human));
+        const under = shellFields(fieldGun, t.x, t.y, side).flatMap(f => at(st, f.x, f.y, enemyOf(side)));
         st.computer.shelling = { which: fieldGun, x: t.x, y: t.y, target: t.id, asks: under.map(u => u.id) };
         // On the page, the target shows first
         if (showAim) { st.computer.aim = { fieldMission: true, artillery: fieldGun === 'artillery', target: t.id }; return { aim: st.computer.aim }; }
@@ -2178,7 +2203,7 @@ const Sim = (() => {
       const shelling = st.computer.shelling;
       while (shelling.asks.length) {
         const id = shelling.asks.shift();
-        if (canReact(st, unitById(st, id))) { st.computer.ask = { shelled: true, artillery: shelling.which === 'artillery', target: id }; return { ask: st.computer.ask }; }
+        if (askable(st, unitById(st, id))) { st.computer.ask = { shelled: true, artillery: shelling.which === 'artillery', target: id }; return { ask: st.computer.ask }; }
       }
       // All have chosen: the shells land
       st.computer.shelling = null;
@@ -2203,7 +2228,7 @@ const Sim = (() => {
       computerSays(st, run ? 'Flies in' : 'Stays away: nothing worth bombing');
       if (run) {
         // Your pieces under the line are each asked before it arrives (Steve); its own men aren't, as under your bomber
-        const under = bomberLine(run.x, run.y, bomberHeading(st, side)).flatMap(f => at(st, f.x, f.y, st.human));
+        const under = bomberLine(run.x, run.y, bomberHeading(st, side)).flatMap(f => at(st, f.x, f.y, enemyOf(side)));
         st.computer.run = { x: run.x, y: run.y, asks: under.map(u => u.id) };
         // On the page, the line shows first
         if (showAim) { st.computer.aim = { bomber: true }; return { aim: st.computer.aim }; }
@@ -2214,7 +2239,7 @@ const Sim = (() => {
       // Each piece of yours under the line that can still get down
       while (run.asks.length) {
         const id = run.asks.shift();
-        if (canReact(st, unitById(st, id))) { st.computer.ask = { bombed: true, target: id }; return { ask: st.computer.ask }; }
+        if (askable(st, unitById(st, id))) { st.computer.ask = { bombed: true, target: id }; return { ask: st.computer.ask }; }
       }
       // All have chosen: it flies
       st.computer.run = null;
@@ -2373,16 +2398,18 @@ const Sim = (() => {
     st.activeId = null;
     st.fx = [];
     for (const u of st.units) { u.halfShot = false; u.mayAmbush = false; }
-    if (side !== st.human) {
-      const pick = pickComputer(st);
+    // A human's token: that side is the one being commanded now (with two humans it changes token by token)
+    if (!isRobot(st, side)) st.human = side;
+    if (isRobot(st, side)) {
+      const pick = pickComputer(st, side);
       if (pick.gun) {
         firedOf(st, side)[pick.gun] = true;
         activated(st, { side, gun: pick.gun });
-        st.computer = { queue: [], mortar: pick.gun === 'mortars', artillery: pick.gun === 'artillery', bomber: pick.gun === 'bomber', rep: st.roundRep, ask: null, move: { gun: pick.gun, what: '' } };
+        st.computer = { queue: [], mortar: pick.gun === 'mortars', artillery: pick.gun === 'artillery', bomber: pick.gun === 'bomber', rep: st.roundRep, ask: null, side, move: { gun: pick.gun, what: '', side } };
       } else {
         pick.unit.acted = true;
         activated(st, { side, id: pick.unit.id });
-        st.computer = { queue: [pick.unit.id], mortar: false, artillery: false, bomber: false, rep: st.roundRep, ask: null, move: { id: pick.unit.id, what: '' } };
+        st.computer = { queue: [pick.unit.id], mortar: false, artillery: false, bomber: false, rep: st.roundRep, ask: null, side, move: { id: pick.unit.id, what: '', side } };
       }
     }
     return side;
@@ -2390,8 +2417,8 @@ const Sim = (() => {
 
   // What moves on the computer's token: its guns if they have a target, then a piece with someone to shoot, then one that
   // could move and shoot, then any
-  function pickComputer(st) {
-    const side = computerSide(st), ammo = ammoOf(st, side), fired = firedOf(st, side);
+  function pickComputer(st, side) {
+    const ammo = ammoOf(st, side), fired = firedOf(st, side);
     const options = st.units.filter(u => u.side === side && u.x !== null && !u.acted).map(u => ({ unit: u, score: eagerness(st, u) + st.rand() }));
     if (ammo.mortars > 0 && !fired.mortars) options.push({ gun: 'mortars', score: (mortarTarget(st, side) ? 2.5 : -1) + st.rand() });
     if (ammo.artillery > 0 && !fired.artillery) options.push({ gun: 'artillery', score: (artilleryTarget(st, side) ? 2.5 : -1) + st.rand() });
@@ -2505,13 +2532,19 @@ const Sim = (() => {
     } else if (!st.units.some(u => u.side === 'us' && u.x !== null)) {
       st.lost = true;
       rep.unshift('💀 Nothing is left of the company. The attack has failed.');
-    } else if (st.human === 'us' && cannotWin(st)) {
-      // (playing the Germans, you win only by destroying every American piece, Steve; guns off the table don't count)
+    } else if (isRobot(st, 'de') && cannotWin(st)) {
+      // (a human playing the Germans wins only by destroying every American piece, Steve; guns off the table don't count)
       st.lost = true;
       rep.unshift('⌛ No rifle platoon is left to take the village, and nothing is left that can hurt the German tanks. The attack has failed.');
     } else if (TURNS && st.turn >= TURNS) {
       st.lost = true;
       rep.unshift(`⌛ After ${TURNS} rounds the attack has run out of time short of ${st.objective.name}.`);
+    }
+    // Robot against robot: neither finished it in time, a draw
+    if (!st.won && !st.lost && st.mode === 'none' && st.turn >= ROBOT_ROUNDS) {
+      st.lost = true;
+      st.draw = true;
+      rep.unshift(`🤝 Neither side could finish it in ${ROBOT_ROUNDS} rounds. A draw.`);
     }
     if (!st.won && !st.lost) newTurn(st, rep);
     st.report = rep.length ? rep : ['A quiet round.'];
@@ -2538,7 +2571,7 @@ const Sim = (() => {
 
   return {
     firesOnTheMove, canAmbush, actAmbush, bestMoveShoot, bomberHeading, bomberEdges, bomberLine, bombNeed, bombWhy, bestBomberRun,
-    wreckAt, remove, computerSide, enemyOf, ammoOf, firedOf, gunStats, edgeKey, atCloseRange, closeCells,
+    wreckAt, remove, computerSide, isRobot, piecesToAsk, takeCover, enemyOf, ammoOf, firedOf, gunStats, edgeKey, atCloseRange, closeCells,
     newGame, roll, endTurn, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, chargeSpots,
     rallyTargets, canAct, canReact, firepower, canCallFire, holdsObjective, roundText, roomFor,
     startGermanHour, computerStep, answer, finishHour, startRound, drawToken, endComputerToken, activationOver, passToken, humanCanMove, endRound, canFire, actSkip, actSkipShot, skipSupport,

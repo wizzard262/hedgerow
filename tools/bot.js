@@ -162,6 +162,23 @@ function playAsGermans(seed, bot, maxRounds = 20) {
   return st;
 }
 
+// ---------- Two robots ----------
+
+// A game with no human: every token is the computer's, and nobody is ever asked anything
+function playRobots(seed) {
+  const st = Sim.newGame(seed, 'none');
+  while (!st.won && !st.lost) {
+    Sim.startRound(st);
+    for (let side = Sim.drawToken(st); side; side = Sim.drawToken(st)) {
+      if (side === 'timer') break;
+      for (let r = Sim.computerStep(st); !r.done; r = Sim.computerStep(st)) throw new Error('a robot was asked a question');
+      Sim.endComputerToken(st);
+    }
+    Sim.endRound(st);
+  }
+  return st;
+}
+
 if (require.main === module) {
   const n = +process.argv[2] || 100;
   let wins = 0, idle = 0, turns = 0;
@@ -171,4 +188,4 @@ if (require.main === module) {
   for (let s = 1; s <= n; s++) { const st = playAsGermans(s, true); if (st.lost && !st.draw) german++; if (st.won) americans++; }
   console.log(`as the Germans: the test player wins ${Math.round(german / n * 100)}%, the American computer ${Math.round(americans / n * 100)}%`);
 }
-module.exports = { play, playRound, playAsGermans };
+module.exports = { play, playRound, playAsGermans, playRobots };

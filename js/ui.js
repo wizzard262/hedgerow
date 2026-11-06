@@ -204,6 +204,36 @@ const UI = (() => {
     return ts[0] || null;
   }
 
+  // ---------- Two humans: who is asked before a shot (Steve) ----------
+
+  // The pieces to ask before firing on the target under a red cross-hair; null if that isn't a shot the player can make now
+  function asksForShot(t) {
+    if (view.mode && view.mode.startsWith('fire:')) {
+      const which = view.mode.slice(5);
+      return canFire(which) ? Sim.piecesToAsk(st, which, t.x, t.y, t) : null;
+    }
+    const u = selected();
+    if (!u) return null;
+    const moving = view.mode === 'halfShot';
+    const can = moving ? u.halfShot : Sim.canAct(st, u) && Sim.mayFire(u);
+    if (!can || !Sim.targets(st, u, moving).includes(t)) return null;
+    return Sim.piecesToAsk(st, 'shot', t.x, t.y, t);
+  }
+
+  // The same for a click on a lit field: a gun or the bomber on that field, or a shot at the best target in it; null if the
+  // click isn't one of those
+  function asksForField(x, y) {
+    if (!view.mode || !spots().some(p => p.x === x && p.y === y)) return null;
+    if (view.mode.startsWith('fire:')) {
+      const which = view.mode.slice(5);
+      if (!canFire(which)) return null;
+      return Sim.piecesToAsk(st, which, x, y, Sim.at(st, x, y, enemy())[0]);
+    }
+    if (view.mode !== 'shoot' && view.mode !== 'halfShot') return null;
+    const t = pickTarget(selected(), x, y);
+    return t ? Sim.piecesToAsk(st, 'shot', x, y, t) : null;
+  }
+
   // ---------- Clicking the table ----------
 
   // A click on the table: carry out the chosen action on a highlighted field, or choose the piece clicked (one piece,
@@ -522,7 +552,7 @@ const UI = (() => {
     }
     if (!u || u.x === null) {
       box.className = '';
-      box.innerHTML = `<div class="sub">Click one of your pieces on the table (or ${st.human === 'us' ? 'a German' : 'an American'} one to see what it is).</div>`;
+      box.innerHTML = st.mode === 'none' ? '<div class="sub">Click any piece on the table to see what it is.</div>' : `<div class="sub">Click one of your pieces on the table (or ${st.human === 'us' ? 'a German' : 'an American'} one to see what it is).</div>`;
       return;
     }
     // Its picture on the left (Steve), for your pieces and the Germans'
@@ -539,12 +569,12 @@ const UI = (() => {
     box.append(el('div', 'name', `${u.name}${u.quality === 'elite' ? ' ★' : ''}`));
     // Elite troops say so (Steve): Rangers or Fallschirmjäger, one less needed to hit
     const elite = u.quality === 'elite' ? ` · <b class="elite">Elite</b> (${u.side === 'us' ? 'Rangers' : 'Fallschirmjäger'}: −1 to hit)` : '';
-    const nation = u.side === st.human ? '' : u.side === 'de' ? 'German · ' : 'American · ';
+    const nation = u.side === st.human && st.mode !== 'none' ? '' : u.side === 'de' ? 'German · ' : 'American · ';
     box.append(el('div', 'sub', `${nation}${KIND[u.kind]}${elite}${Sim.hasCutters(u) ? ' · hedge cutters' : ''}`));
     const where = `📍 At ${Sim.placeName(u.at)}`;
     box.append(el('div', 'stats', [strength, dice, armour, where, status].filter(Boolean).map(s => `<span>${s}</span>`).join('')));
     // The enemy's piece: just what it is (Steve), no actions
-    if (u.side !== st.human) return;
+    if (u.side !== st.human || st.mode === 'none') return;
     const acts = el('div'); acts.id = 'actions'; acts.style.marginTop = '6px';
     // (Ambush is in the piece's pop-up menu only, Steve: the panel has no room for a fifth button)
     for (const a of actionButtons(u).filter(o => o.mode !== 'ambush')) {
@@ -558,9 +588,11 @@ const UI = (() => {
 
   function hint() {
     const u = selected();
-    const computerToken = st.drawn && st.drawn !== st.human;
-    const theirToken = st.human === 'us' ? 'German token: a German piece moves…' : 'American token: an American piece moves…';
-    const text = !view.mode ? (computerToken ? theirToken : st.drawn === st.human ? (st.activeId ? 'Finish its move (or Skip in its menu).' : 'Your token: pick one piece and give it its move (or Skip turn in its menu).') : 'Drawing a token…')
+    const computerToken = st.drawn && Sim.isRobot(st, st.drawn);
+    const theirToken = st.drawn === 'de' ? 'German token: a German piece moves…' : 'American token: an American piece moves…';
+    // Two humans (Steve): whose token it is, as they share the screen
+    const yours = st.mode === 'both' ? `${st.human === 'us' ? 'American' : 'German'} player, your token` : 'Your token';
+    const text = !view.mode ? (computerToken ? theirToken : st.drawn === st.human ? (st.activeId ? 'Finish its move (or Skip in its menu).' : `${yours}: pick one piece and give it its move (or Skip turn in its menu).`) : 'Drawing a token…')
       : view.mode === 'fire:bomber' ? 'Point at a lit field on the edge of the board to see the line; click it to send the bomber through.'
       : view.mode.startsWith('fire:') ? `Click a red target, or a field with ${foes()} your troops can see.`
       : view.mode === 'halfShot' ? 'Moved. Click a red target to fire on it (one more needed on the move), or Esc to hold fire.'
@@ -575,7 +607,9 @@ const UI = (() => {
 
   function update() {
     $('#clock').innerHTML = `<b>Round ${st.turn}</b>${TURNS ? ` of ${TURNS}` : ''} · ${START_DATE}`;
-    $('#goal').textContent = st.human === 'de'
+    $('#goal').textContent = st.mode === 'none'
+      ? `🎯 Two robots: the Americans attack ${st.objective.name}, the Germans hold it. Click any piece to see what it is.`
+      : st.human === 'de'
       ? `🎯 Destroy every American piece on the table (guns and bomber off it don't count). Don't let them hold ${st.objective.name} at a round's end.`
       : `🎯 Take ${st.objective.name} and hold it at the end of a round, or destroy every German${TURNS ? `, within ${TURNS} rounds` : ' (no time limit for now)'}.`;
     card(); hint(); bag();
@@ -632,5 +666,5 @@ const UI = (() => {
     refresh = onChange;
   }
 
-  return { init, setState, update, clickField, openMenu, openGunMenu, openAsk, closeMenu, inspect, actsOn, spots, moveSpotsFor, targets, shootTarget, rallies, rallyTarget, view, selected, selectSupport, supportState, flyToken, returnTokens, KIND };
+  return { init, setState, update, asksForShot, asksForField, clickField, openMenu, openGunMenu, openAsk, closeMenu, inspect, actsOn, spots, moveSpotsFor, targets, shootTarget, rallies, rallyTarget, view, selected, selectSupport, supportState, flyToken, returnTokens, KIND };
 })();

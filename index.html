@@ -110,6 +110,9 @@
   #help .buttons { margin-top: 6px; }
   .modal ul { padding-left: 18px; }
   .modal li { margin: 4px 0; }
+  /* Who commands each side: a row for each, Human or Robot (Steve) */
+  .side-row { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
+  .side-row b { width: 90px; }
   .modal .buttons { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
 
   @media (max-width: 900px) {
@@ -123,7 +126,7 @@
 <aside id="panel">
   <div class="brand">
   <div class="top">
-    <h1>HEDGEROW <span id="ver" style="font-size:11px;color:var(--muted);letter-spacing:0">v117</span> <a id="prompts-link" href="prompts.html" target="_blank" rel="noopener" title="How the game was made, prompt by prompt">Prompts</a></h1>
+    <h1>HEDGEROW <span id="ver" style="font-size:11px;color:var(--muted);letter-spacing:0">v118</span> <a id="prompts-link" href="prompts.html" target="_blank" rel="noopener" title="How the game was made, prompt by prompt">Prompts</a></h1>
     <div class="links"><button id="sound-btn" title="Sound on or off">🔊</button><button id="help-btn">How to play</button><button id="new-btn">New game</button></div>
   </div>
   <div id="clock"></div>
@@ -147,8 +150,10 @@
 <div class="modal" id="newgame" hidden>
   <div class="card">
     <h2>New game</h2>
-    <p>Which side will you command?</p>
-    <div class="buttons"><button id="side-us">Play the Americans</button><button id="side-de">Play the Germans</button><button data-close>Cancel</button></div>
+    <p>Who commands each side?</p>
+    <div class="side-row"><b>Americans</b><button id="us-human">Human</button><button id="us-robot">Robot</button></div>
+    <div class="side-row"><b>Germans</b><button id="de-human">Human</button><button id="de-robot">Robot</button></div>
+    <div class="buttons"><button id="start-game">Start</button><button data-close>Cancel</button></div>
   </div>
 </div>
 
@@ -158,7 +163,7 @@
     <p>Tuesday 11 July 1944, Normandy. Your American rifle company must fight through the bocage, field by field, and take a village three fields in from the German end of the board (Saint-Jean or La Haye: it changes each game), then hold it at the end of a round, or destroy every German on the field. The game is played in rounds; there is no limit for now. The moment one side has no pieces left, the game is over (the round isn't finished); if one mission or bomb takes the last of both sides, it is a draw. You lose at the end of a round if you have no rifle platoon left and nothing left that can hurt the German tanks. A German garrison holds the village; more Germans march up from the east.</p>
     <ul>
       <li>🪖 <b>Pieces</b>: your company: three rifle platoons (three sections of three men each, moving together), the captain, machine-gun and bazooka teams, a sniper, and two tanks: a Sherman and a Firefly. 1st Platoon is elite, and so is the Germans' 1. Fallschirmjäger-Zug: an elite piece has a gold band round the edge of each of its bases, its men look the part (and a ★ after its name): 1st Platoon are Rangers in brown, with the orange diamond on their helmets; the Fallschirmjäger wear the paratrooper's camouflage smock and black helmet. The other Germans are in field grey. Elite troops need one less to hit, in shooting and hand to hand. Your bases are green, the Germans' brown. The Germans: Fallschirmjäger platoons, MG 42 and Panzerschreck teams, a PaK 40 gun with its crew of three (it turns to face whatever it fires at), a Panzer IV and a Panther in panzer grey (the Panther's armour needs one more to hit, by shot or shell; every tank's armour shows in its panel and on the red label), and their captain with a red flag, who rallies their shaken pieces. Both captains can be shot and shelled like anyone else (a small target): one wound and he's gone.</li>
-      <li>🔄 <b>Playing the Germans</b>: the game starts by asking which side you command, and <b>New game</b> asks again. As the Germans you win only by destroying every American piece on the table; their mortars, artillery and bomber off the table don't count. You lose if a rifle platoon of theirs takes the village and holds it at the end of a round, with no Germans left in it, or if every German is destroyed. The computer plays the Americans and attacks. Everything else in these rules works the same, the other way round: your pieces fight with German weapons and your mortars drop on one piece, not a whole field.</li>
+      <li>🔄 <b>Human or robot</b>: the game starts by asking who commands each side, and <b>New game</b> asks again. Two humans share the screen and take turns token by token: a piece under fire is asked Stand fast or Take cover by the other player. Two robots play it out while you watch, a draw after 30 rounds. <b>Playing the Germans</b>: As the Germans you win only by destroying every American piece on the table; their mortars, artillery and bomber off the table don't count. You lose if a rifle platoon of theirs takes the village and holds it at the end of a round, with no Germans left in it, or if every German is destroyed. The computer plays the Americans and attacks. Everything else in these rules works the same, the other way round: your pieces fight with German weapons and your mortars drop on one piece, not a whole field.</li>
       <li>📋 <b>The bag</b>: each round a token goes in a blind bag for every piece on the table: green with a gold star for yours, grey with a black cross for the Germans', and one black timer token (a white sand-glass): when the timer is drawn the round ends there and then, whoever has still to move (it is never the first token out). Tokens are drawn one at a time; on yours, pick one piece and give it its move (or Skip turn in its menu); on theirs, a German piece moves. A piece destroyed, or one that loses its move, takes a token out. When the bag is empty the next round starts. The tokens left are shown in the bar at the bottom (the timer between the two sides'); the one drawn flies onto the table above that side's artillery and stays there until its move is over. Your mortars, artillery and bomber each have a token too, while they have rounds or a run left (with none left, they come out of the bag): on one of your tokens, firing them or flying the bomber uses it. Any piece or gun can <b>Skip turn</b> (in its menu): it gives up its move this round and the token is used.</li>
       <li>🔍 <b>Looking at a German piece</b>: click it to ring it and see its card in the bottom panel. Every card has a picture of the piece.</li>
       <li>🖱️ <b>Picking a piece</b> shows where it can go straight away (picking the captain also puts a blue target on every piece he can rally, himself too: click one to rally it; with nobody to rally there is no Rally; after he moves or fires, his menu opens again with Rally if he can still rally someone): red-hatched fields are a Move &amp; shoot (it moves there, then fires), the other marked fields a Charge. Click the field (where in it you want to stand) and that's the action. The menu by the piece has the rest.</li>
@@ -188,14 +193,14 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="js/data.js?v=117"></script>
-<script src="js/sim.js?v=117"></script>
-<script src="js/sound.js?v=117"></script>
-<script src="js/models.js?v=117"></script>
-<script src="js/fire.js?v=117"></script>
-<script src="js/labels.js?v=117"></script>
-<script src="js/board3d.js?v=117"></script>
-<script src="js/ui.js?v=117"></script>
-<script src="js/main.js?v=117"></script>
+<script src="js/data.js?v=118"></script>
+<script src="js/sim.js?v=118"></script>
+<script src="js/sound.js?v=118"></script>
+<script src="js/models.js?v=118"></script>
+<script src="js/fire.js?v=118"></script>
+<script src="js/labels.js?v=118"></script>
+<script src="js/board3d.js?v=118"></script>
+<script src="js/ui.js?v=118"></script>
+<script src="js/main.js?v=118"></script>
 </body>
 </html>

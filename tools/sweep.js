@@ -8,7 +8,7 @@ for (const arg of process.argv.slice(2).length ? process.argv.slice(2) : ['']) {
     data = data.replace(new RegExp(`const ${k} = [^;]+;`), `const ${k} = ${v};`);
   }
   const ctx = vm.createContext({ Math, Date, console, module: undefined, require });
-  const bot = read('tools/bot.js').replace(/const fs = [\s\S]*?load\('sim.js'\); \}/, '').replace(/if \(require.main[\s\S]*$/, 'this.play = play; this.playAsGermans = playAsGermans;');
+  const bot = read('tools/bot.js').replace(/const fs = [\s\S]*?load\('sim.js'\); \}/, '').replace(/if \(require.main[\s\S]*$/, 'this.play = play; this.playAsGermans = playAsGermans; this.playRobots = playRobots;');
   vm.runInContext(data + '\n' + read('js/sim.js') + '\nthis.Sim = Sim;\n' + bot, ctx);
   // With no time limit the bot plays up to 20 hours a game
   let wins = 0, idle = 0, turns = 0;
@@ -25,5 +25,15 @@ for (const arg of process.argv.slice(2).length ? process.argv.slice(2) : ['']) {
     if (lazy.lost && !lazy.draw) idleGerman++;
   }
   console.log((arg || 'as is').padEnd(60), `bot ${Math.round(wins / n * 100)}% (turn ${wins ? (turns / wins).toFixed(1) : '-'})  idle ${Math.round(idle / n * 100)}%`);
+  // Robot against robot
+  let usRobot = 0, deRobot = 0, drawn = 0, robotTurns = 0;
+  for (let s = 1; s <= n; s++) {
+    const st = ctx.playRobots(s);
+    robotTurns += st.turn;
+    if (st.draw) drawn++;
+    else if (st.won) usRobot++;
+    else deRobot++;
+  }
+  console.log(''.padEnd(60), `robots: Americans ${Math.round(usRobot / n * 100)}%  Germans ${Math.round(deRobot / n * 100)}%  draws ${Math.round(drawn / n * 100)}% (turn ${(robotTurns / n).toFixed(1)})`);
   console.log(''.padEnd(60), `as the Germans: bot ${Math.round(german / n * 100)}%  American computer ${Math.round(american / n * 100)}% (turn ${american ? (americanTurns / american).toFixed(1) : '-'})  unfinished ${Math.round(stuck / n * 100)}%  idle ${Math.round(idleGerman / n * 100)}%`);
 }

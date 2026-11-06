@@ -10,7 +10,7 @@ const { chromium } = require(path.join(__dirname, '..', '..', 'harrier-carrier-p
   page.on('pageerror', e => errors.push(e.message));
   await page.goto('http://localhost:8768/');
   // The game starts by asking which side
-  await page.click('#side-us');
+  await page.click('#start-game');
   await page.waitForTimeout(2500);
   // (the rules no longer open at the start)
   // Each hour: end it, answering every "take cover?" with Stand fast

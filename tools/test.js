@@ -2,7 +2,7 @@
 const fs = require('fs'), vm = require('vm'), path = require('path');
 const load = f => vm.runInThisContext(fs.readFileSync(path.join(__dirname, '..', 'js', f), 'utf8'));
 load('data.js'); load('sim.js');
-const { play, playAsGermans } = require('./bot.js');
+const { play, playAsGermans, playRobots } = require('./bot.js');
 
 let failed = 0;
 function check(name, fn) {
@@ -2324,7 +2324,9 @@ check('the table is drawn with no more pixels than the budget on a big screen, a
 // The table with the player as the Germans
 function tableAsGermans(places, seed = 3) {
   const st = tableWith(places, seed);
+  st.mode = 'de';
   st.human = 'de';
+  st.players = { us: 'robot', de: 'human' };
   return st;
 }
 // A token of a given side, as the bag would give it (no guns left, so it goes to a piece)
@@ -2791,6 +2793,143 @@ check('a 1 always misses: no shot needs less than 2+, and the label says why', (
   const shooter = Sim.unitById(armour, 'A'), panther = Sim.unitById(armour, 'dt2');
   shooter.at = null; panther.at = null;
   assert(Sim.shotNeed(armour, shooter, panther) === MIN_NEED, `a Panther at close range needed ${Sim.shotNeed(armour, shooter, panther)}`);
+});
+
+// ---------- Human or robot, each side (Steve): all four variations ----------
+
+check('the four variations: who is a robot, from the choice', () => {
+  const who = mode => { const st = Sim.newGame(5, mode); return [Sim.isRobot(st, 'us'), Sim.isRobot(st, 'de')].join(); };
+  assert(who('us') === 'false,true', 'a human American should face a German robot');
+  assert(who('de') === 'true,false', 'a human German should face an American robot');
+  assert(who('both') === 'false,false', 'two humans');
+  assert(who('none') === 'true,true', 'two robots');
+});
+
+check('two robots play whole games: nobody is asked, nothing goes wrong, and every game ends', () => {
+  const a = playRobots(11), b = playRobots(11);
+  assert(JSON.stringify(a.units) === JSON.stringify(b.units) && a.turn === b.turn, 'two games with seed 11 ended differently');
+  for (let seed = 1; seed <= 25; seed++) {
+    const st = playRobots(seed);
+    assert(st.won || st.lost, `seed ${seed}: it did not end`);
+    assert(st.turn <= ROBOT_ROUNDS, `seed ${seed}: it ran to round ${st.turn}`);
+    for (const u of live(st)) {
+      assert(u.platoons > 0 && Sim.inside(u.x, u.y), `seed ${seed}: ${u.name} at ${u.x},${u.y}`);
+      assert(fieldOk(st, u.x, u.y), `seed ${seed}: too many units share ${u.x},${u.y}`);
+    }
+    for (const n of [st.ammo.mortars, st.ammo.artillery, st.ammo.bomber, st.deMortarAmmo, st.deArtilleryAmmo, st.deBomberAmmo]) assert(n >= 0, `seed ${seed}: negative ammunition`);
+  }
+});
+
+check('two robots: both sides really play, and neither can be commanded', () => {
+  const st = Sim.newGame(4, 'none');
+  const sides = new Set();
+  Sim.startRound(st);
+  for (let side = Sim.drawToken(st); side && side !== 'timer'; side = Sim.drawToken(st)) {
+    sides.add(st.computer.side);
+    assert(st.computer.side === side, 'the token and the computer disagree about whose move it is');
+    assert(!st.units.some(u => Sim.canAct(st, u)), 'a person could command a robot\'s piece');
+    for (let r = Sim.computerStep(st); !r.done; r = Sim.computerStep(st)) throw new Error('a robot was asked');
+    Sim.endComputerToken(st);
+  }
+  assert(sides.size === 2, `only ${[...sides]} moved`);
+});
+
+check('two robots: too long a game is a draw', () => {
+  const st = tableWith({ A: [0, 0], d2: [11, 0] });
+  st.mode = 'none';
+  st.players = { us: 'robot', de: 'robot' };
+  st.turn = ROBOT_ROUNDS;
+  Sim.finishHour(st);
+  assert(st.draw && st.lost && !st.won, 'it did not end in a draw');
+  // Not before
+  const early = tableWith({ A: [0, 0], d2: [11, 0] });
+  early.mode = 'none';
+  early.players = { us: 'robot', de: 'robot' };
+  early.turn = ROBOT_ROUNDS - 1;
+  Sim.finishHour(early);
+  assert(!early.draw && !early.lost && !early.won, 'it ended too soon');
+});
+
+check('two humans: each token is commanded by its own side, and the other side can\'t move on it', () => {
+  const st = Sim.newGame(5, 'both');
+  const american = st.units.find(u => u.side === 'us' && u.kind === 'company');
+  const german = st.units.find(u => u.side === 'de' && u.kind === 'company');
+  Sim.startRound(st);
+  st.bag = { us: 1, de: 0, timer: 0 };
+  assert(Sim.drawToken(st) === 'us' && st.human === 'us' && !st.computer, 'the American token was not the American player\'s');
+  assert(Sim.canAct(st, american) && !Sim.canAct(st, german), 'the wrong side could act on the American token');
+  Sim.passToken(st);
+  st.bag = { us: 0, de: 1, timer: 0 };
+  assert(Sim.drawToken(st) === 'de' && st.human === 'de' && !st.computer, 'the German token was not the German player\'s');
+  assert(Sim.canAct(st, german) && !Sim.canAct(st, american), 'the wrong side could act on the German token');
+  // Each uses its own guns
+  assert(Sim.canFire(st, 'artillery'), 'the German player could not fire');
+  Sim.passToken(st);
+  st.bag = { us: 1, de: 0, timer: 0 };
+  Sim.drawToken(st);
+  assert(Sim.canFire(st, 'artillery'), 'the American player could not fire');
+});
+
+check('two humans: the other player is asked about a shot, shells or bombs; a robot never is', () => {
+  const both = Sim.newGame(5, 'both');
+  both.wire = {}; both.hedges = {};
+  for (const u of both.units) u.x = u.y = null;
+  const place = (st, id, x, y) => { const u = Sim.unitById(st, id); u.x = x; u.y = y; u.at = null; u.acted = false; return u; };
+  const A = place(both, 'A', 1, 5), d2 = place(both, 'd2', 3, 5), d5 = place(both, 'd5', 3, 4), dt1 = place(both, 'dt1', 4, 5);
+  Sim.startRound(both);
+  both.human = 'us';
+  assert(Sim.piecesToAsk(both, 'shot', 3, 5, d2).join() === [d2].join(), 'the piece shot at was not asked');
+  const shells = Sim.piecesToAsk(both, 'artillery', 3, 5, d2);
+  assert(shells.includes(d2) && shells.includes(d5), 'not every piece under the shells was asked');
+  assert(!shells.includes(dt1) && !shells.includes(A), 'a tank, or the player\'s own piece, was asked');
+  // Already moved: it can't be asked
+  d2.acted = true;
+  assert(!Sim.piecesToAsk(both, 'shot', 3, 5, d2).length, 'a piece that had moved was asked');
+  d2.acted = false;
+  // American mortars the whole field, German mortars the one piece
+  place(both, 'd3', 3, 5);
+  both.human = 'de';
+  const B = place(both, 'B', 3, 5), C = place(both, 'C', 3, 5);
+  assert(Sim.piecesToAsk(both, 'mortars', 3, 5, B).length === 1, 'German mortars asked more than the one piece');
+  both.human = 'us';
+  assert(Sim.piecesToAsk(both, 'mortars', 3, 5, d2).length > 1, 'American mortars asked only one piece');
+  // A robot decides for itself
+  const one = Sim.newGame(5, 'us');
+  const target = one.units.find(u => u.side === 'de' && u.kind === 'company');
+  target.x = 3; target.y = 5;
+  assert(!Sim.piecesToAsk(one, 'shot', 3, 5, target).length, 'a robot was asked');
+});
+
+check('two humans: taking cover counts in the dice, and the German must still destroy every American', () => {
+  const st = tableWith({ A: [1, 5], d2: [3, 5] });
+  st.mode = 'both';
+  st.players = { us: 'human', de: 'human' };
+  const A = Sim.unitById(st, 'A'), d2 = Sim.unitById(st, 'd2');
+  A.at = null; d2.at = null;
+  Sim.startRound(st);
+  st.drawn = 'us';
+  const before = Sim.needFor(st, A, d2);
+  Sim.takeCover(st, d2);
+  assert(Sim.needFor(st, A, d2) === before + TAKE_COVER, 'taking cover did not add two');
+  assert(Sim.actShoot(st, A, d2).ok, 'the shot did not go');
+  // With two humans the shot doesn't make its own choice to take cover
+  const again = tableWith({ A: [1, 5], d2: [3, 5] });
+  again.mode = 'both';
+  again.players = { us: 'human', de: 'human' };
+  const shaken = Sim.unitById(again, 'd2');
+  shaken.at = null; shaken.shocked = true;
+  Sim.unitById(again, 'A').at = null;
+  Sim.startRound(again);
+  again.drawn = 'us';
+  Sim.actShoot(again, Sim.unitById(again, 'A'), shaken);
+  assert(!shaken.down, 'a human\'s piece took cover by itself');
+  // No American platoon, nothing to hurt a tank: still no end, the German has to finish it
+  const last = tableWith({ mg1: [1, 1], dt1: [9, 3] });
+  last.mode = 'both';
+  last.players = { us: 'human', de: 'human' };
+  last.ammo = { mortars: 0, artillery: 0, bomber: 0 };
+  Sim.finishHour(last);
+  assert(!last.won && !last.lost, 'the game ended with an American piece still on the table');
 });
 
 console.log(failed ? `\n${failed} failed` : '\nall passed');

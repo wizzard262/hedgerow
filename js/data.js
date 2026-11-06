@@ -31,6 +31,7 @@ const WIRE = 0.5;                // chance a gap between two fields is closed by
 // The blind bag: as well as a token for each piece, black timer tokens (a white sand-glass); drawing one ends the round
 // there and then, whoever has still to move (Steve)
 const ROUND_TIMER = 1;
+const ROBOT_ROUNDS = 30;         // robot against robot: a draw after this many rounds, so a game can't run for ever
 const TURNS = 0;                 // rounds allowed (0: no limit for now, Steve)
 const START_DATE = 'Tue 11 July 1944';
 
