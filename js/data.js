@@ -27,7 +27,7 @@ const FEATURES = {
   carriage: { name: 'Railway carriage', blocksView: true },
   wagon: { name: 'Goods wagon', blocksView: true },
   signalbox: { name: 'Signal box', blocksView: true },
-  signal: { name: 'Signal', blocksView: true },
+  signal: { name: 'Signal', blocksView: false },   // (Steve: too thin to block the view)
   watertower: { name: 'Water tower', blocksView: true },
   coal: { name: 'Coal heap', blocksView: true },
 };
@@ -112,7 +112,7 @@ const MAPS = [
     de: { remove: ['dt2'], add: [{ id: 'dmg5', kind: 'mg42', name: 'MG 42 Team', reserve: true }] },
   },
   {
-    id: 'station', name: 'Train station', note: 'Houses and tracks: a railway yard with tracks everywhere, joining and parting. One or two engines, carriages and goods wagons, some loaded with coal, wheat or timber, stand all over it, with signal boxes, signals, water towers and coal heaps, all blocking the view like a tank, in new places each game. The tracks themselves have no effect.',
+    id: 'station', name: 'Train station', note: 'Houses and tracks: a railway yard with tracks everywhere, joining and parting. One or two engines, carriages and goods wagons, some loaded with coal, wheat or timber, stand all over it, with signal boxes, water towers and coal heaps, all blocking the view like a tank, and signals, which don't, in new places each game. The tracks themselves have no effect.',
     generated: 'yard',
     rows: [
       'tttttttttttt',

@@ -3381,7 +3381,7 @@ check('the train station: houses and tracks; many trucks and a few other things,
     assert(others.length >= 2, `seed ${seed}: only ${others.length} other things`);
     assert(st.map.joins.length >= 5, `seed ${seed}: only ${st.map.joins.length} joins`);
     for (const f of st.features) {
-      assert(f.blocksView, `${f.name} doesn't block the view`);
+      assert(f.blocksView === (f.kind !== 'signal'), `${f.name}: blocks the view is ${f.blocksView}`);
       assert(Sim.tileType(f.x, f.y) === 'yard', `${f.name} is not on the tracks`);
       assert(!f.areas.includes('c'), `${f.name} takes the middle`);
       // Room left for a big piece
@@ -3408,7 +3408,7 @@ check('the train station: houses and tracks; many trucks and a few other things,
 });
 
 check('railway tracks change nothing: as open ground for moving and for the view, and not a road for a tank', () => {
-  const st = Sim.newGame(3, 'us', 'station');
+  let st = Sim.newGame(3, 'us', 'station');
   st.features = [];
   for (const u of st.units) if (u.id !== 'T1' && u.id !== 'B' && u.id !== 'd2') u.x = u.y = null;
   const T1 = Sim.unitById(st, 'T1'), B = Sim.unitById(st, 'B'), d2 = Sim.unitById(st, 'd2');
@@ -3423,6 +3423,16 @@ check('railway tracks change nothing: as open ground for moving and for the view
   assert(Sim.chargeSpots(st, B).some(p => p.x === 4 && p.y === 5), 'men could not go three fields over the tracks');
   d2.x = 4; d2.y = 5; d2.at = null;
   assert(Sim.sight(st, B, d2), 'tracks blocked the view');
+  // A signal in the way doesn't block it, though nobody can stand on it
+  const signal = Sim.newGame(5, 'us', 'station');
+  signal.features = [{ x: 3, y: 5, kind: 'signal', area: 'c', areas: ['c'], blocksView: FEATURES.signal.blocksView, name: 'Signal' }];
+  for (const u of signal.units) if (u.id !== 'B' && u.id !== 'd2') u.x = u.y = null;
+  const b2 = Sim.unitById(signal, 'B'), d3 = Sim.unitById(signal, 'd2');
+  b2.x = 2; b2.y = 5; b2.at = 'e'; b2.platoons = 1;
+  d3.x = 4; d3.y = 5; d3.at = 'w'; d3.platoons = 1;
+  assert(Sim.sight(signal, b2, d3), 'a signal blocked the view');
+  assert(!Sim.fitsAt(signal, b2, 3, 5, 'c'), 'a piece could stand on a signal');
+  Sim.newGame(3, 'us', 'station');
   // A truck between them does block it
   st.features = [{ x: 3, y: 5, kind: 'wagon', areas: ['w', 'c', 'e'], blocksView: true, name: 'Railway truck' }];
   B.at = 'e'; d2.at = 'w'; B.platoons = 1; d2.platoons = 1;

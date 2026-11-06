@@ -369,8 +369,8 @@ const Sim = (() => {
   }
 
   // The railway yard (Steve: a train station): what stands on the tracks, new each game: one or two engines, mostly carriages
-  // and goods wagons, some loaded, a few signal boxes and signals and other things, each blocking the view like a tank; and
-  // where the tracks join. Each field has a track along its
+  // and goods wagons, some loaded, a few signal boxes and other things, each blocking the view like a tank, and signals, which
+  // don't; and where the tracks join. Each field has a track along its
   // north row of areas and one along its south row. The tracks themselves change nothing
   const YARD = { truck: 0.42, other: 0.1, joinInField: 0.18, joinToNext: 0.1 };
   const YARD_THINGS = ['signal', 'signal', 'signalbox', 'coal', 'watertower'];
