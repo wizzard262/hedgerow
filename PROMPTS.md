@@ -1309,9 +1309,10 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - (Assumed: "trucks" are railway wagons; "cola" is coal)
 - Hedge country plays exactly as before (300 test games). Tests: 188 pass; the browser check, no errors. Balance, 40 games: Train station test American 8% | test German 38%, American computer 57%, unfinished 5% | robots: Americans 20%, Germans 80%, draws 0%, 11.0 rounds
 
-## 221. Signals don't block the view (v130)
+## 221. Signals don't block the view (v130–v131)
 
 - Steve: signals do not block line of sight. A signal still takes its area, but pieces can see and shoot past it
+- (v130 had a slip in the words for the map that stopped the game loading; v131 puts it right. Neither was pushed)
 
 ## Sessions
 
