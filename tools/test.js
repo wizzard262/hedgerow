@@ -3027,14 +3027,14 @@ check('a gun that fired has its token in the next round\'s bag, on both sides al
 
 check('every map is the same size, has real tiles, and its villages are villages', () => {
   for (const map of MAPS) {
-    assert(map.rows.length === ROWS, `${map.id}: ${map.rows.length} rows`);
-    for (const row of map.rows) {
+    const played = Sim.newGame(1, 'us', map.id).map;
+    assert(played.rows.length === ROWS, `${map.id}: ${played.rows.length} rows`);
+    for (const row of played.rows) {
       assert(row.length === COLS, `${map.id}: row "${row}"`);
-      assert(/^[.ovhr#=|+]+$/.test(row), `${map.id}: odd tile in "${row}"`);
+      assert(/^[.ovhr#=|+sq]+$/.test(row), `${map.id}: odd tile in "${row}"`);
     }
-    assert(map.villages.length >= 1 && map.name && map.note, `${map.id}: not filled in`);
-    Sim.newGame(1, 'us', map.id);
-    for (const v of map.villages) assert(Sim.tileType(v.x, v.y) === 'village', `${map.id}: ${v.name} is not in a village`);
+    assert(played.villages.length >= 1 && map.name && map.note, `${map.id}: not filled in`);
+    for (const v of played.villages) assert(Sim.tileType(v.x, v.y) === 'village', `${map.id}: ${v.name} is not in a village`);
   }
   // Ids are all different
   assert(new Set(MAPS.map(m => m.id)).size === MAPS.length, 'two maps with the same id');
@@ -3131,6 +3131,115 @@ check('every map: robots and the test players finish games, and doing nothing ne
     }
     assert(robotsDone === 6, `${map.id}: robot games did not finish`);
   }
+  Sim.newGame(1);
+});
+
+check('Paris: a new maze each game, the same for the same seed: every street joined up, every village reachable', () => {
+  const boards = new Set();
+  for (let seed = 1; seed <= 40; seed++) {
+    const st = Sim.newGame(seed, 'us', 'paris');
+    boards.add(st.map.rows.join());
+    assert(Sim.newGame(seed, 'us', 'paris').map.rows.join() === st.map.rows.join(), `seed ${seed}: not the same board twice`);
+    const again = Sim.newGame(seed, 'us', 'paris');
+    assert(/^[vsq]+$/.test(again.map.rows.join('')), `seed ${seed}: something other than houses, streets and squares`);
+    // Every street and square joined to every other, along the streets
+    const paved = [];
+    for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) if (Sim.tileType(x, y) !== 'village') paved.push({ x, y });
+    const reached = new Set([`${paved[0].x},${paved[0].y}`]), open = [paved[0]];
+    while (open.length) {
+      const p = open.pop();
+      for (const q of paved) if (Sim.adjacent(p, q) && !reached.has(`${q.x},${q.y}`)) { reached.add(`${q.x},${q.y}`); open.push(q); }
+    }
+    assert(reached.size === paved.length, `seed ${seed}: streets cut off`);
+    // No hedges or wire in the city
+    assert(!Object.keys(again.hedges).length && !Object.keys(again.wire).length, `seed ${seed}: hedges in Paris`);
+    // The objective is houses on a street, towards the German end
+    const o = again.objective;
+    assert(Sim.tileType(o.x, o.y) === 'village' && o.x >= 6 && o.x <= 9, `seed ${seed}: objective at ${o.x},${o.y}`);
+    // Every piece has a place
+    for (const u of live(again)) assert(fieldOk(again, u.x, u.y), `seed ${seed}: too many in ${u.x},${u.y}`);
+  }
+  assert(boards.size > 30, `only ${boards.size} different boards in 40 games`);
+  Sim.newGame(1);
+});
+
+check('Paris: each little square has a café and a fountain, with room left for a platoon or a tank', () => {
+  for (let seed = 1; seed <= 30; seed++) {
+    const st = Sim.newGame(seed, 'us', 'paris');
+    const squares = [];
+    for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) if (Sim.tileType(x, y) === 'square') squares.push({ x, y });
+    assert(squares.length === 3, `seed ${seed}: ${squares.length} squares`);
+    for (const q of squares) {
+      const here = Sim.featuresAt(st, q.x, q.y);
+      const cafe = here.find(f => f.kind === 'cafe'), fountain = here.find(f => f.kind === 'fountain');
+      assert(cafe && cafe.areas.length === 3 && cafe.blocksView, `seed ${seed}: no café`);
+      assert(fountain && fountain.areas.length === 1 && !fountain.blocksView, `seed ${seed}: no fountain`);
+      assert(!fountain.areas.some(a => cafe.areas.includes(a)), `seed ${seed}: the fountain is in the café`);
+      // Empty the square: a platoon fits, and a tank
+      const platoon = st.units.find(u => u.kind === 'company'), tank = st.units.find(u => Sim.isTank(u));
+      for (const big of [platoon, tank]) {
+        const others = st.units.filter(u => u !== big && u.x === q.x && u.y === q.y);
+        const saved = others.map(u => [u.x, u.y]);
+        others.forEach(u => { u.x = u.y = null; });
+        assert(Sim.roomFor(st, big, q.x, q.y), `seed ${seed}: no room for ${big.name} in a square`);
+        others.forEach((u, i) => { [u.x, u.y] = saved[i]; });
+      }
+    }
+  }
+  Sim.newGame(1);
+});
+
+check('a café or a barn blocks the view as a tank does, and nobody stands on it; a fountain or pond can be seen over', () => {
+  // A row of three fields, a building along the north side of the middle one, the shooter and target lined up behind it
+  const set = (kind, side, area) => {
+    const st = tableWith({ B: [3, 5], d2: [5, 5] });
+    const placed = side ? { n: ['nw', 'n', 'ne'], s: ['sw', 's', 'se'] }[side] : [area];
+    st.features = [{ x: 4, y: 5, kind, side, area, areas: placed, blocksView: FEATURES[kind].blocksView, name: FEATURES[kind].name }];
+    const a = Sim.unitById(st, 'B'), b = Sim.unitById(st, 'd2');
+    return { st, a, b };
+  };
+  // Standing level with the north side of the fields: along the building, so blocked
+  const c = set('cafe', 'n');
+  c.a.at = 'n'; c.b.at = 'n';
+  c.a.platoons = 1; c.b.platoons = 1;
+  assert(!Sim.sight(c.st, c.a, c.b), 'a café did not block the view through it');
+  // Level with the south side: clear of it
+  c.a.at = 's'; c.b.at = 's';
+  assert(Sim.sight(c.st, c.a, c.b), 'a café blocked a view clear of it');
+  // A barn the same
+  const barn = set('barn', 'n');
+  barn.a.at = 'n'; barn.b.at = 'n'; barn.a.platoons = 1; barn.b.platoons = 1;
+  assert(!Sim.sight(barn.st, barn.a, barn.b), 'a barn did not block the view');
+  // A pond and a fountain can be seen over
+  const pond = set('pond', 'n');
+  pond.a.at = 'n'; pond.b.at = 'n'; pond.a.platoons = 1; pond.b.platoons = 1;
+  assert(Sim.sight(pond.st, pond.a, pond.b), 'a pond blocked the view');
+  // Nobody stands on any of them
+  const taken = set('cafe', 'n');
+  const small = Sim.unitById(taken.st, 'B');
+  small.platoons = 1;
+  for (const k of ['nw', 'n', 'ne']) assert(!Sim.fitsAt(taken.st, small, 4, 5, k), `a piece fits on the café at ${k}`);
+  assert(Sim.fitsAt(taken.st, small, 4, 5, 's'), 'a piece does not fit beside the café');
+  Sim.newGame(1);
+});
+
+check('Open farmland has its barns and duck pond, in fields with room round them; other maps have none', () => {
+  for (let seed = 1; seed <= 12; seed++) {
+    const st = Sim.newGame(seed, 'us', 'farmland');
+    assert(st.features.filter(f => f.kind === 'barn').length >= 3, 'not a few barns');
+    assert(st.features.filter(f => f.kind === 'pond').length === 1, 'no duck pond');
+    for (const f of st.features) {
+      assert(Sim.tileType(f.x, f.y) === 'field', `${f.name} is on a ${Sim.tileType(f.x, f.y)}`);
+      const tank = st.units.find(u => Sim.isTank(u));
+      const others = st.units.filter(u => u !== tank && u.x === f.x && u.y === f.y);
+      const saved = others.map(u => [u.x, u.y]);
+      others.forEach(u => { u.x = u.y = null; });
+      assert(Sim.roomFor(st, tank, f.x, f.y), `no room for a tank beside the ${f.name}`);
+      others.forEach((u, i) => { [u.x, u.y] = saved[i]; });
+    }
+    for (const u of live(st)) assert(fieldOk(st, u.x, u.y), `seed ${seed}: too many in ${u.x},${u.y}`);
+  }
+  assert(!Sim.newGame(1, 'us', 'hedges').features.length, 'the usual map has features');
   Sim.newGame(1);
 });
 

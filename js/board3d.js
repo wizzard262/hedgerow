@@ -317,18 +317,22 @@ const Board = (() => {
     for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
       const t = Sim.tileType(x, y), seed = x * 7 + y * 13;
       built.add(at(Models.field(t, t === 'field' && seed % 5 === 0, seed), x + 0.5, 0, y + 0.5, -Math.PI / 2, 0, 0));
-      if (t === 'laneEW' || t === 'crossroads') built.add(at(Models.lane(1, 0.3), x + 0.5, 0.001, y + 0.5, -Math.PI / 2, 0, 0));
-      if (t === 'laneNS' || t === 'crossroads') built.add(at(Models.lane(0.3, 1), x + 0.5, 0.0012, y + 0.5, -Math.PI / 2, 0, 0));
+      const cobbled = nearHouses(x, y);
+      if (t === 'laneEW' || t === 'crossroads') built.add(at(Models.lane(1, 0.3, cobbled), x + 0.5, 0.001, y + 0.5, -Math.PI / 2, 0, 0));
+      if (t === 'laneNS' || t === 'crossroads') built.add(at(Models.lane(0.3, 1, cobbled), x + 0.5, 0.0012, y + 0.5, -Math.PI / 2, 0, 0));
       // The river: water down the field, joined to the river or bridge above and below; a bridge carries the lane over
       if (t === 'river' || t === 'bridge') {
         const wet = (xx, yy) => Sim.inside(xx, yy) && ['river', 'bridge'].includes(Sim.tileType(xx, yy));
         const top = wet(x, y - 1) || y === 0 ? 0 : 0.3, bottom = wet(x, y + 1) || y === ROWS - 1 ? 1 : 0.7;
         built.add(at(Models.water(0.42, bottom - top), x + 0.5, 0, y + (top + bottom) / 2));
         if (t === 'bridge') built.add(at(Models.bridge(), x + 0.5, 0, y + 0.5));
+        // Reeds along the banks, here and there (Steve)
+        if (t === 'river') addReeds(x, y, seed);
       }
       if (t === 'orchard') for (const [ox, oz] of orchardTrees(seed)) built.add(at(Models.tree(seed + ox * 10 + oz * 3, 0.68 + ((ox * 31 + oz * 17) % 1) * 0.15), x + ox, 0, y + oz));
       if (t === 'village' || t === 'hamlet') addHouses(x, y, seed);
     }
+    for (const f of st.features) addFeature(f);
     // Fields, houses and trees never move: merged, they are drawn in a few goes
     Models.mergeParts(built);
     scene.add(built);
@@ -347,6 +351,39 @@ const Board = (() => {
   // Houses round the square (Steve): small ones, about as tall as a figure, two along each side of the field with gaps
   // between, their fronts facing in. They stand in a band just inside the edge; the pieces keep to the yard inside it
   // (see YARD in arrange), so none stands under a house
+  // A lane is cobbled where it runs beside a village or a hamlet (Steve: a few cobbled streets on every map); only to look at
+  function nearHouses(x, y) {
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      if (!Sim.inside(x + dx, y + dy)) continue;
+      const near = Sim.tileType(x + dx, y + dy);
+      if (near === 'village' || near === 'hamlet') return true;
+    }
+    return false;
+  }
+
+  // Clumps of reeds along each bank of a river field: some of the places along it, not all
+  const REEDS = { places: 4, chance: 0.55, bank: 0.25 };
+  function addReeds(x, y, seed) {
+    const R = (k => () => { k = (k * 16807) % 2147483647; return k / 2147483647; })(seed * 97 + 13);
+    for (const bank of [-1, 1]) {
+      for (let i = 0; i < REEDS.places; i++) {
+        const showing = R() < REEDS.chance;
+        const along = (i + 0.2 + R() * 0.6) / REEDS.places, out = R() * 0.03;
+        if (!showing) continue;
+        built.add(at(Models.reeds(seed * 31 + i * 7 + (bank + 1)), x + 0.5 + bank * (REEDS.bank + out), 0, y + along));
+      }
+    }
+  }
+
+  // A café, a barn, a fountain or a pond in its field. One along a side stands in the middle of the areas of that side, its
+  // front facing into the field; one in an area stands in that area
+  function addFeature(f) {
+    const MAKERS = { cafe: Models.cafe, barn: Models.barn, fountain: Models.fountain, pond: Models.pond };
+    const FACING = { n: 0, s: Math.PI, e: -Math.PI / 2, w: Math.PI / 2 };
+    const p = Sim.placeXY(f.side || f.area);
+    built.add(at(MAKERS[f.kind](), f.x + 0.5 + p.x / 3, 0, f.y + 0.5 + p.y / 3, 0, f.side ? FACING[f.side] : 0, 0));
+  }
+
   function addHouses(x, y, seed) {
     // Along each side: which way it runs, which edge, and which way the front faces (into the field)
     const sides = [

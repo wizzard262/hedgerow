@@ -502,11 +502,13 @@ window.Game = (() => {
   function tooltip(e, f) {
     const tip = $('#tip');
     if (!f) { tip.style.display = 'none'; return; }
-    const NAMES = { field: 'Field', orchard: 'Orchard', village: 'Village', hamlet: 'Hamlet', river: 'River', bridge: 'Bridge', laneEW: 'Lane', laneNS: 'Lane', crossroads: 'Crossroads' };
+    const NAMES = { field: 'Field', orchard: 'Orchard', village: 'Village', hamlet: 'Hamlet', river: 'River', street: 'Street', square: 'Square', bridge: 'Bridge', laneEW: 'Lane', laneNS: 'Lane', crossroads: 'Crossroads' };
     const here = Sim.at(st, f.x, f.y);
     const lines = here.map(u => `${u.side === 'us' ? 'US' : 'German'} · ${u.name}${u.kind === 'company' ? ` · ${u.platoons} sections` : ''}${u.ambush ? ' · in ambush' : ''}${u.shocked ? ' · shaken' : ''}`);
     // A wreck in the field: it is there to be hidden behind
     if (Sim.wreckAt(st, f.x, f.y)) lines.push('Burnt-out tank: blocks the view, +1 cover past its corner');
+    // A café, a barn, a fountain or a pond: what it takes, and whether it blocks the view
+    for (const thing of Sim.featuresAt(st, f.x, f.y)) lines.push(thing.blocksView ? `${thing.name}: blocks the view, +1 cover past its corner` : `${thing.name}: nobody can stand there`);
     const t = Sim.tileType(f.x, f.y);
     // Houses and trees: their cover (see PLACE_COVER), and the view
     const place = PLACE_COVER[t];

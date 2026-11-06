@@ -1,6 +1,7 @@
 // Hedgerow: the map and every number to tune
 
 // A board: one character per field. Each field is a tile; hedges grow on the edges between fields
+//   s  street (paved, in the city)    q  square (paved and open, in the city)
 //   .  field        o  orchard (some cover)        h  hamlet: a few houses round a yard (good cover)
 //   v  village (good cover, no hedges round it)    r  river (nothing can enter it)    #  bridge (a lane across the river)
 // One unit to a field (Steve); only hand-to-hand fighting brings two sides into the same field.
@@ -12,6 +13,15 @@
 // the objective, the field to take and hold, its church in the middle. Left out, a map keeps the usual:
 //   gap, wire: chance of a gap in a hedge, and of a gap being fenced    deploy: share of the board each side starts in
 //   us, de: { add: pieces more, remove: ids of pieces less }            ammo: { us: {...}, de: {...} } rounds and bomber runs
+//   features: things standing in fields, see FEATURES                   generated: a new board each game (rows, villages and features come from sim.js)
+// Things that stand in a field and take some of its nine areas (Steve). A building (blocksView) blocks the view like a tank.
+// side: along that side of the field, three areas, leaving a block free opposite for a platoon or a tank. area: one area
+const FEATURES = {
+  cafe: { name: 'Café', blocksView: true },
+  barn: { name: 'Barn', blocksView: true },
+  fountain: { name: 'Fountain', blocksView: false },
+  pond: { name: 'Duck pond', blocksView: false },
+};
 const MAPS = [
   {
     id: 'hedges', name: 'Hedge country', note: 'The usual battle: two villages, hedges and lanes.',
@@ -61,7 +71,7 @@ const MAPS = [
     de: { remove: ['dt1'], add: [{ id: 'pak2', kind: 'pak', name: 'PaK 40 (2)', post: [0, -1], garrison: true }] },
   },
   {
-    id: 'farmland', name: 'Open farmland', note: 'Few hedges and long shots. An extra tank each, and 2 bomber runs each.',
+    id: 'farmland', name: 'Open farmland', note: 'Few hedges and long shots, a few barns that block the view, and a duck pond. An extra tank each, and 2 bomber runs each.',
     rows: [
       '.....|.....h',
       '..o..|.vv...',
@@ -74,9 +84,23 @@ const MAPS = [
     ],
     villages: [{ x: 7, y: 4, name: 'Les Champs' }, { x: 7, y: 1, name: 'La Ferme' }],
     gap: 0.8, wire: 0.2,
+    features: [
+      { x: 3, y: 3, kind: 'barn', side: 'n' },
+      { x: 9, y: 5, kind: 'barn', side: 'w' },
+      { x: 4, y: 0, kind: 'barn', side: 's' },
+      { x: 8, y: 7, kind: 'barn', side: 'e' },
+      { x: 3, y: 6, kind: 'pond', side: 's' },
+    ],
     ammo: { us: { bomber: 2 }, de: { bomber: 2 } },
     us: { add: [{ id: 'T3', kind: 'sherman', name: 'Sherman (2)' }] },
     de: { add: [{ id: 'dt3', kind: 'pz4', name: 'Panzer IV (2)', reserve: true }] },
+  },
+  {
+    id: 'paris', name: 'Paris', note: 'A tight city, a new maze of cobbled streets each game: houses, streets and little squares, each with a café and a fountain. Few tanks: no Firefly and no Panther; a second bazooka for the Americans, an extra MG 42 for the Germans.',
+    generated: true,
+    gap: 1, wire: 0,
+    us: { remove: ['T2'], add: [{ id: 'bz2', kind: 'bazooka', name: 'Bazooka Team 2' }] },
+    de: { remove: ['dt2'], add: [{ id: 'dmg5', kind: 'mg42', name: 'MG 42 Team', reserve: true }] },
   },
   {
     id: 'deep', name: 'Deep bocage', note: 'Hedges nearly everywhere and few lanes. More infantry and fewer tanks: no Firefly and no Panther; a fourth American platoon and second bazooka, a sixth German platoon and second Panzerschreck.',

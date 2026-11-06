@@ -16,7 +16,7 @@ const Sim = (() => {
 
   // ---------- The board ----------
 
-  const TYPES = { '.': 'field', o: 'orchard', v: 'village', h: 'hamlet', r: 'river', '#': 'bridge', '=': 'laneEW', '|': 'laneNS', '+': 'crossroads' };
+  const TYPES = { '.': 'field', o: 'orchard', v: 'village', h: 'hamlet', r: 'river', '#': 'bridge', '=': 'laneEW', '|': 'laneNS', '+': 'crossroads', s: 'street', q: 'square' };
   const inside = (x, y) => x >= 0 && y >= 0 && x < COLS && y < ROWS;
   // The map being played (one game at a time, so a new game changes it for everyone asking)
   let currentMap = MAPS[0];
@@ -87,8 +87,12 @@ const Sim = (() => {
     // A wreck takes its three areas too, whoever's it was
     const wreck = wreckAt(st, x, y);
     if (wreck) for (const k of wreck.areas) taken.add(k);
+    // And a café, a barn, a fountain or a pond
+    for (const f of st.features) if (f.x === x && f.y === y) for (const k of f.areas) taken.add(k);
     return taken;
   }
+  // The café, barn, fountain or pond standing in a field
+  const featuresAt = (st, x, y) => st.features.filter(f => f.x === x && f.y === y);
   // The wreck in a field, if there is one (one to a field at most, see leaveWreck)
   const wreckAt = (st, x, y) => st.wrecks.find(w => w.x === x && w.y === y) || null;
   // A tank knocked out stays where it died, burnt out (Steve). It is shoved into a corner and takes that corner and the
@@ -203,14 +207,16 @@ const Sim = (() => {
   // mapId: which of MAPS (Steve)
   function newGame(seed, mode = 'us', mapId = MAPS[0].id) {
     seed = seed || (Date.now() % 1e9);
-    currentMap = MAPS.find(m => m.id === mapId) || MAPS[0];
-    walkTables.clear();
-    const map = currentMap;
+    let map = MAPS.find(m => m.id === mapId) || MAPS[0];
     const human = mode === 'de' ? 'de' : 'us';
     const players = { us: mode === 'us' || mode === 'both' ? 'human' : 'robot', de: mode === 'de' || mode === 'both' ? 'human' : 'robot' };
     const R = rng(seed);
+    // A map made new each game: from this game's dice, so the same seed gives the same streets
+    if (map.generated) map = Object.assign({}, map, cityMap(R));
+    currentMap = map;
+    walkTables.clear();
     const st = {
-      seed, mode, human, players, map, turn: 1, hedges: {}, wire: {}, units: [], wrecks: [], report: [], fx: [],
+      seed, mode, human, players, map, features: (map.features || []).map(placedFeature), turn: 1, hedges: {}, wire: {}, units: [], wrecks: [], report: [], fx: [],
       // Each side's guns and bomber: what they have fired this round, and what they have left
       fired: { us: {}, de: {} },
       ammo: {
@@ -297,6 +303,67 @@ const Sim = (() => {
       if (free(x, y) && d < bestD) { bestD = d; best = { x, y }; }
     }
     return best || want;
+  }
+
+  // A thing standing in a field, with the areas it takes (see FEATURES)
+  const SIDE_AREAS = { n: ['nw', 'n', 'ne'], s: ['sw', 's', 'se'], e: ['ne', 'e', 'se'], w: ['nw', 'w', 'sw'] };
+  function placedFeature(f) {
+    const areas = f.side ? SIDE_AREAS[f.side] : [f.area];
+    return Object.assign({}, f, { areas, blocksView: FEATURES[f.kind].blocksView, name: FEATURES[f.kind].name });
+  }
+
+  // The city (Steve: Paris): a maze of streets through houses, new each game. Crossing points every two fields, joined by a
+  // maze that reaches them all, then a few more streets so there is more than one way round. Some crossing points become
+  // little squares, each with a café along one side and a fountain in a far corner
+  const CITY_NAMES = ['Saint-Germain', 'La Bastille', 'Montmartre', 'Le Marais', 'Belleville', 'La Cité'];
+  const CITY_SQUARES = 3;
+  const CITY_EXTRA_STREETS = 0.3;
+  function cityMap(R) {
+    const tiles = [];
+    for (let y = 0; y < ROWS; y++) tiles.push(Array(COLS).fill('v'));
+    const xs = [], ys = [];
+    for (let x = 0; x < COLS; x += 2) xs.push(x);
+    for (let y = 0; y < ROWS; y += 2) ys.push(y);
+    const shuffled = list => { const out = list.slice(); for (let i = out.length - 1; i > 0; i--) { const j = Math.floor(R() * (i + 1)); [out[i], out[j]] = [out[j], out[i]]; } return out; };
+    const STEPS = [[2, 0], [-2, 0], [0, 2], [0, -2]];
+    const isPoint = (x, y) => x >= 0 && y >= 0 && x <= xs[xs.length - 1] && y <= ys[ys.length - 1];
+    const carve = (x, y, dx, dy) => { tiles[y + dy / 2][x + dx / 2] = 's'; tiles[y + dy][x + dx] = 's'; };
+    // The maze: from a corner, going on to any crossing point not yet reached
+    const seen = new Set(['0,0']);
+    tiles[0][0] = 's';
+    const trail = [{ x: 0, y: 0 }];
+    while (trail.length) {
+      const here = trail[trail.length - 1];
+      const next = shuffled(STEPS).find(([dx, dy]) => isPoint(here.x + dx, here.y + dy) && !seen.has(`${here.x + dx},${here.y + dy}`));
+      if (!next) { trail.pop(); continue; }
+      carve(here.x, here.y, next[0], next[1]);
+      seen.add(`${here.x + next[0]},${here.y + next[1]}`);
+      trail.push({ x: here.x + next[0], y: here.y + next[1] });
+    }
+    // A few more streets, between crossing points next to each other
+    for (const y of ys) for (const x of xs) {
+      if (isPoint(x + 2, y) && R() < CITY_EXTRA_STREETS) carve(x, y, 2, 0);
+      if (isPoint(x, y + 2) && R() < CITY_EXTRA_STREETS) carve(x, y, 0, 2);
+    }
+    // Little squares, away from where the sides start
+    const inner = [];
+    for (const y of ys) for (const x of xs) if (x >= 2 && x <= 8) inner.push({ x, y });
+    const features = [];
+    for (const p of shuffled(inner).slice(0, CITY_SQUARES)) {
+      tiles[p.y][p.x] = 'q';
+      const side = shuffled(['n', 'e', 's', 'w'])[0];
+      features.push({ x: p.x, y: p.y, kind: 'cafe', side });
+      // The fountain in a corner on the far side, leaving a block free for a platoon or a tank
+      const far = { n: ['sw', 'se'], s: ['nw', 'ne'], e: ['nw', 'sw'], w: ['ne', 'se'] }[side];
+      features.push({ x: p.x, y: p.y, kind: 'fountain', area: far[Math.floor(R() * 2)] });
+    }
+    // The villages to take: houses towards the German end, on a street
+    const onStreet = (x, y) => NEIGHBOURS.some(([dx, dy]) => inside(x + dx, y + dy) && tiles[y + dy][x + dx] !== 'v');
+    const places = [];
+    for (let y = 1; y < ROWS - 1; y++) for (let x = 6; x <= 9; x++) if (tiles[y][x] === 'v' && onStreet(x, y)) places.push({ x, y });
+    const names = shuffled(CITY_NAMES);
+    const villages = shuffled(places).slice(0, 2).map((p, i) => ({ x: p.x, y: p.y, name: names[i] }));
+    return { rows: tiles.map(row => row.join('')), villages, features };
   }
 
   // There are no hours, only rounds (Steve)
@@ -518,6 +585,8 @@ const Sim = (() => {
       things.push({ field: t, areas: standsIn(t) });
     }
     for (const w of st.wrecks) things.push({ field: w, areas: w.areas });
+    // A building blocks the view as a tank does (Steve)
+    for (const f of st.features) if (f.blocksView) things.push({ field: f, areas: f.areas });
     const piecesCells = [from, target].map(u => (u.kind ? standsIn(u).map(k => cellOf(u, k)) : []));
     return { things, piecesCells };
   }
@@ -2613,7 +2682,7 @@ const Sim = (() => {
 
   return {
     firesOnTheMove, canAmbush, actAmbush, bestMoveShoot, bomberHeading, bomberEdges, bomberLine, bombNeed, bombWhy, bestBomberRun,
-    walkDistance, fireSound, wreckAt, remove, computerSide, isRobot, piecesToAsk, takeCover, enemyOf, gunStats, edgeKey, atCloseRange, closeCells,
+    featuresAt, walkDistance, fireSound, wreckAt, remove, computerSide, isRobot, piecesToAsk, takeCover, enemyOf, gunStats, edgeKey, atCloseRange, closeCells,
     newGame, roll, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, chargeSpots,
     rallyTargets, canAct, canReact, firepower, canCallFire, holdsObjective, roundText, roomFor,
     computerStep, answer, finishRound, startRound, drawToken, endComputerToken, activationOver, passToken, humanCanMove, endRound, canFire, actSkip, actSkipShot, skipSupport,

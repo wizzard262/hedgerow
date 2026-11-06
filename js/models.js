@@ -783,11 +783,40 @@ const Models = (() => {
     return g;
   }
 
+  // Cobbles: rows of rounded stones, each row shifted half a stone, dark between them. Stone width and height, in pixels
+  function cobbleTex(shades, wide, tall, repeat, seed) {
+    return canvasTexture(512, 512, (g, w, h) => {
+      const R = seeded(seed);
+      g.fillStyle = '#2f2c27';
+      g.fillRect(0, 0, w, h);
+      const rows = Math.round(h / tall), across = Math.round(w / wide);
+      for (let row = 0; row < rows; row++) {
+        const y = row * (h / rows), shift = row % 2 ? (w / across) / 2 : 0;
+        // (one more than fits, so the row wraps round the edge of the picture)
+        for (let i = -1; i <= across; i++) {
+          const x = i * (w / across) + shift;
+          g.fillStyle = shades[Math.floor(R() * shades.length)];
+          g.beginPath();
+          g.roundRect(x + 2, y + 2, w / across - 4, h / rows - 4, Math.min(wide, tall) * 0.3);
+          g.fill();
+          // Worn smooth on top
+          g.fillStyle = 'rgba(255,250,235,.1)';
+          g.beginPath();
+          g.ellipse(x + (w / across) * 0.45, y + (h / rows) * 0.4, (w / across) * 0.26, (h / rows) * 0.2, 0, 0, Math.PI * 2);
+          g.fill();
+        }
+      }
+    }, repeat);
+  }
+
   // One field of the mat: flock for grass, wheat or the village yard; lanes painted on top
   const texCache = {};
   const fieldMats = {};
   function field(type, wheat, seed) {
-    const key = type === 'village' ? 'v' : type === 'orchard' ? 'o' : wheat ? 'w' : 'g' + (seed % 3);
+    const key = type === 'village' ? 'v' : type === 'orchard' ? 'o' : type === 'street' ? 'st' : type === 'square' ? 'sq' : wheat ? 'w' : 'g' + (seed % 3);
+    // The city's paving (Steve: cobbled): grey cobbles for the streets, big pale flagstones for the squares
+    if (key === 'st' && !texCache.st) texCache.st = cobbleTex(['#6b675f', '#5d5a53', '#77736a', '#524f49', '#827d73'], 26, 26, [4, 4], 41);
+    if (key === 'sq' && !texCache.sq) texCache.sq = cobbleTex(['#a39c8b', '#928c7d', '#b0a998', '#88826f', '#9b9585'], 64, 44, [3, 3], 43);
     if (!texCache[key]) texCache[key] = key === 'o' ? orchardGrass() : key === 'v' ? flockTex('#7c7465', ['#6e675a', '#8a8272', '#5f584c', '#99907e'], 11) : key === 'w' ? flockTex('#9c8b55', WHEAT, 12) : flockTex(['#5f6d3c', '#647140', '#5a6838'][seed % 3], GRASS, 13 + seed % 3);
     if (!fieldMats[key]) fieldMats[key] = new T.MeshStandardMaterial({ map: texCache[key], roughness: 1 });
     const m = new T.Mesh(new T.PlaneGeometry(1, 1), fieldMats[key]);
@@ -817,9 +846,13 @@ const Models = (() => {
     });
   }
 
-  function lane(len, width) {
+  // A lane of worn earth; cobbled (Steve), a strip of the street's cobbles, running along or across
+  function lane(len, width, cobbled = false) {
     if (!texCache.lane) texCache.lane = flockTex('#8f7d60', EARTH, 21);
-    const m = new T.Mesh(new T.PlaneGeometry(len, width), new T.MeshStandardMaterial({ map: texCache.lane, roughness: 1 }));
+    const across = len < width;
+    const cobbleKey = across ? 'cobbleNS' : 'cobbleEW';
+    if (cobbled && !texCache[cobbleKey]) texCache[cobbleKey] = cobbleTex(['#7a766c', '#6b675f', '#868175', '#5f5b53', '#8f8a7d'], 26, 26, across ? [1.4, 4.5] : [4.5, 1.4], 47);
+    const m = new T.Mesh(new T.PlaneGeometry(len, width), new T.MeshStandardMaterial({ map: cobbled ? texCache[cobbleKey] : texCache.lane, roughness: 1 }));
     m.rotation.x = -Math.PI / 2; m.receiveShadow = true;
     return m;
   }
@@ -830,6 +863,112 @@ const Models = (() => {
     if (!M.water) { M.water = mat('#3f5450', 0.15, 0.2); M.bank = mat('#5b4a35', 1); }
     g.add(at(box(w + 0.08, 0.006, d, M.bank), 0, 0.001, 0));
     g.add(at(box(w, 0.006, d, M.water), 0, 0.003, 0));
+    return castAll(g);
+  }
+
+  // ---------- Things standing in fields (Steve) ----------
+  // Each is built along x, with its back to the edge of the field and its front facing +z; the table turns it to its side
+
+  // A café: cream walls and a slate roof, a striped awning over the front, and little tables on the pavement
+  function cafe() {
+    const g = new T.Group();
+    if (!M.cafeWall) {
+      M.cafeWall = mat('#d9cdb0', 0.95);
+      M.cafeRoof = mat('#4d5158', 0.9);
+      M.cafeGlass = mat('#2d3a40', 0.3);
+      M.cafeDoor = mat('#3f2a1c', 0.8);
+      M.awningRed = mat('#a8322a', 0.9);
+      M.awningWhite = mat('#e8e1cf', 0.9);
+      M.cafeTable = mat('#2c2b28', 0.6, 0.3);
+    }
+    const length = 0.9, depth = 0.2, height = 0.17;
+    g.add(at(box(length, height, depth, M.cafeWall), 0, height / 2, -0.04));
+    g.add(at(box(length + 0.02, 0.05, depth + 0.02, M.cafeRoof), 0, height + 0.025, -0.04));
+    // Windows and a door along the front
+    for (let i = -3; i <= 3; i++) {
+      const doorway = i === 0;
+      g.add(at(box(0.075, doorway ? 0.1 : 0.06, 0.004, doorway ? M.cafeDoor : M.cafeGlass), i * 0.125, doorway ? 0.05 : 0.075, 0.062));
+    }
+    // The awning in red and white stripes, sloping out over the pavement
+    for (let i = 0; i < 14; i++) {
+      const x = -0.42 + (i + 0.5) * (0.84 / 14);
+      g.add(at(box(0.84 / 14, 0.005, 0.07, i % 2 ? M.awningWhite : M.awningRed), x, 0.118, 0.092, 0.45, 0, 0));
+    }
+    // Round tables out in front
+    for (const x of [-0.31, -0.11, 0.11, 0.31]) {
+      g.add(at(cyl(0.022, 0.022, 0.004, M.cafeTable, 12), x, 0.042, 0.14));
+      g.add(at(cyl(0.003, 0.003, 0.04, M.cafeTable, 6), x, 0.02, 0.14));
+    }
+    return castAll(g);
+  }
+
+  // A barn: weathered red boards, a dark steep roof and big doors
+  function barn() {
+    const g = new T.Group();
+    if (!M.barnWall) {
+      M.barnWall = mat('#6e3a2a', 1);
+      M.barnRoof = mat('#3b3a36', 1);
+      M.barnDoor = mat('#4a2a1e', 1);
+      M.barnTrim = mat('#b8ab90', 1);
+    }
+    const length = 0.9, depth = 0.25, height = 0.15;
+    g.add(at(box(length, height, depth, M.barnWall), 0, height / 2, 0));
+    // The roof, two slopes meeting along the ridge
+    for (const s of [-1, 1]) g.add(at(box(length + 0.03, 0.012, depth * 0.62, M.barnRoof), 0, height + 0.04, s * depth * 0.25, s * 0.55, 0, 0));
+    // Big doors in the middle of the front, with a white cross brace
+    g.add(at(box(0.2, 0.125, 0.004, M.barnDoor), 0, 0.0625, depth / 2 + 0.002));
+    g.add(at(box(0.008, 0.125, 0.005, M.barnTrim), 0, 0.0625, depth / 2 + 0.004));
+    for (const s of [-1, 1]) g.add(at(box(0.2, 0.006, 0.005, M.barnTrim), 0, 0.0625, depth / 2 + 0.004, 0, 0, s * 0.55));
+    // Boards up and down the walls
+    for (let i = -8; i <= 8; i++) if (Math.abs(i) > 1) g.add(at(box(0.004, height, 0.003, M.barnDoor), i * 0.052, height / 2, depth / 2 + 0.001));
+    return castAll(g);
+  }
+
+  // A fountain: a stone basin of water and a column with a small bowl on top
+  function fountain() {
+    const g = new T.Group();
+    if (!M.water) { M.water = mat('#3f5450', 0.15, 0.2); M.bank = mat('#5b4a35', 1); }
+    if (!M.fountainStone) { M.fountainStone = mat('#b5ad9b', 1); M.fountainWater = mat('#5f8d92', 0.1, 0.2); }
+    g.add(at(cyl(0.12, 0.13, 0.03, M.fountainStone, 20), 0, 0.015, 0));
+    g.add(at(cyl(0.1, 0.1, 0.004, M.fountainWater, 20), 0, 0.031, 0));
+    g.add(at(cyl(0.012, 0.018, 0.09, M.fountainStone, 10), 0, 0.075, 0));
+    g.add(at(cyl(0.04, 0.012, 0.015, M.fountainStone, 14), 0, 0.122, 0));
+    g.add(at(cyl(0.032, 0.032, 0.003, M.fountainWater, 14), 0, 0.13, 0));
+    g.add(at(cyl(0.006, 0.009, 0.03, M.fountainStone, 8), 0, 0.145, 0));
+    return castAll(g);
+  }
+
+  // Reeds at the water's edge: a clump of thin stems, some with a brown seed head. seed: so each clump differs
+  function reeds(seed, stems = 10) {
+    const g = new T.Group(), R = seeded(seed + 1);
+    if (!M.reed) { M.reed = mat('#6f8440', 1); M.reedDry = mat('#9a9050', 1); M.reedHead = mat('#4a3320', 1); }
+    for (let i = 0; i < stems; i++) {
+      const tall = 0.1 + R() * 0.1, x = (R() - 0.5) * 0.09, z = (R() - 0.5) * 0.07;
+      const stem = cyl(0.0016, 0.0036, tall, R() < 0.3 ? M.reedDry : M.reed, 5);
+      const lean = (R() - 0.5) * 0.3;
+      g.add(at(stem, x, tall / 2, z, lean, 0, (R() - 0.5) * 0.3));
+      if (R() < 0.4) g.add(at(cyl(0.0042, 0.0042, 0.016, M.reedHead, 6), x, tall + 0.003, z + lean * tall * 0.5));
+    }
+    return castAll(g);
+  }
+
+  // A duck pond: water in a muddy bank, reeds at one end, and ducks on it
+  function pond() {
+    const g = new T.Group(), R = seeded(61);
+    if (!M.water) { M.water = mat('#3f5450', 0.15, 0.2); M.bank = mat('#5b4a35', 1); }
+    if (!M.duck) { M.duck = mat('#e8e4d6', 0.9); M.duckBrown = mat('#6d5438', 0.9); M.duckHead = mat('#2c5a3a', 0.6); M.duckBill = mat('#d8922e', 0.7); }
+    const bank = cyl(1, 1, 0.006, M.bank, 28); bank.scale.set(0.44, 1, 0.145); g.add(at(bank, 0, 0.003, 0));
+    const water = cyl(1, 1, 0.006, M.water, 28); water.scale.set(0.41, 1, 0.12); g.add(at(water, 0, 0.005, 0));
+    for (const [x, z] of [[-0.36, -0.08], [-0.38, 0.05], [0.37, -0.06], [0.3, 0.1]]) g.add(at(reeds(Math.round(R() * 1000), 6), x, 0, z));
+    // The ducks: a body, a head, a bill; a white one and brown ones
+    for (const [x, z, ry, white] of [[-0.14, 0.02, 0.5, true], [0.02, -0.05, 2.4, false], [0.16, 0.04, 4.2, false], [0.05, 0.07, 1.2, true]]) {
+      const duck = new T.Group();
+      const body = new T.Mesh(new T.SphereGeometry(0.018, 10, 8), white ? M.duck : M.duckBrown); body.scale.set(1.5, 0.8, 1);
+      duck.add(at(body, 0, 0.012, 0));
+      duck.add(at(new T.Mesh(new T.SphereGeometry(0.01, 8, 6), white ? M.duck : M.duckHead), 0.022, 0.03, 0));
+      duck.add(at(box(0.012, 0.003, 0.006, M.duckBill), 0.034, 0.029, 0));
+      g.add(at(duck, x, 0.006, z, 0, ry, 0));
+    }
     return castAll(g);
   }
 
@@ -941,5 +1080,5 @@ const Models = (() => {
     return castAll(g);
   }
 
-  return { BRIDGE_DECK, materials, M, mergeParts, eliteBand, water, bridge, soldier, squad, team, captain, pak, mortar, bomber, bomberOnStand, howitzer, round, coin, token, sherman, panther, panzer4, hedge, tree, house, die, table, field, lane, at };
+  return { cafe, barn, fountain, pond, reeds, BRIDGE_DECK, materials, M, mergeParts, eliteBand, water, bridge, soldier, squad, team, captain, pak, mortar, bomber, bomberOnStand, howitzer, round, coin, token, sherman, panther, panzer4, hedge, tree, house, die, table, field, lane, at };
 })();
