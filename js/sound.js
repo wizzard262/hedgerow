@@ -159,6 +159,18 @@ const Sound = (() => {
       o.connect(g); g.connect(far);
       o.start(t); o.stop(t + dur + 0.1);
     }
+    // And the throb (Steve): a few deeper engines in pairs just out of step, beating against each other, wah-wah-wah
+    for (let p = 0; p < BOMBER_THROBS; p++) {
+      const note = 50 + Math.random() * 8;
+      for (const offBeat of [0, 2.5]) {
+        const o = ctx.createOscillator(); o.type = 'sawtooth';
+        o.frequency.setValueAtTime((note + offBeat) * (close ? 1.08 : 1.02), t);
+        o.frequency.linearRampToValueAtTime((note + offBeat) * (close ? 0.92 : 0.98), t + dur);
+        const g = ctx.createGain(); g.gain.value = (close ? BOMBER_CLOSE : BOMBER_LOUDNESS) * 0.7 / (BOMBER_THROBS * 2);
+        o.connect(g); g.connect(far);
+        o.start(t); o.stop(t + dur + 0.1);
+      }
+    }
     // The rumble of the air under them
     const air = ctx.createBufferSource(); air.buffer = noiseBuf; air.loop = true;
     const low = ctx.createBiquadFilter(); low.type = 'lowpass'; low.frequency.value = 160;
@@ -174,6 +186,7 @@ const Sound = (() => {
   }
   const BOMBER_LOUDNESS = 0.35;
   const BOMBER_CLOSE = 1.1;
+  const BOMBER_THROBS = 4;          // pairs of throbbing engines under the drone (Steve)
 
   // Each sound, starting at time t
   const SOUNDS = {
@@ -233,36 +246,47 @@ const Sound = (() => {
         }
       }
     },
-    // A tank driving: a loud engine roaring up and dying away, chugging with each cylinder, the exhaust, and the
-    // tracks clanking and squealing
+    // A tank driving (Steve picked option B): a deep diesel rumble, felt more than heard, the engine slowly revving up and
+    // settling, and the heavy clank of the track links going round. No squeal
     tank(t) {
-      const dur = 2.4;
+      const dur = 2.8;
+      // The whole sound swells in and dies away
       const out = ctx.createGain();
-      out.gain.setValueAtTime(0.0001, t); out.gain.exponentialRampToValueAtTime(1, t + 0.3); out.gain.setValueAtTime(1, t + dur - 0.7); out.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      out.gain.setValueAtTime(0.0001, t);
+      out.gain.exponentialRampToValueAtTime(1, t + 0.3);
+      out.gain.setValueAtTime(1, t + dur - 0.7);
+      out.gain.exponentialRampToValueAtTime(0.0001, t + dur);
       out.connect(bus);
-      // The engine: two growling notes, high enough to hear on small speakers
-      const tone1 = ctx.createOscillator(), tone2 = ctx.createOscillator();
-      tone1.type = 'sawtooth'; tone2.type = 'square';
-      for (const [o, base] of [[tone1, 48], [tone2, 97]]) {
-        o.frequency.setValueAtTime(base * 0.8, t); o.frequency.linearRampToValueAtTime(base * 1.25, t + 0.8); o.frequency.linearRampToValueAtTime(base, t + dur);
-      }
-      const roar = ctx.createBiquadFilter(); roar.type = 'lowpass'; roar.frequency.value = 650; roar.Q.value = 2;
+      // The engine: two low notes an octave apart, through a low-pass
+      const roar = ctx.createBiquadFilter(); roar.type = 'lowpass'; roar.frequency.value = 420; roar.Q.value = 2;
+      // Chugging: the volume pulsing with the cylinders, slowly at first, then a little faster
       const chug = ctx.createGain(); chug.gain.value = 0.5;
+      roar.connect(chug); chug.connect(out);
       const pulse = ctx.createOscillator(), depth = ctx.createGain();
-      pulse.frequency.setValueAtTime(14, t); pulse.frequency.linearRampToValueAtTime(22, t + 0.8);
-      depth.gain.value = 0.3;
+      pulse.frequency.setValueAtTime(8, t); pulse.frequency.linearRampToValueAtTime(12, t + 0.9);
+      depth.gain.value = 0.5;
       pulse.connect(depth); depth.connect(chug.gain);
-      const mix = ctx.createGain(); mix.gain.value = 0.5;
-      tone1.connect(roar); tone2.connect(mix); mix.connect(roar); roar.connect(chug); chug.connect(out);
-      // The exhaust: a rumble of noise
+      const engineNotes = [[31, 1], [62, 0.6]];
+      const parts = [pulse];
+      for (const [note, volume] of engineNotes) {
+        const osc = ctx.createOscillator(); osc.type = 'sawtooth';
+        // Revving up, then settling
+        osc.frequency.setValueAtTime(note * 0.85, t);
+        osc.frequency.linearRampToValueAtTime(note * 1.15, t + 0.9);
+        osc.frequency.linearRampToValueAtTime(note, t + dur);
+        const g = ctx.createGain(); g.gain.value = volume;
+        osc.connect(g); g.connect(roar);
+        parts.push(osc);
+      }
+      // The exhaust: a deep rumble of noise
       const ex = ctx.createBufferSource(); ex.buffer = noiseBuf; ex.loop = true;
-      const exf = ctx.createBiquadFilter(); exf.type = 'lowpass'; exf.frequency.value = 350;
-      const exg = ctx.createGain(); exg.gain.value = 0.7;
+      const exf = ctx.createBiquadFilter(); exf.type = 'lowpass'; exf.frequency.value = 220;
+      const exg = ctx.createGain(); exg.gain.value = 0.9;
       ex.connect(exf); exf.connect(exg); exg.connect(chug);
-      for (const n of [tone1, tone2, pulse, ex]) { n.start(t); n.stop(t + dur + 0.05); }
-      // The tracks: links clanking round, and now and then a squeal
-      for (let k = 0; k < 26; k++) noise(t + 0.15 + k * 0.08 + Math.random() * 0.02, 0.03, 2200 + Math.random() * 800, 3, 0.09, 'bandpass');
-      tone(t + 0.5, 0.5, 2100, 1900, 0.025, 'triangle');
+      parts.push(ex);
+      for (const n of parts) { n.start(t); n.stop(t + dur + 0.05); }
+      // The tracks: heavy links clanking round, lower and slower than before
+      for (let k = 0; k < 20; k++) noise(t + 0.2 + k * 0.12 + Math.random() * 0.03, 0.03, 800 + Math.random() * 600, 2, 0.13, 'bandpass');
     },
   };
 

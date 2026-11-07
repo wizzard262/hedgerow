@@ -85,7 +85,7 @@ async function checkPlayers() {
   await page.waitForTimeout(900);
   console.log('  after Take cover:', JSON.stringify(await page.evaluate(([a, b]) => { const st = Game.state, t = Sim.unitById(st, b), shot = st.fx.filter(o => o.from && o.from.id === a).pop(); return { foeDown: t.down, need: shot && shot.need, dice: shot && shot.faces.length }; }, [set.me, set.foe])));
 
-  // Shells at the other player's pieces: each asked, then they land
+  // Shells at the other player's pieces: nobody is asked (no taking cover from shells, Steve), they just land
   await page.waitForTimeout(600);
   await page.evaluate(() => {});
   const side2 = await humanToken();
@@ -119,6 +119,7 @@ async function checkPlayers() {
     await page.waitForTimeout(500);
   }
   await page.waitForTimeout(800);
+  if (asks) { process.exitCode = 1; console.log('  ❌ a piece was asked to take cover from shells'); }
   console.log(`  ${side2} artillery: ${asks} pieces asked |`, JSON.stringify(await page.evaluate(s => ({ roundsLeft: Game.state.ammo[s].artillery }), shell.side)), 'was', shell.rounds);
 
   // Two humans, a win: the plain ending

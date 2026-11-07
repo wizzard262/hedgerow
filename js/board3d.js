@@ -691,13 +691,12 @@ const Board = (() => {
 
   // ---------- Pieces ----------
 
-  // A bunker: its concrete, with who is in it and the signs on the ground kept apart, as they go when it is knocked out
+  // A bunker: its concrete, with who is in it kept apart, as they go when it is knocked out
   function bunkerBase(gun) {
     const walls = Models.mergeParts(Models.bunker(gun));
     markerSpots(walls);
     walls.userData.crew = Models.mergeParts(Models.bunkerCrew(gun));
-    walls.userData.signs = Models.bunkerSigns();
-    walls.add(walls.userData.crew, walls.userData.signs);
+    walls.add(walls.userData.crew);
     return walls;
   }
 
@@ -1175,12 +1174,11 @@ const Board = (() => {
     }
   }
 
-  // A bunker knocked out: it stays where it stands, scorched and burning, with nobody in it and no signs. Returns the fire
+  // A bunker knocked out: it stays where it stands, scorched and burning, with nobody in it. Returns the fire
   function setBunkerWreck(w, g, hull) {
     g.userData.way = null;
     hull.visible = true;
     hull.userData.crew.visible = false;
-    hull.userData.signs.visible = false;
     Fire.scorch(hull);
     const fire = Fire.make(Math.PI);
     fire.position.set(w.x + hull.position.x, 0, w.y + hull.position.z);
@@ -1287,8 +1285,9 @@ const Board = (() => {
       const p = Sim.placeXY(k === 'c' ? null : k), cx = x + 0.5 + p.x / 3, cz = y + 0.5 + p.y / 3;
       const shoots = spot.cells.includes(k);
       if (!shoots && !spot.canCharge) continue;
-      const close = shoots && (spot.closeCells || []).includes(k);
+      // A Hail Mary is only ever pale, one way (Steve: pale and crossed was confusing), even at close range
       const hailMary = shoots && (spot.hailCells || []).includes(k);
+      const close = shoots && !hailMary && (spot.closeCells || []).includes(k);
       const material = shoots
         ? new T.MeshBasicMaterial({ map: hatch(hailMary ? HAIL_MARY_RED : undefined, close), transparent: true, opacity: close ? 0.95 : 0.8, depthWrite: false })
         : new T.MeshBasicMaterial({ color: new T.Color(MARK.charge), transparent: true, opacity: 0.16, depthWrite: false });
@@ -2099,6 +2098,8 @@ const Board = (() => {
   // until the next piece is chosen (Steve)
   const DIE_SIZE = 6.5, DIE_GAP = 0.22;
   const DICE_OUT = 0.45;               // how far out past the artillery (away from the board) the dice sit
+  const DICE_COLUMN = 1.75;            // how far apart the columns of dice are, when one column fills the screen
+  const DICE_COLUMNS = 3;              // at most this many columns a side
   let diceDue = null;                  // when the dice of the latest attack go on the table
   let diceComing = [];                 // those rolls, kept as they were (the next token clears the attacks list)
   let rollLog = [], rollSeen = new Set();   // the rolls in the corner now, oldest first; every roll already shown
@@ -2113,12 +2114,27 @@ const Board = (() => {
     for (const side of ['us', 'de']) {
       const gun = GUNS[side].artillery;
       const cx = gun.x + (side === 'us' ? -DICE_OUT : DICE_OUT);
-      // Newest first, from just above the drawn token's spot upwards
-      let z = 0.62;
-      // (every roll since the last piece was picked: a fire mission has a row for each piece it caught, Steve)
-      for (const r of rolls.filter(o => o.side === side).reverse()) {
+      // Newest first, from just above the drawn token's spot upwards. Every roll since the last piece was picked. A fire
+      // mission or a bomber run (Steve: so all its dice can be seen): one row of dice for each piece it caught, each with a
+      // small label, under one label for the guns or the plane. When the rolls reach the top of the screen they carry on
+      // in a new column further out; past the last column the oldest are left off
+      const outward = side === 'us' ? -1 : 1;
+      let column = 0, z = 0.62;
+      const list = rolls.filter(o => o.side === side).reverse();
+      for (let n = 0; n < list.length; n++) {
+        const r = list[n];
+        const small = !!r.mission;
         const rows = Math.ceil(r.faces.length / 6), across = Math.min(6, r.faces.length);
-        const left = cx - (across - 1) * DIE_GAP / 2;
+        // Room for this roll and its label in this column? If not, the next column out
+        const lift = 0.15;
+        let colX = cx + outward * column * DICE_COLUMN;
+        if (offTop(new T.Vector3(colX, 0.05, z - (rows - 1) * DIE_GAP - lift))) {
+          if (column >= DICE_COLUMNS - 1) break;
+          column++;
+          z = 0.62;
+          colX = cx + outward * column * DICE_COLUMN;
+        }
+        const left = colX - (across - 1) * DIE_GAP / 2;
         r.faces.forEach((d, i) => {
           const x = left + (i % 6) * DIE_GAP, dz = z - Math.floor(i / 6) * DIE_GAP;
           const die = Models.die(d.face); die.scale.setScalar(DIE_SIZE);
@@ -2133,21 +2149,35 @@ const Board = (() => {
             die.add(at(new T.Mesh(new T.BoxGeometry(0.037, 0.037, 0.037), HIT_EDGE), 0, 0.015, 0));
           }
         });
-        // The tag just above the dice
-        const top = z - (rows - 1) * DIE_GAP - 0.15;
+        // The tag just above the dice: a mission's rows a smaller one, just the piece it caught
+        const top = z - (rows - 1) * DIE_GAP - lift;
         // (the Germans' tag runs in from the right edge of their dice, so it stays on the screen)
         const edge = (across - 1) * DIE_GAP / 2 + 0.1;
-        const anchor = new T.Vector3(side === 'us' ? cx - edge : cx + edge, 0.05, top);
-        // No room left at the top of the screen: the older rolls are left off
-        if (offTop(anchor)) break;
-        const tag = diceTag(r.text, side, false);
-        tag.scale.multiplyScalar(1.15);
-        tag.center.x = side === 'us' ? 0 : 1;
-        tag.position.copy(anchor); tag.renderOrder = 6;
-        scene.add(tag); dice.push(tag);
-        z = top - 0.48;
+        const anchor = new T.Vector3(side === 'us' ? colX - edge : colX + edge, 0.05, top);
+        placeDiceTag(small ? r.row : r.text, side, anchor, small ? 0.8 : 1.15);
+        z = top - (small ? 0.4 : 0.48);
+        // The last row of a mission: the guns' or plane's own label over its rows
+        const next = list[n + 1];
+        if (small && !(next && next.mission === r.mission)) {
+          let caught = 0;
+          for (let k = n; k >= 0 && list[k].mission === r.mission; k--) caught++;
+          const heading = new T.Vector3(anchor.x, 0.05, z + 0.1);
+          if (!offTop(heading)) placeDiceTag([r.who, `${caught} piece${caught === 1 ? '' : 's'} under it`], side, heading, 1.05);
+          z -= 0.42;
+        }
       }
     }
+  }
+
+  // A dice tag at a point, its tail there, running in from the dice's outer edge
+  function placeDiceTag(lines, side, anchor, size) {
+    const tag = diceTag(lines, side, false);
+    tag.scale.multiplyScalar(size);
+    tag.center.x = side === 'us' ? 0 : 1;
+    tag.position.copy(anchor);
+    tag.renderOrder = 6;
+    scene.add(tag);
+    dice.push(tag);
   }
 
   const HIT_EDGE = new T.MeshBasicMaterial({ color: 0xffd23f, side: T.BackSide });
@@ -2185,7 +2215,12 @@ const Board = (() => {
         }
         continue;
       }
-      if (f.faces && f.faces.length) out.push({ side: f.side, faces: f.faces, text: shotTagText(st, f) });
+      if (!f.faces || !f.faces.length) continue;
+      const text = shotTagText(st, f);
+      // A mortar or artillery mission, or a bomber run: one row of many (consecutive rolls of the same guns or plane)
+      const [who, target] = text[0].split(' → ');
+      const mission = f.support ? f.support + '/' + f.side : null;
+      out.push({ side: f.side, faces: f.faces, text, mission, who, row: [target || who, text[1]] });
     }
     return out;
   }
@@ -2528,7 +2563,6 @@ const Board = (() => {
       m.scale.setScalar(kind === 'artillery' ? TANKS * 1.7 : MEN * 1.3);
       bases = [m];
     } else bases = buildBases(side, kind, elite);
-    for (const b of bases) if (b.userData.signs) b.userData.signs.visible = false;
     if (elite) for (const b of bases) Models.eliteBand(b);
     const spots = kind === 'company' ? [[-0.11, -0.09], [0.11, -0.07], [0, 0.11]] : [[0, 0]];
     bases.forEach((b, i) => { b.position.set(spots[i][0], 0, spots[i][1]); g.add(b); });

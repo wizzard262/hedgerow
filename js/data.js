@@ -54,7 +54,7 @@ const MAPS = [
     villages: [{ x: 7, y: 4, name: 'Saint-Jean' }, { x: 7, y: 1, name: 'La Haye' }],
   },
   {
-    id: 'river', date: '7 August 1944', name: 'River crossing', note: 'Two bridges are the only way over. The Americans have 2 bomber runs and a fourth artillery round; the Germans an extra MG 42 and no Panther.',
+    id: 'river', date: '7 August 1944', name: 'River crossing', note: 'Two bridges are the only way over. The Americans have no bomber; the Germans an extra MG 42 and no Panther, and their Ju 88.',
     rows: [
       '..|.or.o..h.',
       '.o|..r.vv..o',
@@ -66,7 +66,7 @@ const MAPS = [
       'h.|..r.h...o',
     ],
     villages: [{ x: 7, y: 4, name: 'Pont-Sainte-Marie' }, { x: 7, y: 1, name: 'Le Moulin' }],
-    ammo: { us: { bomber: 2, artillery: 4 } },
+    ammo: { us: { bomber: 0, artillery: 2 } },
     de: { remove: ['dt2'], add: [{ id: 'dmg5', kind: 'mg42', name: 'MG 42 Team', reserve: true }] },
   },
   {
@@ -83,11 +83,12 @@ const MAPS = [
     ],
     villages: [{ x: 7, y: 3, name: 'Saint-Martin' }, { x: 7, y: 5, name: 'Les Quatre-Routes' }],
     deploy: 0.3,
+    ammo: { de: { bomber: 0 } },
     us: { add: [{ id: 'T3', kind: 'sherman', name: 'Sherman 75mm (2)' }] },
     de: { remove: ['dt1'], add: [{ id: 'pak2', kind: 'pak', name: 'PaK 40 (2)', post: [0, -1], garrison: true }] },
   },
   {
-    id: 'farmland', date: '25 July 1944', name: 'Open farmland', note: 'Few hedges and long shots, a few barns that block the view, and a duck pond. An extra tank each, and 2 bomber runs each.',
+    id: 'farmland', date: '25 July 1944', name: 'Open farmland', note: 'Few hedges and long shots, a few barns that block the view, and a duck pond. An extra tank each; the B-17 flies, the Ju 88 does not.',
     rows: [
       '.....|.....h',
       '..o..|.vv...',
@@ -107,7 +108,7 @@ const MAPS = [
       { x: 8, y: 7, kind: 'barn', areas: ['c', 's'] },
       { x: 3, y: 6, kind: 'pond', side: 's' },
     ],
-    ammo: { us: { bomber: 2 }, de: { bomber: 2 } },
+    ammo: { us: { bomber: 1 }, de: { bomber: 0 } },
     us: { add: [{ id: 'T3', kind: 'sherman', name: 'Sherman 75mm (2)' }] },
     de: { add: [{ id: 'dt3', kind: 'pz4', name: 'Panzer IV (2)', reserve: true }] },
   },
@@ -115,6 +116,7 @@ const MAPS = [
     id: 'paris', date: '25 August 1944', name: 'Paris', note: 'A tight city, a new maze of cobbled streets each game: houses, streets and little squares, each with a café and a fountain. The Americans must capture the Eiffel Tower, in the centre of the city. Few tanks: no Sherman 76mm and no Panther; a second bazooka for the Americans, an extra MG 42 for the Germans.',
     generated: 'city',
     gap: 1, wire: 0,
+    ammo: { us: { bomber: 0 } },
     us: { remove: ['T2'], add: [{ id: 'bz2', kind: 'bazooka', name: 'Bazooka Team 2' }] },
     de: { remove: ['dt2'], add: [{ id: 'dmg5', kind: 'mg42', name: 'MG 42 Team', reserve: true }] },
   },
@@ -149,7 +151,7 @@ const MAPS = [
       'wbbbb.o.h..o',
     ],
     villages: [{ x: 8, y: 4, name: 'Main bunker' }],
-    ammo: { us: { bomber: 2 }, de: { artillery: 3 } },
+    ammo: { us: { bomber: 1 }, de: { artillery: 2, bomber: 0 } },
     us: { add: [{ id: 'D', kind: 'company', name: '4th Platoon', quality: 'standard' }, { id: 'bz2', kind: 'bazooka', name: 'Bazooka Team 2' }] },
     de: {
       remove: ['pak1', 'dmg2', 'dmg4', 'dps1', 'd3', 'd5', 'dt1', 'dt2'],
@@ -176,6 +178,7 @@ const MAPS = [
     villages: [{ x: 7, y: 4, name: 'Saint-Fromond' }, { x: 7, y: 1, name: 'Le Bocage' }],
     gap: 0.15,
     deploy: 0.25,
+    ammo: { de: { bomber: 0 } },
     us: { remove: ['T2'], add: [{ id: 'D', kind: 'company', name: '4th Platoon', quality: 'standard' }, { id: 'bz2', kind: 'bazooka', name: 'Bazooka Team 2' }] },
     de: { remove: ['dt2'], add: [{ id: 'd6', kind: 'company', name: '6. Zug', quality: 'standard', reserve: true }, { id: 'dps2', kind: 'schreck', name: 'Panzerschreck Team', reserve: true }] },
   },
@@ -236,7 +239,7 @@ const RANGES = {
 };
 // Close range (Steve): four areas across or less (a field is three), from whichever of their areas are nearest: one less
 // needed on the dice, for every shot; not mortars, artillery or bombs
-const BUNKER_ARC = 120;           // how wide a bunker's front is, in degrees, half each side of straight ahead (Steve)
+const BUNKER_ARC = 90;            // how wide a bunker's front is, in degrees, half each side of straight ahead (Steve: 120, then 90)
 const BUNKER_FRONT = 3;          // more needed to hit a bunker from in front of it, or with shells or bombs (Steve)
 const CLOSE_RANGE = 4 / 3;       // in fields
 const CLOSE_BONUS = 1;           // taken off the score needed
@@ -290,10 +293,12 @@ const HAND_TO_HAND_LIMIT = 40;
 // Fire support: dice on the target field (and a few on the fields around it for artillery), and its ammo: once fired it
 // never comes back (Steve: mortars, artillery and, later, bombers never replenish)
 // hard: its dice against a tank. A mortar's (Steve) only shakes a tank, or kills one already shaken: see damage in sim.js
-const MORTARS = { name: '81 mm mortars', dice: 4, splash: 0, ammo: 6, hard: 1 };
-const ARTILLERY = { name: '105 mm battery', dice: 5, splash: 1, ammo: 3, hard: 1 };
-const DE_MORTAR = { name: '8 cm mortars', dice: 3, splash: 0, ammo: 8, hard: 1 };   // the Germans' own mortar: drops on one piece, one mission a turn while ammo lasts
-const DE_ARTILLERY = { name: '10.5 cm battery', dice: 5, splash: 1, ammo: 2, hard: 1 };   // the Germans' guns: like ours, fewer rounds
+// (Steve: too many, too accurate: half the rounds, 6 to 3 and 8 to 4, and the guns' 3 to 2 and 2 to 1; see SHELL_HARDER)
+const MORTARS = { name: '81 mm mortars', dice: 4, splash: 0, ammo: 3, hard: 1 };
+const ARTILLERY = { name: '105 mm battery', dice: 5, splash: 1, ammo: 2, hard: 1 };
+const DE_MORTAR = { name: '8 cm mortars', dice: 3, splash: 0, ammo: 4, hard: 1 };   // the Germans' own mortar: drops on one piece, one mission a turn while ammo lasts
+const DE_ARTILLERY = { name: '10.5 cm battery', dice: 5, splash: 1, ammo: 1, hard: 1 };
+const SHELL_HARDER = 1;           // mortar and artillery dice need one more than a shot does: 4+ before cover (Steve)   // the Germans' guns: like ours, fewer rounds
 // The bomber (Steve): the same for both sides. One run a game; a compass spin says which way it flies; it goes straight
 // through a field chosen on the edge of the board and drops one bomb on every piece in every field under it, friend or foe.
 // need: the score a bomb needs before cover. worth: how many more enemy pieces than a side's own (each of those counts

@@ -1179,35 +1179,6 @@ const Models = (() => {
     else { const mgTeam = team('de', 'mg42'); mgTeam.scale.setScalar(2); g.add(at(mgTeam, -0.02, 0, 0)); }
     return castAll(g);
   }
-  // Painted on the ground round it, so it is plain where it is strong and where it is weak (Steve). The bunker faces west, so
-  // each is spun to read the right way up. Flat, and not there to be clicked
-  function bunkerSign(text, colour) {
-    const c = document.createElement('canvas'); c.width = 256; c.height = 64;
-    const paint = c.getContext('2d');
-    paint.beginPath(); paint.roundRect(3, 3, 250, 58, 12);
-    paint.fillStyle = colour; paint.fill();
-    paint.lineWidth = 3; paint.strokeStyle = 'rgba(255,245,225,.9)'; paint.stroke();
-    paint.font = 'bold 38px Georgia, serif'; paint.fillStyle = '#fff8ea';
-    paint.textAlign = 'center'; paint.textBaseline = 'middle';
-    paint.fillText(text, 128, 34);
-    const map = new T.CanvasTexture(c);
-    map.encoding = T.sRGBEncoding;
-    const sign = new T.Mesh(new T.PlaneGeometry(0.44, 0.11), new T.MeshBasicMaterial({ map, transparent: true, depthWrite: false }));
-    sign.raycast = () => {};
-    sign.userData.keep = true;
-    return sign;
-  }
-  function bunkerSigns() {
-    const g = new T.Group(), B = BUNKER, flat = 0.018;
-    const place = (text, colour, x, z) => g.add(at(bunkerSign(text, colour), x, flat, z, -Math.PI / 2, 0, Math.PI));
-    const STRONG = 'rgba(160,26,20,.95)', WEAK = 'rgba(38,120,40,.95)';
-    place('FRONT +3', STRONG, B.deep / 2 + 0.25, 0);
-    place('SIDE: EASY', WEAK, 0, B.wide / 2 + 0.075);
-    place('SIDE: EASY', WEAK, 0, -(B.wide / 2 + 0.075));
-    place('BACK: EASY', WEAK, -(B.deep / 2 + 0.26), 0);
-    return g;
-  }
-
   // ---------- The railway (Steve) ----------
 
   // A length of track along x, flat on the ground: pale ballast, dark sleepers across it, two steel rails along it
@@ -1220,12 +1191,12 @@ const Models = (() => {
         g.fillStyle = R() < 0.5 ? 'rgba(40,36,30,.3)' : 'rgba(210,200,185,.2)';
         g.fillRect(R() * w, R() * h, 1 + R() * 3, 1 + R() * 3);
       }
-      // The sleepers
-      for (let i = 0; i < 9; i++) { g.fillStyle = i % 3 ? '#3f2e22' : '#4a372a'; g.fillRect((i + 0.25) * (w / 9), 8, w / 9 * 0.42, h - 16); }
-      // The rails, with a shine along the top
+      // The sleepers, and the rails with a shine along the top: a little faint against the ballast (Steve), so the yard
+      // doesn't shout over the pieces
+      for (let i = 0; i < 9; i++) { g.fillStyle = i % 3 ? '#5a4a3d' : '#625142'; g.fillRect((i + 0.25) * (w / 9), 8, w / 9 * 0.42, h - 16); }
       for (const y of [h * 0.26, h * 0.7]) {
-        g.fillStyle = '#34343a'; g.fillRect(0, y, w, 8);
-        g.fillStyle = '#b6bcc2'; g.fillRect(0, y + 1, w, 3);
+        g.fillStyle = '#56565a'; g.fillRect(0, y, w, 8);
+        g.fillStyle = '#a3a7ab'; g.fillRect(0, y + 1, w, 3);
       }
     });
   }
@@ -1625,5 +1596,5 @@ const Models = (() => {
     return castAll(g);
   }
 
-  return { EIFFEL_HEIGHT, eiffel, landingCraft, tankTrap, hulk, crater, seaWall, bunker, bunkerCrew, bunkerSigns, BUNKER, track, bufferStop, engine, carriage, wagon, signalbox, signal, watertower, coal, cow, sheep, lampPost, posterColumn, marketStall, cafe, barn, fountain, pond, reeds, BRIDGE_DECK, materials, M, mergeParts, eliteBand, water, bridge, soldier, squad, team, captain, pak, mortar, bomber, bomberOnStand, howitzer, round, coin, token, sherman, panther, panzer4, hedge, tree, house, die, table, field, lane, at };
+  return { EIFFEL_HEIGHT, eiffel, landingCraft, tankTrap, hulk, crater, seaWall, bunker, bunkerCrew, BUNKER, track, bufferStop, engine, carriage, wagon, signalbox, signal, watertower, coal, cow, sheep, lampPost, posterColumn, marketStall, cafe, barn, fountain, pond, reeds, BRIDGE_DECK, materials, M, mergeParts, eliteBand, water, bridge, soldier, squad, team, captain, pak, mortar, bomber, bomberOnStand, howitzer, round, coin, token, sherman, panther, panzer4, hedge, tree, house, die, table, field, lane, at };
 })();

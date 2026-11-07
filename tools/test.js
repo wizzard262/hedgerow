@@ -421,7 +421,7 @@ check("a tank's armour is on its label and in its score, for shots and shells", 
   T2.x = 2; T2.y = 5; T2.at = null; pan.x = 4; pan.y = 5; pan.at = null;
   assert(Sim.armourOf(pan) === 1 && Sim.armourOf(T2) === 0, 'the Panther is not armour +1, the Firefly +0');
   assert(Sim.needWhy(st, T2, pan).includes('+1 armour'), 'the label does not say +1 armour');
-  assert(Sim.shellWhy(st, pan).includes('+1 armour') && Sim.shellNeed(st, pan) === TO_HIT + 1, 'shells on the Panther ignore its armour');
+  assert(Sim.shellWhy(st, pan).includes('+1 armour') && Sim.shellNeed(st, pan) === TO_HIT + SHELL_HARDER + 1, 'shells on the Panther ignore its armour');
 });
 
 check('no hedges or wire round villages, hamlets or orchards', () => {
@@ -871,29 +871,22 @@ check('the bomber can stay away: the token is used, the run is kept, and it is b
   assert(Sim.tokensHome(st).us.from.some(w => w.gun === 'bomber') && st.bag.us === 1 + 3, 'it did not get a token next round');
 });
 
-check('the German bomber: your pieces under the line are each asked, then it flies once; its line is worth flying', () => {
+check('the German bomber: nobody is asked, it flies once; its line is worth flying', () => {
   const st = tableWith({ A: [3, 7], B: [3, 5], C: [3, 3], d1: [9, 1] });
   Sim.startRound(st);
   st.spin.de = 0;
   st.fired.de = {};
   st.drawn = 'de';
   st.computer = { queue: [], mortar: false, artillery: false, bomber: true, rep: [], ask: null, move: { gun: 'bomber', what: '' } };
-  const asked = [];
-  let r = Sim.computerStep(st);
-  while (r.ask) {
-    assert(r.ask.bombed, 'it asked about something else');
-    assert(st.ammo.de.bomber === 1, 'the bombs fell before everyone was asked');
-    asked.push(r.ask.target);
-    Sim.answer(st, r.ask.target === 'B');
-    r = Sim.computerStep(st);
-  }
-  assert(r.done, 'the run did not end');
-  assert(asked.length === 3 && asked.includes('A') && asked.includes('B') && asked.includes('C'), `asked ${asked.join(', ')}`);
+  // B was already down from an earlier shot: that still counts
+  Sim.unitById(st, 'B').down = true;
+  const r = Sim.computerStep(st);
+  assert(r.done && !r.ask, 'it asked someone to take cover');
   assert(st.ammo.de.bomber === 0, 'the run was not used');
   const bombs = st.fx.filter(f => f.kind === 'bomb' && f.side === 'de');
   assert(bombs.length === 3, `${bombs.length} bombs fell`);
-  assert(bombs.find(f => f.to.id === 'B').need === BOMBER.need + TAKE_COVER, 'taking cover did not count');
-  assert(Sim.unitById(st, 'B').down, 'B did not get down');
+  assert(bombs.find(f => f.to.id === 'B').need === BOMBER.need + TAKE_COVER, 'being down already did not count');
+  assert(bombs.find(f => f.to.id === 'A').need === BOMBER.need && !Sim.unitById(st, 'A').down, 'A got down');
   // Nothing worth bombing: it stays away and keeps its run
   const quiet = tableWith({ A: [3, 7], d1: [9, 1] });
   Sim.startRound(quiet);
@@ -1045,22 +1038,16 @@ check('the Germans: their men do not charge across barbed wire', () => {
   }
 });
 
-check('the Germans: every American under their artillery is asked, then it fires once', () => {
+check('the Germans: their artillery fires once without asking anyone; a piece already down keeps its +2', () => {
   const st = tableWith({ A: [3, 5], B: [3, 4], C: [0, 0], d2: [9, 5], dcap: [11, 7] });
   const before = st.ammo.de.artillery;
+  Sim.unitById(st, 'B').down = true;
   st.computer = { queue: [], mortar: false, artillery: true, bomber: false, rep: [], ask: null, move: { gun: 'artillery', what: '' } };
-  const asked = [];
-  for (let r = Sim.computerStep(st); !r.done; r = Sim.computerStep(st)) {
-    assert(st.ammo.de.artillery === before, 'it fired before everyone was asked');
-    asked.push(r.ask.target);
-    Sim.answer(st, r.ask.target !== asked[0]);
-  }
-  assert(asked.length === 2 && asked.includes('A') && asked.includes('B'), `asked ${asked.join(', ')}`);
+  const r = Sim.computerStep(st);
+  assert(r.done && !r.ask, 'it asked someone to take cover');
   assert(st.ammo.de.artillery === before - 1, 'it did not fire once');
-  // The one that got down needs two more; the one that stood fast doesn't
-  const down = asked[1], stood = asked[0];
   const need = id => st.fx.find(f => f.kind === 'shell' && f.to && f.to.id === id).need;
-  assert(Sim.unitById(st, down).down && need(down) === need(stood) + TAKE_COVER, 'taking cover did not count');
+  assert(need('B') === need('A') + TAKE_COVER && !Sim.unitById(st, 'A').down, 'being down already did not count, or A got down');
 });
 
 check('the Germans: a shaken piece rallies itself, unless it has a shot and its captain is near', () => {
@@ -1590,9 +1577,9 @@ check('mortars land on the one field, artillery on it and the four next to it; m
   assert(Sim.shellFields('artillery', 0, 0).length === 3, 'artillery in a corner reached off the board');
   const t = st.units.find(u => u.side === 'de' && u.x !== null && Sim.tileType(u.x, u.y) !== 'village');
   t.down = false;
-  assert(Sim.shellNeed(st, t) === TO_HIT && !Sim.shellWhy(st, t).length, 'shells on men in the open needed more than the start');
+  assert(Sim.shellNeed(st, t) === TO_HIT + SHELL_HARDER && !Sim.shellWhy(st, t).length, 'shells on men in the open needed more than the start');
   t.down = true;
-  assert(Sim.shellNeed(st, t) === TO_HIT + TAKE_COVER && Sim.shellWhy(st, t).includes('+2 take cover'), 'shells ignored men down in cover');
+  assert(Sim.shellNeed(st, t) === TO_HIT + SHELL_HARDER + TAKE_COVER && Sim.shellWhy(st, t).includes('+2 take cover'), 'shells ignored men down in cover');
 });
 
 check('tanks cannot take cover', () => {
@@ -1634,7 +1621,7 @@ check('villages, hamlets and orchards: +2 or +1 for men, +1 a tank, +1 against s
   const sameField = { x: 7, y: 4, side: 'us', kind: 'company' };
   assert(Sim.tileType(7, 3) === 'village' && Sim.cover(st0, inside, target) - (Sim.sight(st0, inside, target) || { cover: 0 }).cover === PLACE_COVER.village.men, 'a piece in the next field of the village lost its cover');
   assert(Sim.cover(st0, sameField, target) === 0, 'an enemy in the very same field still got cover from it');
-  assert(Sim.shellNeed(st0, target) === TO_HIT + 1, 'shells on the village needed more than +1');
+  assert(Sim.shellNeed(st0, target) === TO_HIT + SHELL_HARDER + 1, 'shells on the village needed more than +1');
   const tank = { x: 7, y: 4, side: 'de', kind: 'pz4' };
   assert(Sim.cover(st0, null, tank) === 1, 'a tank in the village did not get +1');
 });
@@ -2449,7 +2436,7 @@ check('the American computer: a piece fired on is yours to ask, and the shot use
   assert(d2.down || d2.x === null, 'taking cover did not count');
 });
 
-check('the American computer: its shells ask every German piece under them, and use American rounds', () => {
+check('the American computer: its shells ask nobody, and use American rounds', () => {
   // (along the lane, so the American platoon sees them)
   const st = tableAsGermans({ A: [0, 2], d1: [6, 2], d2: [6, 3] });
   Sim.startRound(st);
@@ -2460,7 +2447,7 @@ check('the American computer: its shells ask every German piece under them, and 
   const asked = runComputerToken(st);
   assert(st.ammo.us.artillery === before - 1, 'it did not fire once');
   assert(st.ammo.de.artillery === german, 'it used a German round');
-  assert(asked.length === 2 && asked.every(a => a.shelled && Sim.unitById(st, a.target).side === 'de'), 'it did not ask both your pieces');
+  assert(!asked.length, 'it asked your pieces to take cover from shells');
 });
 
 check('the American computer: a rifle platoon charges an empty village in reach; nothing else stops in it', () => {
@@ -2736,7 +2723,7 @@ check('close range does nothing for mortars, artillery or bombs', () => {
   const st = tableWith({ A: [3, 5], d2: [4, 5] });
   const t = Sim.unitById(st, 'd2');
   t.at = null;
-  assert(Sim.shellNeed(st, t) === TO_HIT, 'shells got a close-range bonus');
+  assert(Sim.shellNeed(st, t) === TO_HIT + SHELL_HARDER, 'shells got a close-range bonus');
   assert(Sim.bombNeed(st, t) === BOMBER.need, 'bombs got a close-range bonus');
   assert(!Sim.shellWhy(st, t).some(w => w.includes('close range')), 'the shell label says close range');
 });
@@ -2885,7 +2872,7 @@ check('two humans: each token is commanded by its own side, and the other side c
   assert(Sim.canFire(st, 'artillery'), 'the American player could not fire');
 });
 
-check('two humans: the other player is asked about a shot, shells or bombs; a robot never is', () => {
+check('two humans: the other player is asked about a shot, never shells or bombs; a robot never is', () => {
   const both = Sim.newGame(5, 'both');
   both.wire = {}; both.hedges = {};
   for (const u of both.units) u.x = u.y = null;
@@ -2894,20 +2881,17 @@ check('two humans: the other player is asked about a shot, shells or bombs; a ro
   Sim.startRound(both);
   both.human = 'us';
   assert(Sim.piecesToAsk(both, 'shot', 3, 5, d2).join() === [d2].join(), 'the piece shot at was not asked');
-  const shells = Sim.piecesToAsk(both, 'artillery', 3, 5, d2);
-  assert(shells.includes(d2) && shells.includes(d5), 'not every piece under the shells was asked');
-  assert(!shells.includes(dt1) && !shells.includes(A), 'a tank, or the player\'s own piece, was asked');
+  assert(!Sim.piecesToAsk(both, 'artillery', 3, 5, d2).length, 'a piece was asked about shells');
   // Already moved: it can't be asked
   d2.acted = true;
   assert(!Sim.piecesToAsk(both, 'shot', 3, 5, d2).length, 'a piece that had moved was asked');
   d2.acted = false;
-  // American mortars the whole field, German mortars the one piece
-  place(both, 'd3', 3, 5);
+  // Nor mortars, either side's
   both.human = 'de';
-  const B = place(both, 'B', 3, 5), C = place(both, 'C', 3, 5);
-  assert(Sim.piecesToAsk(both, 'mortars', 3, 5, B).length === 1, 'German mortars asked more than the one piece');
+  const B = place(both, 'B', 3, 5);
+  assert(!Sim.piecesToAsk(both, 'mortars', 3, 5, B).length, 'a piece was asked about German mortars');
   both.human = 'us';
-  assert(Sim.piecesToAsk(both, 'mortars', 3, 5, d2).length > 1, 'American mortars asked only one piece');
+  assert(!Sim.piecesToAsk(both, 'mortars', 3, 5, d2).length, 'a piece was asked about American mortars');
   // A robot decides for itself
   const one = Sim.newGame(5, 'us');
   const target = one.units.find(u => u.side === 'de' && u.kind === 'company');
@@ -3077,11 +3061,11 @@ check('every map changes what it says it does: pieces, ammunition and hedges', (
   assert(pieces('farmland').includes('T3') && pieces('farmland').includes('dt3'), 'open farmland: not as it says');
   assert(pieces('deep').includes('D') && !pieces('deep').includes('T2') && pieces('deep').includes('d6'), 'deep bocage: not as it says');
   assert(usual.length === US_START.length + DE_START.length, 'the usual map changed its pieces');
-  // Two bomber runs on some maps, the guns as they say; one elsewhere
-  assert(Sim.newGame(1, 'us', 'river').ammo.us.bomber === 2 && Sim.newGame(1, 'us', 'river').ammo.de.bomber === 1, 'river crossing: bomber runs');
-  assert(Sim.newGame(1, 'us', 'river').ammo.us.artillery === 4, 'river crossing: artillery rounds');
+  // The bomber runs and guns as they say (see also: half the bomber runs)
+  assert(Sim.newGame(1, 'us', 'river').ammo.us.bomber === 0 && Sim.newGame(1, 'us', 'river').ammo.de.bomber === 1, 'river crossing: bomber runs');
+  assert(Sim.newGame(1, 'us', 'river').ammo.us.artillery === 2, 'river crossing: artillery rounds');
   const farm = Sim.newGame(1, 'us', 'farmland');
-  assert(farm.ammo.us.bomber === 2 && farm.ammo.de.bomber === 2, 'open farmland: bomber runs');
+  assert(farm.ammo.us.bomber === 1 && farm.ammo.de.bomber === 0, 'open farmland: bomber runs');
   assert(Sim.newGame(1).ammo.us.bomber === 1 && Sim.newGame(1).ammo.de.bomber === 1, 'the usual map has one run each');
   // Hedges: far more in deep bocage than in open farmland, over a few games
   const hedges = id => { let n = 0; for (let s = 1; s <= 10; s++) n += Object.keys(Sim.newGame(s, 'us', id).hedges).length; return n; };
@@ -3089,21 +3073,15 @@ check('every map changes what it says it does: pieces, ammunition and hedges', (
   Sim.newGame(1);
 });
 
-check('two bomber runs can both be flown, one a round; then it is out of the game', () => {
-  const st = Sim.newGame(3, 'us', 'river');
+check('a bomber run is flown once, on a token; then the bomber is out of the game', () => {
+  const st = Sim.newGame(3, 'us', 'hedges');
   Sim.startRound(st);
   st.drawn = 'us';
-  assert(Sim.canFire(st, 'bomber') && Sim.actFire(st, 'bomber', 0, 0).ok && st.ammo.us.bomber === 1, 'the first run did not fly');
+  assert(Sim.canFire(st, 'bomber') && Sim.actFire(st, 'bomber', 0, 0).ok && st.ammo.us.bomber === 0, 'the run did not fly');
   st.activeId = null;
   assert(!Sim.canFire(st, 'bomber'), 'it flew twice in a round');
   Sim.endRound(st);
-  if (!st.won && !st.lost) {
-    Sim.startRound(st);
-    st.drawn = 'us';
-    assert(Sim.canFire(st, 'bomber') && Sim.actFire(st, 'bomber', 0, 0).ok && st.ammo.us.bomber === 0, 'the second run did not fly');
-    Sim.endRound(st);
-    if (!st.won && !st.lost) { Sim.startRound(st); st.drawn = 'us'; assert(!Sim.canFire(st, 'bomber'), 'a third run'); }
-  }
+  if (!st.won && !st.lost) { Sim.startRound(st); st.drawn = 'us'; assert(!Sim.canFire(st, 'bomber'), 'a second run'); }
   Sim.newGame(1);
 });
 
@@ -3458,7 +3436,7 @@ check('the beach: Americans start in the sea and can only leave it; Germans are 
     assert(de.filter(u => Sim.isBunker(u)).length === 4, `seed ${seed}: not four bunkers`);
     assert(de.some(u => u.kind === 'company') && de.some(u => u.kind === 'mg42'), `seed ${seed}: no loose infantry or MGs`);
     assert(de.length < DE_START.length && us.length > de.length - 2, `seed ${seed}: the Germans are not fewer: ${de.length}`);
-    assert(st.ammo.de.artillery >= 3, 'the Germans have no extra artillery');
+    assert(st.ammo.de.artillery > DE_ARTILLERY.ammo, 'the Germans have no extra artillery');
     for (const u of us.concat(de)) assert(fieldOk(st, u.x, u.y), `seed ${seed}: too many in ${u.x},${u.y}`);
     // The main bunker is the objective
     const main = Sim.unitById(st, 'bk1');
@@ -3540,7 +3518,7 @@ check('a bunker: +3 from the front, none from the side or back; rifles only shak
   // Shells: mortars only shake it, artillery can kill it; +3 either way
   const shell = setUp('B', 0, 0);
   shell.b.shocked = true;
-  assert(Sim.shellNeed(shell.st, shell.b) === TO_HIT + BUNKER_FRONT, 'shells do not need +3');
+  assert(Sim.shellNeed(shell.st, shell.b) === TO_HIT + SHELL_HARDER + BUNKER_FRONT, 'shells do not need +3');
   Sim.newGame(1);
 });
 
@@ -3716,12 +3694,12 @@ check('the bomber can be sent through any field, and nothing has to be lit', () 
   Sim.newGame(1);
 });
 
-check('a bunker fires across 120 degrees: 60 either side of straight ahead', () => {
+check('a bunker fires across 90 degrees: 45 either side of straight ahead', () => {
   const bunker = { x: 8, y: 4 };
-  // One field out: the fields beside straight ahead are in; two rows off is past 60 degrees
+  // One field out: the fields beside straight ahead are on the 45 degree line, in; two rows off is not
   assert(Sim.inFrontOf(bunker, { x: 7, y: 4 }) && Sim.inFrontOf(bunker, { x: 7, y: 5 }) && !Sim.inFrontOf(bunker, { x: 7, y: 6 }), 'one field out');
-  // Two fields out: three rows off is inside 60 degrees, four is not
-  assert(Sim.inFrontOf(bunker, { x: 6, y: 7 }) && !Sim.inFrontOf(bunker, { x: 6, y: 8 }), 'two fields out');
+  // Two fields out: two rows off is in, three is not
+  assert(Sim.inFrontOf(bunker, { x: 6, y: 6 }) && !Sim.inFrontOf(bunker, { x: 6, y: 7 }), 'two fields out');
   // Its own column and behind it: never
   assert(!Sim.inFrontOf(bunker, { x: 8, y: 3 }) && !Sim.inFrontOf(bunker, { x: 9, y: 4 }), 'beside or behind it');
 });
@@ -3761,6 +3739,80 @@ check('whenever a robot picks a gun target, on every map, someone on that side c
         if (t) assert(st.units.some(u => u.side === side && u.x !== null && Sim.sight(st, u, t, true)), `${map.id} ${seed}: ${side} would fire on ${t.name} unseen`);
       }
     }
+  }
+  Sim.newGame(1);
+});
+
+check('the captain can take the goal too, as a rifle platoon can; nobody else can', () => {
+  const o = Sim.newGame(5, 'us').objective;
+  for (const [id, takes] of [['cap', true], ['A', true], ['mg1', false], ['bz1', false], ['T1', false]]) {
+    const st = tableWith({ [id]: [o.x, o.y], d2: [0, 0] }, 5);
+    assert(Sim.holdsObjective(st) === takes, `${id}: holds ${Sim.holdsObjective(st)}`);
+  }
+  // Held a whole round by the captain alone: won
+  const st = tableWith({ cap: [o.x, o.y], d2: [0, 0] }, 5);
+  Sim.finishRound(st);
+  Sim.finishRound(st);
+  assert(st.won, 'the captain held the goal for a whole round and did not win');
+  // With a German still in the field, not
+  const contested = tableWith({ cap: [o.x, o.y], d2: [o.x, o.y] }, 5);
+  assert(!Sim.holdsObjective(contested), 'the captain held it with a German in it');
+  // No platoon left but the captain: not beaten yet
+  const last = tableWith({ cap: [1, 1], dt1: [10, 4] }, 5);
+  assert(!Sim.cannotWin(last), 'with the captain left the attack was given up');
+  Sim.newGame(1);
+});
+
+check('half the bomber runs: ten over the campaign, at most one a side on each map, given to the side that needs it', () => {
+  const runs = {};
+  for (const map of MAPS) {
+    const st = Sim.newGame(1, 'us', map.id);
+    runs[map.id] = [st.ammo.us.bomber, st.ammo.de.bomber];
+  }
+  const total = Object.values(runs).reduce((n, [us, de]) => n + us + de, 0);
+  assert(total === 10, `${total} runs in all`);
+  assert(Object.values(runs).every(([us, de]) => us <= 1 && de <= 1 && us + de >= 1), 'a map with two runs a side, or none at all: ' + JSON.stringify(runs));
+  const want = { beach: [1, 0], deep: [1, 0], hedges: [1, 1], farmland: [1, 0], river: [0, 1], town: [1, 0], station: [1, 1], paris: [0, 1] };
+  for (const id of Object.keys(want)) assert(runs[id].join() === want[id].join(), `${id}: ${runs[id]}`);
+  // No runs: no token for it in the bag
+  const paris = Sim.newGame(1, 'us', 'paris');
+  assert(!Sim.canFire(paris, 'bomber'), 'a bomber with no runs could fly');
+  Sim.newGame(1);
+});
+
+check('mortars and artillery: half the rounds, one more to hit, and nobody takes cover from them or from bombs', () => {
+  const st = Sim.newGame(1);
+  assert(st.ammo.us.mortars === 3 && st.ammo.us.artillery === 2 && st.ammo.de.mortars === 4 && st.ammo.de.artillery === 1, 'rounds: ' + JSON.stringify(st.ammo));
+  assert(Sim.newGame(1, 'us', 'river').ammo.us.artillery === 2 && Sim.newGame(1, 'us', 'beach').ammo.de.artillery === 2, 'the maps\' extra rounds not halved');
+  // Men in the open: 4+ against shells, 3+ against a shot
+  const open = tableWith({ A: [3, 5], d2: [5, 5] });
+  const d2 = Sim.unitById(open, 'd2');
+  d2.at = null;
+  assert(Sim.shellNeed(open, d2) === 4, `shells need ${Sim.shellNeed(open, d2)}`);
+  // Already down: still +2 against them
+  d2.down = true;
+  assert(Sim.shellNeed(open, d2) === 6 && Sim.shellWhy(open, d2)[0] === '4+', `down: ${Sim.shellNeed(open, d2)}, ${Sim.shellWhy(open, d2)}`);
+  // Nobody of the other side is asked about shells or bombs, only about a shot
+  const both = tableWith({ A: [3, 5], d2: [5, 5] });
+  both.mode = 'both'; both.players = { us: 'human', de: 'human' };
+  for (const which of ['mortars', 'artillery', 'bomber']) assert(!Sim.piecesToAsk(both, which, 5, 5).length, `asked about ${which}`);
+  // The computer's guns and bomber never stop to ask you either, and its own men never duck under yours
+  for (let seed = 1; seed <= 12; seed++) {
+    const g = Sim.newGame(seed, 'us', 'hedges');
+    let rounds = 0;
+    while (!g.won && !g.lost && rounds++ < 25) {
+      Sim.startRound(g);
+      for (let side = Sim.drawToken(g); side; side = Sim.drawToken(g)) {
+        if (side === 'timer') break;
+        if (side === 'us') { g.drawn = null; continue; }
+        for (let r = Sim.computerStep(g); !r.done; r = Sim.computerStep(g)) {
+          if (r.ask) { assert(!r.ask.shelled && !r.ask.bombed && !r.ask.mortar, `seed ${seed}: asked about ${JSON.stringify(r.ask)}`); Sim.answer(g, false); }
+        }
+        Sim.endComputerToken(g);
+      }
+      Sim.endRound(g);
+    }
+    assert(!g.fx.some(f => (f.kind === 'shell' || f.kind === 'bomb') && f.tookCover), `seed ${seed}: someone ducked under shells`);
   }
   Sim.newGame(1);
 });

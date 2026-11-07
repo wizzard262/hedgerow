@@ -98,9 +98,9 @@ const UI = (() => {
     if (view.mode === 'charge' && Sim.canAct(st, u) && Sim.lineSides(st, u).length) marked.push({ x: u.x, y: u.y, kind: 'line' });
     // Rallying: every field the captain's voice reaches, faintly, round the pieces he can rally (Steve)
     if (view.mode === 'rally') marked.push(...rallyReach(u, marked));
-    // A rifle platoon that can reach the village to take: that field in blue hatching (Steve), so it's clear
+    // A rifle platoon or the captain that can reach the village to take: that field in blue hatching (Steve), so it's clear
     // (only the Americans have to take it)
-    if (st.human === 'us' && u.kind === 'company' && ['charge', 'moveShoot'].includes(view.mode)) {
+    if (st.human === 'us' && Sim.takesGoal(u) && ['charge', 'moveShoot'].includes(view.mode)) {
       for (const p of marked) if (p.x === st.objective.x && p.y === st.objective.y && p.kind !== 'line') p.kind = 'goal';
     }
     return marked;
