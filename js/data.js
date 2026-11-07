@@ -52,6 +52,7 @@ const MAPS = [
       'o.|.o.h....o',
     ],
     villages: [{ x: 7, y: 4, name: 'Saint-Jean' }, { x: 7, y: 1, name: 'La Haye' }],
+    ammo: { us: { artillery: 3 } },   // (Steve: one more artillery round here, in the bocage and at the station)
   },
   {
     id: 'river', date: '7 August 1944', name: 'River crossing', note: 'Two bridges are the only way over. The Americans have no bomber; the Germans an extra MG 42 and no Panther, and their Ju 88.',
@@ -83,7 +84,8 @@ const MAPS = [
     ],
     villages: [{ x: 7, y: 3, name: 'Saint-Martin' }, { x: 7, y: 5, name: 'Les Quatre-Routes' }],
     deploy: 0.3,
-    ammo: { de: { bomber: 0 } },
+    // (Steve: too easy for the Americans: no bomber, and one artillery round fewer)
+    ammo: { us: { bomber: 0, artillery: 1 }, de: { bomber: 0 } },
     us: { add: [{ id: 'T3', kind: 'sherman', name: 'Sherman 75mm (2)' }] },
     de: { remove: ['dt1'], add: [{ id: 'pak2', kind: 'pak', name: 'PaK 40 (2)', post: [0, -1], garrison: true }] },
   },
@@ -135,6 +137,7 @@ const MAPS = [
     ],
     villages: [{ x: 7, y: 4, name: 'La Gare' }, { x: 7, y: 1, name: 'Le Dépôt' }],
     gap: 1, wire: 0,
+    ammo: { us: { artillery: 3 } },
   },
   {
     id: 'beach', date: '6 June 1944', name: 'Beach landing', note: 'The Americans land from craft in the surf and must capture the main bunker and hold it. Each bunker is a U of concrete with an MG team or a PaK 40 inside, firing only out of the slit in its thick front. From the front you need 3 more to hit: get round to its thin sides or open back. Tank traps, a sea wall, wrecks on the sand. The Germans have fewer pieces and no tanks, but more artillery.',
@@ -178,7 +181,7 @@ const MAPS = [
     villages: [{ x: 7, y: 4, name: 'Saint-Fromond' }, { x: 7, y: 1, name: 'Le Bocage' }],
     gap: 0.15,
     deploy: 0.25,
-    ammo: { de: { bomber: 0 } },
+    ammo: { us: { artillery: 3 }, de: { bomber: 0 } },
     us: { remove: ['T2'], add: [{ id: 'D', kind: 'company', name: '4th Platoon', quality: 'standard' }, { id: 'bz2', kind: 'bazooka', name: 'Bazooka Team 2' }] },
     de: { remove: ['dt2'], add: [{ id: 'd6', kind: 'company', name: '6. Zug', quality: 'standard', reserve: true }, { id: 'dps2', kind: 'schreck', name: 'Panzerschreck Team', reserve: true }] },
   },

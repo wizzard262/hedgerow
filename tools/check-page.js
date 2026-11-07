@@ -136,9 +136,14 @@ async function checkPlayers() {
     await page.waitForTimeout(400);
   }
   console.log('  two humans ends:', await page.textContent('#result-title'), '|', await page.textContent('#result-text'));
+  const was = await page.evaluate(() => Game.state.map.id);
+  console.log('  its button:', await page.textContent('#again-btn'));
   await page.click('#again-btn');
   await page.waitForTimeout(600);
-  console.log('  play again keeps it:', await page.evaluate(() => Game.state.mode));
+  const after = await page.evaluate(() => ({ mode: Game.state.mode, map: Game.state.map.id }));
+  const wanted = await page.evaluate(id => CAMPAIGN[(CAMPAIGN.indexOf(id) + 1) % CAMPAIGN.length], was);
+  console.log('  next battle keeps the commanders:', after.mode, '| map', was, '->', after.map, after.map === wanted ? 'ok' : 'WRONG');
+  if (after.map !== wanted || after.mode !== 'both') process.exitCode = 1;
 
   // ---------- Two robots ----------
   await page.click('#new-btn');

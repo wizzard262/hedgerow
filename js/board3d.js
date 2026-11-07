@@ -1587,6 +1587,72 @@ const Board = (() => {
   // Each new shot plays once: a muzzle flash at the shooter, then tracers (rifles a few, machine guns a stream) or one
   // glowing shell (tanks and guns) or a rocket trail flying to the target; where it lands, dust and sparks for bullets,
   // a bright strike on armour, or a high-explosive burst with smoke when a gun fires on men. Artillery and mortars burst only
+  // ---------- Fireworks (Steve: Paris liberated) ----------
+  // Rockets going up over the Eiffel Tower and bursting into stars in the colours of the French flag, then falling and
+  // fading. Each rocket: when it goes up, where it bursts, its stars flying out
+  let fireworks = null;
+  const FIREWORK = { rise: 1.1, burstHigh: [3.2, 4.2], stars: 36, starLife: 1.8, speed: 0.9, fall: 0.6, every: 0.6 };
+  const FIREWORK_COLOURS = ['rgba(60,110,255,1)', 'rgba(255,255,255,1)', 'rgba(255,60,50,1)', 'rgba(255,215,90,1)'];
+  function startFireworks(x, z, seconds) {
+    endFireworks();
+    const group = new T.Group();
+    scene.add(group);
+    const t0 = performance.now() / 1000;
+    const rockets = [];
+    for (let k = 0; k < seconds / FIREWORK.every; k++) {
+      const colour = FIREWORK_COLOURS[k % FIREWORK_COLOURS.length];
+      const burst = new T.Vector3(x + (Math.random() - 0.5) * 2.4, FIREWORK.burstHigh[0] + Math.random() * (FIREWORK.burstHigh[1] - FIREWORK.burstHigh[0]), z + (Math.random() - 0.5) * 1.2);
+      const trail = glow('rgba(255,220,150,1)');
+      trail.scale.setScalar(0.12);
+      trail.visible = false;
+      group.add(trail);
+      const stars = [];
+      for (let i = 0; i < FIREWORK.stars; i++) {
+        // A direction on a sphere
+        const up = Math.random() * 2 - 1, round = Math.random() * Math.PI * 2, flat = Math.sqrt(1 - up * up);
+        const s = glow(colour);
+        s.visible = false;
+        group.add(s);
+        stars.push({ sprite: s, dir: new T.Vector3(flat * Math.cos(round), up, flat * Math.sin(round)).multiplyScalar(FIREWORK.speed * (0.7 + Math.random() * 0.3)) });
+      }
+      rockets.push({ start: t0 + k * FIREWORK.every + Math.random() * 0.3, from: new T.Vector3(x, 0.2, z), burst, trail, stars });
+    }
+    fireworks = { group, rockets, until: t0 + seconds + FIREWORK.rise + FIREWORK.starLife };
+  }
+  function endFireworks() {
+    if (!fireworks) return;
+    scene.remove(fireworks.group);
+    freeObject(fireworks.group);
+    fireworks = null;
+  }
+  // Move them on; true while any are still in the sky
+  function moveFireworks(now) {
+    if (!fireworks) return false;
+    const t = now / 1000;
+    if (t > fireworks.until) { endFireworks(); return false; }
+    for (const r of fireworks.rockets) {
+      const age = t - r.start;
+      // Going up: a spark on its way to where it bursts
+      const rising = age >= 0 && age < FIREWORK.rise;
+      r.trail.visible = rising;
+      if (rising) r.trail.position.lerpVectors(r.from, r.burst, age / FIREWORK.rise);
+      // Burst: the stars fly out, drop and fade
+      const after = age - FIREWORK.rise;
+      const shining = after >= 0 && after < FIREWORK.starLife;
+      for (const s of r.stars) {
+        s.sprite.visible = shining;
+        if (!shining) continue;
+        const slow = 1 - Math.exp(-after * 2.2);
+        s.sprite.position.copy(r.burst).addScaledVector(s.dir, slow);
+        s.sprite.position.y -= FIREWORK.fall * after * after;
+        const fade = 1 - after / FIREWORK.starLife;
+        s.sprite.material.opacity = fade;
+        s.sprite.scale.setScalar(0.09 + 0.05 * fade);
+      }
+    }
+    return true;
+  }
+
   const glowTex = {};
   function glow(colour) {
     if (!glowTex[colour]) {
@@ -2097,9 +2163,13 @@ const Board = (() => {
   // are outlined in yellow on a glow; misses are dimmed. They appear once the attack has landed on the table, and stay
   // until the next piece is chosen (Steve)
   const DIE_SIZE = 6.5, DIE_GAP = 0.22;
+  // A fire mission's or bomber run's dice, smaller (Steve), and how far apart across and up the table (further up than
+  // across, as the table is seen at a slant)
+  const MISSION_DIE_SIZE = 4.8, MISSION_DIE_ACROSS = 0.2, MISSION_DIE_UP = 0.27;
   const DICE_OUT = 0.45;               // how far out past the artillery (away from the board) the dice sit
-  const DICE_COLUMN = 1.75;            // how far apart the columns of dice are, when one column fills the screen
-  const DICE_COLUMNS = 3;              // at most this many columns a side
+  const DICE_COLUMN = 2.3;             // how far apart the columns of dice are, when one column fills the screen
+  const DICE_COLUMNS = 4;              // at most this many columns a side
+  const DICE_BEHIND = -0.25;           // where a new column starts: on the table just behind the board, towards the middle
   let diceDue = null;                  // when the dice of the latest attack go on the table
   let diceComing = [];                 // those rolls, kept as they were (the next token clears the attacks list)
   let rollLog = [], rollSeen = new Set();   // the rolls in the corner now, oldest first; every roll already shown
@@ -2115,57 +2185,69 @@ const Board = (() => {
       const gun = GUNS[side].artillery;
       const cx = gun.x + (side === 'us' ? -DICE_OUT : DICE_OUT);
       // Newest first, from just above the drawn token's spot upwards. Every roll since the last piece was picked. A fire
-      // mission or a bomber run (Steve: so all its dice can be seen): one row of dice for each piece it caught, each with a
-      // small label, under one label for the guns or the plane. When the rolls reach the top of the screen they carry on
-      // in a new column further out; past the last column the oldest are left off
-      const outward = side === 'us' ? -1 : 1;
+      // mission or a bomber run (Steve): smaller dice, one upright column for each piece it caught, side by side, under one
+      // label for the guns or the plane (no label for each piece). When the rolls reach the top of the screen they carry
+      // on in a new column on the table behind the board, towards the middle (Steve: further out they went off the
+      // screen); past the last column the oldest are left off
+      const inward = side === 'us' ? 1 : -1;
       let column = 0, z = 0.62;
       const list = rolls.filter(o => o.side === side).reverse();
       for (let n = 0; n < list.length; n++) {
         const r = list[n];
-        const small = !!r.mission;
-        const rows = Math.ceil(r.faces.length / 6), across = Math.min(6, r.faces.length);
-        // Room for this roll and its label in this column? If not, the next column out
+        // A mission: every roll of it at once, first piece hit on the left
+        const group = [r];
+        while (r.mission && list[n + 1] && list[n + 1].mission === r.mission) group.unshift(list[++n]);
+        const mission = !!r.mission;
+        // How big and how far apart its dice are, how wide and tall the lot is
+        const size = mission ? MISSION_DIE_SIZE : DIE_SIZE;
+        const gap = mission ? MISSION_DIE_ACROSS : DIE_GAP, up = mission ? MISSION_DIE_UP : DIE_GAP;
+        const across = mission ? group.length : Math.min(6, r.faces.length);
+        const tall = mission ? Math.max(...group.map(g => g.faces.length)) : Math.ceil(r.faces.length / 6);
+        // Room for it and its label in this column? If not, the next column
         const lift = 0.15;
-        let colX = cx + outward * column * DICE_COLUMN;
-        if (offTop(new T.Vector3(colX, 0.05, z - (rows - 1) * DIE_GAP - lift))) {
+        let colX = cx + inward * column * DICE_COLUMN;
+        if (offTop(new T.Vector3(colX, 0.05, z - (tall - 1) * up - lift))) {
           if (column >= DICE_COLUMNS - 1) break;
           column++;
-          z = 0.62;
-          colX = cx + outward * column * DICE_COLUMN;
+          z = DICE_BEHIND;
+          colX = cx + inward * column * DICE_COLUMN;
         }
-        const left = colX - (across - 1) * DIE_GAP / 2;
-        r.faces.forEach((d, i) => {
-          const x = left + (i % 6) * DIE_GAP, dz = z - Math.floor(i / 6) * DIE_GAP;
-          const die = Models.die(d.face); die.scale.setScalar(DIE_SIZE);
-          at(die, x, 0, dz, 0, (i * 1.7) % 0.4 - 0.2, 0);
-          // Misses dimmed; hits on a yellow glow (Steve)
-          // (a Hail Mary's first 6 stays bright: it has earned its second throw)
-          if (!d.hit && !d.lead) die.traverse(c => { if (c.isMesh && c.material === Models.M.die) { c.material = c.material.clone(); c.material.color.multiplyScalar(0.35); } });
-          scene.add(die); dice.push(die);
-          if (d.hit) {
-            const glow = hitGlow(); at(glow, x, 0.002, dz, -Math.PI / 2, 0, 0); scene.add(glow); dice.push(glow);
-            // A yellow outline round the die itself: a slightly bigger box, only its inside faces drawn
-            die.add(at(new T.Mesh(new T.BoxGeometry(0.037, 0.037, 0.037), HIT_EDGE), 0, 0.015, 0));
-          }
-        });
-        // The tag just above the dice: a mission's rows a smaller one, just the piece it caught
-        const top = z - (rows - 1) * DIE_GAP - lift;
+        const left = colX - (across - 1) * gap / 2;
+        if (mission) {
+          // Each piece's dice in an upright column, from the bottom up
+          group.forEach((g, k) => g.faces.forEach((d, i) => placeDie(d, left + k * gap, z - i * up, i, size)));
+        } else {
+          // A shot: its dice six to a row
+          r.faces.forEach((d, i) => placeDie(d, left + (i % 6) * gap, z - Math.floor(i / 6) * gap, i, size));
+        }
+        // The tag just above the dice: for a mission, the guns or plane, how many pieces it caught and the hits in all
+        const top = z - (tall - 1) * up - lift;
         // (the Germans' tag runs in from the right edge of their dice, so it stays on the screen)
-        const edge = (across - 1) * DIE_GAP / 2 + 0.1;
+        const edge = (across - 1) * gap / 2 + 0.1;
         const anchor = new T.Vector3(side === 'us' ? colX - edge : colX + edge, 0.05, top);
-        placeDiceTag(small ? r.row : r.text, side, anchor, small ? 0.8 : 1.15);
-        z = top - (small ? 0.4 : 0.48);
-        // The last row of a mission: the guns' or plane's own label over its rows
-        const next = list[n + 1];
-        if (small && !(next && next.mission === r.mission)) {
-          let caught = 0;
-          for (let k = n; k >= 0 && list[k].mission === r.mission; k--) caught++;
-          const heading = new T.Vector3(anchor.x, 0.05, z + 0.1);
-          if (!offTop(heading)) placeDiceTag([r.who, `${caught} piece${caught === 1 ? '' : 's'} under it`], side, heading, 1.05);
-          z -= 0.42;
-        }
+        const hits = group.reduce((t, g) => t + g.faces.filter(d => d.hit).length, 0);
+        const lines = mission ? [r.who, `${group.length} piece${group.length === 1 ? '' : 's'} · ${hits} hit${hits === 1 ? '' : 's'}`] : r.text;
+        placeDiceTag(lines, side, anchor, mission ? 1.05 : 1.15);
+        z = top - 0.48;
       }
+    }
+  }
+
+  // One die of a throw on the table: misses dimmed, hits on a yellow glow (Steve). size: how big (a mission's are smaller)
+  function placeDie(d, x, z, i, size) {
+    const die = Models.die(d.face);
+    die.scale.setScalar(size);
+    at(die, x, 0, z, 0, (i * 1.7) % 0.4 - 0.2, 0);
+    // (a Hail Mary's first 6 stays bright: it has earned its second throw)
+    if (!d.hit && !d.lead) die.traverse(c => { if (c.isMesh && c.material === Models.M.die) { c.material = c.material.clone(); c.material.color.multiplyScalar(0.35); } });
+    scene.add(die); dice.push(die);
+    if (d.hit) {
+      const glow = hitGlow();
+      glow.scale.setScalar(size / DIE_SIZE);
+      at(glow, x, 0.002, z, -Math.PI / 2, 0, 0);
+      scene.add(glow); dice.push(glow);
+      // A yellow outline round the die itself: a slightly bigger box, only its inside faces drawn
+      die.add(at(new T.Mesh(new T.BoxGeometry(0.037, 0.037, 0.037), HIT_EDGE), 0, 0.015, 0));
     }
   }
 
@@ -2218,9 +2300,9 @@ const Board = (() => {
       if (!f.faces || !f.faces.length) continue;
       const text = shotTagText(st, f);
       // A mortar or artillery mission, or a bomber run: one row of many (consecutive rolls of the same guns or plane)
-      const [who, target] = text[0].split(' → ');
+      const who = text[0].split(' → ')[0];
       const mission = f.support ? f.support + '/' + f.side : null;
-      out.push({ side: f.side, faces: f.faces, text, mission, who, row: [target || who, text[1]] });
+      out.push({ side: f.side, faces: f.faces, text, mission, who });
     }
     return out;
   }
@@ -2360,6 +2442,7 @@ const Board = (() => {
 
   // A new game: nothing left over from the last one still flying, falling or waiting
   function reset() {
+    endFireworks();
     for (const c of homing) scene.remove(c.mesh);
     homing = []; homingDone = null;
     clearTokenNow();
@@ -2415,7 +2498,7 @@ const Board = (() => {
     const firing = playShots(now);
     const flying = moveCoin(now) | moveHoming(now) | moveCompass(now);
     // Fires flicker all the time, but cast no shadows, so they don't count as busy
-    const burning = burnWrecks(st, now, dt) | moveSea(now);
+    const burning = burnWrecks(st, now, dt) | moveSea(now) | moveFireworks(now);
     // Shadows: worked out again only while something moves, and once more after it stops
     const busy = moving || hopping || firing || flying || shadowStale;
     renderer.shadowMap.needsUpdate = busy || wasBusy;
@@ -2612,7 +2695,7 @@ const Board = (() => {
   return {
     whereNow, reset, diceLeft, labelReport: () => labelReport, init, resize, render, fieldAt, pieceAt,
     pieceUnder, portrait, bounce, bounceGun, busyFor, settledIn, gunAt, targetAt, screenPoint, pieceScreen,
-    labelBox, clearDice, respinCompass, flyToken, clearToken, returnTokens,
+    labelBox, clearDice, respinCompass, flyToken, clearToken, returnTokens, fireworks: startFireworks,
     canvas: () => renderer.domElement,
   };
 })();

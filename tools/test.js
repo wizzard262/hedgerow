@@ -3763,16 +3763,17 @@ check('the captain can take the goal too, as a rifle platoon can; nobody else ca
   Sim.newGame(1);
 });
 
-check('half the bomber runs: ten over the campaign, at most one a side on each map, given to the side that needs it', () => {
+check('half the bomber runs: nine over the campaign, at most one a side on each map, given to the side that needs it', () => {
   const runs = {};
   for (const map of MAPS) {
     const st = Sim.newGame(1, 'us', map.id);
     runs[map.id] = [st.ammo.us.bomber, st.ammo.de.bomber];
   }
   const total = Object.values(runs).reduce((n, [us, de]) => n + us + de, 0);
-  assert(total === 10, `${total} runs in all`);
-  assert(Object.values(runs).every(([us, de]) => us <= 1 && de <= 1 && us + de >= 1), 'a map with two runs a side, or none at all: ' + JSON.stringify(runs));
-  const want = { beach: [1, 0], deep: [1, 0], hedges: [1, 1], farmland: [1, 0], river: [0, 1], town: [1, 0], station: [1, 1], paris: [0, 1] };
+  assert(total === 9, `${total} runs in all`);
+  assert(Object.values(runs).every(([us, de]) => us <= 1 && de <= 1), 'a map with two runs a side: ' + JSON.stringify(runs));
+  // (Crossroads town: none at all, Steve: it was too easy for the Americans)
+  const want = { beach: [1, 0], deep: [1, 0], hedges: [1, 1], farmland: [1, 0], river: [0, 1], town: [0, 0], station: [1, 1], paris: [0, 1] };
   for (const id of Object.keys(want)) assert(runs[id].join() === want[id].join(), `${id}: ${runs[id]}`);
   // No runs: no token for it in the bag
   const paris = Sim.newGame(1, 'us', 'paris');
@@ -3782,7 +3783,9 @@ check('half the bomber runs: ten over the campaign, at most one a side on each m
 
 check('mortars and artillery: half the rounds, one more to hit, and nobody takes cover from them or from bombs', () => {
   const st = Sim.newGame(1);
-  assert(st.ammo.us.mortars === 3 && st.ammo.us.artillery === 2 && st.ammo.de.mortars === 4 && st.ammo.de.artillery === 1, 'rounds: ' + JSON.stringify(st.ammo));
+  // (Hedge country, the usual map, has one more American artillery round: see the next test)
+  assert(st.ammo.us.mortars === 3 && st.ammo.us.artillery === 3 && st.ammo.de.mortars === 4 && st.ammo.de.artillery === 1, 'rounds: ' + JSON.stringify(st.ammo));
+  assert(ARTILLERY.ammo === 2 && MORTARS.ammo === 3 && DE_MORTAR.ammo === 4 && DE_ARTILLERY.ammo === 1, 'the usual rounds');
   assert(Sim.newGame(1, 'us', 'river').ammo.us.artillery === 2 && Sim.newGame(1, 'us', 'beach').ammo.de.artillery === 2, 'the maps\' extra rounds not halved');
   // Men in the open: 4+ against shells, 3+ against a shot
   const open = tableWith({ A: [3, 5], d2: [5, 5] });
@@ -3813,6 +3816,14 @@ check('mortars and artillery: half the rounds, one more to hit, and nobody takes
       Sim.endRound(g);
     }
     assert(!g.fx.some(f => (f.kind === 'shell' || f.kind === 'bomb') && f.tookCover), `seed ${seed}: someone ducked under shells`);
+  }
+  Sim.newGame(1);
+});
+
+check('one more American artillery round in Hedge country, Deep bocage and the Train station; one fewer in Crossroads town; two elsewhere', () => {
+  for (const map of MAPS) {
+    const want = ['hedges', 'deep', 'station'].includes(map.id) ? 3 : map.id === 'town' ? 1 : 2;
+    assert(Sim.newGame(1, 'us', map.id).ammo.us.artillery === want, `${map.id}: ${Sim.newGame(1, 'us', map.id).ammo.us.artillery} rounds`);
   }
   Sim.newGame(1);
 });

@@ -214,7 +214,8 @@ window.Game = (() => {
       const p = Board.screenPoint(st.objective.x + 0.5, st.objective.y, 0.35), r = board.getBoundingClientRect();
       Object.assign($('#label').style, { left: p.x - r.left + 'px', top: p.y - r.top + 'px' });
       // Taken: the round it must be held through, so nobody has to remember
-      $('#label').textContent = st.holdUntil ? `🚩 ${st.objective.name}: hold all of round ${st.holdUntil}` : `🎯 ${st.objective.name}`;
+      // (and once it is won, just its name with the cup)
+      $('#label').textContent = st.won && st.holdUntil ? `🏆 ${st.objective.name}` : st.holdUntil ? `🚩 ${st.objective.name}: hold all of round ${st.holdUntil}` : `🎯 ${st.objective.name}`;
     }
     requestAnimationFrame(frame);
   }
@@ -339,18 +340,59 @@ window.Game = (() => {
     // Called once for the end, however many ways it is reached
     if (resultWaiting) return;
     resultWaiting = true;
+    // Paris taken (Steve): fireworks over the Eiffel Tower, and the message waits a few seconds more so they can be seen
+    const liberated = parisLiberated();
+    const wait = () => Board.settledIn() + RESULT_PAUSE + (liberated ? FIREWORKS_FIRST : 0);
     // Two frames, so the table has started showing the shots, then until they land
-    requestAnimationFrame(() => requestAnimationFrame(() => later(openResult, Board.settledIn() + RESULT_PAUSE)));
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      if (liberated) later(celebrate, Board.settledIn() + RESULT_PAUSE);
+      later(openResult, wait());
+    }));
+  }
+
+  // The Americans have taken Paris: the last battle of the campaign won
+  const parisLiberated = () => st.won && st.map.id === 'paris';
+  const FIREWORKS_FIRST = 4500;      // how long the fireworks go before the message comes up
+  const FIREWORKS_FOR = 14;          // how many seconds of fireworks
+  function celebrate() {
+    Board.fireworks(st.objective.x + 0.5, st.objective.y + 0.5, FIREWORKS_FOR);
+    // A rocket going up and bursting about every 0.6 seconds, a little off the beat
+    for (let k = 0; k < FIREWORKS_FOR / 0.6; k++) Sound.play('firework', k * 0.6 + Math.random() * 0.3);
+    changed();
+  }
+
+  // The battle after this one in the campaign (after Paris, back to the beach)
+  function nextMapId() {
+    const here = CAMPAIGN.indexOf(st.map.id);
+    return CAMPAIGN[(here + 1) % CAMPAIGN.length];
+  }
+  // Next battle (Steve: no Play again): the next map, the same commanders on each side, and it is remembered
+  function nextBattle() {
+    const next = nextMapId();
+    $('#result').hidden = true;
+    chosenMap = next;
+    rememberMap(next);
+    start(undefined, st.mode, next);
   }
 
   function openResult() {
     resultWaiting = false;
     const twoAlike = st.mode === 'both' || st.mode === 'none';
-    const ending = twoAlike ? plainEnding() : st.mode === 'de' ? germanEnding() : americanEnding();
+    const ending = parisLiberated() ? PARIS_LIBERATED : twoAlike ? plainEnding() : st.mode === 'de' ? germanEnding() : americanEnding();
     $('#result-title').textContent = ending.title;
     $('#result-text').textContent = ending.text;
+    // The one button: on to the next battle, named
+    const next = MAPS.find(m => m.id === nextMapId());
+    $('#again-btn').textContent = `Next battle: ${CAMPAIGN.indexOf(next.id) + 1}. ${next.name} ›`;
     $('#result').hidden = false;
   }
+
+  // The end of the campaign (Steve: something historically suitable): de Gaulle at the Hôtel de Ville on the evening of
+  // 25 August 1944, and the bells
+  const PARIS_LIBERATED = {
+    title: '🎆 Paris is liberated!',
+    text: '25 August 1944. "Paris! Paris outraged! Paris broken! Paris martyred! But Paris liberated!" (General de Gaulle, at the Hôtel de Ville that evening). The bells of Notre-Dame ring out across the city for the first time in four years.',
+  };
 
   // How it ended with no one player to win or lose it: two humans, or two robots
   function plainEnding() {
@@ -586,7 +628,7 @@ window.Game = (() => {
     start(undefined, mode);
   };
   $('#newgame [data-close]').onclick = () => { $('#newgame').hidden = true; };
-  $('#again-btn').onclick = () => { $('#result').hidden = true; start(); };
+  $('#again-btn').onclick = nextBattle;
   window.addEventListener('resize', fit);
 
   // ---------- Start ----------

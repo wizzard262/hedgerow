@@ -191,6 +191,15 @@ const Sound = (() => {
   // Each sound, starting at time t
   const SOUNDS = {
     bombers,
+    // A firework (Steve: Paris liberated): a whistle going up, a bang, and a crackle of stars, a little way off
+    firework(t) {
+      tone(t, 1.0, 700 + Math.random() * 300, 1900 + Math.random() * 600, 0.05, 'sine');
+      const bang = t + 1.1;
+      noise(bang, 0.05, 2600, 0.5, 0.5, 'highpass');
+      tone(bang, 0.6, 90, 40, 0.5);
+      noise(bang, 0.9, 500, 0.4, 0.3);
+      for (let k = 0; k < 14; k++) noise(bang + 0.15 + Math.random() * 1.2, 0.02, 3000 + Math.random() * 3000, 2, 0.06, 'bandpass');
+    },
     // The bomber on the table going over: `seconds` long
     bomberPass: (t, big, seconds) => bombers(t, true, seconds),
     // Riflemen: single shots, a few men firing at their own pace
