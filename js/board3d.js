@@ -179,6 +179,11 @@ const Board = (() => {
   const COIN_SIZE = 0.48;
   const TIMER_HOVER = 1.2;           // how high over the board the timer token stops            // radius on the table (Steve: three times the first size)
   let coinFlight = null;             // { mesh, from, to, t0, done, leaving }
+  // Where a side's drawn token lands on the table: just above its artillery, a little further out (the dice sit beside it)
+  function coinSpot(side) {
+    const gun = GUNS[side].artillery;
+    return { x: gun.x + (side === 'us' ? -0.1 : 0.1), z: gun.z - 1.15 };
+  }
   function flyToken(side, clientX, clientY, done) {
     clearTokenNow();
     const mesh = Models.coin(side);
@@ -189,9 +194,9 @@ const Board = (() => {
     const from = new T.Vector3();
     if (!ray.ray.intersectPlane(table, from)) from.set(COLS / 2, 0, ROWS + 2);
     // It lands above that side's artillery; the timer in the middle of the board (Steve)
-    const gun = GUNS[side === 'timer' ? 'us' : side].artillery;
     // (the timer stops in the air over the middle of the board, Steve, so it hides nothing on the table)
-    const to = side === 'timer' ? new T.Vector3(COLS / 2, TIMER_HOVER, ROWS / 2) : new T.Vector3(gun.x + (side === 'us' ? -0.1 : 0.1), 0.04, gun.z - 1.15);
+    const spot = side === 'timer' ? null : coinSpot(side);
+    const to = side === 'timer' ? new T.Vector3(COLS / 2, TIMER_HOVER, ROWS / 2) : new T.Vector3(spot.x, 0.04, spot.z);
     mesh.position.copy(from);
     scene.add(mesh);
     coinFlight = { mesh, from, to, t0: performance.now(), done, leaving: 0 };
@@ -800,10 +805,12 @@ const Board = (() => {
   // How high a piece stands in a field: on the road over a bridge, otherwise on the table
   const standsAt = (x, y) => (Sim.inside(x, y) && Sim.tileType(x, y) === 'bridge' ? Models.BRIDGE_DECK : 0);
 
-  // The bomber's compass (Steve): sixteen points on a card lying on the table above the board, its needle spinning round
-  // and stopping on the way the bomber will fly. The card lies flat, so the needle points that way across the board too
-  const COMPASS = { x: COLS / 2, z: -0.95, radius: 0.8, spin: 1700, turns: 3 };
-  let compass = null;                // { group, needle, t0, to }: built the first time it is needed
+  // The bomber's compass (Steve): sixteen points on a card hovering flat over the middle of the board, where the timer
+  // token stops, its needle spinning round and stopping on the way the bomber will fly. The card lies flat, so the needle
+  // points that way across the board too. Once the needle has stopped it stays a moment, then fades away, so it hides
+  // nothing while the line is aimed (Steve: it disappears when set)
+  const COMPASS = { x: COLS / 2, y: TIMER_HOVER, z: ROWS / 2, radius: 0.8, spin: 1700, turns: 3, hold: 800, fade: 500 };
+  let compass = null;                // { group, needle, parts, t0, to }: built the first time it is needed
   let compassShown = false;
   function compassCard() {
     const c = document.createElement('canvas');
@@ -833,22 +840,27 @@ const Board = (() => {
   }
   function buildCompass() {
     const group = new T.Group();
-    const card = new T.Mesh(new T.CircleGeometry(COMPASS.radius, 48), new T.MeshBasicMaterial({ map: compassCard() }));
+    // (drawn over everything, so nothing on the board shows through it; transparent, so it can fade)
+    const cardMat = new T.MeshBasicMaterial({ map: compassCard(), transparent: true, depthTest: false });
+    const card = new T.Mesh(new T.CircleGeometry(COMPASS.radius, 48), cardMat);
+    card.renderOrder = 20;
     group.add(at(card, 0, 0, 0, -Math.PI / 2, 0, 0));
-    // The needle: a long red arrow, its point on the way it flies
+    // The needle: a long red arrow, its point on the way it flies (drawn after the card, so on top of it)
     const r = COMPASS.radius;
     const shape = new T.Shape();
     shape.moveTo(0, r * 0.82); shape.lineTo(r * 0.11, -r * 0.28); shape.lineTo(0, -r * 0.14); shape.lineTo(-r * 0.11, -r * 0.28); shape.closePath();
-    const arrow = new T.Mesh(new T.ShapeGeometry(shape), new T.MeshBasicMaterial({ color: 0xc8261c }));
+    const needleMat = new T.MeshBasicMaterial({ color: 0xc8261c, transparent: true, depthTest: false });
+    const arrow = new T.Mesh(new T.ShapeGeometry(shape), needleMat);
+    arrow.renderOrder = 21;
     const needle = new T.Group();
     needle.add(at(arrow, 0, 0, 0, -Math.PI / 2, 0, 0));
     needle.position.y = 0.01;
     group.add(needle);
-    group.position.set(COMPASS.x, 0.03, COMPASS.z);
+    group.position.set(COMPASS.x, COMPASS.y, COMPASS.z);
     scene.add(group);
-    compass = { group, needle, t0: 0, to: 0 };
+    compass = { group, needle, parts: [cardMat, needleMat], t0: 0, to: 0 };
   }
-  // Show the compass while heading is a number, hide it when null. Each time it comes up it spins
+  // Show the compass while heading is a number, hide it when null. Each time it comes up it spins, then fades away
   function setCompass(heading) {
     if (heading === null || heading === undefined) {
       compassShown = false;
@@ -859,18 +871,27 @@ const Board = (() => {
     compassShown = true;
     if (!compass) buildCompass();
     compass.group.visible = true;
+    for (const m of compass.parts) m.opacity = 1;
     compass.t0 = performance.now();
     compass.to = -heading * 2 * Math.PI / BOMBER.directions;
   }
   // Picked again while showing: it spins again next time the marks are built
   function respinCompass() { compassShown = false; }
-  // One frame of the spin: fast, slowing to a stop on the way. Returns true while it is still turning
+  // One frame of the compass: the spin, fast and slowing to a stop on the way; a moment still; then fading out. Returns
+  // true while it is still moving or fading
   function moveCompass(now) {
     if (!compass || !compass.group.visible) return false;
-    const p = Math.min(1, (now - compass.t0) / COMPASS.spin);
+    const age = now - compass.t0;
+    // The spin
+    const p = Math.min(1, age / COMPASS.spin);
     const slowing = 1 - Math.pow(1 - p, 3);
     compass.needle.rotation.y = compass.to + (1 - slowing) * COMPASS.turns * 2 * Math.PI;
-    return p < 1;
+    // Set: after the moment still, it fades, and then it is gone (until it is picked again)
+    const fading = (age - COMPASS.spin - COMPASS.hold) / COMPASS.fade;
+    const opacity = Math.max(0, Math.min(1, 1 - fading));
+    for (const m of compass.parts) m.opacity = opacity;
+    if (opacity <= 0) { compass.group.visible = false; return false; }
+    return true;
   }
 
   // The bomber's line on the table: a red strip along it, across the whole board
@@ -2157,19 +2178,19 @@ const Board = (() => {
   }
 
   // ---------- Dice on the table ----------
-  // The dice of every attack (Steve: shots, shells and hand to hand, both sides) sit in the top corner of the table above
-  // the attacking side's artillery, not on the board: the red dice, six to a row, each with a tag over it saying who
-  // rolled at whom, what each die needed and how many hit. The newest at the bottom, the rest stacked above it. Hits
-  // are outlined in yellow on a glow; misses are dimmed. They appear once the attack has landed on the table, and stay
-  // until the next piece is chosen (Steve)
+  // The dice of every attack (Steve: shots, shells and hand to hand, both sides) sit on the table right beside the side's
+  // drawn token, the American star or the German cross, above the attacking side's artillery (Steve: not at the top of
+  // the table, where they went off the screen): the red dice, six to a row, each with a tag over it saying who rolled at
+  // whom, what each die needed and how many hit. The newest at the bottom, level with the token, the rest stacked above
+  // it. Hits are outlined in yellow on a glow; misses are dimmed. They appear once the attack has landed on the table, and
+  // stay until the next piece is chosen (Steve)
   const DIE_SIZE = 6.5, DIE_GAP = 0.22;
   // A fire mission's or bomber run's dice, smaller (Steve), and how far apart across and up the table (further up than
   // across, as the table is seen at a slant)
   const MISSION_DIE_SIZE = 4.8, MISSION_DIE_ACROSS = 0.2, MISSION_DIE_UP = 0.27;
-  const DICE_OUT = 0.45;               // how far out past the artillery (away from the board) the dice sit
-  const DICE_COLUMN = 2.3;             // how far apart the columns of dice are, when one column fills the screen
-  const DICE_COLUMNS = 4;              // at most this many columns a side
-  const DICE_BEHIND = -0.25;           // where a new column starts: on the table just behind the board, towards the middle
+  const COIN_EDGE = COIN_SIZE + 0.12;  // from the token's middle to just past its edge
+  const DICE_BESIDE = COIN_EDGE + 0.6; // from the token's middle to the middle of the dice beside it (six dice across)
+  const DICE_LEVEL = 0.35;             // the newest dice's bottom row: this far down the table from the token's middle
   let diceDue = null;                  // when the dice of the latest attack go on the table
   let diceComing = [];                 // those rolls, kept as they were (the next token clears the attacks list)
   let rollLog = [], rollSeen = new Set();   // the rolls in the corner now, oldest first; every roll already shown
@@ -2182,15 +2203,13 @@ const Board = (() => {
     dice = [];
     const rolls = rollLog;
     for (const side of ['us', 'de']) {
-      const gun = GUNS[side].artillery;
-      const cx = gun.x + (side === 'us' ? -DICE_OUT : DICE_OUT);
-      // Newest first, from just above the drawn token's spot upwards. Every roll since the last piece was picked. A fire
-      // mission or a bomber run (Steve): smaller dice, one upright column for each piece it caught, side by side, under one
-      // label for the guns or the plane (no label for each piece). When the rolls reach the top of the screen they carry
-      // on in a new column on the table behind the board, towards the middle (Steve: further out they went off the
-      // screen); past the last column the oldest are left off
-      const inward = side === 'us' ? 1 : -1;
-      let column = 0, z = 0.62;
+      // Where this side's dice can go: beside its token, then above it
+      const columns = diceColumns(side);
+      // Newest first, from level with the token upwards. Every roll since the last piece was picked. A fire mission or a
+      // bomber run (Steve): smaller dice, one upright column for each piece it caught, side by side, under one label for
+      // the guns or the plane (no label for each piece). When the rolls reach the top of the screen they carry on above
+      // the token; past that the oldest are left off
+      let column = 0, z = columns[0].z, inColumn = 0;
       const list = rolls.filter(o => o.side === side).reverse();
       for (let n = 0; n < list.length; n++) {
         const r = list[n];
@@ -2203,15 +2222,19 @@ const Board = (() => {
         const gap = mission ? MISSION_DIE_ACROSS : DIE_GAP, up = mission ? MISSION_DIE_UP : DIE_GAP;
         const across = mission ? group.length : Math.min(6, r.faces.length);
         const tall = mission ? Math.max(...group.map(g => g.faces.length)) : Math.ceil(r.faces.length / 6);
-        // Room for it and its label in this column? If not, the next column
+        // Room for it and its label in this column? If not, the next column (the newest always goes beside the token)
         const lift = 0.15;
-        let colX = cx + inward * column * DICE_COLUMN;
-        if (offTop(new T.Vector3(colX, 0.05, z - (tall - 1) * up - lift))) {
-          if (column >= DICE_COLUMNS - 1) break;
+        const reachesTop = () => offTop(new T.Vector3(columns[column].x, 0.05, z - (tall - 1) * up - lift));
+        if (inColumn > 0 && reachesTop()) {
+          // No more columns: the older rolls are left off
+          if (column >= columns.length - 1) break;
           column++;
-          z = DICE_BEHIND;
-          colX = cx + inward * column * DICE_COLUMN;
+          z = columns[column].z;
+          inColumn = 0;
+          // (no room above the token either)
+          if (reachesTop()) break;
         }
+        const colX = columns[column].x;
         const left = colX - (across - 1) * gap / 2;
         if (mission) {
           // Each piece's dice in an upright column, from the bottom up
@@ -2222,15 +2245,38 @@ const Board = (() => {
         }
         // The tag just above the dice: for a mission, the guns or plane, how many pieces it caught and the hits in all
         const top = z - (tall - 1) * up - lift;
-        // (the Germans' tag runs in from the right edge of their dice, so it stays on the screen)
-        const edge = (across - 1) * gap / 2 + 0.1;
-        const anchor = new T.Vector3(side === 'us' ? colX - edge : colX + edge, 0.05, top);
         const hits = group.reduce((t, g) => t + g.faces.filter(d => d.hit).length, 0);
         const lines = mission ? [r.who, `${group.length} piece${group.length === 1 ? '' : 's'} · ${hits} hit${hits === 1 ? '' : 's'}`] : r.text;
-        placeDiceTag(lines, side, anchor, mission ? 1.05 : 1.15);
+        // Its tail at one edge of the dice, the tag running across them and on from there
+        const out = columns[column].tagOut;
+        const edge = (across - 1) * gap / 2 + 0.1;
+        const anchor = new T.Vector3(colX - out * edge, 0.05, top);
+        placeDiceTag(lines, side, anchor, mission ? 1.05 : 1.15, out);
+        // The next (older) roll goes above this one
         z = top - 0.48;
+        inColumn++;
       }
     }
+  }
+
+  // Where a side's dice go: first beside its drawn token, on the side away from the board (slid in a little if that
+  // would be off the edge of the screen), then above the token. x: the middle of the dice; z: their bottom row; tagOut:
+  // which way across the table the tag runs from the dice (+1 east, -1 west)
+  function diceColumns(side) {
+    const coin = coinSpot(side);
+    const away = side === 'us' ? -1 : 1;
+    // Beside the token: the outer die must be on the screen
+    let besideX = coin.x + away * DICE_BESIDE;
+    for (let k = 0; k < 20; k++) {
+      const outer = new T.Vector3(besideX + away * 0.65, 0.05, coin.z).project(camera);
+      if (Math.abs(outer.x) < 0.98) break;
+      besideX -= away * 0.1;
+    }
+    // (its tag runs from the dice's edge nearest the token out away from it, so it doesn't cover the token)
+    const beside = { x: besideX, z: coin.z + DICE_LEVEL, tagOut: away };
+    // Above the token: its bottom row just past the token's far edge; the tag runs in towards the board
+    const above = { x: coin.x, z: coin.z - COIN_EDGE, tagOut: -away };
+    return [beside, above];
   }
 
   // One die of a throw on the table: misses dimmed, hits on a yellow glow (Steve). size: how big (a mission's are smaller)
@@ -2251,13 +2297,15 @@ const Board = (() => {
     }
   }
 
-  // A dice tag at a point, its tail there, running in from the dice's outer edge
-  function placeDiceTag(lines, side, anchor, size) {
+  // A dice tag at a point, its tail there. out: which way across the table it runs from there (+1 east, -1 west).
+  // Slid back onto the screen if it would go off a side
+  function placeDiceTag(lines, side, anchor, size, out) {
     const tag = diceTag(lines, side, false);
     tag.scale.multiplyScalar(size);
-    tag.center.x = side === 'us' ? 0 : 1;
+    tag.center.x = out > 0 ? 0 : 1;
     tag.position.copy(anchor);
     tag.renderOrder = 6;
+    keepInSide(tag);
     scene.add(tag);
     dice.push(tag);
   }
@@ -2387,8 +2435,11 @@ const Board = (() => {
   // Slide a word bubble sideways so it stays on the screen (its width from the sprite's scale)
   function keepInSide(sprite) {
     const right = new T.Vector3(1, 0, 0).applyQuaternion(camera.quaternion).multiplyScalar(sprite.scale.x / 2);
+    // Its middle: the anchor, moved across by how far from the middle the anchor is (a tag anchored at one end)
+    const toMiddle = right.clone().multiplyScalar((0.5 - sprite.center.x) * 2);
     for (let k = 0; k < 20; k++) {
-      const l = sprite.position.clone().sub(right).project(camera), r = sprite.position.clone().add(right).project(camera);
+      const middle = sprite.position.clone().add(toMiddle);
+      const l = middle.clone().sub(right).project(camera), r = middle.clone().add(right).project(camera);
       // Past the left or right edge: a step back in, along the screen's across
       if (l.x < -0.98) sprite.position.addScaledVector(right, 0.1);
       else if (r.x > 0.98) sprite.position.addScaledVector(right, -0.1);
