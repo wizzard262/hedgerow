@@ -1250,10 +1250,14 @@ check('shaken twice kills; bazookas and tanks kill men outright; MGs and tanks r
   };
   let g = setUp();
   Sim.actShoot(g.st, g.A, g.de);
-  assert(g.de.platoons === 1, `three rifle hits on a fresh platoon should shake it with the first and kill with the next two (it has ${g.de.platoons})`);
+  // (one shot takes at most one section from a rifle platoon, Steve)
+  assert(g.de.platoons === 2, `three rifle hits on a fresh platoon should shake it with the first and take one section with the next (it has ${g.de.platoons})`);
   g = setUp(); g.de.shocked = true;
   Sim.actShoot(g.st, g.A, g.de);
-  assert(g.de.x === null, 'three hits on a shaken platoon did not wipe it out');
+  assert(g.de.platoons === 2, `three hits on a shaken platoon took more than one section (it has ${g.de.platoons})`);
+  g = setUp(); g.de.shocked = true; g.de.platoons = 1;
+  Sim.actShoot(g.st, g.A, g.de);
+  assert(g.de.x === null, 'hits on a shaken platoon down to its last section did not wipe it out');
   g = setUp();
   g.bz.at = null; g.bz.x = 1; g.bz.y = 7;
   Sim.actShoot(g.st, g.bz, g.de);
@@ -1266,6 +1270,45 @@ check('shaken twice kills; bazookas and tanks kill men outright; MGs and tanks r
   r.mg.x = 0; r.mg.y = 5; r.mg.at = null;
   const far2 = { x: 4, y: 5, kind: 'company', side: 'de', at: null };
   assert(!Sim.needWhy(r.st, r.mg, far2).some(w => w.includes('long range')), 'four fields away was long range for a machine gun');
+});
+
+check('a tank at men: its machine guns are a coin toss, only its gun kills outright', () => {
+  const setUp = kind => {
+    const st = Sim.newGame(4);
+    st.hedges = {}; st.wire = {};
+    const T1 = Sim.unitById(st, 'T1');
+    const de = st.units.find(u => u.side === 'de' && u.kind === 'company');
+    for (const u of st.units) if (![T1, de].includes(u)) u.x = u.y = null;
+    T1.kind = kind; T1.x = 0; T1.y = 6; T1.at = null;
+    de.x = 1; de.y = 6; de.platoons = 3; de.at = null; de.shocked = false; de.quality = 'standard';
+    // (it has moved this round, so it can't take cover: every die rolls)
+    de.acted = true;
+    // Every die a 6, no half die rounded up, every coin toss tails: only the rules themselves kill
+    st.rand = () => 0.99;
+    return { st, T1, de };
+  };
+  // A Sherman 75mm: one machine-gun die, no gun die. The hit shakes, and tails means no section lost
+  let g = setUp('sherman');
+  Sim.actShoot(g.st, g.T1, g.de);
+  assert(g.de.platoons === 3 && g.de.shocked, `a machine-gun hit from a tank killed outright (sections ${g.de.platoons})`);
+  // A Panther: one machine-gun die (shakes, tails) then one gun die, which kills a section
+  g = setUp('panther');
+  Sim.actShoot(g.st, g.T1, g.de);
+  assert(g.de.platoons === 2, `a Panther's gun hit did not kill a section, or its machine gun did (sections ${g.de.platoons})`);
+  // With real dice, a tank with only a machine gun: about half its hits on a fresh platoon take a section
+  PIECES.mgOnlyTank = { name: 'Test tank', soft: 1, hard: 0, tank: true, armour: 0 };
+  let hits = 0, wounded = 0;
+  for (let k = 0; k < 600; k++) {
+    g = setUp('mgOnlyTank');
+    let seed = k * 7919 + 1;
+    g.st.rand = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+    Sim.actShoot(g.st, g.T1, g.de);
+    if (g.de.shocked) hits++;
+    if (g.de.platoons < 3) wounded++;
+  }
+  delete PIECES.mgOnlyTank;
+  const share = wounded / hits;
+  assert(hits > 100 && share > 0.35 && share < 0.65, `a tank's machine-gun hits wounded ${wounded} of ${hits}, not about half`);
 });
 
 check('tanks block sight through the areas they stand in; past a tank corner only from that corner, +1 both', () => {
@@ -2161,6 +2204,30 @@ function mortarOnTank(seed, side, shaken) {
   const shell = st.fx.find(f => f.kind === 'shell' && f.to && f.to.id === tank.id);
   return { tank, shell };
 }
+
+check('a rifle platoon loses at most one section to one mortar or artillery mission, however many hits', () => {
+  for (const which of ['mortars', 'artillery']) {
+    const st = Sim.newGame(5);
+    st.hedges = {}; st.wire = {};
+    const spot = st.units.find(u => u.side === 'us' && u.kind === 'company');
+    const foe = st.units.find(u => u.side === 'de' && u.kind === 'company');
+    const other = st.units.find(u => u.side === 'de' && u !== foe);
+    for (const o of st.units) if (![spot, foe, other].includes(o)) o.x = o.y = null;
+    foe.x = 5; foe.y = 3; foe.at = null; foe.platoons = 3; foe.shocked = true; foe.down = false;
+    spot.x = 5; spot.y = 2; spot.at = null;
+    other.x = 11; other.y = 7; other.at = null;
+    st.ammo.us[which] = 3;
+    st.fx = [];
+    Sim.startRound(st);
+    st.drawn = 'us'; st.activeId = null;
+    // Every die a 6: every die hits
+    st.rand = () => 0.99;
+    assert(Sim.actFire(st, which, 5, 3).ok, `the ${which} would not fire`);
+    const hits = st.fx.filter(f => f.kind === 'shell' && f.to && f.to.id === foe.id).reduce((t, f) => t + f.faces.filter(d => d.hit).length, 0);
+    assert(hits >= 2, `${which}: only ${hits} hits, not enough to check`);
+    assert(foe.platoons === 2, `${which}: ${hits} hits on a shaken platoon took ${3 - foe.platoons} sections`);
+  }
+});
 
 check('a mortar has one anti-tank die: a hit only shakes a tank, however many are tried, both sides', () => {
   for (const side of ['us', 'de']) {

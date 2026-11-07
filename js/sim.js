@@ -807,6 +807,8 @@ const Sim = (() => {
   // What hits do to a piece (Steve): every hit shakes it, and each hit is a coin toss whether it wounds: a section
   // of a platoon, a whole team, or a tank lost. Only anti-tank (hard) hits count against tanks
   // shakeOnly (a mortar on a tank, Steve): no coin toss, so a hit only shakes it, unless it is already shaken
+  // deadly: true when every hit on men kills outright, or how many of the hits do (a tank's gun, not its machine guns);
+  // those come last, after the coin tosses
   function damage(st, u, softHits, hardHits, deadly = false, shakeOnly = false) {
     const name = u.name, out = [];
     // A bunker (Steve): rifles, machine guns and mortars only shake it
@@ -821,9 +823,12 @@ const Sim = (() => {
     // whether it wounds as well
     let wounds = 0;
     const wasShocked = u.shocked;
+    // How many of the hits kill outright: all of them, none, or the count given
+    const killers = deadly === true ? hits : Math.min(hits, deadly || 0);
     for (let k = 0; k < hits; k++) {
       // A bazooka, Panzerschreck or tank gun hitting men kills outright (Steve: they're powerful)
-      if (deadly && !isTank(u) && !isBunker(u)) wounds++;
+      const killsOutright = k >= hits - killers;
+      if (killsOutright && !isTank(u) && !isBunker(u)) wounds++;
       else if (u.shocked) wounds++;
       else if (!shakeOnly && st.rand() < WOUND_CHANCE) wounds++;
       u.shocked = true;
@@ -836,7 +841,8 @@ const Sim = (() => {
       // A team is one base: one wound and it's gone
       if (wounds) { u.platoons = 0; out.push(`${name} wiped out`); }
     } else {
-      const lost = Math.min(u.platoons, wounds);
+      // A rifle platoon loses at most one section to one attack, however many hits (Steve); only hand to hand takes more
+      const lost = Math.min(u.platoons, wounds, MAX_SECTIONS_LOST);
       u.platoons -= lost;
       if (lost) out.push(`${name} loses ${lost} section${lost > 1 ? 's' : ''}`);
     }
@@ -1035,6 +1041,7 @@ const Sim = (() => {
     const need = needFor(st, shooter, target, moving);
     const faces = [];
     let softHits, hardHits;
+    let gunHits = 0;            // a tank's gun hits on men, that kill outright
     if (isTank(target)) {
       hardHits = roll(st, dice(st, f.hard), need + armourOf(target), faces);
       softHits = roll(st, dice(st, f.soft), need, []);
@@ -1042,6 +1049,13 @@ const Sim = (() => {
       // Anti-tank weapons can knock it out; anything else only shakes it. The dice shown: the ones that matter most
       hardHits = roll(st, dice(st, f.hard), need, f.hard ? faces : []);
       softHits = roll(st, dice(st, f.soft), need, f.hard ? [] : faces);
+    } else if (isTank(shooter)) {
+      // A tank at men (Steve): its machine guns' dice are a coin toss like anyone's; its gun's high explosive (half its
+      // anti-tank dice, as below) kills on every hit. One row of dice on the table, the machine guns' first
+      const mgHits = roll(st, dice(st, f.soft), need, faces);
+      gunHits = roll(st, dice(st, f.hard * 0.5), need, faces);
+      softHits = mgHits + gunHits;
+      hardHits = 0;
     } else {
       // Anti-tank weapons are poor against men in a hedge: half value
       const full = dice(st, menDice(f));
@@ -1051,7 +1065,9 @@ const Sim = (() => {
     // Where the target stood, so its dice still land there if it is wiped out
     const stood = { x: target.x, y: target.y };
     const before = { strength: target.platoons, shocked: target.shocked };
-    const deadly = isTank(shooter) || ['bazooka', 'schreck', 'pak', 'bunker_gun'].includes(shooter.kind);
+    // Which hits kill outright: every one from a bazooka, Panzerschreck, PaK or gun bunker; only a tank's gun hits, not
+    // its machine guns' (Steve: those are 50/50)
+    const deadly = isTank(shooter) ? gunHits : ['bazooka', 'schreck', 'pak', 'bunker_gun'].includes(shooter.kind);
     const out = (pre ? [pre.line] : []).concat(damage(st, target, softHits, hardHits, deadly));
     // In a word, what the shot did, for the words that float up off the target
     const lost = before.strength - (target.x === null ? 0 : target.platoons);

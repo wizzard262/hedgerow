@@ -218,6 +218,7 @@ const MIN_NEED = 2;              // no shot needs less than this (Steve): a 1 al
 const PAK_VILLAGE_FIELDS = 4;    // a village this big (Steve): the PaK can move about all of it
 const MAX_NEED = 6;              // past this a shot is a Hail Mary (Steve): throw a 6, then throw another 6 to hit, about 3%
 const WOUND_CHANCE = 0.5;        // each hit is a coin toss: heads it wounds (a section, a team or a tank lost); every hit shakes
+const MAX_SECTIONS_LOST = 1;     // the most sections a rifle platoon loses to one shot, mission or bomb (Steve); hand to hand can take more
 const QUALITY = { elite: { name: 'Elite', shoot: 1, assault: 1.3 }, standard: { name: 'Standard', shoot: 0, assault: 1 } };
 // How finely the table is drawn (Steve: a low-power laptop on a 4K screen). start: the most pixels drawn on any screen,
 // about 2560×1600; least: the floor it may fall to when frames are slow; step: the share kept each time it falls;
