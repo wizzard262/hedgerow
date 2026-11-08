@@ -3761,14 +3761,30 @@ check('the bomber can be sent through any field, and nothing has to be lit', () 
   Sim.newGame(1);
 });
 
-check('a bunker fires across 90 degrees: 45 either side of straight ahead', () => {
-  const bunker = { x: 8, y: 4 };
-  // One field out: the fields beside straight ahead are on the 45 degree line, in; two rows off is not
-  assert(Sim.inFrontOf(bunker, { x: 7, y: 4 }) && Sim.inFrontOf(bunker, { x: 7, y: 5 }) && !Sim.inFrontOf(bunker, { x: 7, y: 6 }), 'one field out');
-  // Two fields out: two rows off is in, three is not
-  assert(Sim.inFrontOf(bunker, { x: 6, y: 6 }) && !Sim.inFrontOf(bunker, { x: 6, y: 7 }), 'two fields out');
-  // Its own column and behind it: never
-  assert(!Sim.inFrontOf(bunker, { x: 8, y: 3 }) && !Sim.inFrontOf(bunker, { x: 9, y: 4 }), 'beside or behind it');
+check('a bunker fires across 90 degrees: 45 either side of straight ahead, from where it stands to where they stand', () => {
+  // A bunker against the west edge of its field, in the north and middle areas: it stands at x 8.17, y 4.33
+  const bunker = { kind: 'bunker_gun', x: 8, y: 4, at: 'nw+w' };
+  const mg = (x, y, at) => ({ kind: 'mg', x, y, at });
+  // Straight out of its front, in the next field: in
+  assert(Sim.inFrontOf(bunker, mg(7, 4, 'e')), 'straight ahead was not in front');
+  // The next field along the diagonal, close in at its corner: about 68 degrees off, out (Steve: it fired at these)
+  assert(!Sim.inFrontOf(bunker, mg(7, 5, 'ne')), 'the near corner of the diagonal field was in front');
+  // The same field's far corner: under 45 degrees, in
+  assert(Sim.inFrontOf(bunker, mg(7, 5, 'nw')), 'the far corner of the diagonal field was not in front');
+  // Two fields out: the near corner two rows down is in, the far one out to the side is not
+  assert(Sim.inFrontOf(bunker, mg(6, 6, 'nw')) && !Sim.inFrontOf(bunker, mg(6, 6, 'se')), 'two fields out');
+  // Beside it and behind it: never
+  assert(!Sim.inFrontOf(bunker, mg(8, 3, 'sw')) && !Sim.inFrontOf(bunker, mg(9, 4, 'w')), 'beside or behind it');
+  // Everywhere on the board: nothing it counts as in front is more than 45 degrees off straight ahead, and nothing
+  // within 44 degrees is left out
+  for (let x = 0; x < COLS; x++) for (let y = 0; y < ROWS; y++) for (const at of ['nw', 'n', 'ne', 'w', 'c', 'e', 'sw', 's', 'se']) {
+    const t = mg(x, y, at);
+    const ahead = 8 + 1 / 6 - (x + 0.5 + (at.includes('e') ? 1 / 3 : at.includes('w') ? -1 / 3 : 0));
+    const aside = Math.abs(y + 0.5 + (at.includes('s') ? 1 / 3 : at.includes('n') ? -1 / 3 : 0) - (4 + 1 / 3));
+    const degrees = Math.atan2(aside, ahead) * 180 / Math.PI;
+    if (Sim.inFrontOf(bunker, t)) assert(ahead > 0 && degrees <= 45 + 1e-6, `${x},${y} ${at} is ${degrees.toFixed(0)} degrees off but counted in front`);
+    else assert(ahead <= 0 || degrees > 44, `${x},${y} ${at} is ${degrees.toFixed(0)} degrees off but left out`);
+  }
 });
 
 check('the guns only fire on a piece their side can see: not behind a hedge, not next door across one', () => {

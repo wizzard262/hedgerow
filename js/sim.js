@@ -909,9 +909,24 @@ const Sim = (() => {
     return TO_HIT + cover(st, shooter, target) + small + down + (moving ? ON_THE_MOVE : 0) + (shooter.shocked ? SHAKEN_SHOOT : 0) - QUALITY[shooter.quality || 'standard'].shoot - close;
   }
 
-  // Is one field in front of a bunker? Its front looks west: anywhere within 45° of straight out of it (Steve)
+  // Where a piece (or a bare field) stands on the board, as one point in fields: the middle of the areas it is in
+  function boardPoint(u) {
+    const spot = spotXY(u);
+    // (an area's middle is a third of a field from the field's middle)
+    return { x: u.x + 0.5 + spot.x / 3, y: u.y + 0.5 + spot.y / 3 };
+  }
+  // Is a piece (or a field) in front of a bunker? Its front looks west: within 45° either side of straight out of it,
+  // 90° in all (Steve). Measured from where the bunker stands in its field to where the other stands in theirs (Steve:
+  // from field to field it fired wider than that, at pieces in the next field along the diagonal)
   // (the same arc for where it can fire and where its thick front faces)
-  const inFrontOf = (bunker, f) => f.x < bunker.x && Math.abs(f.y - bunker.y) <= (bunker.x - f.x) * Math.tan(BUNKER_ARC / 2 * Math.PI / 180) + 1e-9;
+  function inFrontOf(bunker, f) {
+    const from = boardPoint(bunker), to = boardPoint(f);
+    // How far out in front of it (west), and how far off to the side
+    const ahead = from.x - to.x;
+    const aside = Math.abs(to.y - from.y);
+    // In front, and no wider than the arc
+    return ahead > 0 && aside <= ahead * Math.tan(BUNKER_ARC / 2 * Math.PI / 180) + 1e-9;
+  }
   // What the front of a bunker adds to a shot from there
   const bunkerFront = (shooter, target) => (isBunker(target) && inFrontOf(target, shooter) ? BUNKER_FRONT : 0);
 
