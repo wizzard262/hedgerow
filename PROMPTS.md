@@ -1484,6 +1484,7 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - Steve: in v137 bunkers still fire more than 90 degrees in all
 - Found: the arc was measured from field to field, middle to middle, so the whole next field along the diagonal counted as in front (exactly 45 degrees), even a piece in its near corner, about 68 degrees off. Now it is measured from where the bunker stands in its field to where the target stands in its own (the middle of its areas): no more than 45 degrees either side of straight out of the front. The same arc still decides the +3 for the front and where it can be stormed
 - Balance, two robots on the Beach landing, 60 games each: before, the Americans won 65%, the Germans 18%, 17% unfinished, about 14.7 rounds; now the Americans 83%, the Germans 7%, 10% unfinished, about 11.6 rounds
+- Steve also saw a shot from the side of a bunker say 3+ and a 5 miss. Not reproduced: about 6,000 test shots at bunkers from all round, v137 and v138, every label matched its dice and every die at or over it hit (likely rifle or machine-gun hits, which only shake a bunker). Steve: leave it
 
 ## Sessions
 
