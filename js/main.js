@@ -212,6 +212,8 @@ window.Game = (() => {
       });
       if (more) dirty = true;
       const p = Board.screenPoint(st.objective.x + 0.5, st.objective.y, 0.35), r = board.getBoundingClientRect();
+      // No goal on this map (Steve: the beach): no label for it
+      $('#label').style.display = st.noGoal ? 'none' : '';
       Object.assign($('#label').style, { left: p.x - r.left + 'px', top: p.y - r.top + 'px' });
       // Taken: the round it must be held through, so nobody has to remember
       // (and once it is won, just its name with the cup)

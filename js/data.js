@@ -140,9 +140,12 @@ const MAPS = [
     ammo: { us: { artillery: 3 } },
   },
   {
-    id: 'beach', date: '6 June 1944', name: 'Beach landing', note: 'The Americans land from craft in the surf and must capture the main bunker and hold it. Each bunker is a U of concrete with an MG team or a PaK 40 inside, firing only out of the slit in its thick front. From the front you need 3 more to hit, from a thin side 1 more, from the open back nothing extra. Tank traps, a sea wall, wrecks on the sand. The Germans have fewer pieces and no tanks, but more artillery.',
+    id: 'beach', date: '6 June 1944', name: 'Beach landing', note: 'The Americans land from craft in the surf and must destroy every German: there is no goal to take and hold. Each bunker is a U of concrete with an MG team or a PaK 40 inside, firing only out of the slit in its thick front. From the front you need 3 more to hit, from a thin side 1 more, from the open back nothing extra. Tank traps, a sea wall, wrecks on the sand. The Germans have fewer pieces and no tanks, but more artillery.',
     generated: 'beach',
     landing: true,
+    // (Steve: no goal to take on the beach; the Americans win by destroying every German. The main bunker's field is
+    // still where the main bunker stands and the German reserves gather)
+    noGoal: true,
     rows: [
       'wbbbb..o.o.h',
       'wbbbb.h...vo',

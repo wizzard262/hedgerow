@@ -234,6 +234,9 @@ const Sim = (() => {
     };
     // This game's objective: one of the villages
     st.objective = map.villages[Math.floor(R() * map.villages.length)];
+    // No goal to take and hold on some maps (Steve: the beach): only destroying every German wins. The objective's field
+    // still places the main bunker and is where the German reserves gather
+    st.noGoal = !!map.noGoal;
     const gapChance = map.gap === undefined ? HEDGE_GAP : map.gap;
     const wireChance = map.wire === undefined ? WIRE : map.wire;
     const bunkerFields = !map.landing ? [] : [st.objective].concat(map.de.add.filter(d => d.place).map(d => ({ x: d.place[0], y: d.place[1] })));
@@ -253,7 +256,9 @@ const Sim = (() => {
     // German teams that start with a company
     st.rand = R;
     deploy(st, 'us'); deploy(st, 'de');
-    st.report = [`${START_DATE}. The company attacks into the bocage. Take ${st.objective.name} and hold it for the whole of the next round${TURNS ? ` within ${TURNS} rounds` : ''}.`];
+    st.report = [st.noGoal
+      ? `${START_DATE}. The company attacks. Destroy every German on the table${TURNS ? ` within ${TURNS} rounds` : ''}.`
+      : `${START_DATE}. The company attacks into the bocage. Take ${st.objective.name} and hold it for the whole of the next round${TURNS ? ` within ${TURNS} rounds` : ''}.`];
     return st;
   }
 
@@ -869,6 +874,8 @@ const Sim = (() => {
   // hurt with, so it can't destroy every German either (Steve)
   function cannotWin(st) {
     const us = st.units.filter(u => u.side === 'us' && u.x !== null);
+    // No goal on this map: only destroying every German wins, so it is lost once a bunker or tank is left that nothing can hurt
+    if (st.noGoal) return noGoalCannotWin(st, us);
     if (us.some(u => takesGoal(u))) return false;
     const tanksLeft = st.units.some(u => u.side === 'de' && u.x !== null && isTank(u));
     if (!tanksLeft) return false;
@@ -876,6 +883,18 @@ const Sim = (() => {
     if (us.some(u => firepower(st, u).hard > 0)) return false;
     const left = st.ammo.us;
     return left.mortars <= 0 && left.artillery <= 0 && left.bomber <= 0;
+  }
+
+  // With no goal: is a German bunker or tank left that nothing American can knock out? Anti-tank weapons on the table,
+  // artillery or a bomber run can; mortars can knock out a tank but only shake a bunker
+  function noGoalCannotWin(st, us) {
+    const hard = st.units.filter(u => u.side === 'de' && u.x !== null && (isTank(u) || isBunker(u)));
+    if (!hard.length) return false;
+    if (us.some(u => firepower(st, u).hard > 0)) return false;
+    const left = st.ammo.us;
+    if (left.artillery > 0 || left.bomber > 0) return false;
+    // Only mortars left: they can still knock out tanks, never bunkers
+    return left.mortars <= 0 || hard.some(u => isBunker(u));
   }
 
   function remove(st, u) {
@@ -1280,12 +1299,14 @@ const Sim = (() => {
 
   // Hand to hand (Steve): the two sides strike at each other in turn, the attacker first. Every base still standing rolls
   // a die and each hit takes a base off the other side; the survivors go on until only one side has anyone left.
-  // Being shaken doesn't count in the fight, and it lasts past it: only a rally clears it (Steve)
+  // A shaken piece needs one more to hit in the fight, as when shooting (Steve), and it is still shaken after it: only a
+  // rally clears it (Steve)
   function handToHand(st, u, defenders, x, y) {
     const out = [`⚔️ ${u.name} charges ${defenders.map(d => d.name).join(' and ')}`];
     // The attacker's dice: 3+, one more against men behind the hedge it went over or in houses; elite one less
     const sheltered = hedge(st, u.x, u.y, x, y) || ['village', 'hamlet'].includes(tileType(x, y));
-    const attackNeed = TO_HIT + (sheltered ? 1 : 0) - QUALITY[u.quality || 'standard'].shoot;
+    // (shaken: one more, Steve)
+    const attackNeed = TO_HIT + (sheltered ? 1 : 0) - QUALITY[u.quality || 'standard'].shoot + (u.shocked ? SHAKEN_SHOOT : 0);
     const attackers = [u];
     const standing = list => list.filter(p => p.x !== null);
     // For the table (Steve: each exchange shown): the fight's field, where the attacker came from, everyone's bases at
@@ -1298,7 +1319,8 @@ const Sim = (() => {
       out.push(...a.lines);
       if (a.able) fight.strikes.push(a.blow);
       if (!standing(defenders).length) break;
-      const d = strike(st, standing(defenders), standing(attackers), s => TO_HIT - QUALITY[s.quality || 'standard'].shoot);
+      // Each defender: 3+, elite one less, shaken one more (Steve)
+      const d = strike(st, standing(defenders), standing(attackers), s => TO_HIT - QUALITY[s.quality || 'standard'].shoot + (s.shocked ? SHAKEN_SHOOT : 0));
       out.push(...d.lines);
       if (d.able) fight.strikes.push(d.blow);
       if (!standing(attackers).length) break;
@@ -2814,6 +2836,8 @@ const Sim = (() => {
 
   // Does the US hold the hamlet: a rifle platoon or the captain in it and no Germans left there
   function holdsObjective(st) {
+    // No goal on this map: nothing to hold
+    if (st.noGoal) return false;
     const here = at(st, st.objective.x, st.objective.y);
     return here.some(u => u.side === 'us' && takesGoal(u)) && !here.some(u => u.side === 'de');
   }
@@ -2850,10 +2874,12 @@ const Sim = (() => {
     } else if (isRobot(st, 'de') && cannotWin(st)) {
       // (a human playing the Germans wins only by destroying every American piece, Steve; guns off the table don't count)
       st.lost = true;
-      rep.unshift('⌛ No rifle platoon or captain is left to take the village, and nothing is left that can hurt the German tanks. The attack has failed.');
+      rep.unshift(st.noGoal
+        ? '⌛ Nothing is left that can knock out the last German bunkers or tanks. The attack has failed.'
+        : '⌛ No rifle platoon or captain is left to take the village, and nothing is left that can hurt the German tanks. The attack has failed.');
     } else if (TURNS && st.turn >= TURNS) {
       st.lost = true;
-      rep.unshift(`⌛ After ${TURNS} rounds the attack has run out of time short of ${st.objective.name}.`);
+      rep.unshift(st.noGoal ? `⌛ After ${TURNS} rounds the attack has run out of time.` : `⌛ After ${TURNS} rounds the attack has run out of time short of ${st.objective.name}.`);
     }
     // Just taken: the count starts
     if (held && !st.holdUntil && !st.won && !st.lost) {

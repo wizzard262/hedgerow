@@ -1801,6 +1801,31 @@ check('hand to hand: blows in turn, attacker first, until one side is gone; shak
   assert(won > 0 && lost > 0, `the attacker won ${won} and lost ${lost} of 40: one side always wins`);
 });
 
+check('hand to hand: a shaken piece needs one more to hit, attacking or defending (Steve)', () => {
+  // Every die a 3: a hit at 3+, a miss at 4+. A standard platoon charges a standard one across open ground
+  const fight = (attackerShaken, defenderShaken) => {
+    const st = Sim.newGame(3);
+    st.hedges = {}; st.wire = {};
+    const A = Sim.unitById(st, 'A'), de = st.units.find(u => u.side === 'de' && u.kind === 'company');
+    for (const u of st.units) if (u !== A && u !== de) u.x = u.y = null;
+    A.x = 2; A.y = 6; A.at = null; A.acted = false; A.quality = 'standard'; A.shocked = attackerShaken;
+    de.x = 3; de.y = 6; de.at = null; de.quality = 'standard'; de.shocked = defenderShaken; de.platoons = 3;
+    assert(Sim.tileType(3, 6) !== 'village' && Sim.tileType(3, 6) !== 'hamlet', 'the test needs open ground at 3,6');
+    st.rand = () => 0.4;
+    st.fx = [];
+    Sim.actCharge(st, A, 3, 6);
+    const f = st.fx.find(o => o.kind === 'melee');
+    return f.strikes.map(b => b.faces.map(d => d.hit));
+  };
+  // Neither shaken: the attacker's first blow, three 3s, all hit
+  assert(fight(false, false)[0].every(h => h), 'fresh, a 3 did not hit');
+  // The attacker shaken: its 3s all miss
+  assert(fight(true, false)[0].every(h => !h), 'a shaken attacker hit on a 3');
+  // The defender shaken: the attacker's 3s hit as before; the defender's 3s, when it strikes back, all miss
+  const back = fight(true, true);
+  assert(back.length >= 2 && back[1].every(h => !h), 'a shaken defender hit on a 3');
+});
+
 check('villages and orchards: never seen through, but pieces in one see out and are seen wherever they stand', () => {
   const st = Sim.newGame(3);
   st.hedges = {}; st.wire = {};
@@ -3589,7 +3614,7 @@ check('a bunker: +3 from the front, none from the back; rifles only shake it; an
   Sim.newGame(1);
 });
 
-check('a bunker: stormed from the side or back, never the front; it blocks the view; capturing the main one wins', () => {
+check('a bunker: stormed from the side or back, never the front; it blocks the view; on the beach taking its field never wins', () => {
   const setUp = (x, y) => {
     const st = Sim.newGame(5, 'us', 'beach');
     st.hedges = {}; st.wire = {};
@@ -3618,18 +3643,20 @@ check('a bunker: stormed from the side or back, never the front; it blocks the v
   eye.x = 3; eye.y = 5; eye.at = 'n'; eye.platoons = 1;
   far.x = 5; far.y = 5; far.at = 'n'; far.platoons = 1;
   assert(!Sim.sight(look, eye, far), 'a bunker did not block the view');
-  // Holding it, the bunker gone: the Americans win; with the bunker still there, not
-  const hold = setUp(o.x, o.y);
-  Sim.finishRound(hold.st);
-  assert(!hold.st.won, 'the Americans won with the bunker still there');
-  // (a German elsewhere, so it is the bunker that wins it, not the last German gone)
+  // No goal on the beach (Steve): standing in the main bunker's field, the bunker gone, a German elsewhere, wins nothing
+  // however long it is held, and there is no label for it
   const taken = setUp(o.x, o.y);
   Sim.unitById(taken.st, 'dcap').x = 11; Sim.unitById(taken.st, 'dcap').y = 7;
   Sim.remove(taken.st, taken.b);
+  assert(taken.st.noGoal && !Sim.holdsObjective(taken.st), 'the beach has a goal to hold');
   Sim.finishRound(taken.st);
-  assert(!taken.st.won, 'taking the main bunker should only start the count');
   Sim.finishRound(taken.st);
-  assert(taken.st.won, 'capturing the main bunker and holding it for a round did not win');
+  assert(!taken.st.won && !taken.st.holdUntil, `holding the main bunker's field won the beach`);
+  // Every German gone: that wins
+  for (const u of taken.st.units) if (u.side === 'de' && u.x !== null) Sim.remove(taken.st, u);
+  assert(taken.st.won, 'destroying every German did not win the beach');
+  // The other maps still have their goal
+  assert(!Sim.newGame(5, 'us', 'hedges').noGoal, 'Hedge country lost its goal');
   Sim.newGame(1);
 });
 

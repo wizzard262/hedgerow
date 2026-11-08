@@ -100,7 +100,7 @@ const UI = (() => {
     if (view.mode === 'rally') marked.push(...rallyReach(u, marked));
     // A rifle platoon or the captain that can reach the village to take: that field in blue hatching (Steve), so it's clear
     // (only the Americans have to take it)
-    if (st.human === 'us' && Sim.takesGoal(u) && ['charge', 'moveShoot'].includes(view.mode)) {
+    if (st.human === 'us' && !st.noGoal && Sim.takesGoal(u) && ['charge', 'moveShoot'].includes(view.mode)) {
       for (const p of marked) if (p.x === st.objective.x && p.y === st.objective.y && p.kind !== 'line') p.kind = 'goal';
     }
     return marked;
@@ -620,9 +620,20 @@ const UI = (() => {
     $('#hint').textContent = text;
   }
 
+  // The goal on a map with nothing to take (Steve: the beach): destroy every piece of the other side
+  function goalWithout() {
+    // Two robots playing
+    if (st.mode === 'none') return '🎯 Two robots: the Americans must destroy every German, the Germans hold out. Click any piece to see what it is.';
+    // Playing the Germans
+    if (st.human === 'de') return "🎯 Destroy every American piece on the table (guns and bomber off it don't count), or hold out.";
+    // Playing the Americans
+    return `🎯 Destroy every German on the table${TURNS ? `, within ${TURNS} rounds` : ' (no time limit for now)'}. There is no goal to take here.`;
+  }
+
   function update() {
     $('#clock').innerHTML = `<b>Round ${st.turn}</b>${TURNS ? ` of ${TURNS}` : ''} · ${st.map.name}`;
-    $('#goal').textContent = st.mode === 'none'
+    $('#goal').textContent = st.noGoal ? goalWithout()
+      : st.mode === 'none'
       ? `🎯 Two robots: the Americans attack ${st.objective.name}, the Germans hold it. Click any piece to see what it is.`
       : st.human === 'de'
       ? `🎯 Destroy every American piece on the table (guns and bomber off it don't count). Don't let them hold ${st.objective.name} for a whole round.`
