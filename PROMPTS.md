@@ -1532,6 +1532,7 @@ How the game was made: each prompt, what was built, and the assumptions made.
 
 - Steve: the hand-to-hand winner started shaken and still had it at the end; winning hand to hand makes you lose any shaken. I want the winner to lose any shaken
 - Whoever wins a hand-to-hand fight is no longer shaken: the attacker if it wiped out the defenders, the defenders left if the attacker was wiped out. If the attacker can't get at them and stays back, nobody's shaken changes. This replaces the "still shaken after the fight" of 125 and 261; a shaken piece still needs one more to hit during the fight
+- Balance with 261 and 263, 150 games on Hedge country: as the Americans the test player wins 11% in about 12.9 rounds (was 10%); as the Germans 29%, the American computer 52%, 19% unfinished; two robots: the Germans 72%, the Americans 27%, about 13.6 rounds; doing nothing wins 0%. Next to no change
 
 ## Sessions
 
