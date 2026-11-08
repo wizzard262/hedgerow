@@ -3022,7 +3022,35 @@ check('two humans: taking cover counts in the dice, and the German must still de
   assert(!last.won && !last.lost, 'the game ended with an American piece still on the table');
 });
 
-check('the PaK in the large village can move all round it; anywhere else it stays in its field', () => {
+check('moving within its own field, the shot after needs nothing more for moving (Steve); out of it, one more', () => {
+  const st = Sim.newGame(3);
+  st.hedges = {}; st.wire = {};
+  const A = Sim.unitById(st, 'A'), de = st.units.find(u => u.side === 'de' && u.kind === 'company');
+  for (const u of st.units) if (u !== A && u !== de) u.x = u.y = null;
+  A.x = 2; A.y = 6; A.at = 'w'; A.acted = false; A.quality = 'standard';
+  de.x = 4; de.y = 6; de.at = null;
+  Sim.startRound(st); st.drawn = 'us'; st.activeId = null;
+  // To the other side of its field: a shot after, and nothing more needed for moving
+  assert(Sim.actLine(st, A, 'e').ok && A.halfShot, 'it could not shift in its field and fire');
+  assert(!Sim.shotOnTheMove(A), 'a shift in its own field counted as on the move');
+  const still = Sim.needFor(st, A, de, false) + Sim.armourOf(de);
+  st.fx = [];
+  assert(Sim.actHalfShot(st, A, de).ok, 'the shot after the shift was refused');
+  const shot = st.fx.find(f => f.to && f.to.id === de.id && f.faces);
+  assert(shot && shot.need === still, `the shot after a shift in its field needed ${shot && shot.need}, not ${still}`);
+  // A Move & shoot to another field: on the move again
+  const st2 = Sim.newGame(3);
+  st2.hedges = {}; st2.wire = {};
+  const B = Sim.unitById(st2, 'A'), d2 = st2.units.find(u => u.side === 'de' && u.kind === 'company');
+  for (const u of st2.units) if (u !== B && u !== d2) u.x = u.y = null;
+  B.x = 1; B.y = 6; B.at = null; B.acted = false; B.stayedIn = true;
+  d2.x = 4; d2.y = 6; d2.at = null;
+  Sim.startRound(st2); st2.drawn = 'us'; st2.activeId = null;
+  assert(Sim.actMoveShoot(st2, B, 2, 6).ok, 'the Move & shoot was refused');
+  assert(Sim.shotOnTheMove(B), 'a Move & shoot to another field was not on the move');
+});
+
+check('the PaK in a village of two or four fields can move all round it; anywhere else it stays in its field', () => {
   // The four fields of the large village: x 7 and 8, y 3 and 4
   const st = tableAsGermans({ pak1: [8, 4], A: [0, 0] });
   const pak = Sim.unitById(st, 'pak1');
@@ -3049,9 +3077,11 @@ check('the PaK in the large village can move all round it; anywhere else it stay
   const held = tableAsGermans({ pak1: [8, 4], A: [7, 4], B: [0, 0] });
   const spot2 = Sim.chargeSpots(held, Sim.unitById(held, 'pak1')).map(p => `${p.x},${p.y}`);
   assert(!spot2.includes('7,4'), 'it could go into a field the Americans hold');
-  // Not in the small village, or out in a field
+  // In the small village of two fields (7,1 and 8,1), across to the other one too (Steve)
   const small = tableAsGermans({ pak1: [8, 1], A: [0, 0] });
-  assert(!Sim.chargeSpots(small, Sim.unitById(small, 'pak1')).length, 'it could leave its field in the small village');
+  const smallSpots = Sim.chargeSpots(small, Sim.unitById(small, 'pak1')).map(p => `${p.x},${p.y}`);
+  assert(smallSpots.join(' ') === '7,1', `in the two-field village it could go to ${smallSpots}`);
+  // Out in a field: it stays in its field
   const open = tableAsGermans({ pak1: [9, 4], A: [0, 0] });
   assert(!Sim.chargeSpots(open, Sim.unitById(open, 'pak1')).length, 'it could leave an open field');
 });

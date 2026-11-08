@@ -138,7 +138,8 @@ const UI = (() => {
     // Just picked and it can shoot from where it stands (Steve): its targets show straight away, a click fires
     const shootFromHere = view.mode === 'go' && Sim.canAct(st, u) && actionButtonsFor(u).some(a => a.mode === 'shoot' && a.ok);
     if (!['shoot', 'halfShot'].includes(view.mode) && !shootFromHere) return [];
-    const moving = view.mode === 'halfShot';
+    // (after moving within its own field, no moving penalty, Steve)
+    const moving = view.mode === 'halfShot' && Sim.shotOnTheMove(u);
     return Sim.targets(st, u, moving).map(t => {
       t.needNow = Sim.needFor(st, u, t, moving) + Sim.armourOf(t);
       t.needWhy = Sim.needWhy(st, u, t, moving);
@@ -495,7 +496,9 @@ const UI = (() => {
     if (u.halfShot) {
       const i = b.findIndex(a => a.mode === 'moveShoot');
       if (i >= 0) b.splice(i, 1);
-      b.unshift({ mode: 'halfShot', label: '➡️ Move & shoot', ok: true, title: 'Moved: now click a red target (one more needed on the dice)' });
+      // (moved only within its own field: nothing more needed, Steve)
+      const extra = Sim.shotOnTheMove(u) ? 'one more needed on the dice' : 'moved within its field: nothing more needed';
+      b.unshift({ mode: 'halfShot', label: '➡️ Move & shoot', ok: true, title: `Moved: now click a red target (${extra})` });
     }
     return b;
   }
@@ -610,7 +613,7 @@ const UI = (() => {
     const text = !view.mode ? noAction
       : view.mode === 'fire:bomber' ? 'Point anywhere on the board to see the line; click to send the bomber through.'
       : view.mode.startsWith('fire:') ? `Click a red target, or a field with ${foes()} your troops can see.`
-      : view.mode === 'halfShot' ? 'Moved. Click a red target to fire on it (one more needed on the move), or Esc to hold fire.'
+      : view.mode === 'halfShot' ? `Moved. Click a red target to fire on it (${selected() && !Sim.shotOnTheMove(selected()) ? 'moved within its field: nothing more needed' : 'one more needed on the move'}), or Esc to hold fire.`
       : view.mode === 'shoot' ? 'Click a red target to fire on it. Esc cancels.'
       : view.mode === 'rally' ? `Bright green: pieces he can rally; click one. Pale green: how far he reaches (${RALLY_RANGE} fields). Esc cancels.`
       : view.mode === 'go' ? `${targets().length ? 'Red targets: shoot from here. ' : ''}Red hatching: Move & shoot (crossed: close range; pale: only a Hail Mary from there). Other marked fields: Charge. ${st.human === 'us' ? 'Blue: the village. ' : ''}Click where in the field to stand: a corner, an edge (lining its hedge) or the middle. Or use the menu.`

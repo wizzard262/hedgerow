@@ -1489,6 +1489,8 @@ const Sim = (() => {
     const route = canAct(st, u) && moveShootRoutes(st, u).find(r => r[r.length - 1].x === x && r[r.length - 1].y === y);
     if (!route) return { ok: false };
     spend(st, u);
+    // (out of its field: the shot after is on the move)
+    u.stayedIn = false;
     const lines = moveToShoot(st, u, route, side);
     u.halfShot = u.x !== null && targets(st, u, true).length > 0;
     return { ok: true, lines: [lines.join(', ') + '.'] };
@@ -1513,10 +1515,14 @@ const Sim = (() => {
     return lines;
   }
 
+  // Is the shot after a move on the move (one more needed)? Not after moving only within its own field (Steve)
+  const shotOnTheMove = u => !u.stayedIn;
+
   function actHalfShot(st, u, target) {
     if (!u || !u.halfShot || u.x === null || !targets(st, u, true).includes(target)) return { ok: false };
     u.halfShot = false;
-    const lines = [`🔫 ${u.name} moves and fires on ${target.name}: ` + fireAt(st, u, target, false, true).join(', ')];
+    const moving = shotOnTheMove(u);
+    const lines = [`🔫 ${u.name} ${moving ? 'moves and fires' : 'fires'} on ${target.name}: ` + fireAt(st, u, target, false, moving).join(', ')];
     springAmbushes(st, u, lines);
     return { ok: true, lines: [lines.join(', ') + '.'] };
   }
@@ -1636,11 +1642,11 @@ const Sim = (() => {
     return block;
   }
 
-  // The other fields a PaK can move to (Steve): only in the large village of four fields, and only those with room for it
-  // and no enemy in them
+  // The other fields a PaK can move to (Steve): only in a village of two fields or more (the whole block of houses it is
+  // in), and only those with room for it and no enemy in them
   function villageFieldsFor(st, u) {
     const block = villageBlock(u.x, u.y);
-    if (block.length !== PAK_VILLAGE_FIELDS) return [];
+    if (block.length < PAK_VILLAGE_FIELDS) return [];
     return block.filter(f => (f.x !== u.x || f.y !== u.y) && roomFor(st, u, f.x, f.y));
   }
 
@@ -1838,7 +1844,8 @@ const Sim = (() => {
   }
 
   // Move to another area of its own field (Steve: north hedge to south hedge, say): the piece's move for the round, and
-  // like a Move & shoot it may fire after, one more needed for moving. The area clicked, or the nearest place it fits
+  // it may fire after with nothing more needed for moving (Steve: moving within its square has no Move & shoot penalty).
+  // Machine guns still can't fire after moving, and the PaK can only lie in ambush. The area clicked, or the nearest place it fits
   function actLine(st, u, side) {
     if (!canAct(st, u) || !lineSides(st, u).length) return { ok: false };
     const isPak = !!PIECES[u.kind].fixed;
@@ -1853,6 +1860,8 @@ const Sim = (() => {
     standAt(st, u, to);
     const lines = [`🌳 ${u.name} moves to ${placeName(u.at)}`];
     springAmbushes(st, u, lines);
+    // The shot after: no moving penalty (Steve); still only for pieces that can fire after moving at all
+    u.stayedIn = true;
     u.halfShot = u.x !== null && firesOnTheMove(u) && targets(st, u, true).length > 0;
     // The PaK can't fire after moving, but it can lie in ambush on the same go (Steve)
     u.mayAmbush = u.x !== null && !!PIECES[u.kind].fixed;
@@ -2918,7 +2927,7 @@ const Sim = (() => {
 
   return {
     firesOnTheMove, canAmbush, actAmbush, bestMoveShoot, bomberHeading, bomberAims, bomberLine, bombNeed, bombWhy, bestBomberRun,
-    isBunker, inFrontOf, bunkerFace, isRoad, featuresAt, walkDistance, fireSound, wreckAt, remove, computerSide, isRobot, piecesToAsk, takeCover, enemyOf, gunStats, edgeKey, atCloseRange, closeCells, hailMaryCells,
+    isBunker, inFrontOf, bunkerFace, shotOnTheMove, isRoad, featuresAt, walkDistance, fireSound, wreckAt, remove, computerSide, isRobot, piecesToAsk, takeCover, enemyOf, gunStats, edgeKey, atCloseRange, closeCells, hailMaryCells,
     newGame, roll, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, chargeSpots,
     rallyTargets, canAct, canReact, firepower, canCallFire, takesGoal, cannotWin, artilleryTarget, mortarTarget, holdsObjective, roundText, roomFor,
     computerStep, answer, finishRound, startRound, drawToken, endComputerToken, activationOver, passToken, humanCanMove, endRound, canFire, actSkip, actSkipShot, skipSupport,
