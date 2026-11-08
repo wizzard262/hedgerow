@@ -363,12 +363,21 @@ window.Game = (() => {
     changed();
   }
 
-  // The battle after this one in the campaign (after Paris, back to the beach)
+  // Did the player win this battle (Steve: only a win goes on to the next one)? Playing the Germans: the Americans lost,
+  // and not a draw. Otherwise, one human or two, or two robots: the Americans won (the campaign is theirs)
+  function playerWon() {
+    if (st.mode === 'de') return st.lost && !st.draw;
+    return st.won;
+  }
+  // The battle to play next: won, the one after this in the campaign (after Paris, back to the beach); otherwise this one
+  // again
   function nextMapId() {
+    if (!playerWon()) return st.map.id;
     const here = CAMPAIGN.indexOf(st.map.id);
     return CAMPAIGN[(here + 1) % CAMPAIGN.length];
   }
-  // Next battle (Steve: no Play again): the next map, the same commanders on each side, and it is remembered
+  // Next battle, or the same one again (Steve: no Play again; lost, you don't go on): the same commanders on each side,
+  // and the map is remembered
   function nextBattle() {
     const next = nextMapId();
     $('#result').hidden = true;
@@ -383,9 +392,10 @@ window.Game = (() => {
     const ending = parisLiberated() ? PARIS_LIBERATED : twoAlike ? plainEnding() : st.mode === 'de' ? germanEnding() : americanEnding();
     $('#result-title').textContent = ending.title;
     $('#result-text').textContent = ending.text;
-    // The one button: on to the next battle, named
+    // The one button: won, on to the next battle; lost or drawn, this one again (Steve). Named either way
     const next = MAPS.find(m => m.id === nextMapId());
-    $('#again-btn').textContent = `Next battle: ${CAMPAIGN.indexOf(next.id) + 1}. ${next.name} ›`;
+    const word = playerWon() ? 'Next battle' : 'Try again';
+    $('#again-btn').textContent = `${word}: ${CAMPAIGN.indexOf(next.id) + 1}. ${next.name} ›`;
     $('#result').hidden = false;
   }
 

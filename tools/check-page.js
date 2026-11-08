@@ -174,8 +174,14 @@ async function checkPlayers() {
   await page.evaluate(lim => { Game.state.turn = lim; }, 30);
   await page.waitForSelector('#result:not([hidden])', { timeout: 120000 });
   console.log('  two robots ends:', await page.textContent('#result-title'), '|', await page.textContent('#result-text'));
+  // A draw is not a win: the same battle again (Steve)
+  const drawnOn = await page.evaluate(() => Game.state.map.id);
+  console.log('  its button:', await page.textContent('#again-btn'));
   await page.click('#again-btn');
   await page.waitForTimeout(500);
+  const drawnNext = await page.evaluate(() => Game.state.map.id);
+  console.log('  after a draw, the same battle again:', drawnOn, '->', drawnNext, drawnOn === drawnNext ? 'ok' : 'WRONG');
+  if (drawnOn !== drawnNext) process.exitCode = 1;
 
   // ---------- A reload remembers; one human still works ----------
   await page.reload();

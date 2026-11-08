@@ -1777,7 +1777,7 @@ check('skip the shot after Move & shoot ends the token', () => {
   assert(Sim.actSkipShot(st, A).ok && !A.halfShot, 'the shot could not be skipped');
 });
 
-check('hand to hand: blows in turn, attacker first, until one side is gone; shaken lasts past the fight', () => {
+check('hand to hand: blows in turn, attacker first, until one side is gone; the winner is no longer shaken', () => {
   let won = 0, lost = 0;
   for (let seed = 1; seed <= 40; seed++) {
     const st = Sim.newGame(seed);
@@ -1787,14 +1787,13 @@ check('hand to hand: blows in turn, attacker first, until one side is gone; shak
     // A standard platoon against the elite Fallschirmjäger, so it can go either way
     A.x = 2; A.y = 6; A.at = null; A.acted = false; A.shocked = true; A.quality = 'standard';
     de.x = 3; de.y = 6; de.at = null; de.shocked = true;
-    // (being shaken doesn't stop a charge in this check)
-    A.shocked = false;
+    // (both shaken going in: whoever wins comes out of it no longer shaken, Steve)
     const r = Sim.actCharge(st, A, 3, 6);
     assert(r.ok, `seed ${seed}: the charge was refused`);
     const aLeft = A.x !== null, dLeft = de.x !== null;
     assert(aLeft !== dLeft, `seed ${seed}: both sides (or neither) came out of the fight`);
-    if (aLeft) won++;
-    else { lost++; assert(de.shocked, 'the fight cleared the defender\'s shaken (only a rally does)'); }
+    if (aLeft) { won++; assert(!A.shocked, `seed ${seed}: the attacker won and is still shaken`); }
+    else { lost++; assert(!de.shocked, `seed ${seed}: the defenders won and are still shaken`); }
     if (aLeft) assert(A.x === 3 && A.y === 6, `seed ${seed}: the winner did not take the field`);
     assert(/hit/.test(r.lines[0]), `seed ${seed}: no blows reported`);
   }

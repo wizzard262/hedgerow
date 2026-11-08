@@ -1299,8 +1299,8 @@ const Sim = (() => {
 
   // Hand to hand (Steve): the two sides strike at each other in turn, the attacker first. Every base still standing rolls
   // a die and each hit takes a base off the other side; the survivors go on until only one side has anyone left.
-  // A shaken piece needs one more to hit in the fight, as when shooting (Steve), and it is still shaken after it: only a
-  // rally clears it (Steve)
+  // A shaken piece needs one more to hit in the fight, as when shooting (Steve). Winning the fight clears it: whoever is
+  // left on the winning side is no longer shaken (Steve); the loser is gone
   function handToHand(st, u, defenders, x, y) {
     const out = [`⚔️ ${u.name} charges ${defenders.map(d => d.name).join(' and ')}`];
     // The attacker's dice: 3+, one more against men behind the hedge it went over or in houses; elite one less
@@ -1328,6 +1328,9 @@ const Sim = (() => {
       if (!a.able && !d.able) break;
     }
     fight.won = !standing(defenders).length && u.x !== null;
+    // The winners shake it off (Steve): the attacker if the defenders are all gone, the defenders left if the attacker is
+    const winners = fight.won ? [u] : u.x === null ? standing(defenders) : [];
+    for (const w of winners) w.shocked = false;
     st.fx.push(fight);
     if (!standing(defenders).length && u.x !== null) {
       // The field is the attacker's
