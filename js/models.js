@@ -142,8 +142,16 @@ const Models = (() => {
     M.slate = mat('#5d6266', 0.7);
     M.shutter = mat('#5e6a5c', 0.8);
     M.window = mat('#262624', 0.3, 0.2);
-    M.die = mat('#b5261e', 0.35);
-    M.pip = mat('#f4efe6', 0.4);
+    // The dice matt, with no shine (Steve: the lamp over the American corner glared off them, too bright to read), like
+    // the drawn token: they take light and shadow but never glare
+    M.die = mattMat('#b5261e');
+    M.pip = mattMat('#f4efe6');
+  }
+  // A colour that takes light and shadow but has no shine at all
+  function mattMat(color) {
+    const m = new T.MeshLambertMaterial();
+    m.color.set(color).convertSRGBToLinear();
+    return m;
   }
 
   // ---------- Small helpers ----------
