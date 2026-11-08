@@ -798,6 +798,9 @@ const Sim = (() => {
 
   // Cover for a target, added to the score needed: lining a hedge it is shot across, at range, in a village or an orchard
   function cover(st, from, target) {
+    // A bunker takes no cover from hedges, the sea wall, houses or trees (Steve): its concrete is its cover, the +3 of
+    // its front, and its sides and back are open
+    if (isBunker(target)) return 0;
     let c = 0;
     if (from) { const s2 = sight(st, from, target); if (s2) c += s2.cover; }
     c += placeCover(st, target, from);
@@ -953,10 +956,12 @@ const Sim = (() => {
     const s = sight(st, shooter, target);
     const far = isFar(shooter, target);
     // The covers one by one: the hedge it lines, a tank in a field in between, the field it stands in, its own tank beside it
-    if (s && s.hedge) why.push(`+${COVER.hedge} hedge`);
-    if (s && s.tankCorner) why.push(`+${COVER.tankCorner} tank's corner`);
-    if (s && s.placeCorner) why.push(`+${COVER.placeCorner} cover`);
-    why.push(...placeWhy(st, target, shooter));
+    // (none for a bunker, Steve: see cover)
+    const covered = !isBunker(target);
+    if (covered && s && s.hedge) why.push(`+${COVER.hedge} hedge`);
+    if (covered && s && s.tankCorner) why.push(`+${COVER.tankCorner} tank's corner`);
+    if (covered && s && s.placeCorner) why.push(`+${COVER.placeCorner} cover`);
+    if (covered) why.push(...placeWhy(st, target, shooter));
     if (target.down) why.push(`+${TAKE_COVER} take cover`);
     // Two men or fewer (Steve)
     if (smallTarget(target)) why.push(`+${SMALL_TARGET} small target`);

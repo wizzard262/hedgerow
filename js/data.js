@@ -163,6 +163,8 @@ const MAPS = [
         { id: 'bk2', kind: 'bunker_mg', name: 'MG bunker', place: [5, 1] },
         { id: 'bk3', kind: 'bunker_gun', name: 'PaK 40 bunker', place: [5, 3] },
         { id: 'bk4', kind: 'bunker_mg', name: 'MG bunker', place: [5, 6] },
+        // (Steve: one more MG bunker, in the gap in the middle of the sea wall, facing the way up to the main bunker)
+        { id: 'bk5', kind: 'bunker_mg', name: 'MG bunker', place: [5, 4] },
       ],
     },
   },

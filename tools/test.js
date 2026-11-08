@@ -3500,7 +3500,7 @@ check('the beach: Americans start in the sea and can only leave it; Germans are 
     const us = live(st).filter(u => u.side === 'us'), de = live(st).filter(u => u.side === 'de');
     assert(us.every(u => Sim.tileType(u.x, u.y) === 'sea'), `seed ${seed}: an American not in the sea`);
     assert(!de.some(u => Sim.isTank(u)), `seed ${seed}: a German tank`);
-    assert(de.filter(u => Sim.isBunker(u)).length === 4, `seed ${seed}: not four bunkers`);
+    assert(de.filter(u => Sim.isBunker(u)).length === 5, `seed ${seed}: not five bunkers`);
     assert(de.some(u => u.kind === 'company') && de.some(u => u.kind === 'mg42'), `seed ${seed}: no loose infantry or MGs`);
     assert(de.length < DE_START.length && us.length > de.length - 2, `seed ${seed}: the Germans are not fewer: ${de.length}`);
     assert(st.ammo.de.artillery > DE_ARTILLERY.ammo, 'the Germans have no extra artillery');
@@ -3674,14 +3674,31 @@ check('the beach is four fields of sand deep, with the bunkers behind it and eac
     for (let x = 1; x <= 4; x++) assert(Sim.tileType(x, y) === 'beach', `no sand at ${x},${y}`);
     assert(Sim.tileType(5, y) !== 'beach', `too much sand in row ${y}`);
   }
-  assert(Sim.unitById(st, 'bk1').x === 8 && Sim.unitById(st, 'bk2').x === 5 && Sim.unitById(st, 'bk3').x === 5, 'the bunkers are not behind the sand');
+  assert(Sim.unitById(st, 'bk1').x === 8 && ['bk2', 'bk3', 'bk4', 'bk5'].every(id => Sim.unitById(st, id).x === 5), 'the bunkers are not behind the sand');
+  // (Steve: a third MG bunker, in the middle of the sea wall)
+  assert(Sim.unitById(st, 'bk5').kind === 'bunker_mg' && Sim.unitById(st, 'bk5').y === 4, 'no MG bunker in the middle of the sea wall');
   assert(Sim.unitById(st, 'bk3').name === 'PaK 40 bunker' && PIECES.bunker_mg.name === 'MG bunker', 'a bunker is not named for what is in it');
   // No hedges round a bunker: its sides are open to get at
-  for (const id of ['bk1', 'bk2', 'bk3', 'bk4']) {
+  for (const id of ['bk1', 'bk2', 'bk3', 'bk4', 'bk5']) {
     const b = Sim.unitById(st, id);
     for (const [dx, dy] of [[0, -1], [0, 1], [1, 0]]) assert(!Sim.inside(b.x + dx, b.y + dy) || !Sim.hedge(st, b.x, b.y, b.x + dx, b.y + dy), `a hedge round ${id}`);
   }
   assert(!Sim.hedge(st, 7, 4, 8, 4), 'a hedge across the main bunker');
+  Sim.newGame(1);
+});
+
+check('a bunker takes no cover from the sea wall, hedges, houses or trees: only its front adds', () => {
+  const st = Sim.newGame(5, 'us', 'beach');
+  const b = Sim.unitById(st, 'bk2'), s = Sim.unitById(st, 'mg1');
+  for (const u of st.units) if (u !== b && u !== s) u.x = u.y = null;
+  // On the sand to its side, shooting across the sea wall it is built into (Steve: it said +1)
+  s.x = 4; s.y = 0; s.at = 'n';
+  assert(Sim.sight(st, s, b) && !Sim.inFrontOf(b, s), 'not a side shot that can be made');
+  const why = Sim.needWhy(st, s, b);
+  assert(!why.some(w => w.includes('hedge') || w.includes('cover') || w.includes('village') || w.includes('house')), `a bunker had cover: ${why.join(' | ')}`);
+  assert(why.includes('+0 bunker side'), 'the label does not say bunker side');
+  // The score needed: the plain score, less close range
+  assert(Sim.shotNeed(st, s, b) === TO_HIT - CLOSE_BONUS, `a side shot at a bunker needs ${Sim.shotNeed(st, s, b)}`);
   Sim.newGame(1);
 });
 
