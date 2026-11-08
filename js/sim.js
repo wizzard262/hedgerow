@@ -798,8 +798,8 @@ const Sim = (() => {
 
   // Cover for a target, added to the score needed: lining a hedge it is shot across, at range, in a village or an orchard
   function cover(st, from, target) {
-    // A bunker takes no cover from hedges, the sea wall, houses or trees (Steve): its concrete is its cover, the +3 of
-    // its front, and its sides and back are open
+    // A bunker takes no cover from hedges, the sea wall, houses or trees (Steve): its concrete is its cover, what its face
+    // adds (3 from the front, 1 from a side, none from behind)
     if (isBunker(target)) return 0;
     let c = 0;
     if (from) { const s2 = sight(st, from, target); if (s2) c += s2.cover; }
@@ -905,7 +905,7 @@ const Sim = (() => {
     // A small target needs one more, whoever shoots (Steve)
     const small = smallTarget(target) ? SMALL_TARGET : 0;
     // Close range: one less, whoever shoots (Steve)
-    const close = closeBonus(shooter, target) - bunkerFront(shooter, target);
+    const close = closeBonus(shooter, target) - bunkerExtra(shooter, target);
     // Taking cover: two more from every weapon (Steve), but not the sniper (no cover helps against him)
     const down = target.down ? TAKE_COVER : 0;
     if (PIECES[shooter.kind].sniper) return TO_HIT + small + (moving ? ON_THE_MOVE : 0) + (shooter.shocked ? SHAKEN_SHOOT : 0) - QUALITY[shooter.quality || 'standard'].shoot - close;
@@ -930,13 +930,26 @@ const Sim = (() => {
     // In front, and no wider than the arc
     return ahead > 0 && aside <= ahead * Math.tan(BUNKER_ARC / 2 * Math.PI / 180) + 1e-9;
   }
-  // What the front of a bunker adds to a shot from there
-  const bunkerFront = (shooter, target) => (isBunker(target) && inFrontOf(target, shooter) ? BUNKER_FRONT : 0);
+  // Which face of a bunker a piece (or a field) is at (Steve): its front, within 45° either side of straight out of its
+  // slit (west); its back, the same arc straight behind it (east); otherwise one of its sides
+  function bunkerFace(bunker, f) {
+    if (inFrontOf(bunker, f)) return 'front';
+    const from = boardPoint(bunker), to = boardPoint(f);
+    // How far behind it (east), and how far off to the side
+    const behind = to.x - from.x;
+    const aside = Math.abs(to.y - from.y);
+    if (behind > 0 && aside <= behind * Math.tan(BUNKER_ARC / 2 * Math.PI / 180) + 1e-9) return 'back';
+    return 'side';
+  }
+  // What a bunker's face adds to a shot from there (Steve): 3 from the front, 1 from a side, none from behind
+  const BUNKER_FACE_ADDS = { front: BUNKER_FRONT, side: BUNKER_SIDE, back: 0 };
+  const bunkerExtra = (shooter, target) => (isBunker(target) ? BUNKER_FACE_ADDS[bunkerFace(target, shooter)] : 0);
 
-  // The bunker's line on that label (Steve: it must be obvious the sides are easier): the front's 3 more, or none from the side
+  // The bunker's line on that label (Steve: it must be obvious which face is easier): what its face adds, and which face
   function bunkerWhy(shooter, target) {
     if (!isBunker(target)) return [];
-    return [bunkerFront(shooter, target) ? `+${BUNKER_FRONT} bunker front` : '+0 bunker side'];
+    const face = bunkerFace(target, shooter);
+    return [`+${BUNKER_FACE_ADDS[face]} bunker ${face}`];
   }
 
   // Why a shot needs what it needs, for the label on the target (Steve): each thing that makes it harder (−) or easier (+),
@@ -2097,7 +2110,7 @@ const Sim = (() => {
   // How much a German piece wants to shoot this target from where it stands
   function targetScore(st, u, t) {
     const f = firepower(st, u);
-    return (isTank(t) ? f.hard * 2 : menDice(f)) * (7 - TO_HIT - cover(st, u, t) + closeBonus(u, t) - bunkerFront(u, t)) / 2 + (t.shocked ? 1 : 0) - t.platoons * 0.1;
+    return (isTank(t) ? f.hard * 2 : menDice(f)) * (7 - TO_HIT - cover(st, u, t) + closeBonus(u, t) - bunkerExtra(u, t)) / 2 + (t.shocked ? 1 : 0) - t.platoons * 0.1;
   }
 
   // Where a German piece is heading: its post, or (reserves) the objective if nobody holds it, else the nearest American
@@ -2876,7 +2889,7 @@ const Sim = (() => {
 
   return {
     firesOnTheMove, canAmbush, actAmbush, bestMoveShoot, bomberHeading, bomberAims, bomberLine, bombNeed, bombWhy, bestBomberRun,
-    isBunker, inFrontOf, isRoad, featuresAt, walkDistance, fireSound, wreckAt, remove, computerSide, isRobot, piecesToAsk, takeCover, enemyOf, gunStats, edgeKey, atCloseRange, closeCells, hailMaryCells,
+    isBunker, inFrontOf, bunkerFace, isRoad, featuresAt, walkDistance, fireSound, wreckAt, remove, computerSide, isRobot, piecesToAsk, takeCover, enemyOf, gunStats, edgeKey, atCloseRange, closeCells, hailMaryCells,
     newGame, roll, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, chargeSpots,
     rallyTargets, canAct, canReact, firepower, canCallFire, takesGoal, cannotWin, artilleryTarget, mortarTarget, holdsObjective, roundText, roomFor,
     computerStep, answer, finishRound, startRound, drawToken, endComputerToken, activationOver, passToken, humanCanMove, endRound, canFire, actSkip, actSkipShot, skipSupport,

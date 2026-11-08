@@ -140,7 +140,7 @@ const MAPS = [
     ammo: { us: { artillery: 3 } },
   },
   {
-    id: 'beach', date: '6 June 1944', name: 'Beach landing', note: 'The Americans land from craft in the surf and must capture the main bunker and hold it. Each bunker is a U of concrete with an MG team or a PaK 40 inside, firing only out of the slit in its thick front. From the front you need 3 more to hit: get round to its thin sides or open back. Tank traps, a sea wall, wrecks on the sand. The Germans have fewer pieces and no tanks, but more artillery.',
+    id: 'beach', date: '6 June 1944', name: 'Beach landing', note: 'The Americans land from craft in the surf and must capture the main bunker and hold it. Each bunker is a U of concrete with an MG team or a PaK 40 inside, firing only out of the slit in its thick front. From the front you need 3 more to hit, from a thin side 1 more, from the open back nothing extra. Tank traps, a sea wall, wrecks on the sand. The Germans have fewer pieces and no tanks, but more artillery.',
     generated: 'beach',
     landing: true,
     rows: [
@@ -247,6 +247,7 @@ const RANGES = {
 // needed on the dice, for every shot; not mortars, artillery or bombs
 const BUNKER_ARC = 90;            // how wide a bunker's front is, in degrees, half each side of straight ahead (Steve: 120, then 90)
 const BUNKER_FRONT = 3;          // more needed to hit a bunker from in front of it, or with shells or bombs (Steve)
+const BUNKER_SIDE = 1;           // more needed to hit a bunker from either side (Steve); from behind, nothing
 const CLOSE_RANGE = 4 / 3;       // in fields
 const CLOSE_BONUS = 1;           // taken off the score needed
 const ON_THE_MOVE = 1;           // added to the score needed when firing after a move (Steve: like range and cover, +1 each)

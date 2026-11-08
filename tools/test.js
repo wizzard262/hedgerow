@@ -3558,7 +3558,7 @@ check('a bunker: never moves, fires only out of its front', () => {
   Sim.newGame(1);
 });
 
-check('a bunker: +3 from the front, none from the side or back; rifles only shake it; anti-tank weapons can kill it', () => {
+check('a bunker: +3 from the front, none from the back; rifles only shake it; anti-tank weapons can kill it', () => {
   const setUp = (shooterId, x, y) => {
     const st = Sim.newGame(5, 'us', 'beach');
     st.hedges = {}; st.wire = {};
@@ -3687,7 +3687,7 @@ check('the beach is four fields of sand deep, with the bunkers behind it and eac
   Sim.newGame(1);
 });
 
-check('a bunker takes no cover from the sea wall, hedges, houses or trees: only its front adds', () => {
+check('a bunker takes no cover from the sea wall, hedges, houses or trees: only its own faces add', () => {
   const st = Sim.newGame(5, 'us', 'beach');
   const b = Sim.unitById(st, 'bk2'), s = Sim.unitById(st, 'mg1');
   for (const u of st.units) if (u !== b && u !== s) u.x = u.y = null;
@@ -3696,20 +3696,26 @@ check('a bunker takes no cover from the sea wall, hedges, houses or trees: only 
   assert(Sim.sight(st, s, b) && !Sim.inFrontOf(b, s), 'not a side shot that can be made');
   const why = Sim.needWhy(st, s, b);
   assert(!why.some(w => w.includes('hedge') || w.includes('cover') || w.includes('village') || w.includes('house')), `a bunker had cover: ${why.join(' | ')}`);
-  assert(why.includes('+0 bunker side'), 'the label does not say bunker side');
-  // The score needed: the plain score, less close range
-  assert(Sim.shotNeed(st, s, b) === TO_HIT - CLOSE_BONUS, `a side shot at a bunker needs ${Sim.shotNeed(st, s, b)}`);
+  assert(why.includes(`+${BUNKER_SIDE} bunker side`), 'the label does not say bunker side');
+  // The score needed: the plain score, less close range, and the side's 1 more
+  assert(Sim.shotNeed(st, s, b) === TO_HIT - CLOSE_BONUS + BUNKER_SIDE, `a side shot at a bunker needs ${Sim.shotNeed(st, s, b)}`);
   Sim.newGame(1);
 });
 
-check('the label on a shot at a bunker says front or side', () => {
+check('the label on a shot at a bunker says front, side or back: +3, +1, +0 (Steve)', () => {
   const st = Sim.newGame(5, 'us', 'beach');
   const bunker = Sim.unitById(st, 'bk3'), A = Sim.unitById(st, 'A');
+  for (const u of st.units) if (u !== bunker && u !== A) u.x = u.y = null;
   A.x = bunker.x - 1; A.y = bunker.y; A.at = null;
   assert(Sim.needWhy(st, A, bunker).includes('+3 bunker front'), 'from in front it does not say so');
+  const fromFront = Sim.needFor(st, A, bunker);
   A.x = bunker.x; A.y = bunker.y - 1;
   const side = Sim.needWhy(st, A, bunker);
-  assert(side.includes('+0 bunker side') && !side.some(w => w.includes('front')), 'from the side it does not say so: ' + side);
+  assert(side.includes('+1 bunker side') && !side.some(w => w.includes('front')), 'from the side it does not say so: ' + side);
+  A.x = bunker.x + 1; A.y = bunker.y;
+  const back = Sim.needWhy(st, A, bunker);
+  assert(back.includes('+0 bunker back'), 'from behind it does not say so: ' + back);
+  assert(Sim.bunkerFace(bunker, { x: bunker.x + 2, y: bunker.y + 3 }) === 'side' && Sim.bunkerFace(bunker, { x: bunker.x + 3, y: bunker.y + 1 }) === 'back', 'the back is not the 90 degrees behind it');
   Sim.newGame(1);
 });
 
