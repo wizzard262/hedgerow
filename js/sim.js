@@ -320,9 +320,15 @@ const Sim = (() => {
       const spot = u.main ? st.objective : { x: u.place[0], y: u.place[1] };
       u.x = spot.x; u.y = spot.y; u.at = 'nw+w';
     }
+    // A railway across the board (Steve): some pieces always start on each side of it, a rifle platoon and one more
+    // on the far side from most (the line's own field counts as south of a line along its north row)
+    const train = st.map.train;
+    const southOfLine = f => f.y >= train.row;
+    const movers = leaders.filter(u => !u.garrison && !isBunker(u));
+    const southers = !train ? [] : [movers.find(u => u.kind === 'company'), movers.find(u => u.kind !== 'company' && !isTank(u))].filter(Boolean);
     for (const u of leaders) {
       if (u.garrison || isBunker(u)) continue;
-      const options = fields.map(f => ({ f, w: worth(f) })).sort((a, b) => b.w - a.w);
+      const options = fields.filter(f => !southers.includes(u) || southOfLine(f)).map(f => ({ f, w: worth(f) })).sort((a, b) => b.w - a.w);
       const spot = options.find(o => roomFor(st, u, o.f.x, o.f.y));
       u.x = spot.f.x; u.y = spot.f.y;
       // (its place in the field straight away, so the next piece's room is judged by where this one really stands: by the
@@ -408,7 +414,12 @@ const Sim = (() => {
   // A new train coming on from the left: its engine in the first field, its carriages still off the board behind it
   function newTrain(st) {
     st.trainsMade = (st.trainsMade || 0) + 1;
-    st.trains.push({ id: st.trainsMade, head: 0, moved: 0 });
+    // What it is made up of, from the game and the train's number alone (the game's own dice are left alone): three or
+    // four behind the engine, each a carriage or a goods wagon (a van, or open with coal, wheat, timber or a tank on it)
+    const R = rng(st.seed * 131 + st.trainsMade * 17);
+    const cars = R() < TRAIN.short ? TRAIN.shorter : TRAIN.carriages;
+    const consist = [...Array(cars)].map(() => (R() < TRAIN.wagon ? { kind: 'wagon', load: YARD_LOADS[Math.floor(R() * YARD_LOADS.length)] } : { kind: 'carriage' }));
+    st.trains.push({ id: st.trainsMade, head: 0, moved: 0, cars, consist });
   }
   // The trains move on at the start of each round: three fields to the right; one that has moved three times brings the
   // next one on behind it; one right off the board is gone
@@ -419,17 +430,27 @@ const Sim = (() => {
       t.moved++;
       if (t.moved === TRAIN.every) newTrain(st);
     }
-    st.trains = st.trains.filter(t => t.head - TRAIN.carriages < COLS);
+    st.trains = st.trains.filter(t => t.head - (t.cars || TRAIN.carriages) < COLS);
+  }
+  // Does a step from one field to the next cross a train: over the edge of a field on the railway's side of it (the line
+  // runs along that side), with an engine or carriage standing in that field
+  function trainAcross(st, fx, fy, x, y) {
+    if (!st.map || !st.map.train || fx !== x) return false;
+    const { row, side } = st.map.train;
+    // The edge on the railway's side of the line's field: north of it for a line along the north row
+    const beyond = row + placeXY(side).y;
+    const crossing = (fy === row && y === beyond) || (fy === beyond && y === row);
+    return crossing && trainCars(st).some(c => c.x === x);
   }
   // Every engine and carriage on the board now: the field it is in, its row of areas, which train and which car
   function trainCars(st) {
     if (!st.map || !st.map.train || !st.trains) return [];
     const { row, side } = st.map.train, out = [];
     for (const t of st.trains) {
-      for (let k = 0; k <= TRAIN.carriages; k++) {
+      for (let k = 0; k <= (t.cars || TRAIN.carriages); k++) {
         const x = t.head - k;
         if (x < 0 || x >= COLS) continue;
-        out.push({ x, y: row, areas: SIDE_AREAS[side], kind: k === 0 ? 'engine' : 'carriage', train: t.id, car: k });
+        out.push({ x, y: row, areas: SIDE_AREAS[side], kind: k === 0 ? 'engine' : (t.consist ? t.consist[k - 1].kind : 'carriage'), train: t.id, car: k });
       }
     }
     return out;
@@ -1366,7 +1387,7 @@ const Sim = (() => {
       // that stops nobody from then on
       if (isTank(u)) {
         if (!st.openWire) st.openWire = {};
-        st.openWire[key] = { from: { x: u.x, y: u.y }, to: { x, y } };
+        st.openWire[key] = { from: { x: u.x, y: u.y }, to: { x, y }, by: u.id };
       }
     }
     if (hedge(st, u.x, u.y, x, y)) {
@@ -1714,6 +1735,8 @@ const Sim = (() => {
     if (!inside(x, y) || tileType(x, y) === 'river' || tileType(x, y) === 'sea' || PIECES[u.kind].fixed) return null;
     // Tank traps stop tanks (Steve)
     if (isTank(u) && featuresAt(st, x, y).some(f => FEATURES[f.kind].stopsTanks)) return null;
+    // Nothing crosses a train (Steve): no going over the railway's side of a field an engine or carriage stands in
+    if (trainAcross(st, fx, fy, x, y)) return null;
     // An armoured car can't get through barbed wire (Steve): it is on wheels
     if (isCar(u) && wire(st, fx, fy, x, y)) return null;
     if (isTank(u)) return hedge(st, fx, fy, x, y) && !cutter(u) ? null : 1;

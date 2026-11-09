@@ -684,37 +684,7 @@ const Board = (() => {
     for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
       for (const [dx, dy] of [[1, 0], [0, 1]]) {
         if (!Sim.inside(x + dx, y + dy) || !Sim.wire(st, x, y, x + dx, y + dy)) continue;
-        const along = dx ? 'z' : 'x', cx = dx ? x + 1 : x + 0.5, cz = dx ? y + 0.5 : y + 1;
-        // A point `a` along the fence, `h` up, `s` to one side
-        const pt = (a, h, s = 0) => (along === 'z' ? new T.Vector3(cx + s, h, cz + a) : new T.Vector3(cx + a, h, cz + s));
-        for (let a = -0.45; a <= 0.46; a += 0.15) posts.push(new T.Matrix4().compose(pt(a, 0.045), new T.Quaternion(), new T.Vector3(1, 1, 1)));
-        // Each strand kinks and wanders, with a barb (a little cross) every few steps
-        for (const h of [0.055, 0.075]) {
-          let prev = pt(-0.45, h);
-          for (let k = 1; k <= 90; k++) {
-            const a = -0.45 + k * 0.01;
-            const next = pt(a, h + 0.005 * Math.sin(k * 1.7 + h * 100), 0.005 * Math.cos(k * 1.3));
-            strands.push(prev, next);
-            prev = next;
-            if (k % 4 === 0) strands.push(pt(a, h - 0.005, -0.004), pt(a, h + 0.005, 0.004), pt(a, h + 0.005, -0.004), pt(a, h - 0.005, 0.004));
-          }
-        }
-        // The concertina (Steve: big loose loops, not a tight coil): about eight wide loops rolled along the foot of the
-        // fence, each a little different in size, leaning back and forth so they overlap
-        const LOOPS = 8, STEPS = 48, RADIUS = 0.06;
-        const wobble = seeded(x * 31 + y * 17 + dx * 7);
-        const sizes = [...Array(LOOPS + 1)].map(() => RADIUS * (0.8 + wobble() * 0.4));
-        let prev = null;
-        for (let i = 0; i <= LOOPS * STEPS; i++) {
-          const turn = i * Math.PI * 2 / STEPS;
-          const loop = Math.floor(i / STEPS);
-          // (each loop's size eases into the next one's)
-          const r = sizes[loop] + (sizes[Math.min(LOOPS, loop + 1)] - sizes[loop]) * ((i % STEPS) / STEPS);
-          const a = -0.45 + i * (0.9 / (LOOPS * STEPS)) + 0.045 * Math.sin(turn);
-          const next = pt(a, r + 0.004 + r * Math.cos(turn), r * Math.sin(turn));
-          if (prev) strands.push(prev, next);
-          prev = next;
-        }
+        fence(x, y, dx, dy, posts, strands);
       }
     }
     if (posts.length) {
@@ -725,6 +695,42 @@ const Board = (() => {
     }
     scene.add(hedgeGroup);
     hedgeKey = key;
+  }
+
+  // One barbed-wire fence on the edge from field x, y to the next one dx, dy along: its posts (as placings) and the lines of
+  // its strands and coil, added to the lists given. Used for the fences standing, and for wire a tank is just reaching
+  function fence(x, y, dx, dy, posts, strands) {
+    const along = dx ? 'z' : 'x', cx = dx ? x + 1 : x + 0.5, cz = dx ? y + 0.5 : y + 1;
+    // A point `a` along the fence, `h` up, `s` to one side
+    const pt = (a, h, s = 0) => (along === 'z' ? new T.Vector3(cx + s, h, cz + a) : new T.Vector3(cx + a, h, cz + s));
+    for (let a = -0.45; a <= 0.46; a += 0.15) posts.push(new T.Matrix4().compose(pt(a, 0.045), new T.Quaternion(), new T.Vector3(1, 1, 1)));
+    // Each strand kinks and wanders, with a barb (a little cross) every few steps
+    for (const h of [0.055, 0.075]) {
+      let prev = pt(-0.45, h);
+      for (let k = 1; k <= 90; k++) {
+        const a = -0.45 + k * 0.01;
+        const next = pt(a, h + 0.005 * Math.sin(k * 1.7 + h * 100), 0.005 * Math.cos(k * 1.3));
+        strands.push(prev, next);
+        prev = next;
+        if (k % 4 === 0) strands.push(pt(a, h - 0.005, -0.004), pt(a, h + 0.005, 0.004), pt(a, h + 0.005, -0.004), pt(a, h - 0.005, 0.004));
+      }
+    }
+    // The concertina (Steve: big loose loops, not a tight coil): about eight wide loops rolled along the foot of the
+    // fence, each a little different in size, leaning back and forth so they overlap
+    const LOOPS = 8, STEPS = 48, RADIUS = 0.06;
+    const wobble = seeded(x * 31 + y * 17 + dx * 7);
+    const sizes = [...Array(LOOPS + 1)].map(() => RADIUS * (0.8 + wobble() * 0.4));
+    let prev = null;
+    for (let i = 0; i <= LOOPS * STEPS; i++) {
+      const turn = i * Math.PI * 2 / STEPS;
+      const loop = Math.floor(i / STEPS);
+      // (each loop's size eases into the next one's)
+      const r = sizes[loop] + (sizes[Math.min(LOOPS, loop + 1)] - sizes[loop]) * ((i % STEPS) / STEPS);
+      const a = -0.45 + i * (0.9 / (LOOPS * STEPS)) + 0.045 * Math.sin(turn);
+      const next = pt(a, r + 0.004 + r * Math.cos(turn), r * Math.sin(turn));
+      if (prev) strands.push(prev, next);
+      prev = next;
+    }
   }
 
   function seeded(n) { let a = (n * 2654435761) >>> 0; return () => { a = (a * 1664525 + 1013904223) >>> 0; return a / 4294967296; }; }
@@ -848,12 +854,51 @@ const Board = (() => {
   // Wire a tank has hit (Steve: it goes from straight to stretched). Each half of the fence, from its end post, is dragged
   // the way the tank went: while a tank is snagged in it, in to the tank's front corners, a V with the tank at its point;
   // once the tank has gone on (or went straight through), pulled aside, leaving a gap in the middle that stops nobody
-  let snagGroup = null;
+  let snagGroup = null, snagSt = null;
   const SNAG_WIRE = new T.LineBasicMaterial({ color: 0x5e5e58 });
+  // (Steve: no wire opens until the tank pushes it open) The torn edges the tank that tore them has reached on the table;
+  // until it gets there the fence still stands, and it opens as the tank comes to it (see openWireReached)
+  let wireOpened = new Set(), wireGame = '';
+  // Has the tank that tore this wire reached it on the table yet: its middle up to the edge (or the tank gone)
+  function tankAtWire(st, key, open) {
+    if (wireOpened.has(key)) return true;
+    const u = open.by && Sim.unitById(st, open.by), g = u && pieces[u.id];
+    const base = g && g.userData.bases.find(b => b.visible);
+    let there = !u || u.x === null || !base;
+    if (!there) {
+      const way = { x: open.to.x - open.from.x, z: open.to.y - open.from.y };
+      const edge = way.x ? Math.max(open.from.x, open.to.x) : Math.max(open.from.y, open.to.y);
+      const at = way.x ? g.position.x + base.position.x : g.position.z + base.position.z;
+      // How far past the edge it is, the way it was going
+      there = (at - edge) * (way.x || way.z) > -0.12;
+    }
+    if (there) wireOpened.add(key);
+    return there;
+  }
+  // One frame: any torn wire whose tank has now reached it opens (the wire on the table is drawn again)
+  function openWireReached() {
+    const st = snagSt;
+    if (!st || !st.openWire) return;
+    let changed = false;
+    for (const [key, open] of Object.entries(st.openWire)) if (!wireOpened.has(key) && tankAtWire(st, key, open)) changed = true;
+    if (changed) drawSnags(st);
+  }
   function drawSnags(st) {
+    snagSt = st;
+    // A new game: nothing opened yet
+    const game = st.seed + '/' + st.map.id;
+    if (game !== wireGame) { wireOpened = new Set(); wireGame = game; }
     if (snagGroup) { scene.remove(snagGroup); freeObject(snagGroup); }
     snagGroup = new T.Group();
     const points = [], posts = [];
+    // Torn wire the tank has not reached yet: still the standing fence
+    const notYet = new Set();
+    for (const [key, open] of Object.entries(st.openWire || {})) {
+      if (tankAtWire(st, key, open)) continue;
+      notYet.add(key);
+      const x = Math.min(open.from.x, open.to.x), y = Math.min(open.from.y, open.to.y);
+      fence(x, y, open.to.x !== open.from.x ? 1 : 0, open.to.y !== open.from.y ? 1 : 0, posts, points);
+    }
     // One half of the fence, dragged from its post to a point: two strands and a stretched coil, its loops getting smaller
     const dragged = (post, end) => {
       posts.push(new T.Matrix4().compose(new T.Vector3(post.x, 0.045, post.z), new T.Quaternion(), new T.Vector3(1, 1, 1)));
@@ -888,6 +933,7 @@ const Board = (() => {
       if (st.map.train && u.y === st.map.train.row && u.snag.y !== u.y && Sim.placeXY(st.map.train.side).y === u.snag.y - u.y) continue;
       const g = pieces[u.id];
       if (!g || !g.userData.bases[0]) continue;
+      if (notYet.has(Sim.edgeKey(u.snag.x, u.snag.y, u.x, u.y))) continue;
       held.add(Sim.edgeKey(u.snag.x, u.snag.y, u.x, u.y));
       const { way, across, mid } = edgeOf(u.snag, u);
       // Where the tank stands (the first one shown)
@@ -901,7 +947,7 @@ const Board = (() => {
     }
     // Wire a tank has torn open and gone on from: each half pulled aside the way it went, a gap in the middle
     for (const [key, open] of Object.entries(st.openWire || {})) {
-      if (held.has(key)) continue;
+      if (held.has(key) || notYet.has(key)) continue;
       const { way, across, mid } = edgeOf(open.from, open.to);
       for (const side of [-1, 1]) {
         const post = { x: mid.x + across.x * side * 0.45, z: mid.z + across.z * side * 0.45 };
@@ -935,8 +981,10 @@ const Board = (() => {
       if (!g) {
         // Made once: the engine and carriages behind it, then it comes on from off the board to the left
         g = new T.Group();
-        for (let k = 0; k <= TRAIN.carriages; k++) {
-          const car = k === 0 ? Models.engine(0.9, t.id * 7) : Models.carriage(0.9, t.id * 7 + k);
+        for (let k = 0; k <= (t.cars || TRAIN.carriages); k++) {
+          // The engine, then each car as the train is made up: a carriage, or a wagon with its load
+          const spec = k > 0 && t.consist ? t.consist[k - 1] : { kind: 'carriage' };
+          const car = k === 0 ? Models.engine(0.9, t.id * 7) : spec.kind === 'wagon' ? Models.wagon(0.9, t.id * 7 + k, spec.load) : Models.carriage(0.9, t.id * 7 + k);
           g.add(at(car, -k, 0, 0));
         }
         g.position.set(t.head + 0.5 - TRAIN.step, 0, z);
@@ -2780,6 +2828,8 @@ const Board = (() => {
     }
     if (view.stateChanged) shadowStale = true;
     const moving = glide(dt) | moveTrains(dt);
+    // (torn wire opens as its tank gets there)
+    openWireReached();
     const hopping = moveHop(now);
     const waiting = pulseAmbush(now);
     const firing = playShots(now);

@@ -234,7 +234,9 @@ const TANK_ROAD_BONUS = 1;       // fields more a tank goes, on a Move & shoot o
 const CAR_ROAD_BONUS = 2;        // the same for an armoured car (Steve): it is quick on the road
 // A train (Steve: on Open farmland): an engine pulling four carriages, a field each, moving three fields left to right
 // each round; when one has moved three times another comes on from the left. They block the view like the station's
-const TRAIN = { carriages: 4, step: 3, every: 3 };
+// (Steve: a mix, and some only three long) Each train is three or four long behind its engine, each car a passenger
+// carriage or a goods wagon, some loaded
+const TRAIN = { carriages: 4, shorter: 3, short: 0.4, wagon: 0.5, step: 3, every: 3 };
 // Airdrops (Steve): once a game, at the start of a round from first to last. Paratroopers (on the bocage maps): a C-47 drops
 // a section of the 101st, elite, onto a field in the middle of the board, off target (a field next to it) half the time.
 // A supply crate (on the open maps): the first side to reach its field gets one more artillery round

@@ -446,7 +446,7 @@ check('armoured cars (Steve): no hedges, no wire, two further on the road, machi
   Sim.newGame(1);
 });
 
-check('the train on Open farmland (Steve): an engine and four carriages, three fields a round left to right, another every third move; it blocks the view and nobody stands on the line', () => {
+check('the train on Open farmland (Steve): an engine and three or four carriages and wagons, three fields a round left to right, another every third move; it blocks the view and nobody stands on the line', () => {
   const st = Sim.newGame(3, 'us', 'farmland');
   // The line: the north row of areas of every field of the second row up from the bottom
   assert(st.map.train.row === ROWS - 2, 'the line is not on the second row up');
@@ -472,7 +472,15 @@ check('the train on Open farmland (Steve): an engine and four carriages, three f
   assert(after.slice(0, 4).join(' ') === '3 6 9,0 12,3', `the trains went ${after.join(' ')}`);
   // Five cars on the board when it is all on
   const cars = Sim.trainCars(st2);
-  assert(cars.filter(c => c.kind === 'engine').length >= 1 && cars.filter(c => c.kind === 'carriage').length >= 4, 'not an engine and four carriages');
+  // An engine, and three or four behind it, carriages and goods wagons mixed (Steve)
+  const first = st2.trains[0];
+  assert(cars.filter(c => c.kind === 'engine').length >= 1 && [3, 4].includes(first.cars) && first.consist.length === first.cars, 'not an engine and three or four behind it');
+  let short = 0, wagons = 0, carriages = 0;
+  for (let seed = 1; seed <= 30; seed++) for (const t of Sim.newGame(seed, 'us', 'farmland').trains) {
+    if (t.cars === 3) short++;
+    wagons += t.consist.filter(c => c.kind === 'wagon').length; carriages += t.consist.filter(c => c.kind === 'carriage').length;
+  }
+  assert(short > 3 && short < 27 && wagons > 10 && carriages > 10, `trains not mixed: ${short} short of 30, ${wagons} wagons, ${carriages} carriages`);
   // It blocks the view along its row
   const a = st2.units.find(u => u.side === 'us' && u.kind === 'company'), b = st2.units.find(u => u.side === 'de' && u.kind === 'company');
   for (const u of st2.units) if (u !== a && u !== b) u.x = u.y = null;
@@ -524,6 +532,42 @@ check('airdrops (Steve): paratroopers on the bocage maps, a supply crate on the 
   Sim.startRound(st); st.drawn = 'us'; st.activeId = null;
   assert(Sim.actCharge(st, tank, st.crate.x, st.crate.y).ok, 'it could not go to the crate');
   assert(st.crate.taken === 'us' && st.ammo.us.artillery === before + AIRDROP.crateRounds, 'the crate gave nothing');
+  Sim.newGame(1);
+});
+
+check('on Open farmland each side starts with pieces both sides of the railway (Steve)', () => {
+  for (let seed = 1; seed <= 25; seed++) for (const mode of ['us', 'de', 'none']) {
+    const st = Sim.newGame(seed, mode, 'farmland');
+    const row = st.map.train.row;
+    for (const side of ['us', 'de']) {
+      const mine = st.units.filter(u => u.side === side && u.x !== null);
+      const south = mine.filter(u => u.y >= row), north = mine.filter(u => u.y < row);
+      assert(south.length >= 2 && north.length >= 2, `seed ${seed}, ${side}: ${north.length} north of the line, ${south.length} south`);
+      assert(south.some(u => u.kind === 'company'), `seed ${seed}, ${side}: no rifle platoon south of the line`);
+    }
+  }
+  Sim.newGame(1);
+});
+
+check('nothing crosses a train (Steve): no going over the line where an engine or carriage stands; elsewhere you can', () => {
+  const st = Sim.newGame(3, 'us', 'farmland');
+  st.hedges = {}; st.wire = {};
+  const row = st.map.train.row;
+  const A = Sim.unitById(st, 'A');
+  for (const u of st.units) if (u !== A) u.x = u.y = null;
+  // A train with its engine at 6: cars at 2 to 6
+  st.trains = [{ id: 9, head: 6, moved: 2 }];
+  // From the field north of a carriage: it can't go south into the line's field, nor over it to the next row
+  A.x = 4; A.y = row - 1; A.at = null; A.acted = false; A.shocked = false;
+  const spots = Sim.chargeSpots(st, A).map(p => `${p.x},${p.y}`);
+  assert(!spots.includes(`4,${row}`) && !spots.includes(`4,${row + 1}`), `it crossed the train: ${spots.join(' ')}`);
+  // Where no car stands it can cross the line
+  A.x = 9; A.y = row - 1;
+  const clear = Sim.chargeSpots(st, A).map(p => `${p.x},${p.y}`);
+  assert(clear.includes(`9,${row}`) && clear.includes(`9,${row + 1}`), `it could not cross where there is no train: ${clear.join(' ')}`);
+  // From the south it can come into the line's field (it stays on the near side of the train)
+  A.x = 4; A.y = row + 1;
+  assert(Sim.chargeSpots(st, A).some(p => p.x === 4 && p.y === row), 'it could not come up to the train from the south');
   Sim.newGame(1);
 });
 
