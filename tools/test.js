@@ -3594,6 +3594,21 @@ check('tank traps stop tanks and give no cover (Steve); the lanes off the beach 
   Sim.newGame(1);
 });
 
+check('the craters on the beach never overlap (Steve)', () => {
+  let craters = 0;
+  for (let seed = 1; seed <= 20; seed++) {
+    const st = Sim.newGame(seed, 'us', 'beach');
+    const holes = Scenery.list(st).filter(o => o.kind === 'crater');
+    craters += holes.length;
+    for (let i = 0; i < holes.length; i++) for (let j = i + 1; j < holes.length; j++) {
+      const d = Math.hypot(holes[i].x - holes[j].x, holes[i].y - holes[j].y);
+      assert(d >= 0.42, `seed ${seed}: two craters ${d.toFixed(2)} apart`);
+    }
+  }
+  assert(craters > 20 * 10, `only ${craters} craters in 20 beaches`);
+  Sim.newGame(1);
+});
+
 check('a burnt-out landing craft: cover like a hedge for a piece right beside it, in its field or the next; none past its corner', () => {
   const st = tableWith({ mg1: [2, 3], d2: [11, 0] });
   // A wreck along the north row of field 2,3

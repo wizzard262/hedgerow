@@ -6,6 +6,8 @@ const Scenery = (() => {
   const ANIMALS = { farm: 0.4, country: 0.12 };   // the share of plain fields with animals in, on the farm and elsewhere
   const SHEEP = 0.4;                              // the share of those that are sheep, not cows
   const CRATERS = 0.75;                           // the share of the beach's fields with a shell crater in them, or two
+  const CRATER_APART = 0.42;                      // how far apart two craters' middles must be, so they never overlap (Steve)
+  const CRATER_TRIES = 12;                        // places tried for each crater before it is left out
   const LAMP = 0.35, POSTERS = 0.15;              // the share of the city's streets with one, at a corner of the field
   const CORNERS = [[-0.45, -0.45], [0.45, -0.45], [-0.45, 0.45], [0.45, 0.45]];
   const CORNER_AREAS = [['nw', -1, -1], ['ne', 1, -1], ['sw', -1, 1], ['se', 1, 1]];
@@ -33,6 +35,16 @@ const Scenery = (() => {
     }
   }
 
+  // A place in field x, y far enough from every crater so far; null if none of the tries finds one
+  function clearSpot(out, x, y, R) {
+    for (let k = 0; k < CRATER_TRIES; k++) {
+      const spot = { x: x + 0.12 + R() * 0.76, y: y + 0.12 + R() * 0.76 };
+      const clear = out.every(o => o.kind !== 'crater' || Math.hypot(o.x - spot.x, o.y - spot.y) >= CRATER_APART);
+      if (clear) return spot;
+    }
+    return null;
+  }
+
   // Everything to draw for this game. field: when it is set, the thing goes while a piece is in that field (it would stand in
   // the way); without it, it never gets in the way
   function list(st) {
@@ -44,7 +56,12 @@ const Scenery = (() => {
       // Shell holes all over the beach, and a few just behind it
       if (tile === 'beach' && R() < CRATERS) {
         const holes = 1 + Math.floor(R() * 2);
-        for (let i = 0; i < holes; i++) out.push({ kind: 'crater', x: x + 0.12 + R() * 0.76, y: y + 0.12 + R() * 0.76, seed: Math.floor(R() * 1000) });
+        for (let i = 0; i < holes; i++) {
+          // A place clear of every crater already there, this field's and the next ones' (Steve: they never overlap)
+          const spot = clearSpot(out, x, y, R);
+          const seed = Math.floor(R() * 1000);
+          if (spot) out.push({ kind: 'crater', x: spot.x, y: spot.y, seed });
+        }
       }
       if (tile === 'field' && !st.map.landing && !Sim.featuresAt(st, x, y).length && R() < (onFarm ? ANIMALS.farm : ANIMALS.country)) herd(R() < SHEEP ? 'sheep' : 'cow', x, y, R, out);
       // (no market stalls under the Eiffel Tower)
