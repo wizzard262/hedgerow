@@ -234,6 +234,14 @@ const Sim = (() => {
     };
     // This game's objective: one of the villages
     st.objective = map.villages[Math.floor(R() * map.villages.length)];
+    // A railway with its trains (Steve: Open farmland): the line takes its row of areas in every field along it, and the
+    // first train starts coming on from the left
+    st.trains = [];
+    st.trainsMade = 0;
+    if (map.train) {
+      for (let x = 0; x < COLS; x++) st.features.push(placedFeature({ x, y: map.train.row, kind: 'rail', side: map.train.side }));
+      newTrain(st);
+    }
     // No goal to take and hold on some maps (Steve: the beach): only destroying every German wins. The objective's field
     // still places the main bunker and is where the German reserves gather
     st.noGoal = !!map.noGoal;
@@ -310,6 +318,8 @@ const Sim = (() => {
       const options = fields.map(f => ({ f, w: worth(f) })).sort((a, b) => b.w - a.w);
       const spot = options.find(o => roomFor(st, u, o.f.x, o.f.y));
       u.x = spot.f.x; u.y = spot.f.y;
+      // (its place in the field straight away, so the next piece's room is judged by where this one really stands)
+      u.at = freePlace(st, u, u.x, u.y, null);
     }
     // Pieces sharing a field stand in different places in it
     // (a bunker has its place first: everyone else fits round it)
@@ -329,6 +339,37 @@ const Sim = (() => {
       if (free(x, y) && d < bestD) { bestD = d; best = { x, y }; }
     }
     return best || want;
+  }
+
+  // ---------- Trains (Steve: Open farmland) ----------
+  // A new train coming on from the left: its engine in the first field, its carriages still off the board behind it
+  function newTrain(st) {
+    st.trainsMade = (st.trainsMade || 0) + 1;
+    st.trains.push({ id: st.trainsMade, head: 0, moved: 0 });
+  }
+  // The trains move on at the start of each round: three fields to the right; one that has moved three times brings the
+  // next one on behind it; one right off the board is gone
+  function moveTrains(st) {
+    if (!st.map.train || !st.trains) return;
+    for (const t of st.trains) t.head += TRAIN.step;
+    for (const t of st.trains.slice()) {
+      t.moved++;
+      if (t.moved === TRAIN.every) newTrain(st);
+    }
+    st.trains = st.trains.filter(t => t.head - TRAIN.carriages < COLS);
+  }
+  // Every engine and carriage on the board now: the field it is in, its row of areas, which train and which car
+  function trainCars(st) {
+    if (!st.map || !st.map.train || !st.trains) return [];
+    const { row, side } = st.map.train, out = [];
+    for (const t of st.trains) {
+      for (let k = 0; k <= TRAIN.carriages; k++) {
+        const x = t.head - k;
+        if (x < 0 || x >= COLS) continue;
+        out.push({ x, y: row, areas: SIDE_AREAS[side], kind: k === 0 ? 'engine' : 'carriage', train: t.id, car: k });
+      }
+    }
+    return out;
   }
 
   // A thing standing in a field, with the areas it takes (see FEATURES)
@@ -687,6 +728,8 @@ const Sim = (() => {
       things.push({ field: t, areas: standsIn(t) });
     }
     for (const w of st.wrecks) things.push({ field: w, areas: w.areas });
+    // A train blocks the view as the station's engines and carriages do (Steve)
+    for (const c of trainCars(st)) things.push({ field: c, areas: c.areas });
     // A building blocks the view as a tank does (Steve)
     // (a wreck on the beach gives cover only to a piece right beside it, Steve, not past its corner)
     for (const f of st.features) if (f.blocksView) things.push({ field: f, areas: f.areas, noCorner: !!FEATURES[f.kind].coverBeside });
@@ -2997,11 +3040,13 @@ const Sim = (() => {
     }
     // A new round: the bombers' compasses spin afresh
     st.spin = {};
+    // and the trains move on (Steve)
+    moveTrains(st);
   }
 
   return {
     firesOnTheMove, canAmbush, actAmbush, bestMoveShoot, bomberHeading, bomberAims, bomberLine, bombNeed, bombWhy, bestBomberRun,
-    isBunker, isCar, hurtsCars, inFrontOf, bunkerFace, shotOnTheMove, wrecksBeside, isRoad, featuresAt, walkDistance, fireSound, wreckAt, remove, computerSide, isRobot, piecesToAsk, takeCover, enemyOf, gunStats, edgeKey, atCloseRange, closeCells, hailMaryCells,
+    isBunker, isCar, hurtsCars, trainCars, inFrontOf, bunkerFace, shotOnTheMove, wrecksBeside, isRoad, featuresAt, walkDistance, fireSound, wreckAt, remove, computerSide, isRobot, piecesToAsk, takeCover, enemyOf, gunStats, edgeKey, atCloseRange, closeCells, hailMaryCells,
     newGame, roll, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, chargeSpots,
     rallyTargets, canAct, canReact, firepower, canCallFire, takesGoal, cannotWin, artilleryTarget, mortarTarget, holdsObjective, roundText, roomFor,
     computerStep, answer, finishRound, startRound, drawToken, endComputerToken, activationOver, passToken, humanCanMove, endRound, canFire, actSkip, actSkipShot, skipSupport,

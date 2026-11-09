@@ -25,6 +25,8 @@ const FEATURES = {
   fountain: { name: 'Fountain', blocksView: false },
   pond: { name: 'Duck pond', blocksView: false },
   engine: { name: 'Steam engine', blocksView: true },
+  // A railway line across a field (Steve: on Open farmland): it takes its row of areas, so nobody stands on it
+  rail: { name: 'Railway line', blocksView: false },
   carriage: { name: 'Railway carriage', blocksView: true },
   wagon: { name: 'Goods wagon', blocksView: true },
   signalbox: { name: 'Signal box', blocksView: true },
@@ -92,7 +94,7 @@ const MAPS = [
     de: { remove: ['dt1', 'dt2'], add: [{ id: 'pak2', kind: 'pak', name: 'PaK 40 (2)', post: [0, -1], garrison: true }, { id: 'dac1', kind: 'puma', name: 'Puma', reserve: true }] },
   },
   {
-    id: 'farmland', date: '25 July 1944', name: 'Open farmland', note: 'Few hedges and long shots, a few barns that block the view, and a duck pond. An armoured car each, an M8 Greyhound and a Puma; the B-17 flies, the Ju 88 does not.',
+    id: 'farmland', date: '25 July 1944', name: 'Open farmland', note: 'Few hedges and long shots, a few barns that block the view, a duck pond, and a railway: trains run along it left to right, three fields a round, blocking the view. An armoured car each, an M8 Greyhound and a Puma; the B-17 flies, the Ju 88 does not.',
     rows: [
       '.....|.....h',
       '..o..|.vv...',
@@ -110,9 +112,13 @@ const MAPS = [
       { x: 9, y: 5, kind: 'barn', areas: ['nw', 'w'] },
       { x: 4, y: 0, kind: 'barn', areas: ['c', 'e'] },
       { x: 8, y: 7, kind: 'barn', areas: ['c', 's'] },
-      { x: 3, y: 6, kind: 'pond', side: 's' },
+      // (a field up from where it was, off the railway's row, so the field still has room for a tank)
+      { x: 3, y: 5, kind: 'pond', side: 's' },
     ],
     ammo: { us: { bomber: 1 }, de: { bomber: 0 } },
+    // A railway across the second row of fields up from the bottom, along their north row of areas (Steve): trains run
+    // along it from left to right (see TRAIN)
+    train: { row: 6, side: 'n' },
     us: { add: [{ id: 'AC1', kind: 'm8', name: 'M8 Greyhound' }] },
     de: { add: [{ id: 'dac1', kind: 'puma', name: 'Puma', reserve: true }] },
   },
@@ -219,6 +225,9 @@ const MOVE_SHOOT_MOVES = 2;      // fields a Move & shoot can cover (Steve: one 
 const CHARGE_MOVES = 3;          // fields a charge can cover
 const TANK_ROAD_BONUS = 1;       // fields more a tank goes, on a Move & shoot or a Charge, if it starts, stays and ends on road or lane (Steve)
 const CAR_ROAD_BONUS = 2;        // the same for an armoured car (Steve): it is quick on the road
+// A train (Steve: on Open farmland): an engine pulling four carriages, a field each, moving three fields left to right
+// each round; when one has moved three times another comes on from the left. They block the view like the station's
+const TRAIN = { carriages: 4, step: 3, every: 3 };
 const CLIMB = 1;                 // extra moves it costs men to climb a hedge bank (tanks drive through; wire stops men)
 const SHAKEN_SHOOT = 1;          // a shaken piece needs one more to hit
 const SHAKEN_MOVE = 0.5;         // a shaken piece still moves and charges, but only half as far (rounded down, at least one field)

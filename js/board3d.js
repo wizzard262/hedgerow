@@ -565,6 +565,8 @@ const Board = (() => {
     };
     // The tower stands over its whole field, on no areas of its own
     if (f.kind === 'eiffel') { built.add(at(MAKERS.eiffel(), f.x + 0.5, 0, f.y + 0.5)); return; }
+    // A railway line: a length of track along its row of areas (the trains run on it, see drawTrains)
+    if (f.kind === 'rail') { built.add(at(Models.track(1), f.x + 0.5, 0.002, f.y + 0.5 + Sim.placeXY(f.side).y / 3, -Math.PI / 2, 0, 0)); return; }
     const spots = f.areas.map(k => Sim.placeXY(k === 'c' ? null : k));
     const midX = spots.reduce((n, p) => n + p.x, 0) / spots.length, midY = spots.reduce((n, p) => n + p.y, 0) / spots.length;
     const alongX = new Set(spots.map(p => p.y)).size === 1;
@@ -911,6 +913,51 @@ const Board = (() => {
     scene.add(snagGroup);
   }
 
+  // The trains (Steve: Open farmland): a group for each, the engine at the front, its four carriages behind, a field each.
+  // Each round it runs on to where it now is at a steady speed; cars off either end of the board are hidden
+  let trainGroups = new Map(), trainGame = '';
+  const TRAIN_SPEED = 1.6;            // fields a second
+  function drawTrains(st) {
+    // A new game: none of the old ones
+    const game = st.seed + '/' + st.map.id;
+    if (game !== trainGame) { for (const g of trainGroups.values()) { scene.remove(g); freeObject(g); } trainGroups = new Map(); trainGame = game; }
+    if (!st.map.train) return;
+    const z = st.map.train.row + 0.5 + Sim.placeXY(st.map.train.side).y / 3;
+    const live = new Set();
+    for (const t of st.trains) {
+      live.add(t.id);
+      let g = trainGroups.get(t.id);
+      if (!g) {
+        // Made once: the engine and carriages behind it, then it comes on from off the board to the left
+        g = new T.Group();
+        for (let k = 0; k <= TRAIN.carriages; k++) {
+          const car = k === 0 ? Models.engine(0.9, t.id * 7) : Models.carriage(0.9, t.id * 7 + k);
+          g.add(at(car, -k, 0, 0));
+        }
+        g.position.set(t.head + 0.5 - TRAIN.step, 0, z);
+        scene.add(g);
+        trainGroups.set(t.id, g);
+      }
+      g.userData.trainTo = t.head + 0.5;
+    }
+    // Gone off the board
+    for (const [id, g] of trainGroups) if (!live.has(id)) { scene.remove(g); freeObject(g); trainGroups.delete(id); }
+  }
+  // One frame of the trains: each on towards where it should be; a car shows only while it is over the board. Returns true
+  // while one is moving
+  function moveTrains(dt) {
+    let moving = false;
+    for (const g of trainGroups.values()) {
+      const to = g.userData.trainTo;
+      if (to === undefined) continue;
+      const gap = to - g.position.x;
+      if (Math.abs(gap) > 0.001) { g.position.x += Math.sign(gap) * Math.min(Math.abs(gap), TRAIN_SPEED * dt); moving = true; }
+      g.children.forEach((car, k) => { const x = g.position.x - k; car.visible = x > 0.1 && x < COLS - 0.1; });
+    }
+    if (moving) shadowStale = true;
+    return moving;
+  }
+
   // How high a piece stands in a field: on the road over a bridge, otherwise on the table
   const standsAt = (x, y) => (Sim.inside(x, y) && Sim.tileType(x, y) === 'bridge' ? Models.BRIDGE_DECK : 0);
 
@@ -1245,6 +1292,7 @@ const Board = (() => {
     if (drove) Sound.play('tank');
     for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) arrange(st, x, y);
     drawSnags(st);
+    drawTrains(st);
     hideSceneryUnderPieces(st);
     // The way a piece that just moved goes: through each field it passed, keeping its place in the field
     for (const u of st.units) {
@@ -2666,7 +2714,7 @@ const Board = (() => {
       marksReady = true;
     }
     if (view.stateChanged) shadowStale = true;
-    const moving = glide(dt);
+    const moving = glide(dt) | moveTrains(dt);
     const hopping = moveHop(now);
     const waiting = pulseAmbush(now);
     const firing = playShots(now);
