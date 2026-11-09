@@ -567,7 +567,7 @@ const Board = (() => {
     // The tower stands over its whole field, on no areas of its own
     if (f.kind === 'eiffel') { built.add(at(MAKERS.eiffel(), f.x + 0.5, 0, f.y + 0.5)); return; }
     // A railway line: a length of track along its row of areas (the trains run on it, see drawTrains)
-    if (f.kind === 'rail') { built.add(at(Models.track(1), f.x + 0.5, 0.002, f.y + 0.5 + Sim.placeXY(f.side).y / 3, -Math.PI / 2, 0, 0)); return; }
+    if (f.kind === 'rail') { if (Sim.tileType(f.x, f.y) !== 'yard') built.add(at(Models.track(1), f.x + 0.5, 0.002, f.y + 0.5 + Sim.placeXY(f.side).y / 3, -Math.PI / 2, 0, 0)); return; }
     const spots = f.areas.map(k => Sim.placeXY(k === 'c' ? null : k));
     const midX = spots.reduce((n, p) => n + p.x, 0) / spots.length, midY = spots.reduce((n, p) => n + p.y, 0) / spots.length;
     const alongX = new Set(spots.map(p => p.y)).size === 1;
@@ -822,7 +822,7 @@ const Board = (() => {
         // Snagged in wire (Steve): half way through the edge it crossed, the wire dragged round it in a V (see drawSnags)
         // (in the middle of the edge, so the wire runs in from both end posts alike)
         // (not across the edge that the railway runs along: the train would run through it, so there it stays in its field)
-        const railEdge = u.snag && st.map.train && y === st.map.train.row && u.snag.y !== y && Sim.placeXY(st.map.train.side).y === u.snag.y - y;
+        const railEdge = u.snag && Sim.lineSideOf(st, y, u.snag.y);
         if (u.snag && !railEdge) {
           if (u.snag.x !== x) { cx = u.snag.x < x ? 0.03 : 0.97; cz = 0.5; }
           if (u.snag.y !== y) { cz = u.snag.y < y ? 0.03 : 0.97; cx = 0.5; }
@@ -930,7 +930,7 @@ const Board = (() => {
     for (const u of st.units) {
       if (!u.snag || u.x === null || !Sim.isTank(u)) continue;
       // (caught on the railway's side of its field: it stands clear of the line, the wire left torn open, see arrange)
-      if (st.map.train && u.y === st.map.train.row && u.snag.y !== u.y && Sim.placeXY(st.map.train.side).y === u.snag.y - u.y) continue;
+      if (Sim.lineSideOf(st, u.y, u.snag.y)) continue;
       const g = pieces[u.id];
       if (!g || !g.userData.bases[0]) continue;
       if (notYet.has(Sim.edgeKey(u.snag.x, u.snag.y, u.x, u.y))) continue;
@@ -972,22 +972,25 @@ const Board = (() => {
     // A new game: none of the old ones
     const game = st.seed + '/' + st.map.id;
     if (game !== trainGame) { for (const g of trainGroups.values()) { scene.remove(g); freeObject(g); } trainGroups = new Map(); trainGame = game; }
-    if (!st.map.train) return;
-    const z = st.map.train.row + 0.5 + Sim.placeXY(st.map.train.side).y / 3;
+    if (!st.map.trains) return;
     const live = new Set();
     for (const t of st.trains) {
       live.add(t.id);
       let g = trainGroups.get(t.id);
       if (!g) {
-        // Made once: the engine and carriages behind it, then it comes on from off the board to the left
+        // Made once: the engine and its cars behind it, facing the way the line runs; then it comes on from off the board
+        const line = st.map.trains[t.line];
+        const z = line.row + 0.5 + Sim.placeXY(line.side).y / 3;
         g = new T.Group();
-        for (let k = 0; k <= (t.cars || TRAIN.carriages); k++) {
+        g.userData.dir = t.dir;
+        g.rotation.y = t.dir > 0 ? 0 : Math.PI;
+        for (let k = 0; k <= t.cars; k++) {
           // The engine, then each car as the train is made up: a carriage, or a wagon with its load
           const spec = k > 0 && t.consist ? t.consist[k - 1] : { kind: 'carriage' };
           const car = k === 0 ? Models.engine(0.9, t.id * 7) : spec.kind === 'wagon' ? Models.wagon(0.9, t.id * 7 + k, spec.load) : Models.carriage(0.9, t.id * 7 + k);
           g.add(at(car, -k, 0, 0));
         }
-        g.position.set(t.head + 0.5 - TRAIN.step, 0, z);
+        g.position.set(t.head + 0.5 - t.dir, 0, z);
         scene.add(g);
         trainGroups.set(t.id, g);
       }
@@ -1005,7 +1008,7 @@ const Board = (() => {
       if (to === undefined) continue;
       const gap = to - g.position.x;
       if (Math.abs(gap) > 0.001) { g.position.x += Math.sign(gap) * Math.min(Math.abs(gap), TRAIN_SPEED * dt); moving = true; }
-      g.children.forEach((car, k) => { const x = g.position.x - k; car.visible = x > 0.1 && x < COLS - 0.1; });
+      g.children.forEach((car, k) => { const x = g.position.x - k * (g.userData.dir || 1); car.visible = x > 0.1 && x < COLS - 0.1; });
     }
     if (moving) shadowStale = true;
     return moving;

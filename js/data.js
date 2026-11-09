@@ -121,8 +121,9 @@ const MAPS = [
     ],
     ammo: { us: { bomber: 1 }, de: { bomber: 0 } },
     // A railway across the second row of fields up from the bottom, along their north row of areas (Steve): trains run
-    // along it from left to right (see TRAIN)
-    train: { row: 6, side: 'n' },
+    // along it from left to right (see TRAIN). cars: how many behind the engine, from to; spacing: how far the last one
+    // has gone when the next comes on, from to
+    trains: [{ row: 6, side: 'n', dir: 1, cars: [3, 4], spacing: [9, 9] }],
     airdrop: 'crate',
     // (Steve: a 4th platoon, to even it up: two robots 22% → 47% for the Americans)
     us: { add: [{ id: 'AC1', kind: 'm8', name: 'M8 Greyhound' }, { id: 'D', kind: 'company', name: '4th Platoon', quality: 'standard' }] },
@@ -151,6 +152,13 @@ const MAPS = [
     ],
     villages: [{ x: 7, y: 4, name: 'La Gare' }, { x: 7, y: 1, name: 'Le Dépôt' }],
     gap: 1, wire: 0,
+    // Three lines clear right across the yard (Steve): near the top and at the bottom the trains run left to right, in the
+    // middle right to left; trains of any length from two to five behind the engine, coming at no fixed times
+    trains: [
+      { row: 0, side: 's', dir: 1, cars: [2, 5], spacing: [4, 11] },
+      { row: 5, side: 'n', dir: -1, cars: [2, 5], spacing: [4, 11] },
+      { row: 7, side: 's', dir: 1, cars: [2, 5], spacing: [4, 11] },
+    ],
     ammo: { us: { artillery: 3 } },
   },
   {
@@ -232,11 +240,10 @@ const MOVE_SHOOT_MOVES = 2;      // fields a Move & shoot can cover (Steve: one 
 const CHARGE_MOVES = 3;          // fields a charge can cover
 const TANK_ROAD_BONUS = 1;       // fields more a tank goes, on a Move & shoot or a Charge, if it starts, stays and ends on road or lane (Steve)
 const CAR_ROAD_BONUS = 2;        // the same for an armoured car (Steve): it is quick on the road
-// A train (Steve: on Open farmland): an engine pulling four carriages, a field each, moving three fields left to right
-// each round; when one has moved three times another comes on from the left. They block the view like the station's
-// (Steve: a mix, and some only three long) Each train is three or four long behind its engine, each car a passenger
-// carriage or a goods wagon, some loaded
-const TRAIN = { carriages: 4, shorter: 3, short: 0.4, wagon: 0.5, step: 3, every: 3 };
+// Trains (Steve: on Open farmland and in the Train station): an engine and its cars, a field each, moving one field along
+// their line after every piece's turn (each token drawn after the first). How long and how often: each map's trains.
+// wagon: the share of cars that are goods wagons, not carriages. They block the view like the station's stock
+const TRAIN = { wagon: 0.5 };
 // Airdrops (Steve): once a game, at the start of a round from first to last. Paratroopers (on the bocage maps): a C-47 drops
 // a section of the 101st, elite, onto a field in the middle of the board, off target (a field next to it) half the time.
 // A supply crate (on the open maps): the first side to reach its field gets one more artillery round
@@ -290,6 +297,7 @@ const PLACE_COVER = {
 };
 // A tank driving over barbed wire (Steve): this chance it gets snagged and stops there (the wire is flattened either way)
 const WIRE_SNAG = 1 / 3;
+const CAR_WIRE_SNAG = 0.5;      // the same for an armoured car (Steve): it gets through wire, but on wheels it is snagged half the time
 const MEN_A_BASE = 3;             // men on each section's round base (Steve)
 const SMALL_TARGET = 1;          // added to the score needed against a small target: a piece of two men or fewer (Steve: sniper, bazooka, captain; not the MG, three men)
 const CAPTAIN_RALLIES = { still: 2, fired: 1 };   // rallies a round (Steve): two if he stays put or charges (before, after or either side of the charge), one if he shoots or moves and shoots (before or after)
@@ -305,8 +313,9 @@ const PIECES = {
   sherman:  { name: 'Sherman 75mm', soft: 1.5, hard: 1, tank: true, armour: 0, cutter: true },
   firefly:  { name: 'Sherman 76mm', soft: 1, hard: 2, tank: true, armour: 0, cutter: true },
   pz4:      { name: 'Panzer IV', soft: 1.5, hard: 1.5, tank: true, armour: 0, cutter: true },
-  // Armoured cars (Steve), on the open maps in place of a tank: on wheels, so no hedge cutters and no getting through
-  // wire, quick on the road (CAR_ROAD_BONUS), thin armour that machine guns can get through (car)
+  // Armoured cars (Steve), on the open maps in place of a tank: on wheels, so no hedge cutters: no driving through
+  // hedges, quick on the road (CAR_ROAD_BONUS), snagged in barbed wire half the time (CAR_WIRE_SNAG), thin armour that
+  // machine guns can get through (car)
   m8:       { name: 'M8 Greyhound', soft: 1.5, hard: 0.5, tank: true, armour: 0, car: true },
   puma:     { name: 'Puma', soft: 1, hard: 1, tank: true, armour: 0, car: true },
   panther:  { name: 'Panther', soft: 1.5, hard: 3, tank: true, armour: 1, cutter: true },

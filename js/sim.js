@@ -238,10 +238,11 @@ const Sim = (() => {
     // first train starts coming on from the left
     st.trains = [];
     st.trainsMade = 0;
-    if (map.train) {
-      for (let x = 0; x < COLS; x++) st.features.push(placedFeature({ x, y: map.train.row, kind: 'rail', side: map.train.side }));
-      newTrain(st);
-    }
+    st.trainLines = (map.trains || []).map(() => ({ since: 0, next: 0 }));
+    (map.trains || []).forEach((line, i) => {
+      for (let x = 0; x < COLS; x++) st.features.push(placedFeature({ x, y: line.row, kind: 'rail', side: line.side }));
+      newTrain(st, i);
+    });
     // No goal to take and hold on some maps (Steve: the beach): only destroying every German wins. The objective's field
     // still places the main bunker and is where the German reserves gather
     st.noGoal = !!map.noGoal;
@@ -256,7 +257,7 @@ const Sim = (() => {
         // On the beach, nothing grows round a bunker (Steve: its sides must be plain to get at); the sea wall stays
         if (bunkerFields.some(f => (f.x === x && f.y === y) || (f.x === bx && f.y === by)) && tileType(x, y) !== 'beach') continue;
         // Nor across the railway (Steve: the train never runs through a hedge), and no wire there either
-        if (map.train && dx === 1 && y === map.train.row) continue;
+        if (dx === 1 && (map.trains || []).some(l => l.row === y)) continue;
         if (R() >= gapChance) st.hedges[edgeKey(x, y, bx, by)] = true;
         else if (!isLane(tileType(x, y)) && !isLane(tileType(bx, by)) && R() < wireChance) st.wire[edgeKey(x, y, bx, by)] = true;
       }
@@ -322,7 +323,8 @@ const Sim = (() => {
     }
     // A railway across the board (Steve): some pieces always start on each side of it, a rifle platoon and one more
     // on the far side from most (the line's own field counts as south of a line along its north row)
-    const train = st.map.train;
+    // (a map with one railway: Open farmland)
+    const train = st.map.trains && st.map.trains.length === 1 ? st.map.trains[0] : null;
     const southOfLine = f => f.y >= train.row;
     const movers = leaders.filter(u => !u.garrison && !isBunker(u));
     const southers = !train ? [] : [movers.find(u => u.kind === 'company'), movers.find(u => u.kind !== 'company' && !isTank(u))].filter(Boolean);
@@ -410,47 +412,63 @@ const Sim = (() => {
     st.fx.push({ kind: 'crate', x: c.x, y: c.y, side: u.side, to: { id: u.id } });
   }
 
-  // ---------- Trains (Steve: Open farmland) ----------
-  // A new train coming on from the left: its engine in the first field, its carriages still off the board behind it
-  function newTrain(st) {
+  // ---------- Trains (Steve: Open farmland, the Train station) ----------
+  // Each map's lines (st.map.trains): the row and side of it, which way they run (dir: 1 left to right, -1 right to left),
+  // how many cars behind the engine and how far apart they come
+  const trainLines = st => (st.map && st.map.trains) || [];
+  // A whole number from..to, from a dice
+  const between = (R, [from, to]) => from + Math.floor(R() * (to - from + 1));
+  // A new train coming on at the start of its line: its engine in the first field, its cars still off the board behind
+  // it. What it is made up of, and how far the next one comes behind it, from the game and the train's number alone (the
+  // game's own dice are left alone): cars a carriage or a goods wagon (a van, or open with coal, wheat, timber or a tank)
+  function newTrain(st, i) {
+    const line = trainLines(st)[i];
     st.trainsMade = (st.trainsMade || 0) + 1;
-    // What it is made up of, from the game and the train's number alone (the game's own dice are left alone): three or
-    // four behind the engine, each a carriage or a goods wagon (a van, or open with coal, wheat, timber or a tank on it)
     const R = rng(st.seed * 131 + st.trainsMade * 17);
-    const cars = R() < TRAIN.short ? TRAIN.shorter : TRAIN.carriages;
+    const cars = between(R, line.cars);
     const consist = [...Array(cars)].map(() => (R() < TRAIN.wagon ? { kind: 'wagon', load: YARD_LOADS[Math.floor(R() * YARD_LOADS.length)] } : { kind: 'carriage' }));
-    st.trains.push({ id: st.trainsMade, head: 0, moved: 0, cars, consist });
+    st.trains.push({ id: st.trainsMade, line: i, dir: line.dir, head: line.dir > 0 ? 0 : COLS - 1, cars, consist });
+    // The next one: once this one has gone far enough for it to come on clear of its tail
+    st.trainLines[i] = { since: 0, next: Math.max(cars + 2, between(R, line.spacing)) };
   }
-  // The trains move on at the start of each round: three fields to the right; one that has moved three times brings the
-  // next one on behind it; one right off the board is gone
+  // After every piece's turn (Steve) every train moves one field along its line; a line whose last train has gone far
+  // enough brings on the next; one right off the board is gone
   function moveTrains(st) {
-    if (!st.map.train || !st.trains) return;
-    for (const t of st.trains) t.head += TRAIN.step;
-    for (const t of st.trains.slice()) {
-      t.moved++;
-      if (t.moved === TRAIN.every) newTrain(st);
-    }
-    st.trains = st.trains.filter(t => t.head - (t.cars || TRAIN.carriages) < COLS);
+    if (!trainLines(st).length || !st.trains) return;
+    for (const t of st.trains) t.head += t.dir;
+    trainLines(st).forEach((line, i) => {
+      const state = st.trainLines[i];
+      state.since++;
+      if (state.since >= state.next) newTrain(st, i);
+    });
+    st.trains = st.trains.filter(t => (t.dir > 0 ? t.head - t.cars < COLS : t.head + t.cars >= 0));
   }
-  // Does a step from one field to the next cross a train: over the edge of a field on the railway's side of it (the line
-  // runs along that side), with an engine or carriage standing in that field
+  // Does a step from one field to the next cross a train: over the edge of a field on a line's side of it (the line runs
+  // along that side), with an engine or car of that line standing in that field
   function trainAcross(st, fx, fy, x, y) {
-    if (!st.map || !st.map.train || fx !== x) return false;
-    const { row, side } = st.map.train;
-    // The edge on the railway's side of the line's field: north of it for a line along the north row
-    const beyond = row + placeXY(side).y;
-    const crossing = (fy === row && y === beyond) || (fy === beyond && y === row);
-    return crossing && trainCars(st).some(c => c.x === x);
+    if (fx !== x || !trainLines(st).length) return false;
+    return trainLines(st).some((line, i) => {
+      // The edge on the line's side of its field: north of it for a line along the north row
+      const beyond = line.row + placeXY(line.side).y;
+      const crossing = (fy === line.row && y === beyond) || (fy === beyond && y === line.row);
+      return crossing && trainCars(st).some(c => c.line === i && c.x === x);
+    });
   }
-  // Every engine and carriage on the board now: the field it is in, its row of areas, which train and which car
+  // Is field x, y on a line, with the line along its side towards the field at row oy (where a snagged tank must not
+  // straddle the edge, the train would run through it)
+  function lineSideOf(st, y, oy) {
+    return trainLines(st).some(line => line.row === y && oy !== y && placeXY(line.side).y === oy - y);
+  }
+  // Every engine and car on the board now: the field it is in, its row of areas, which line, which train and which car
   function trainCars(st) {
-    if (!st.map || !st.map.train || !st.trains) return [];
-    const { row, side } = st.map.train, out = [];
+    if (!trainLines(st).length || !st.trains) return [];
+    const out = [];
     for (const t of st.trains) {
-      for (let k = 0; k <= (t.cars || TRAIN.carriages); k++) {
-        const x = t.head - k;
+      const line = trainLines(st)[t.line];
+      for (let k = 0; k <= t.cars; k++) {
+        const x = t.head - k * t.dir;
         if (x < 0 || x >= COLS) continue;
-        out.push({ x, y: row, areas: SIDE_AREAS[side], kind: k === 0 ? 'engine' : (t.consist ? t.consist[k - 1].kind : 'carriage'), train: t.id, car: k });
+        out.push({ x, y: line.row, areas: SIDE_AREAS[line.side], kind: k === 0 ? 'engine' : t.consist[k - 1].kind, line: t.line, train: t.id, car: k });
       }
     }
     return out;
@@ -547,8 +565,12 @@ const Sim = (() => {
       if (!isYard(x, y)) continue;
       const what = R();
       if (what < YARD.truck) {
-        // On one of its two tracks, the full length of the field or two thirds of it
-        const row = SIDE_AREAS[R() < 0.5 ? 'n' : 's'];
+        // On one of its two tracks, the full length of the field or two thirds of it; never on a line the trains run along
+        // (Steve: those are clear right across)
+        // (nor anywhere in a field a line runs through, so there is still room in it for a tank)
+        const trackSide = R() < 0.5 ? 'n' : 's';
+        if ((map.trains || []).some(l => l.row === y)) continue;
+        const row = SIDE_AREAS[trackSide];
         const length = Math.floor(R() * 3);
         const areas = length === 0 ? row : length === 1 ? [row[0], row[1]] : [row[1], row[2]];
         const carriage = R() < YARD_CARRIAGES;
@@ -1705,6 +1727,8 @@ const Sim = (() => {
   function actHalfShot(st, u, target) {
     if (!u || !u.halfShot || u.x === null || !targets(st, u, true).includes(target)) return { ok: false };
     u.halfShot = false;
+    // (firing instead of lying in ambush)
+    u.mayAmbush = false;
     const moving = shotOnTheMove(u);
     const lines = [`🔫 ${u.name} ${moving ? 'moves and fires' : 'fires'} on ${target.name}: ` + fireAt(st, u, target, false, moving).join(', ')];
     springAmbushes(st, u, lines);
@@ -1737,8 +1761,6 @@ const Sim = (() => {
     if (isTank(u) && featuresAt(st, x, y).some(f => FEATURES[f.kind].stopsTanks)) return null;
     // Nothing crosses a train (Steve): no going over the railway's side of a field an engine or carriage stands in
     if (trainAcross(st, fx, fy, x, y)) return null;
-    // An armoured car can't get through barbed wire (Steve): it is on wheels
-    if (isCar(u) && wire(st, fx, fy, x, y)) return null;
     if (isTank(u)) return hedge(st, fx, fy, x, y) && !cutter(u) ? null : 1;
     // Men: barbed wire stops them (only tanks get through it, Steve); a hedge bank they climb, for one more move
     if (wire(st, fx, fy, x, y)) return null;
@@ -1870,6 +1892,9 @@ const Sim = (() => {
     if (!canAmbush(st, u)) return { ok: false };
     spend(st, u);
     u.ambush = true;
+    // (lying in ambush instead of the shot it could have taken after moving within its field)
+    u.halfShot = false;
+    u.mayAmbush = false;
     // The captain gives up any rallies he has left too, as when he skips
     if (u.kind === 'captain') u.skipped = true;
     return { ok: true, lines: [`🪤 ${u.name} lies in ambush.`] };
@@ -1925,7 +1950,8 @@ const Sim = (() => {
       const p = way[i];
       const from = { x: u.x, y: u.y };
       let how = step(st, u, p.x, p.y);
-      if (how === 'flattened' && !p.pass && st.rand() < WIRE_SNAG) {
+      // (an armoured car, on wheels, gets snagged more often, Steve)
+      if (how === 'flattened' && !p.pass && st.rand() < (isCar(u) ? CAR_WIRE_SNAG : WIRE_SNAG)) {
         how = 'snagged';
         u.snagged = true;
         // Caught half way through (Steve): the table shows it across the edge, facing on, the wire dragged round it
@@ -2066,8 +2092,8 @@ const Sim = (() => {
     // The shot after: no moving penalty (Steve); still only for pieces that can fire after moving at all
     u.stayedIn = true;
     u.halfShot = u.x !== null && firesOnTheMove(u) && targets(st, u, true).length > 0;
-    // The PaK can't fire after moving, but it can lie in ambush on the same go (Steve)
-    u.mayAmbush = u.x !== null && !!PIECES[u.kind].fixed;
+    // Or it can lie in ambush on the same go instead (Steve: the PaK first, then every piece moving within its square)
+    u.mayAmbush = u.x !== null && (!!PIECES[u.kind].fixed || mayFire(u));
     return { ok: true, lines: [lines.join(', ') + '.'] };
   }
 
@@ -2954,6 +2980,9 @@ const Sim = (() => {
     const total = pieceTokens + timer;
     if (!total) return null;
     st.drawnThisRound = (st.drawnThisRound || 0) + 1;
+    // The trains move on one field after every piece's turn (Steve): each token drawn after the very first
+    if (st.tokensDrawn) moveTrains(st);
+    st.tokensDrawn = (st.tokensDrawn || 0) + 1;
     // Which token comes out: one of the Americans', one of the Germans', or the timer
     const pick = st.rand() * total;
     const side = pick < st.bag.us ? 'us' : pick < st.bag.us + st.bag.de ? 'de' : 'timer';
@@ -3132,15 +3161,13 @@ const Sim = (() => {
     }
     // A new round: the bombers' compasses spin afresh
     st.spin = {};
-    // and the trains move on (Steve)
-    moveTrains(st);
     // An airdrop, if this is its round
     airdropNow(st);
   }
 
   return {
     firesOnTheMove, canAmbush, actAmbush, bestMoveShoot, bomberHeading, bomberAims, bomberLine, bombNeed, bombWhy, bestBomberRun,
-    isBunker, isCar, hurtsCars, trainCars, inFrontOf, bunkerFace, shotOnTheMove, wrecksBeside, isRoad, featuresAt, walkDistance, fireSound, wreckAt, remove, computerSide, isRobot, piecesToAsk, takeCover, enemyOf, gunStats, edgeKey, atCloseRange, closeCells, hailMaryCells,
+    isBunker, isCar, hurtsCars, trainCars, lineSideOf, moveTrains, inFrontOf, bunkerFace, shotOnTheMove, wrecksBeside, isRoad, featuresAt, walkDistance, fireSound, wreckAt, remove, computerSide, isRobot, piecesToAsk, takeCover, enemyOf, gunStats, edgeKey, atCloseRange, closeCells, hailMaryCells,
     newGame, roll, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, chargeSpots,
     rallyTargets, canAct, canReact, firepower, canCallFire, takesGoal, cannotWin, artilleryTarget, mortarTarget, holdsObjective, roundText, roomFor,
     computerStep, answer, finishRound, startRound, drawToken, endComputerToken, activationOver, passToken, humanCanMove, endRound, canFire, actSkip, actSkipShot, skipSupport,

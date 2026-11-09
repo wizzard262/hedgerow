@@ -453,9 +453,10 @@ const UI = (() => {
     // (the PaK just moved within its field has used its move: it has No ambush instead, below)
     if (!u.mayAmbush) b.push({ mode: 'skip', label: '⏭️ Skip turn', ok: canSkip, title: 'Give up its move this round (the token is used)', run: () => Sim.actSkip(st, u) });
     // The PaK has just moved within its field and needn't lie in ambush: the token is done
-    if (u.mayAmbush) b.push({ mode: 'skipShot', label: '⏭️ No ambush', ok: true, title: 'Don\'t lie in ambush; the token is used', run: () => Sim.actSkipShot(st, u) });
+    if (u.mayAmbush && !u.halfShot) b.push({ mode: 'skipShot', label: '⏭️ No ambush', ok: true, title: 'Don\'t lie in ambush; the token is used', run: () => Sim.actSkipShot(st, u) });
     // Moved with Move & shoot and not wanting to fire (Steve: no Pass button): skip the shot, and the token is done
-    if (u.halfShot) b.push({ mode: 'skipShot', label: '⏭️ Skip the shot', ok: true, title: 'Don\'t fire after moving; the token is used', run: () => Sim.actSkipShot(st, u) });
+    // (moved within its field it could fire or lie in ambush, Steve: one button gives up both)
+    if (u.halfShot) b.push({ mode: 'skipShot', label: u.mayAmbush ? '⏭️ Neither' : '⏭️ Skip the shot', ok: true, title: u.mayAmbush ? 'Neither fire nor lie in ambush; the token is used' : "Don't fire after moving; the token is used", run: () => Sim.actSkipShot(st, u) });
     return b;
   }
 
