@@ -1651,7 +1651,7 @@ How the game was made: each prompt, what was built, and the assumptions made.
 
 - Steve: (with usage to spare) do the game balance on Open farmland, which had gone to the Germans (two robots, 60 games: Americans 22%, Germans 75%). Tried, 60 games each: no Panther 58/42, no Panzer IV 37/62, a 4th American platoon 47/52, both 63/33, one more American artillery round 27/73. Steve picked the 4th platoon
 - Found while checking every map: since v155 a Beach landing game could fail to start on some seeds (34, 50, 85, 97 of the first hundred): placing the pieces at the start put a big piece in the middle of its field, leaving no room for the next. Each piece now starts by the hedge towards the enemy, in a corner block, as it always did. A new check sets up every map 120 times
-- Two robots, 40 games a map after the change: Beach (see below), Deep bocage 40/55, Hedge country 38/63, Open farmland 45/55, River crossing 38/60, Crossroads town 55/28 (18% unfinished), Train station 50/50, Paris 57/43
+- Two robots, 40 games a map, Americans/Germans, with both changes: Beach landing 43/40 (18% unfinished), Deep bocage 35/63, Hedge country 30/70, Open farmland 40/55, River crossing 40/50, Crossroads town 53/23 (25% unfinished), Train station 33/68, Paris 53/45. The test player, 150 games on Hedge country: 13% as the Americans in about 11.3 rounds, 24% as the Germans; doing nothing wins 0%
 
 ## Sessions
 
