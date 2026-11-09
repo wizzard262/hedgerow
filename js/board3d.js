@@ -607,10 +607,12 @@ const Board = (() => {
     hedgeGroup.add(at(Models.seaWall(1 - BUNKER_GAP.to, x * 31 + y + 500), x, 0, y + (1 + BUNKER_GAP.to) / 2));
   }
   const BUNKER_GAP = { from: 0.06, to: 0.63 };
-  // The sea wall a tank has driven through: its two outer quarters still standing, rubble in the gap between
+  // The sea wall a tank has driven through (Steve: a collapsed section, as a trampled hedge): its two outer quarters still
+  // standing, its boulders tumbled across the gap between
   function addBrokenSeaWall(x, y) {
     hedgeGroup.add(at(Models.seaWall(0.25, x * 31 + y), x, 0, y + 0.125));
     hedgeGroup.add(at(Models.seaWall(0.25, x * 31 + y + 500), x, 0, y + 0.875));
+    hedgeGroup.add(at(Models.seaWallRubble(0.5, x * 31 + y), x, 0, y + 0.5));
   }
 
   // Hedges: every lump of foam on the table drawn as one instanced mesh (one for dark foam, one for light, one for the bases),

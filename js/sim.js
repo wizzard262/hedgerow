@@ -1251,6 +1251,7 @@ const Sim = (() => {
     if (wire(st, u.x, u.y, x, y)) {
       const key = edgeKey(u.x, u.y, x, y);
       delete st.wire[key];
+      // (only tanks ever get here: barbed wire stops men, Steve, see stepCost)
       how = isTank(u) ? 'flattened' : 'wirecut';
       // A tank tears it open (Steve): the wire stays on the table, dragged aside the way the tank went, a gap through it
       // that stops nobody from then on
@@ -1329,7 +1330,7 @@ const Sim = (() => {
         remove(st, d);
       }
     }
-    if (wire(st, u.x, u.y, x, y)) delete st.wire[edgeKey(u.x, u.y, x, y)];
+    // (step tears any wire on the way open, and leaves it on the table)
     step(st, u, x, y);
     return out;
   }
@@ -1386,7 +1387,6 @@ const Sim = (() => {
     st.fx.push(fight);
     if (!standing(defenders).length && u.x !== null) {
       // The field is the attacker's
-      if (wire(st, u.x, u.y, x, y)) delete st.wire[edgeKey(u.x, u.y, x, y)];
       step(st, u, x, y);
       out.push(`⚔️ ${u.name} takes the field!`);
     } else if (u.x === null) out.push(`⚔️ The charge is wiped out.`);

@@ -1210,6 +1210,21 @@ const Models = (() => {
     return mergeParts(castAll(g));
   }
 
+  // Where a tank has driven through the sea wall (Steve: a collapsed section, as a trampled hedge): its boulders tumbled
+  // down and spread out low across the gap, along z
+  function seaWallRubble(length = 0.5, seed = 0) {
+    if (!M.rock) M.rock = [mat('#7d776b', 1), mat('#948c7c', 1), mat('#66625a', 1), mat('#8a7a62', 1)];
+    const g = new T.Group(), R = seeded(seed * 89 + 7);
+    for (let k = 0; k < 14; k++) {
+      const r = 0.016 + R() * 0.02;
+      const rock = new T.Mesh(new T.IcosahedronGeometry(r, 0), M.rock[Math.floor(R() * M.rock.length)]);
+      rock.scale.set(0.8 + R() * 0.5, 0.5 + R() * 0.3, 0.8 + R() * 0.5);
+      // (spread across the gap, further out to either side than the wall stood)
+      g.add(at(rock, (R() - 0.5) * 0.22, r * 0.4, (R() - 0.5) * length, R() * 3, R() * 3, R() * 3));
+    }
+    return mergeParts(castAll(g));
+  }
+
   // A bunker (Steve): a U of concrete, open at the back and to the sky so you can see who is in it. The front (+x) is a thick,
   // tall wall with a slit down it; the sides are thin and low, to show it is the place to hit it. Long along z, two areas of a
   // field. gun: a wider slit, for the PaK 40
@@ -1656,5 +1671,5 @@ const Models = (() => {
     return castAll(g);
   }
 
-  return { EIFFEL_HEIGHT, eiffel, landingCraft, tankTrap, hulk, crater, seaWall, bunker, bunkerCrew, BUNKER, track, bufferStop, engine, carriage, wagon, signalbox, signal, watertower, coal, cow, sheep, lampPost, posterColumn, marketStall, cafe, barn, fountain, pond, reeds, BRIDGE_DECK, materials, M, mergeParts, eliteBand, water, bridge, soldier, squad, team, captain, pak, mortar, bomber, bomberOnStand, howitzer, round, coin, token, sherman, panther, panzer4, hedge, tree, house, die, table, field, lane, at };
+  return { EIFFEL_HEIGHT, eiffel, landingCraft, tankTrap, hulk, crater, seaWall, seaWallRubble, bunker, bunkerCrew, BUNKER, track, bufferStop, engine, carriage, wagon, signalbox, signal, watertower, coal, cow, sheep, lampPost, posterColumn, marketStall, cafe, barn, fountain, pond, reeds, BRIDGE_DECK, materials, M, mergeParts, eliteBand, water, bridge, soldier, squad, team, captain, pak, mortar, bomber, bomberOnStand, howitzer, round, coin, token, sherman, panther, panzer4, hedge, tree, house, die, table, field, lane, at };
 })();
