@@ -784,7 +784,12 @@ const Board = (() => {
         const spread = [[-0.11, -0.09], [0.11, -0.07], [0, 0.11]].map(([sx, sz]) => [sx * reach.spread, sz * reach.spread]);
         g.userData.bases.forEach((b, i) => { const [jx, jz, jr] = loose(u, i); b.visible = i < shownStrength(u); aim(b, cx + spread[i][0] + jx, cz + spread[i][1] + jz, g.userData.face + jr); });
       } else if (Sim.isTank(u)) {
-        const cx = 0.5 + p.x * reach.tank, cz = 0.5 + p.y * reach.tank;
+        let cx = 0.5 + p.x * reach.tank, cz = 0.5 + p.y * reach.tank;
+        // Snagged in wire (Steve): half way through the edge it crossed, the wire dragged round it in a V (see drawSnags)
+        if (u.snag) {
+          if (u.snag.x !== x) cx = u.snag.x < x ? 0.03 : 0.97;
+          if (u.snag.y !== y) cz = u.snag.y < y ? 0.03 : 0.97;
+        }
         const facing = u.aim !== undefined ? u.aim : g.userData.face;
         // Side by side across the way they face, far enough apart that they never overlap (Steve); one left: in the middle
         const shown = shownStrength(u);
@@ -809,6 +814,58 @@ const Board = (() => {
       g.userData.to.y = standsAt(x, y);
     }
   }
+  // Wire a tank is snagged in (Steve): the fence's two end posts still standing, and from each a dragged strand and a
+  // stretched coil running in to the tank's front corners, a V with the tank at its point
+  let snagGroup = null;
+  const SNAG_WIRE = new T.LineBasicMaterial({ color: 0x5e5e58 });
+  function drawSnags(st) {
+    if (snagGroup) { scene.remove(snagGroup); freeObject(snagGroup); }
+    snagGroup = new T.Group();
+    const points = [], posts = [];
+    for (const u of st.units) {
+      if (!u.snag || u.x === null || !Sim.isTank(u)) continue;
+      const g = pieces[u.id];
+      if (!g || !g.userData.bases[0]) continue;
+      // The way it was going, and across that
+      const way = { x: u.x - u.snag.x, z: u.y - u.snag.y };
+      const across = { x: way.z !== 0 ? 1 : 0, z: way.x !== 0 ? 1 : 0 };
+      // Where the tank stands (the first one shown), and the edge it crossed
+      const b = g.userData.bases[0].userData.to;
+      const tank = { x: u.x + b.x, z: u.y + b.z };
+      const edge = { x: way.x ? Math.max(u.x, u.snag.x) : tank.x, z: way.z ? Math.max(u.y, u.snag.y) : tank.z };
+      const fieldMid = { x: way.x ? edge.x : u.x + 0.5, z: way.z ? edge.z : u.y + 0.5 };
+      for (const side of [-1, 1]) {
+        // The end post on this side, and the tank's front corner it is dragged to
+        const post = { x: fieldMid.x + across.x * side * 0.45, z: fieldMid.z + across.z * side * 0.45 };
+        const corner = { x: tank.x + way.x * 0.1 + across.x * side * 0.07, z: tank.z + way.z * 0.1 + across.z * side * 0.07 };
+        posts.push(new T.Matrix4().compose(new T.Vector3(post.x, 0.045, post.z), new T.Quaternion(), new T.Vector3(1, 1, 1)));
+        // Two taut strands
+        for (const h of [0.055, 0.075]) points.push(new T.Vector3(post.x, h, post.z), new T.Vector3(corner.x, h * 0.7, corner.z));
+        // The coil, stretched out: loops getting smaller towards the tank
+        const LOOPS = 5, STEPS = 32;
+        let prev = null;
+        for (let i = 0; i <= LOOPS * STEPS; i++) {
+          const t = i / (LOOPS * STEPS), turn = i * Math.PI * 2 / STEPS;
+          const r = 0.045 * (1 - t * 0.6);
+          const cxp = post.x + (corner.x - post.x) * t, czp = post.z + (corner.z - post.z) * t;
+          // (the coil's loops stand across the line it is dragged along)
+          const len = Math.hypot(corner.x - post.x, corner.z - post.z) || 1;
+          const nx = -(corner.z - post.z) / len, nz = (corner.x - post.x) / len;
+          const next = new T.Vector3(cxp + nx * r * Math.sin(turn), r + 0.004 + r * Math.cos(turn), czp + nz * r * Math.sin(turn));
+          if (prev) points.push(prev, next);
+          prev = next;
+        }
+      }
+    }
+    if (points.length) snagGroup.add(new T.LineSegments(new T.BufferGeometry().setFromPoints(points), SNAG_WIRE));
+    if (posts.length) {
+      const pm = new T.InstancedMesh(new T.CylinderGeometry(0.004, 0.005, 0.09, 6), Models.M.wood, posts.length);
+      posts.forEach((m, k) => pm.setMatrixAt(k, m));
+      snagGroup.add(pm);
+    }
+    scene.add(snagGroup);
+  }
+
   // How high a piece stands in a field: on the road over a bridge, otherwise on the table
   const standsAt = (x, y) => (Sim.inside(x, y) && Sim.tileType(x, y) === 'bridge' ? Models.BRIDGE_DECK : 0);
 
@@ -1142,6 +1199,7 @@ const Board = (() => {
     if (ran) Sound.play('run');
     if (drove) Sound.play('tank');
     for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) arrange(st, x, y);
+    drawSnags(st);
     hideSceneryUnderPieces(st);
     // The way a piece that just moved goes: through each field it passed, keeping its place in the field
     for (const u of st.units) {

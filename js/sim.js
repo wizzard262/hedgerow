@@ -1246,6 +1246,8 @@ const Sim = (() => {
   function step(st, u, x, y, assault = false) {
     let how = '';
     u.trail = null;
+    // (moving on, a tank tears free of wire it was snagged in)
+    u.snag = null;
     if (wire(st, u.x, u.y, x, y)) { delete st.wire[edgeKey(u.x, u.y, x, y)]; how = isTank(u) ? 'flattened' : 'wirecut'; }
     if (hedge(st, u.x, u.y, x, y)) {
       if (cutter(u)) { delete st.hedges[edgeKey(u.x, u.y, x, y)]; how = 'cut'; } else how = 'climbed';
@@ -1762,8 +1764,15 @@ const Sim = (() => {
     const way = route.slice(0, -1);
     for (let i = 0; i < way.length; i++) {
       const p = way[i];
+      const from = { x: u.x, y: u.y };
       let how = step(st, u, p.x, p.y);
-      if (how === 'flattened' && !p.pass && st.rand() < WIRE_SNAG) { how = 'snagged'; u.snagged = true; }
+      if (how === 'flattened' && !p.pass && st.rand() < WIRE_SNAG) {
+        how = 'snagged';
+        u.snagged = true;
+        // Caught half way through (Steve): the table shows it across the edge, facing on, the wire dragged round it
+        u.snag = from;
+        u.aim = { e: 0, n: Math.PI / 2, w: Math.PI, s: -Math.PI / 2 }[dirTo(from, p)];
+      }
       if (how) lines.push(moveLine(u, how).replace(/\.$/, ''));
       // Seen from here: any ambush fires
       if (springAmbushes(st, u, lines, true)) halted = true;
@@ -1888,6 +1897,8 @@ const Sim = (() => {
     // The PaK faces out of its square, one of eight ways, until it next fires (Steve); sent to the middle, the way it came
     const toMiddle = !side || side === 'c';
     if (isPak) u.aim = toMiddle ? faceWayItCame(u, u.at) : faceOut(to, side);
+    // (a snagged tank tears free)
+    u.snag = null;
     // (a move that may fire after, like a Move & shoot: the captain can still fire only with a rally to spare)
     if (u.kind === 'captain' && mayFire(u)) u.fired = true;
     standAt(st, u, to);

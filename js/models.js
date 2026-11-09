@@ -85,10 +85,13 @@ const Models = (() => {
       });
       const total = pieces.reduce((n, g) => n + g.attributes.position.count, 0);
       const position = new Float32Array(total * 3), normal = new Float32Array(total * 3), uv = new Float32Array(total * 2);
+      // (colours painted on the points, as on a crater, kept too)
+      const colours = pieces[0].attributes.color ? new Float32Array(total * 3) : null;
       let at3 = 0, at2 = 0;
       for (const g of pieces) {
         position.set(g.attributes.position.array, at3);
         if (g.attributes.normal) normal.set(g.attributes.normal.array, at3);
+        if (colours && g.attributes.color) colours.set(g.attributes.color.array, at3);
         if (g.attributes.uv) uv.set(g.attributes.uv.array, at2);
         at3 += g.attributes.position.count * 3;
         at2 += g.attributes.position.count * 2;
@@ -98,6 +101,7 @@ const Models = (() => {
       merged.setAttribute('position', new T.BufferAttribute(position, 3));
       merged.setAttribute('normal', new T.BufferAttribute(normal, 3));
       merged.setAttribute('uv', new T.BufferAttribute(uv, 2));
+      if (colours) merged.setAttribute('color', new T.BufferAttribute(colours, 3));
       const mesh = new T.Mesh(merged, parts[0].material);
       mesh.castShadow = parts[0].castShadow; mesh.receiveShadow = parts[0].receiveShadow;
       for (const c of parts) { c.parent.remove(c); c.geometry.dispose(); }
@@ -1141,15 +1145,47 @@ const Models = (() => {
     return castAll(g);
   }
 
-  // A shell crater on the sand: a dark scorched hole with a raised rim
+  // A shell crater on the sand (Steve picked option B): a bowl, a raised sandy lip sloping down into a dark scorched
+  // bottom, a little uneven all round so no two are alike
+  const CRATER_PROFILE = [
+    // Out from the middle: how far (times its size), how high, and the colour there
+    { r: 0.0, y: 0.02, c: '#241c15' }, { r: 0.45, y: 0.04, c: '#33291f' }, { r: 0.8, y: 0.16, c: '#6b5a42' },
+    { r: 1.05, y: 0.36, c: '#b39d76' }, { r: 1.2, y: 0.4, c: '#d4c29e' }, { r: 1.5, y: 0.2, c: '#dccbaa' }, { r: 1.9, y: 0.0, c: '#e6d8bc' },
+  ];
+  let craterMat = null;
   function crater(seed = 0) {
-    const g = new T.Group(), R = seeded(seed + 41);
-    if (!M.craterRim) { M.craterRim = mat('#a8966f', 1); M.craterHole = mat('#3d352a', 1); }
+    const R = seeded(seed + 41);
     const size = 0.06 + R() * 0.05;
-    const rim = cyl(size * 1.3, size * 1.5, 0.01, M.craterRim, 16);
-    g.add(at(rim, 0, 0.004, 0));
-    g.add(at(cyl(size, size, 0.003, M.craterHole, 16), 0, 0.0095, 0));
-    for (const m of g.children) m.receiveShadow = true;
+    if (!craterMat) craterMat = new T.MeshStandardMaterial({ vertexColors: true, roughness: 1 });
+    // The bowl turned on a lathe: one ring of points for each step of the profile, each ring pushed in and out a little
+    const ring = 40, pos = [], col = [], idx = [];
+    const bumps = [...Array(6)].map(() => ({ k: 1 + Math.floor(R() * 5), p: R() * 6.28, a: (R() - 0.5) * 0.1 }));
+    CRATER_PROFILE.forEach((pt, i) => {
+      const colour = new T.Color(pt.c).convertSRGBToLinear();
+      for (let j = 0; j <= ring; j++) {
+        const ang = j / ring * Math.PI * 2;
+        // (the wobble grows towards the rim; the middle stays round)
+        const wobble = 1 + bumps.reduce((n, b) => n + b.a * Math.sin(b.k * ang + b.p), 0) * (i / CRATER_PROFILE.length);
+        const r = pt.r * size * wobble;
+        pos.push(Math.cos(ang) * r, pt.y * size, Math.sin(ang) * r);
+        col.push(colour.r, colour.g, colour.b);
+      }
+    });
+    for (let i = 0; i < CRATER_PROFILE.length - 1; i++) {
+      for (let j = 0; j < ring; j++) {
+        const a = i * (ring + 1) + j, b = a + ring + 1;
+        idx.push(a, a + 1, b, b, a + 1, b + 1);
+      }
+    }
+    const geo = new T.BufferGeometry();
+    geo.setIndex(idx);
+    geo.setAttribute('position', new T.Float32BufferAttribute(pos, 3));
+    geo.setAttribute('color', new T.Float32BufferAttribute(col, 3));
+    geo.computeVertexNormals();
+    const bowl = new T.Mesh(geo, craterMat);
+    bowl.receiveShadow = true;
+    const g = new T.Group();
+    g.add(bowl);
     return g;
   }
 

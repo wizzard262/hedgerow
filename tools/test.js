@@ -401,8 +401,14 @@ check('a tank over barbed wire on its way gets snagged a third of the time and s
     if (!r.ok) continue;
     runs++;
     assert(!Sim.wire(st, 4, 6, 5, 6), `seed ${seed}: the wire is still there`);
-    if (T1.x === 5) snagged++;
-    else assert(T1.x === 6, `seed ${seed}: the tank stopped at ${T1.x}`);
+    if (T1.x === 5) {
+      snagged++;
+      // Caught half way through (Steve): it remembers the field it came from, and faces on, east
+      assert(T1.snag && T1.snag.x === 4 && T1.snag.y === 6 && T1.aim === 0, `seed ${seed}: the snag was not kept: ${JSON.stringify(T1.snag)} facing ${T1.aim}`);
+      // Moving on, it tears free
+      T1.acted = false; Sim.startRound(st); st.drawn = 'us'; st.activeId = null;
+      if (Sim.actCharge(st, T1, 6, 6).ok) assert(!T1.snag, `seed ${seed}: still snagged after moving on`);
+    } else assert(T1.x === 6 && !T1.snag, `seed ${seed}: the tank stopped at ${T1.x}, or counts as snagged`);
   }
   assert(runs > 50 && snagged > runs * 0.2 && snagged < runs * 0.47, `snagged ${snagged} of ${runs}`);
 });
