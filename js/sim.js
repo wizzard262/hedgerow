@@ -222,7 +222,7 @@ const Sim = (() => {
     currentMap = map;
     walkTables.clear();
     const st = {
-      seed, mode, human, players, map, features: (map.features || []).map(placedFeature), turn: 1, hedges: {}, wire: {}, units: [], wrecks: [], report: [], fx: [],
+      seed, mode, human, players, map, features: (map.features || []).map(placedFeature), turn: 1, hedges: {}, wire: {}, openWire: {}, units: [], wrecks: [], report: [], fx: [],
       // Each side's guns and bomber: what they have fired this round, and what they have left
       fired: { us: {}, de: {} },
       ammo: {
@@ -1248,7 +1248,17 @@ const Sim = (() => {
     u.trail = null;
     // (moving on, a tank tears free of wire it was snagged in)
     u.snag = null;
-    if (wire(st, u.x, u.y, x, y)) { delete st.wire[edgeKey(u.x, u.y, x, y)]; how = isTank(u) ? 'flattened' : 'wirecut'; }
+    if (wire(st, u.x, u.y, x, y)) {
+      const key = edgeKey(u.x, u.y, x, y);
+      delete st.wire[key];
+      how = isTank(u) ? 'flattened' : 'wirecut';
+      // A tank tears it open (Steve): the wire stays on the table, dragged aside the way the tank went, a gap through it
+      // that stops nobody from then on
+      if (isTank(u)) {
+        if (!st.openWire) st.openWire = {};
+        st.openWire[key] = { from: { x: u.x, y: u.y }, to: { x, y } };
+      }
+    }
     if (hedge(st, u.x, u.y, x, y)) {
       if (cutter(u)) { delete st.hedges[edgeKey(u.x, u.y, x, y)]; how = 'cut'; } else how = 'climbed';
     }

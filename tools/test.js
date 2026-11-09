@@ -401,6 +401,9 @@ check('a tank over barbed wire on its way gets snagged a third of the time and s
     if (!r.ok) continue;
     runs++;
     assert(!Sim.wire(st, 4, 6, 5, 6), `seed ${seed}: the wire is still there`);
+    // Torn open, not gone from the table (Steve): kept as open wire, the way the tank went
+    const open = st.openWire['4,6|5,6'];
+    assert(open && open.from.x === 4 && open.to.x === 5, `seed ${seed}: the torn wire was not kept: ${JSON.stringify(open)}`);
     if (T1.x === 5) {
       snagged++;
       // Caught half way through (Steve): it remembers the field it came from, and faces on, east

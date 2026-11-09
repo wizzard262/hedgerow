@@ -786,9 +786,10 @@ const Board = (() => {
       } else if (Sim.isTank(u)) {
         let cx = 0.5 + p.x * reach.tank, cz = 0.5 + p.y * reach.tank;
         // Snagged in wire (Steve): half way through the edge it crossed, the wire dragged round it in a V (see drawSnags)
+        // (in the middle of the edge, so the wire runs in from both end posts alike)
         if (u.snag) {
-          if (u.snag.x !== x) cx = u.snag.x < x ? 0.03 : 0.97;
-          if (u.snag.y !== y) cz = u.snag.y < y ? 0.03 : 0.97;
+          if (u.snag.x !== x) { cx = u.snag.x < x ? 0.03 : 0.97; cz = 0.5; }
+          if (u.snag.y !== y) { cz = u.snag.y < y ? 0.03 : 0.97; cx = 0.5; }
         }
         const facing = u.aim !== undefined ? u.aim : g.userData.face;
         // Side by side across the way they face, far enough apart that they never overlap (Steve); one left: in the middle
@@ -814,47 +815,66 @@ const Board = (() => {
       g.userData.to.y = standsAt(x, y);
     }
   }
-  // Wire a tank is snagged in (Steve): the fence's two end posts still standing, and from each a dragged strand and a
-  // stretched coil running in to the tank's front corners, a V with the tank at its point
+  // Wire a tank has hit (Steve: it goes from straight to stretched). Each half of the fence, from its end post, is dragged
+  // the way the tank went: while a tank is snagged in it, in to the tank's front corners, a V with the tank at its point;
+  // once the tank has gone on (or went straight through), pulled aside, leaving a gap in the middle that stops nobody
   let snagGroup = null;
   const SNAG_WIRE = new T.LineBasicMaterial({ color: 0x5e5e58 });
   function drawSnags(st) {
     if (snagGroup) { scene.remove(snagGroup); freeObject(snagGroup); }
     snagGroup = new T.Group();
     const points = [], posts = [];
+    // One half of the fence, dragged from its post to a point: two strands and a stretched coil, its loops getting smaller
+    const dragged = (post, end) => {
+      posts.push(new T.Matrix4().compose(new T.Vector3(post.x, 0.045, post.z), new T.Quaternion(), new T.Vector3(1, 1, 1)));
+      // Two taut strands
+      for (const h of [0.055, 0.075]) points.push(new T.Vector3(post.x, h, post.z), new T.Vector3(end.x, h * 0.7, end.z));
+      const LOOPS = 5, STEPS = 32;
+      const len = Math.hypot(end.x - post.x, end.z - post.z) || 1;
+      // (the coil's loops stand across the line it is dragged along)
+      const nx = -(end.z - post.z) / len, nz = (end.x - post.x) / len;
+      let prev = null;
+      for (let i = 0; i <= LOOPS * STEPS; i++) {
+        const t = i / (LOOPS * STEPS), turn = i * Math.PI * 2 / STEPS;
+        const r = 0.045 * (1 - t * 0.6);
+        const cx = post.x + (end.x - post.x) * t, cz = post.z + (end.z - post.z) * t;
+        const next = new T.Vector3(cx + nx * r * Math.sin(turn), r + 0.004 + r * Math.cos(turn), cz + nz * r * Math.sin(turn));
+        if (prev) points.push(prev, next);
+        prev = next;
+      }
+    };
+    // The edge a tank went over: the way it went, across that, and the middle of the edge
+    const edgeOf = (from, to) => {
+      const way = { x: to.x - from.x, z: to.y - from.y };
+      const across = { x: way.z !== 0 ? 1 : 0, z: way.x !== 0 ? 1 : 0 };
+      const mid = { x: way.x ? Math.max(from.x, to.x) : to.x + 0.5, z: way.z ? Math.max(from.y, to.y) : to.y + 0.5 };
+      return { way, across, mid };
+    };
+    // Snagged tanks: the V round each
+    const held = new Set();
     for (const u of st.units) {
       if (!u.snag || u.x === null || !Sim.isTank(u)) continue;
       const g = pieces[u.id];
       if (!g || !g.userData.bases[0]) continue;
-      // The way it was going, and across that
-      const way = { x: u.x - u.snag.x, z: u.y - u.snag.y };
-      const across = { x: way.z !== 0 ? 1 : 0, z: way.x !== 0 ? 1 : 0 };
-      // Where the tank stands (the first one shown), and the edge it crossed
+      held.add(Sim.edgeKey(u.snag.x, u.snag.y, u.x, u.y));
+      const { way, across, mid } = edgeOf(u.snag, u);
+      // Where the tank stands (the first one shown)
       const b = g.userData.bases[0].userData.to;
       const tank = { x: u.x + b.x, z: u.y + b.z };
-      const edge = { x: way.x ? Math.max(u.x, u.snag.x) : tank.x, z: way.z ? Math.max(u.y, u.snag.y) : tank.z };
-      const fieldMid = { x: way.x ? edge.x : u.x + 0.5, z: way.z ? edge.z : u.y + 0.5 };
       for (const side of [-1, 1]) {
-        // The end post on this side, and the tank's front corner it is dragged to
-        const post = { x: fieldMid.x + across.x * side * 0.45, z: fieldMid.z + across.z * side * 0.45 };
-        const corner = { x: tank.x + way.x * 0.1 + across.x * side * 0.07, z: tank.z + way.z * 0.1 + across.z * side * 0.07 };
-        posts.push(new T.Matrix4().compose(new T.Vector3(post.x, 0.045, post.z), new T.Quaternion(), new T.Vector3(1, 1, 1)));
-        // Two taut strands
-        for (const h of [0.055, 0.075]) points.push(new T.Vector3(post.x, h, post.z), new T.Vector3(corner.x, h * 0.7, corner.z));
-        // The coil, stretched out: loops getting smaller towards the tank
-        const LOOPS = 5, STEPS = 32;
-        let prev = null;
-        for (let i = 0; i <= LOOPS * STEPS; i++) {
-          const t = i / (LOOPS * STEPS), turn = i * Math.PI * 2 / STEPS;
-          const r = 0.045 * (1 - t * 0.6);
-          const cxp = post.x + (corner.x - post.x) * t, czp = post.z + (corner.z - post.z) * t;
-          // (the coil's loops stand across the line it is dragged along)
-          const len = Math.hypot(corner.x - post.x, corner.z - post.z) || 1;
-          const nx = -(corner.z - post.z) / len, nz = (corner.x - post.x) / len;
-          const next = new T.Vector3(cxp + nx * r * Math.sin(turn), r + 0.004 + r * Math.cos(turn), czp + nz * r * Math.sin(turn));
-          if (prev) points.push(prev, next);
-          prev = next;
-        }
+        const post = { x: mid.x + across.x * side * 0.45, z: mid.z + across.z * side * 0.45 };
+        const corner = { x: tank.x + way.x * 0.17 + across.x * side * 0.09, z: tank.z + way.z * 0.17 + across.z * side * 0.09 };
+        dragged(post, corner);
+      }
+    }
+    // Wire a tank has torn open and gone on from: each half pulled aside the way it went, a gap in the middle
+    for (const [key, open] of Object.entries(st.openWire || {})) {
+      if (held.has(key)) continue;
+      const { way, across, mid } = edgeOf(open.from, open.to);
+      for (const side of [-1, 1]) {
+        const post = { x: mid.x + across.x * side * 0.45, z: mid.z + across.z * side * 0.45 };
+        const end = { x: mid.x + way.x * 0.22 + across.x * side * 0.2, z: mid.z + way.z * 0.22 + across.z * side * 0.2 };
+        dragged(post, end);
       }
     }
     if (points.length) snagGroup.add(new T.LineSegments(new T.BufferGeometry().setFromPoints(points), SNAG_WIRE));
