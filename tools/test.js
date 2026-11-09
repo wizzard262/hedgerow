@@ -550,6 +550,15 @@ check('nothing ever stops on the railway, so the train never meets anything (Ste
   Sim.newGame(1);
 });
 
+check('every map sets up without fail, seed after seed, everyone with room (the beach crashed on some seeds in v155)', () => {
+  for (const map of MAPS.map(m => m.id)) for (let seed = 1; seed <= 120; seed++) {
+    let st;
+    try { st = Sim.newGame(seed, 'us', map); } catch (e) { throw new Error(`${map}, seed ${seed}: ${e.message}`); }
+    for (const u of live(st)) assert(fieldOk(st, u.x, u.y), `${map}, seed ${seed}: too many in ${u.x},${u.y}`);
+  }
+  Sim.newGame(1);
+});
+
 check('an armoured car on the road goes two fields further, a tank one', () => {
   // A long straight road: find one on some map and drive along it
   for (const map of ['farmland', 'town', 'river']) for (let seed = 1; seed <= 6; seed++) {
@@ -3347,7 +3356,7 @@ check('every map changes what it says it does: pieces, ammunition and hedges', (
   // The armoured cars (Steve): on the open maps only, each in place of a tank
   assert(!pieces('river').includes('T1') && !pieces('river').includes('dt1') && pieces('river').includes('AC1') && pieces('river').includes('dac1'), 'river crossing: the armoured cars not in place of a tank each');
   assert(!pieces('town').includes('T3') && pieces('town').includes('AC1') && pieces('town').includes('pak2') && !pieces('town').includes('dt1') && !pieces('town').includes('dt2') && pieces('town').includes('dac1'), 'crossroads town: not as it says');
-  assert(!pieces('farmland').includes('T3') && !pieces('farmland').includes('dt3') && pieces('farmland').includes('AC1') && pieces('farmland').includes('dac1'), 'open farmland: not as it says');
+  assert(!pieces('farmland').includes('T3') && !pieces('farmland').includes('dt3') && pieces('farmland').includes('AC1') && pieces('farmland').includes('dac1') && pieces('farmland').includes('D'), 'open farmland: not as it says');
   for (const id of ['hedges', 'deep', 'beach', 'station', 'paris']) assert(!pieces(id).includes('AC1') && !pieces(id).includes('dac1'), `${id}: an armoured car where there should be none`);
   assert(pieces('deep').includes('D') && !pieces('deep').includes('T2') && pieces('deep').includes('d6'), 'deep bocage: not as it says');
   assert(usual.length === US_START.length + DE_START.length, 'the usual map changed its pieces');

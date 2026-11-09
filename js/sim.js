@@ -325,8 +325,9 @@ const Sim = (() => {
       const options = fields.map(f => ({ f, w: worth(f) })).sort((a, b) => b.w - a.w);
       const spot = options.find(o => roomFor(st, u, o.f.x, o.f.y));
       u.x = spot.f.x; u.y = spot.f.y;
-      // (its place in the field straight away, so the next piece's room is judged by where this one really stands)
-      u.at = freePlace(st, u, u.x, u.y, null);
+      // (its place in the field straight away, so the next piece's room is judged by where this one really stands: by the
+      // hedge towards the enemy as it starts, so a big piece takes a corner block and leaves room, never the whole middle)
+      u.at = freePlace(st, u, u.x, u.y, u.at);
     }
     // Pieces sharing a field stand in different places in it
     // (a bunker has its place first: everyone else fits round it)

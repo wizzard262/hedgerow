@@ -97,7 +97,7 @@ const MAPS = [
     de: { remove: ['dt1', 'dt2'], add: [{ id: 'pak2', kind: 'pak', name: 'PaK 40 (2)', post: [0, -1], garrison: true }, { id: 'dac1', kind: 'puma', name: 'Puma', reserve: true }] },
   },
   {
-    id: 'farmland', date: '25 July 1944', name: 'Open farmland', note: 'Few hedges and long shots, a few barns that block the view, a duck pond, and a railway: trains run along it left to right, three fields a round, blocking the view. An armoured car each, an M8 Greyhound and a Puma; the B-17 flies, the Ju 88 does not.',
+    id: 'farmland', date: '25 July 1944', name: 'Open farmland', note: 'Few hedges and long shots, a few barns that block the view, a duck pond, and a railway: trains run along it left to right, three fields a round, blocking the view. An armoured car each, an M8 Greyhound and a Puma, and a fourth American platoon; the B-17 flies, the Ju 88 does not.',
     rows: [
       '.....|.....h',
       '..o..|.vv...',
@@ -124,7 +124,8 @@ const MAPS = [
     // along it from left to right (see TRAIN)
     train: { row: 6, side: 'n' },
     airdrop: 'crate',
-    us: { add: [{ id: 'AC1', kind: 'm8', name: 'M8 Greyhound' }] },
+    // (Steve: a 4th platoon, to even it up: two robots 22% → 47% for the Americans)
+    us: { add: [{ id: 'AC1', kind: 'm8', name: 'M8 Greyhound' }, { id: 'D', kind: 'company', name: '4th Platoon', quality: 'standard' }] },
     de: { add: [{ id: 'dac1', kind: 'puma', name: 'Puma', reserve: true }] },
   },
   {
