@@ -607,11 +607,17 @@ const Board = (() => {
     hedgeGroup.add(at(Models.seaWall(1 - BUNKER_GAP.to, x * 31 + y + 500), x, 0, y + (1 + BUNKER_GAP.to) / 2));
   }
   const BUNKER_GAP = { from: 0.06, to: 0.63 };
+  // The sea wall a tank has driven through: its two outer quarters still standing, rubble in the gap between
+  function addBrokenSeaWall(x, y) {
+    hedgeGroup.add(at(Models.seaWall(0.25, x * 31 + y), x, 0, y + 0.125));
+    hedgeGroup.add(at(Models.seaWall(0.25, x * 31 + y + 500), x, 0, y + 0.875));
+  }
 
   // Hedges: every lump of foam on the table drawn as one instanced mesh (one for dark foam, one for light, one for the bases),
   // so the whole board stays quick to draw. Rebuilt when a hedge is cut
   function buildHedges(st) {
-    const key = Object.keys(st.hedges).sort().join(';') + '/' + Object.keys(st.wire).sort().join(';');
+    const trampled = st.trampled || {};
+    const key = Object.keys(st.hedges).sort().join(';') + '/' + Object.keys(st.wire).sort().join(';') + '/' + Object.keys(trampled).sort().join(';');
     if (key === hedgeKey) return;
     if (hedgeGroup) scene.remove(hedgeGroup);
     shadowStale = true;
@@ -624,18 +630,35 @@ const Board = (() => {
         else runs.push({ cx: x + 1, cz: y + 0.5, along: 'z', seed: x * 31 + y });
       }
       if (y + 1 < ROWS && Sim.hedge(st, x, y, x, y + 1)) runs.push({ cx: x + 0.5, cz: y + 1, along: 'x', seed: x * 17 + y * 5 + 3 });
+      // A hedge a tank has driven through (Steve): still there, its middle half trampled flat
+      if (x + 1 < COLS && trampled[Sim.edgeKey(x, y, x + 1, y)]) {
+        if (Sim.tileType(x, y) === 'beach') addBrokenSeaWall(x + 1, y);
+        else runs.push({ cx: x + 1, cz: y + 0.5, along: 'z', seed: x * 31 + y, trampled: true });
+      }
+      if (y + 1 < ROWS && trampled[Sim.edgeKey(x, y, x, y + 1)]) runs.push({ cx: x + 0.5, cz: y + 1, along: 'x', seed: x * 17 + y * 5 + 3, trampled: true });
     }
     const lumps = [[], []], bases = [];
     const m = new T.Matrix4(), q = new T.Quaternion(), sc = new T.Vector3(), pos = new T.Vector3();
+    // A point `a` along a run and `side` across it, `h` up
+    const along = (r, a, side, h) => pos.set(r.along === 'x' ? r.cx + a : r.cx + side, h, r.along === 'x' ? r.cz + side : r.cz + a);
+    const turned = r => new T.Quaternion().setFromEuler(new T.Euler(0, r.along === 'z' ? Math.PI / 2 : 0, 0));
     for (const r of runs) {
       const R = seeded(r.seed);
-      bases.push(new T.Matrix4().compose(new T.Vector3(r.cx, 0.006, r.cz), new T.Quaternion().setFromEuler(new T.Euler(0, r.along === 'z' ? Math.PI / 2 : 0, 0)), new T.Vector3(1, 1, 1)));
+      // The bank under it: the whole length, or (trampled) only its two outer quarters
+      if (!r.trampled) bases.push(new T.Matrix4().compose(new T.Vector3(r.cx, 0.006, r.cz), turned(r), new T.Vector3(1, 1, 1)));
+      else for (const end of [-1, 1]) bases.push(new T.Matrix4().compose(along(r, end * 0.375, 0, 0.006).clone(), turned(r), new T.Vector3(0.25, 1, 1)));
       for (let k = 0; k < 70; k++) {
-        const a = -0.5 + R(), side = (R() - 0.5) * 0.07, rad = 0.035 + R() * 0.03;
-        pos.set(r.along === 'x' ? r.cx + a : r.cx + side, 0.05 + R() * 0.07, r.along === 'x' ? r.cz + side : r.cz + a);
-        sc.set(rad, rad * (0.9 + R() * 0.4), rad);
+        // (drawn in the same order as always, so the hedges look as they did)
+        const a = -0.5 + R(), side = (R() - 0.5) * 0.07, rad = 0.035 + R() * 0.03, h = 0.05 + R() * 0.07, tall = 0.9 + R() * 0.4, light = R() < 0.25;
+        // Trampled: the middle half crushed flat, lumps squashed low and spread a little wider
+        // (only a few bits of it left, pressed into the ground, so the gap shows clearly)
+        const crushed = r.trampled && Math.abs(a) < 0.25;
+        if (crushed && k % 3) continue;
+        along(r, a, crushed ? side * 2.2 : side, crushed ? 0.004 : h);
+        if (crushed) sc.set(rad * 0.9, rad * 0.15, rad * 0.9);
+        else sc.set(rad, rad * tall, rad);
         m.compose(pos, q, sc);
-        lumps[R() < 0.25 ? 1 : 0].push(m.clone());
+        lumps[light ? 1 : 0].push(m.clone());
       }
     }
     const ball = new T.SphereGeometry(1, 7, 5);

@@ -163,6 +163,8 @@ check('every tank drives through hedges; only tanks get through wire; men climb 
   const k1 = setUp(sher, 0); st.hedges[k1] = true;
   assert(Sim.actCharge(st, sher, 1, 0).ok && sher.x === 1, 'the Sherman could not drive through the hedge');
   assert(!st.hedges[k1], 'the Sherman left the hedge standing');
+  // (Steve: the hedge stays on the table with its middle trampled, a gap from then on)
+  assert(st.trampled[k1], 'the hedge the Sherman drove through was not marked trampled');
   const k2 = setUp(ff, 6); st.hedges[k2] = true;
   assert(Sim.chargeSpots(st, ff).some(p => p.x === 1 && p.y === 6) && 'the Firefly should drive through hedges with no separate Break through');
   const k3 = setUp(co, 3); st.wire[k3] = true;

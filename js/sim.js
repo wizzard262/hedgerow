@@ -222,7 +222,7 @@ const Sim = (() => {
     currentMap = map;
     walkTables.clear();
     const st = {
-      seed, mode, human, players, map, features: (map.features || []).map(placedFeature), turn: 1, hedges: {}, wire: {}, openWire: {}, units: [], wrecks: [], report: [], fx: [],
+      seed, mode, human, players, map, features: (map.features || []).map(placedFeature), turn: 1, hedges: {}, wire: {}, openWire: {}, trampled: {}, units: [], wrecks: [], report: [], fx: [],
       // Each side's guns and bomber: what they have fired this round, and what they have left
       fired: { us: {}, de: {} },
       ammo: {
@@ -1260,7 +1260,14 @@ const Sim = (() => {
       }
     }
     if (hedge(st, u.x, u.y, x, y)) {
-      if (cutter(u)) { delete st.hedges[edgeKey(u.x, u.y, x, y)]; how = 'cut'; } else how = 'climbed';
+      if (cutter(u)) {
+        const key = edgeKey(u.x, u.y, x, y);
+        delete st.hedges[key];
+        how = 'cut';
+        // (Steve: the hedge stays on the table, its middle half trampled flat: a gap for everyone from then on)
+        if (!st.trampled) st.trampled = {};
+        st.trampled[key] = true;
+      } else how = 'climbed';
     }
     const heading = dirTo(u, { x, y });
     u.x = x; u.y = y; u.at = freePlace(st, u, x, y, heading);
