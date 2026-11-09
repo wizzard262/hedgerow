@@ -527,6 +527,29 @@ check('airdrops (Steve): paratroopers on the bocage maps, a supply crate on the 
   Sim.newGame(1);
 });
 
+check('nothing ever stops on the railway, so the train never meets anything (Steve): two robots, token by token', () => {
+  for (let seed = 1; seed <= 4; seed++) {
+    const st = Sim.newGame(seed, 'none', 'farmland');
+    const row = st.map.train.row, line = ['nw', 'n', 'ne'];
+    const clear = when => {
+      for (const u of st.units) if (u.x !== null && u.y === row) assert(!Sim.footprint(u).some(k => line.includes(k)), `seed ${seed}, ${when}: ${u.name} stands on the line`);
+      for (const w of st.wrecks) if (w.y === row) assert(!w.areas.some(k => line.includes(k)), `seed ${seed}, ${when}: a wreck lies on the line`);
+      if (st.crate && st.crate.y === row) throw new Error(`seed ${seed}: the crate came down on the line`);
+    };
+    while (!st.won && !st.lost && st.turn <= 12) {
+      Sim.startRound(st);
+      for (let side = Sim.drawToken(st); side; side = Sim.drawToken(st)) {
+        if (side === 'timer') break;
+        for (let r = Sim.computerStep(st); !r.done; r = Sim.computerStep(st)) { /* robots answer for themselves */ }
+        Sim.endComputerToken(st);
+        clear(`round ${st.turn}`);
+      }
+      Sim.endRound(st);
+    }
+  }
+  Sim.newGame(1);
+});
+
 check('an armoured car on the road goes two fields further, a tank one', () => {
   // A long straight road: find one on some map and drive along it
   for (const map of ['farmland', 'town', 'river']) for (let seed = 1; seed <= 6; seed++) {

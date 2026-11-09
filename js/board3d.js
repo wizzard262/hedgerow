@@ -815,7 +815,9 @@ const Board = (() => {
         let cx = 0.5 + p.x * reach.tank, cz = 0.5 + p.y * reach.tank;
         // Snagged in wire (Steve): half way through the edge it crossed, the wire dragged round it in a V (see drawSnags)
         // (in the middle of the edge, so the wire runs in from both end posts alike)
-        if (u.snag) {
+        // (not across the edge that the railway runs along: the train would run through it, so there it stays in its field)
+        const railEdge = u.snag && st.map.train && y === st.map.train.row && u.snag.y !== y && Sim.placeXY(st.map.train.side).y === u.snag.y - y;
+        if (u.snag && !railEdge) {
           if (u.snag.x !== x) { cx = u.snag.x < x ? 0.03 : 0.97; cz = 0.5; }
           if (u.snag.y !== y) { cz = u.snag.y < y ? 0.03 : 0.97; cx = 0.5; }
         }
@@ -882,6 +884,8 @@ const Board = (() => {
     const held = new Set();
     for (const u of st.units) {
       if (!u.snag || u.x === null || !Sim.isTank(u)) continue;
+      // (caught on the railway's side of its field: it stands clear of the line, the wire left torn open, see arrange)
+      if (st.map.train && u.y === st.map.train.row && u.snag.y !== u.y && Sim.placeXY(st.map.train.side).y === u.snag.y - u.y) continue;
       const g = pieces[u.id];
       if (!g || !g.userData.bases[0]) continue;
       held.add(Sim.edgeKey(u.snag.x, u.snag.y, u.x, u.y));
