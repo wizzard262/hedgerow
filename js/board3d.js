@@ -102,7 +102,8 @@ const Board = (() => {
     us: { artillery: { x: -0.7, z: 2.55, pileX: -1.45, pileZ: 2.3 }, mortars: { x: -0.7, z: 4.05, pileX: -1.45, pileZ: 3.85 }, bomber: { x: -0.6, z: 5.5 } },
     de: { artillery: { x: COLS + 0.7, z: 2.55, pileX: COLS + 1.25, pileZ: 2.3 }, mortars: { x: COLS + 0.7, z: 4.05, pileX: COLS + 1.25, pileZ: 3.85 }, bomber: { x: COLS + 0.5, z: 5.5 } },
   };
-  const GUN_NAMES = { us: { artillery: 'US artillery', mortars: 'US mortars', bomber: `US ${BOMBER_NAMES.us}` }, de: { artillery: 'German artillery', mortars: 'German mortars', bomber: `German ${BOMBER_NAMES.de}` } };
+  // (each gun by its name for the time, Steve; see MORTARS and the rest in data.js)
+  const GUN_NAMES = { us: { artillery: ARTILLERY.name, mortars: MORTARS.name, bomber: `US ${BOMBER_NAMES.us}` }, de: { artillery: DE_ARTILLERY.name, mortars: DE_MORTAR.name, bomber: `German ${BOMBER_NAMES.de}` } };
   const SUPPORT = ['artillery', 'mortars', 'bomber'];
   const PILE_MAX = 12;
   let support = null;           // side → which → { model, rounds: [] }
@@ -2546,7 +2547,7 @@ const Board = (() => {
   // ["1st Platoon", "needs 5+ · 2 hits"]: who fired, then the score each die needed and the hits
   function shotTagText(st, f) {
     const shooter = f.from ? st.units.find(u => u.id === f.from.id) : null;
-    const gunName = f.support === 'bomber' ? BOMBER_NAMES[f.side] : f.support === 'artillery' ? 'artillery' : 'mortars';
+    const gunName = f.support === 'bomber' ? BOMBER_NAMES[f.side] : GUN_NAMES[f.side][f.support];
     // ("Our" only with one human playing: two humans, or two robots, have no "our")
     const onePlayer = st.mode === 'us' || st.mode === 'de';
     const whose = onePlayer && f.side === st.human ? 'Our' : f.side === 'de' ? 'German' : 'American';

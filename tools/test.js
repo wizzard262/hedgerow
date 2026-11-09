@@ -451,6 +451,14 @@ check('the train on Open farmland (Steve): an engine and four carriages, three f
   // The line: the north row of areas of every field of the second row up from the bottom
   assert(st.map.train.row === ROWS - 2, 'the line is not on the second row up');
   for (let x = 0; x < COLS; x++) assert(Sim.featuresAt(st, x, ROWS - 2).some(f => f.kind === 'rail'), `no line at ${x}`);
+  // Never through a hedge, wire, an orchard or a village (Steve): open fields and the lane only
+  for (let seed = 1; seed <= 10; seed++) {
+    const g = Sim.newGame(seed, 'us', 'farmland');
+    for (let x = 0; x < COLS; x++) {
+      assert(['field', 'laneNS', 'laneEW', 'crossroads'].includes(Sim.tileType(x, ROWS - 2)), `the line runs over a ${Sim.tileType(x, ROWS - 2)} at ${x}`);
+      if (x + 1 < COLS) assert(!Sim.hedge(g, x, ROWS - 2, x + 1, ROWS - 2) && !Sim.wire(g, x, ROWS - 2, x + 1, ROWS - 2), `seed ${seed}: a hedge or wire across the line at ${x}`);
+    }
+  }
   assert(!st.units.some(u => u.x !== null && u.y === ROWS - 2 && Sim.footprint(u).some(k => k.includes('n'))), 'a piece stands on the line');
   // It comes on from the left, then three fields a round
   const heads = () => st.trains.map(t => t.head).join(',');

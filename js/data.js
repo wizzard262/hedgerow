@@ -102,8 +102,9 @@ const MAPS = [
       '.....|.vv..o',
       '.h...|.vv...',
       '.....|.....h',
-      '..o..|...o..',
-      '.....|.h....',
+      // (the railway's row: open fields and the lane only, Steve: never through an orchard or a village)
+      '.....|......',
+      '..o..|.h.o..',
     ],
     villages: [{ x: 7, y: 4, name: 'Les Champs' }, { x: 7, y: 1, name: 'La Ferme' }],
     gap: 0.8, wire: 0.2,
@@ -320,10 +321,12 @@ const HAND_TO_HAND_LIMIT = 40;
 // never comes back (Steve: mortars, artillery and, later, bombers never replenish)
 // hard: its dice against a tank. A mortar's (Steve) only shakes a tank, or kills one already shaken: see damage in sim.js
 // (Steve: too many, too accurate: half the rounds, 6 to 3 and 8 to 4, and the guns' 3 to 2 and 2 to 1; see SHELL_HARDER)
-const MORTARS = { name: '81 mm mortars', dice: 4, splash: 0, ammo: 3, hard: 1 };
-const ARTILLERY = { name: '105 mm battery', dice: 5, splash: 1, ammo: 2, hard: 1 };
-const DE_MORTAR = { name: '8 cm mortars', dice: 3, splash: 0, ammo: 4, hard: 1 };   // the Germans' own mortar: drops on one piece, one mission a turn while ammo lasts
-const DE_ARTILLERY = { name: '10.5 cm battery', dice: 5, splash: 1, ammo: 1, hard: 1 };
+// Their names (Steve: the right ones for the time): the US M1 81 mm mortar and 105 mm howitzer, the German 8 cm
+// Granatwerfer 34 and 10.5 cm leichte Feldhaubitze 18. One home for them: the table, the panel and the dice tags all use these
+const MORTARS = { name: 'M1 81 mm mortars', dice: 4, splash: 0, ammo: 3, hard: 1 };
+const ARTILLERY = { name: '105 mm howitzers', dice: 5, splash: 1, ammo: 2, hard: 1 };
+const DE_MORTAR = { name: '8 cm GrW 34 mortars', dice: 3, splash: 0, ammo: 4, hard: 1 };   // the Germans' own mortar: drops on one piece, one mission a turn while ammo lasts
+const DE_ARTILLERY = { name: '10.5 cm leFH 18 howitzers', dice: 5, splash: 1, ammo: 1, hard: 1 };
 const SHELL_HARDER = 1;           // mortar and artillery dice need one more than a shot does: 4+ before cover (Steve)   // the Germans' guns: like ours, fewer rounds
 // The bomber (Steve): the same for both sides. One run a game; a compass spin says which way it flies; it goes straight
 // through a field chosen on the edge of the board and drops one bomb on every piece in every field under it, friend or foe.

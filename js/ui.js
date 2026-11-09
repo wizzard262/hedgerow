@@ -34,8 +34,8 @@ const UI = (() => {
   const selected = () => (view.sel ? Sim.unitById(st, view.sel) : null);
   // A gun's name and its state, for its menu and its card
   const GUN_TITLES = {
-    us: { mortars: '💥 US mortars', artillery: '💣 US artillery', bomber: `✈️ ${BOMBER_NAMES.us} bomber` },
-    de: { mortars: '💥 German mortars', artillery: '💣 German artillery', bomber: `✈️ ${BOMBER_NAMES.de} bomber` },
+    us: { mortars: `💥 ${MORTARS.name}`, artillery: `💣 ${ARTILLERY.name}`, bomber: `✈️ ${BOMBER_NAMES.us} bomber` },
+    de: { mortars: `💥 ${DE_MORTAR.name}`, artillery: `💣 ${DE_ARTILLERY.name}`, bomber: `✈️ ${BOMBER_NAMES.de} bomber` },
   };
   function gunState(which) {
     if (canFire(which)) return '<span class="pill ready">Ready</span>';

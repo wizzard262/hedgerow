@@ -255,6 +255,8 @@ const Sim = (() => {
         if (!inside(bx, by) || !hedgeWanted(x, y, bx, by)) continue;
         // On the beach, nothing grows round a bunker (Steve: its sides must be plain to get at); the sea wall stays
         if (bunkerFields.some(f => (f.x === x && f.y === y) || (f.x === bx && f.y === by)) && tileType(x, y) !== 'beach') continue;
+        // Nor across the railway (Steve: the train never runs through a hedge), and no wire there either
+        if (map.train && dx === 1 && y === map.train.row) continue;
         if (R() >= gapChance) st.hedges[edgeKey(x, y, bx, by)] = true;
         else if (!isLane(tileType(x, y)) && !isLane(tileType(bx, by)) && R() < wireChance) st.wire[edgeKey(x, y, bx, by)] = true;
       }
@@ -2645,7 +2647,7 @@ const Sim = (() => {
       st.ammo.de.mortars--;
       // (nobody gets down as the bombs come in, Steve)
       const lines = mortarOnOnePiece(st, t, false);
-      st.computer.rep.push(`🔺 German mortars on ${t.name}: ${lines.length ? lines.join(', ') : 'no hits'}.`);
+      st.computer.rep.push(`🔺 ${DE_MORTAR.name} on ${t.name}: ${lines.length ? lines.join(', ') : 'no hits'}.`);
       return;
     }
     const u = unitById(st, shot.shooter);

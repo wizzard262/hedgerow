@@ -427,27 +427,51 @@ const Models = (() => {
   // A field howitzer: two big wheels, the split trail behind, a small shield, the barrel raised. The American 105 mm
   // M2A1 in olive drab, the German 10.5 cm leFH 18 in dark yellow with green and brown, with a muzzle brake. Front +x
   function howitzer(side) {
+    // (Steve: more like the real guns) The American 105 mm M2A1: two big rubber tyres, a long split trail with spades,
+    // a small flat shield in two parts, the barrel on a long cradle with its two recoil cylinders under it and the
+    // equilibrators either side. The German 10.5 cm leFH 18: the same layout, with its taller shield and plate hanging below
+    // it, the recuperator above the barrel as well as below, and the muzzle brake of the 18M, in camouflage
     const g = new T.Group(), us = side === 'us', paint = us ? M.olive : camoPaint();
-    // Wheels and axle
+    // The wheels: a tyre, the wheel disc, the hub; the axle between them
     for (const s of [-1, 1]) {
-      g.add(at(wheel(0.03, 0.013, M.track), 0, 0.03, s * 0.047));
-      g.add(at(wheel(0.012, 0.015, paint), 0, 0.03, s * 0.047));
+      g.add(at(wheel(0.034, 0.014, M.track), 0, 0.034, s * 0.052));
+      g.add(at(wheel(0.022, 0.016, paint), 0, 0.034, s * 0.052));
+      g.add(at(wheel(0.007, 0.022, M.steel), 0, 0.034, s * 0.052));
     }
-    g.add(at(cyl(0.004, 0.004, 0.1, M.steel, 8), 0, 0.03, 0, Math.PI / 2, 0, 0));
-    // The split trail, legs spread on the ground behind
-    for (const s of [-1, 1]) g.add(at(box(0.15, 0.009, 0.01, paint), -0.075, 0.018, s * 0.03, 0, s * 0.28, -0.12));
-    for (const s of [-1, 1]) g.add(at(box(0.012, 0.012, 0.02, M.steel), -0.145, 0.006, s * 0.072));
-    // The shield, the cradle and the barrel, raised
-    g.add(at(box(0.005, 0.045, 0.1, paint), 0.012, 0.055, 0, 0, 0, -0.08));
+    g.add(at(cyl(0.004, 0.004, 0.1, M.steel, 8), 0, 0.034, 0, Math.PI / 2, 0, 0));
+    // The saddle the gun sits on
+    g.add(at(box(0.05, 0.022, 0.07, paint), -0.005, 0.05, 0));
+    // The split trail: two long legs spread wide on the ground behind, a spade at each end
+    for (const s of [-1, 1]) {
+      g.add(at(box(0.22, 0.012, 0.013, paint), -0.11, 0.024, s * 0.045, 0, s * 0.26, -0.11));
+      g.add(at(box(0.006, 0.022, 0.026, M.steel), -0.215, 0.01, s * 0.1, 0, s * 0.26, 0));
+    }
+    // The shield in front of the axle
+    if (us) {
+      for (const s of [-1, 1]) g.add(at(box(0.004, 0.042, 0.05, paint), 0.03, 0.068, s * 0.027, 0, s * -0.12, -0.1));
+    } else {
+      g.add(at(box(0.004, 0.06, 0.11, paint), 0.03, 0.074, 0, 0, 0, -0.08));
+      g.add(at(box(0.004, 0.02, 0.07, paint), 0.03, 0.028, 0));
+    }
+    // The gun, raised: the cradle, the recoil cylinders, the breech, the barrel
     const gun = new T.Group();
-    gun.add(at(box(0.08, 0.018, 0.024, paint), 0, 0, 0));
-    gun.add(at(cyl(0.0065, 0.0072, 0.14, M.steel, 12), 0.08, 0.006, 0, 0, 0, Math.PI / 2));
-    if (!us) gun.add(at(cyl(0.0095, 0.0095, 0.016, M.steel, 12), 0.152, 0.006, 0, 0, 0, Math.PI / 2));
-    at(gun, 0.005, 0.05, 0, 0, 0, 0.32);
+    gun.add(at(box(0.13, 0.014, 0.022, paint), -0.005, -0.012, 0));
+    if (us) for (const z of [-0.007, 0.007]) gun.add(at(cyl(0.0055, 0.0055, 0.12, M.steel, 10), 0.0, -0.022, z, 0, 0, Math.PI / 2));
+    else {
+      gun.add(at(cyl(0.007, 0.007, 0.11, paint, 10), 0.0, 0.014, 0, 0, 0, Math.PI / 2));
+      gun.add(at(cyl(0.0065, 0.0065, 0.11, M.steel, 10), 0.0, -0.022, 0, 0, 0, Math.PI / 2));
+    }
+    gun.add(at(box(0.034, 0.022, 0.024, M.steel), -0.07, 0, 0));
+    const length = us ? 0.18 : 0.16;
+    gun.add(at(cyl(0.0062, 0.0078, length, M.steel, 14), -0.055 + length / 2 + 0.01, 0, 0, 0, 0, Math.PI / 2));
+    if (!us) gun.add(at(cyl(0.0105, 0.0105, 0.016, M.steel, 12), -0.045 + length, 0, 0, 0, 0, Math.PI / 2));
+    at(gun, 0.01, 0.066, 0, 0, 0, 0.32);
     g.add(gun);
+    // The equilibrators either side of the cradle (the American gun)
+    if (us) for (const s of [-1, 1]) g.add(at(cyl(0.004, 0.004, 0.04, M.steel, 8), 0.01, 0.07, s * 0.02, 0, 0, -0.5));
     // Two crew: one at the breech, one carrying a round up
-    g.add(at(soldier(side, 0, false), -0.07, 0.0, 0.045, 0, 0.4, 0));
-    g.add(at(soldier(side, 1, false), -0.095, 0.0, -0.05, 0, -0.5, 0));
+    g.add(at(soldier(side, 0, false), -0.09, 0.0, 0.05, 0, 0.4, 0));
+    g.add(at(soldier(side, 1, false), -0.12, 0.0, -0.06, 0, -0.5, 0));
     return castAll(g);
   }
 
