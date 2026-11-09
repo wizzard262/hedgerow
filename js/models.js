@@ -710,6 +710,64 @@ const Models = (() => {
     return castAll(g);
   }
 
+  // The M8 Greyhound (Steve: an American armoured car): six big wheels under mudguards, a low boxy hull with a sloped
+  // nose, an open-topped round turret with the short 37 mm and a .50 on a ring at the back, white stars
+  function greyhound() {
+    const paint = M.olive;
+    const g = new T.Group(), W = 0.18;
+    // The hull: low, with a sloped front plate and a short slope at the back
+    g.add(at(profile([[-0.17, 0.05], [0.13, 0.05], [0.18, 0.075], [0.12, 0.12], [-0.16, 0.12], [-0.18, 0.1]], W * 0.8, paint, 0.006), 0, 0, 0));
+    // Mudguards over the wheels, a stowage box on each, the six wheels
+    for (const s of [-1, 1]) {
+      const z = s * W * 0.43;
+      g.add(at(box(0.3, 0.006, 0.04, paint), -0.01, 0.083, z));
+      g.add(at(box(0.07, 0.02, 0.03, paint), -0.03, 0.096, z));
+      for (const x of [-0.11, -0.03, 0.11]) {
+        g.add(at(wheel(0.034, 0.03, M.black), x, 0.034, z));
+        g.add(at(wheel(0.016, 0.032, M.steel), x, 0.034, z));
+      }
+    }
+    // The driver's hatches and visors at the front
+    for (const z of [-0.035, 0.035]) g.add(at(box(0.004, 0.012, 0.03, M.black), 0.14, 0.105, z));
+    // The open turret: a short round tub, its inside dark, the 37 mm and its mantlet, the .50 on its ring
+    g.add(at(cyl(0.058, 0.062, 0.045, paint, 24), -0.02, 0.143, 0));
+    g.add(at(cyl(0.05, 0.05, 0.002, M.black, 24), -0.02, 0.166, 0));
+    g.add(at(box(0.022, 0.028, 0.04, paint), 0.04, 0.143, 0));
+    g.add(at(cyl(0.006, 0.007, 0.12, M.steel, 12), 0.11, 0.145, 0, 0, 0, Math.PI / 2));
+    const ring = new T.Mesh(new T.TorusGeometry(0.05, 0.003, 6, 24), M.steel); ring.rotation.x = Math.PI / 2; g.add(at(ring, -0.02, 0.178, 0));
+    g.add(at(cyl(0.003, 0.003, 0.06, M.steel, 6), -0.05, 0.19, 0.02, 0, 0, Math.PI / 2 - 0.15));
+    // White stars on the sides
+    for (const s of [-1, 1]) g.add(at(starMesh(0.02), -0.06, 0.085, s * (W * 0.4 + 0.002), 0, s > 0 ? 0 : Math.PI, 0));
+    return castAll(g);
+  }
+
+  // The Sd.Kfz. 234/2 Puma (Steve: a German armoured car): eight wheels, a long hull pointed at both ends with stowage bins
+  // along the sides, an angled closed turret with the long 50 mm and its muzzle brake, crosses on the sides
+  function puma() {
+    const paint = M.panzerGrey;
+    const g = new T.Group(), W = 0.18;
+    // The hull: sloped plates front and back, coming to a point each end
+    g.add(at(profile([[-0.21, 0.07], [-0.16, 0.045], [0.16, 0.045], [0.215, 0.075], [0.15, 0.115], [-0.16, 0.115]], W * 0.78, paint, 0.004), 0, 0, 0));
+    // Stowage bins along both sides, the eight wheels under them
+    for (const s of [-1, 1]) {
+      const z = s * W * 0.43;
+      g.add(at(box(0.27, 0.03, 0.03, paint), 0, 0.085, z));
+      for (const x of [-0.135, -0.055, 0.055, 0.135]) {
+        g.add(at(wheel(0.03, 0.028, M.black), x, 0.03, z));
+        g.add(at(wheel(0.014, 0.03, M.steel), x, 0.03, z));
+      }
+    }
+    // The turret, angled sides, set a little back; the long 50 mm with its muzzle brake
+    g.add(at(profile([[-0.06, 0], [0.05, 0], [0.042, 0.04], [-0.05, 0.043]], 0.1, paint, 0.004), -0.02, 0.115, 0));
+    g.add(at(box(0.02, 0.026, 0.035, paint), 0.04, 0.135, 0));
+    g.add(at(cyl(0.006, 0.007, 0.22, M.steel, 12), 0.16, 0.137, 0, 0, 0, Math.PI / 2));
+    g.add(at(cyl(0.01, 0.01, 0.014, M.steel, 12), 0.275, 0.137, 0, 0, 0, Math.PI / 2));
+    // The aerial at the back, the crosses on the sides
+    g.add(at(cyl(0.0015, 0.0015, 0.12, M.steel, 4), -0.15, 0.17, 0.05, 0.15, 0, 0));
+    for (const s of [-1, 1]) g.add(at(crossMesh(0.018), -0.07, 0.085, s * (W * 0.43 + 0.017), 0, s > 0 ? 0 : Math.PI, 0));
+    return castAll(g);
+  }
+
   // An elite piece's mark (Steve): a gold band round the edge of a base, in place of the old star token. The band is
   // the base's own edge made a touch bigger, so it fits an oval section base as well as a round team base
   function eliteBand(m) {
@@ -1671,5 +1729,5 @@ const Models = (() => {
     return castAll(g);
   }
 
-  return { EIFFEL_HEIGHT, eiffel, landingCraft, tankTrap, hulk, crater, seaWall, seaWallRubble, bunker, bunkerCrew, BUNKER, track, bufferStop, engine, carriage, wagon, signalbox, signal, watertower, coal, cow, sheep, lampPost, posterColumn, marketStall, cafe, barn, fountain, pond, reeds, BRIDGE_DECK, materials, M, mergeParts, eliteBand, water, bridge, soldier, squad, team, captain, pak, mortar, bomber, bomberOnStand, howitzer, round, coin, token, sherman, panther, panzer4, hedge, tree, house, die, table, field, lane, at };
+  return { greyhound, puma, EIFFEL_HEIGHT, eiffel, landingCraft, tankTrap, hulk, crater, seaWall, seaWallRubble, bunker, bunkerCrew, BUNKER, track, bufferStop, engine, carriage, wagon, signalbox, signal, watertower, coal, cow, sheep, lampPost, posterColumn, marketStall, cafe, barn, fountain, pond, reeds, BRIDGE_DECK, materials, M, mergeParts, eliteBand, water, bridge, soldier, squad, team, captain, pak, mortar, bomber, bomberOnStand, howitzer, round, coin, token, sherman, panther, panzer4, hedge, tree, house, die, table, field, lane, at };
 })();

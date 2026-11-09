@@ -1130,6 +1130,8 @@ const Sim = (() => {
     if (isTank(target)) {
       hardHits = roll(st, dice(st, f.hard), need + armourOf(target), faces);
       softHits = roll(st, dice(st, f.soft), need, []);
+      // A machine gun on an armoured car (Steve): its dice count, as anti-tank hits do, and show on the table
+      if (isCar(target) && hurtsCars(shooter)) hardHits += roll(st, dice(st, f.soft), need + armourOf(target), faces);
     } else if (isBunker(target)) {
       // Anti-tank weapons can knock it out; anything else only shakes it. The dice shown: the ones that matter most
       hardHits = roll(st, dice(st, f.hard), need, f.hard ? faces : []);
@@ -1232,7 +1234,8 @@ const Sim = (() => {
     const closeOnly = !!PIECES[shooter.kind].closeOnly;
     // A bunker only fires out of its front (Steve)
     const frontOnly = isBunker(shooter);
-    return st.units.filter(t => t.side !== shooter.side && t.x !== null && (!isTank(t) || f.hard > 0)
+    // (a machine gun can fire on an armoured car, Steve: its armour is thin)
+    return st.units.filter(t => t.side !== shooter.side && t.x !== null && (!isTank(t) || f.hard > 0 || (isCar(t) && hurtsCars(shooter)))
       && (!closeOnly || atCloseRange(shooter, t)) && (!frontOnly || inFrontOf(shooter, t)) && !!sight(st, shooter, t));
   }
 
@@ -1590,6 +1593,11 @@ const Sim = (() => {
 
   // Only rifle platoons charge into hand to hand (Steve: tanks can't fight hand to hand)
   const fightsHandToHand = u => u.kind === 'company';
+  // An armoured car (Steve): a vehicle like a tank, but on wheels with thin armour
+  const isCar = u => !!PIECES[u.kind].car;
+  // What can hurt an armoured car besides anti-tank weapons: machine guns (Steve), not rifles
+  const MACHINE_GUNS = ['mg', 'mg42', 'bunker_mg'];
+  const hurtsCars = u => MACHINE_GUNS.includes(u.kind);
 
   // What it costs to go from one field into the next (Steve): one move, and CLIMB more for men climbing a hedge bank (it
   // stays standing); barbed wire stops men; tanks drive straight through both. null where it can't go at all
@@ -1598,6 +1606,8 @@ const Sim = (() => {
     if (!inside(x, y) || tileType(x, y) === 'river' || tileType(x, y) === 'sea' || PIECES[u.kind].fixed) return null;
     // Tank traps stop tanks (Steve)
     if (isTank(u) && featuresAt(st, x, y).some(f => FEATURES[f.kind].stopsTanks)) return null;
+    // An armoured car can't get through barbed wire (Steve): it is on wheels
+    if (isCar(u) && wire(st, fx, fy, x, y)) return null;
     if (isTank(u)) return hedge(st, fx, fy, x, y) && !cutter(u) ? null : 1;
     // Men: barbed wire stops them (only tanks get through it, Steve); a hedge bank they climb, for one more move
     if (wire(st, fx, fy, x, y)) return null;
@@ -1614,7 +1624,8 @@ const Sim = (() => {
     // half as far
     if (!isTank(u) || u.shocked || !isRoad(u.x, u.y)) return routes;
     const reached = new Set(routes.map(r => `${r[r.length - 1].x},${r[r.length - 1].y}`));
-    const further = routesWithin(st, u, budget + TANK_ROAD_BONUS, charging, true);
+    // (an armoured car two further, Steve)
+    const further = routesWithin(st, u, budget + (isCar(u) ? CAR_ROAD_BONUS : TANK_ROAD_BONUS), charging, true);
     return routes.concat(further.filter(r => !reached.has(`${r[r.length - 1].x},${r[r.length - 1].y}`)));
   }
 
@@ -2205,7 +2216,9 @@ const Sim = (() => {
   // How much a German piece wants to shoot this target from where it stands
   function targetScore(st, u, t) {
     const f = firepower(st, u);
-    return (isTank(t) ? f.hard * 2 : menDice(f)) * (7 - TO_HIT - cover(st, u, t) + closeBonus(u, t) - bunkerExtra(u, t)) / 2 + (t.shocked ? 1 : 0) - t.platoons * 0.1;
+    // (a machine gun on an armoured car: its own dice)
+    const diceAt = isTank(t) ? (isCar(t) && hurtsCars(u) ? f.soft : f.hard * 2) : menDice(f);
+    return diceAt * (7 - TO_HIT - cover(st, u, t) + closeBonus(u, t) - bunkerExtra(u, t)) / 2 + (t.shocked ? 1 : 0) - t.platoons * 0.1;
   }
 
   // Where a German piece is heading: its post, or (reserves) the objective if nobody holds it, else the nearest American
@@ -2988,7 +3001,7 @@ const Sim = (() => {
 
   return {
     firesOnTheMove, canAmbush, actAmbush, bestMoveShoot, bomberHeading, bomberAims, bomberLine, bombNeed, bombWhy, bestBomberRun,
-    isBunker, inFrontOf, bunkerFace, shotOnTheMove, wrecksBeside, isRoad, featuresAt, walkDistance, fireSound, wreckAt, remove, computerSide, isRobot, piecesToAsk, takeCover, enemyOf, gunStats, edgeKey, atCloseRange, closeCells, hailMaryCells,
+    isBunker, isCar, hurtsCars, inFrontOf, bunkerFace, shotOnTheMove, wrecksBeside, isRoad, featuresAt, walkDistance, fireSound, wreckAt, remove, computerSide, isRobot, piecesToAsk, takeCover, enemyOf, gunStats, edgeKey, atCloseRange, closeCells, hailMaryCells,
     newGame, roll, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, chargeSpots,
     rallyTargets, canAct, canReact, firepower, canCallFire, takesGoal, cannotWin, artilleryTarget, mortarTarget, holdsObjective, roundText, roomFor,
     computerStep, answer, finishRound, startRound, drawToken, endComputerToken, activationOver, passToken, humanCanMove, endRound, canFire, actSkip, actSkipShot, skipSupport,

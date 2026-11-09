@@ -418,6 +418,55 @@ check('a tank over barbed wire on its way gets snagged a third of the time and s
   assert(runs > 50 && snagged > runs * 0.2 && snagged < runs * 0.47, `snagged ${snagged} of ${runs}`);
 });
 
+check('armoured cars (Steve): no hedges, no wire, two further on the road, machine guns can hurt them, rifles cannot', () => {
+  const st = Sim.newGame(3, 'us', 'farmland');
+  st.hedges = {}; st.wire = {};
+  const car = Sim.unitById(st, 'AC1'), mg = st.units.find(u => u.side === 'de' && u.kind === 'mg42'), rifles = st.units.find(u => u.side === 'de' && u.kind === 'company');
+  for (const u of st.units) if (![car, mg, rifles].includes(u)) u.x = u.y = null;
+  car.x = 1; car.y = 6; car.at = null; car.acted = false;
+  mg.x = 11; mg.y = 0; rifles.x = 11; rifles.y = 1;
+  // Hedges all round its field stop it (no cutters); so does barbed wire all round
+  const round = [[0, 6], [2, 6], [1, 5], [1, 7]].map(([x, y]) => Sim.edgeKey(1, 6, x, y));
+  for (const k of round) st.hedges[k] = true;
+  assert(!Sim.chargeSpots(st, car).length, 'an armoured car drove through a hedge');
+  st.hedges = {};
+  for (const k of round) st.wire[k] = true;
+  assert(!Sim.chargeSpots(st, car).length, 'an armoured car got through barbed wire');
+  st.wire = {};
+  // Machine guns can fire on it, rifles cannot
+  mg.x = 1; mg.y = 5; mg.at = null; rifles.x = 0; rifles.y = 6; rifles.at = null;
+  assert(Sim.targets(st, mg).includes(car), 'a machine gun could not fire on an armoured car');
+  assert(!Sim.targets(st, rifles).includes(car), 'rifles could fire on an armoured car');
+  // Every die a 6, the coin tosses tails: the machine gun's hits count against it
+  st.rand = () => 0.99;
+  Sim.startRound(st); st.drawn = 'de'; st.activeId = null; mg.acted = false;
+  st.fx = [];
+  Sim.fireAt(st, mg, car);
+  assert(car.shocked || car.x === null, 'machine-gun hits did nothing to an armoured car');
+  Sim.newGame(1);
+});
+
+check('an armoured car on the road goes two fields further, a tank one', () => {
+  // A long straight road: find one on some map and drive along it
+  for (const map of ['farmland', 'town', 'river']) for (let seed = 1; seed <= 6; seed++) {
+    const st = Sim.newGame(seed, 'us', map);
+    const car = Sim.unitById(st, 'AC1');
+    for (const u of st.units) if (u !== car) u.x = u.y = null;
+    st.wire = {};
+    let road = null;
+    for (let y = 0; y < ROWS && !road; y++) for (let x = 0; x + 5 < COLS && !road; x++) {
+      if ([0, 1, 2, 3, 4, 5].every(k => Sim.isRoad(x + k, y))) road = { x, y };
+    }
+    if (!road) continue;
+    car.x = road.x; car.y = road.y; car.at = null; car.acted = false; car.shocked = false;
+    const far = Math.max(...Sim.chargeSpots(st, car).filter(p => p.y === road.y).map(p => p.x - road.x));
+    assert(far === CHARGE_MOVES + CAR_ROAD_BONUS, `${map}: an armoured car went ${far} fields along the road`);
+    Sim.newGame(1);
+    return;
+  }
+  throw new Error('no straight road found to try it on');
+});
+
 check('a bazooka rolls one die at men (half its two anti-tank dice); a rifle platoon three', () => {
   const st = Sim.newGame(2);
   assert(Sim.menDice(Sim.firepower(st, Sim.unitById(st, 'bz1'))) === 1, 'a bazooka does not roll one die at men');
@@ -3189,8 +3238,11 @@ check('every map changes what it says it does: pieces, ammunition and hedges', (
   const pieces = id => Sim.newGame(1, 'us', id).units.map(u => u.id);
   const usual = pieces('hedges');
   assert(!pieces('river').includes('dt2') && pieces('river').includes('dmg5'), 'river crossing: the Germans not as it says');
-  assert(pieces('town').includes('T3') && pieces('town').includes('pak2') && !pieces('town').includes('dt1'), 'crossroads town: not as it says');
-  assert(pieces('farmland').includes('T3') && pieces('farmland').includes('dt3'), 'open farmland: not as it says');
+  // The armoured cars (Steve): on the open maps only, each in place of a tank
+  assert(!pieces('river').includes('T1') && !pieces('river').includes('dt1') && pieces('river').includes('AC1') && pieces('river').includes('dac1'), 'river crossing: the armoured cars not in place of a tank each');
+  assert(!pieces('town').includes('T3') && pieces('town').includes('AC1') && pieces('town').includes('pak2') && !pieces('town').includes('dt1') && !pieces('town').includes('dt2') && pieces('town').includes('dac1'), 'crossroads town: not as it says');
+  assert(!pieces('farmland').includes('T3') && !pieces('farmland').includes('dt3') && pieces('farmland').includes('AC1') && pieces('farmland').includes('dac1'), 'open farmland: not as it says');
+  for (const id of ['hedges', 'deep', 'beach', 'station', 'paris']) assert(!pieces(id).includes('AC1') && !pieces(id).includes('dac1'), `${id}: an armoured car where there should be none`);
   assert(pieces('deep').includes('D') && !pieces('deep').includes('T2') && pieces('deep').includes('d6'), 'deep bocage: not as it says');
   assert(usual.length === US_START.length + DE_START.length, 'the usual map changed its pieces');
   // The bomber runs and guns as they say (see also: half the bomber runs)

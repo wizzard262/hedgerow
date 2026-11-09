@@ -9,7 +9,7 @@ const UI = (() => {
   const view = { sel: null, mode: null };
 
   const KIND = { company: 'Rifle platoon', captain: 'Captain', sherman: 'Sherman 75mm', firefly: 'Sherman 76mm', mg: '.50 cal team', bazooka: 'Bazooka team', sniper: 'Sniper team',
-                 pz4: 'Panzer IV', panther: 'Panther', mg42: 'MG 42 team', schreck: 'Panzerschreck team', pak: 'PaK 40 anti-tank gun', bunker_mg: 'MG bunker', bunker_gun: 'PaK 40 bunker' };
+                 pz4: 'Panzer IV', panther: 'Panther', m8: 'M8 Greyhound armoured car', puma: 'Puma armoured car', mg42: 'MG 42 team', schreck: 'Panzerschreck team', pak: 'PaK 40 anti-tank gun', bunker_mg: 'MG bunker', bunker_gun: 'PaK 40 bunker' };
 
   function setState(s) { st = s; view.sel = null; view.mode = null; view.support = null; }
 

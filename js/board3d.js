@@ -746,7 +746,7 @@ const Board = (() => {
       return [0, 1, 2].map(() => { const s = Models.mergeParts(Models.squad(side, elite)); markerSpots(s); s.scale.setScalar(MEN); return s; });
     }
     if (PIECES[kind].tank) {
-      const make = { sherman: () => Models.sherman(Models.M.olive), firefly: () => Models.sherman(Models.M.olive, true), pz4: Models.panzer4, panther: Models.panther }[kind];
+      const make = { sherman: () => Models.sherman(Models.M.olive), firefly: () => Models.sherman(Models.M.olive, true), pz4: Models.panzer4, panther: Models.panther, m8: Models.greyhound, puma: Models.puma }[kind];
       return [0].map(() => { const m = Models.mergeParts(make()); markerSpots(m); m.scale.setScalar(TANKS); m.userData.slowTurn = true; return m; });
     }
     if (PIECES[kind].bunker) return [bunkerBase(kind === 'bunker_gun')];

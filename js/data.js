@@ -56,7 +56,7 @@ const MAPS = [
     ammo: { us: { artillery: 3 } },   // (Steve: one more artillery round here, in the bocage and at the station)
   },
   {
-    id: 'river', date: '7 August 1944', name: 'River crossing', note: 'Two bridges are the only way over. The Americans have no bomber; the Germans an extra MG 42 and no Panther, and their Ju 88.',
+    id: 'river', date: '7 August 1944', name: 'River crossing', note: 'Two bridges are the only way over. The Americans have no bomber, and an M8 Greyhound armoured car in place of the Sherman 75mm; the Germans an extra MG 42, a Puma armoured car in place of their tanks, and their Ju 88.',
     rows: [
       '..|.or.o..h.',
       '.o|..r.vv..o',
@@ -69,10 +69,11 @@ const MAPS = [
     ],
     villages: [{ x: 7, y: 4, name: 'Pont-Sainte-Marie' }, { x: 7, y: 1, name: 'Le Moulin' }],
     ammo: { us: { bomber: 0, artillery: 2 } },
-    de: { remove: ['dt2'], add: [{ id: 'dmg5', kind: 'mg42', name: 'MG 42 Team', reserve: true }] },
+    us: { remove: ['T1'], add: [{ id: 'AC1', kind: 'm8', name: 'M8 Greyhound' }] },
+    de: { remove: ['dt2', 'dt1'], add: [{ id: 'dmg5', kind: 'mg42', name: 'MG 42 Team', reserve: true }, { id: 'dac1', kind: 'puma', name: 'Puma', reserve: true }] },
   },
   {
-    id: 'town', date: '15 August 1944', name: 'Crossroads town', note: 'A town on each side of the crossroads, and both sides start further forward. The Germans have a second PaK 40 and no Panzer IV; the Americans a third tank.',
+    id: 'town', date: '15 August 1944', name: 'Crossroads town', note: 'A town on each side of the crossroads, and both sides start further forward. The Germans have a second PaK 40 and a Puma armoured car in place of their tanks; the Americans an M8 Greyhound armoured car as well as their two tanks.',
     rows: [
       '.o...|..o..h',
       '..h..|.....o',
@@ -87,11 +88,11 @@ const MAPS = [
     deploy: 0.3,
     // (Steve: too easy for the Americans: no bomber, and one artillery round fewer)
     ammo: { us: { bomber: 0, artillery: 1 }, de: { bomber: 0 } },
-    us: { add: [{ id: 'T3', kind: 'sherman', name: 'Sherman 75mm (2)' }] },
-    de: { remove: ['dt1'], add: [{ id: 'pak2', kind: 'pak', name: 'PaK 40 (2)', post: [0, -1], garrison: true }] },
+    us: { add: [{ id: 'AC1', kind: 'm8', name: 'M8 Greyhound' }] },
+    de: { remove: ['dt1', 'dt2'], add: [{ id: 'pak2', kind: 'pak', name: 'PaK 40 (2)', post: [0, -1], garrison: true }, { id: 'dac1', kind: 'puma', name: 'Puma', reserve: true }] },
   },
   {
-    id: 'farmland', date: '25 July 1944', name: 'Open farmland', note: 'Few hedges and long shots, a few barns that block the view, and a duck pond. An extra tank each; the B-17 flies, the Ju 88 does not.',
+    id: 'farmland', date: '25 July 1944', name: 'Open farmland', note: 'Few hedges and long shots, a few barns that block the view, and a duck pond. An armoured car each, an M8 Greyhound and a Puma; the B-17 flies, the Ju 88 does not.',
     rows: [
       '.....|.....h',
       '..o..|.vv...',
@@ -112,8 +113,8 @@ const MAPS = [
       { x: 3, y: 6, kind: 'pond', side: 's' },
     ],
     ammo: { us: { bomber: 1 }, de: { bomber: 0 } },
-    us: { add: [{ id: 'T3', kind: 'sherman', name: 'Sherman 75mm (2)' }] },
-    de: { add: [{ id: 'dt3', kind: 'pz4', name: 'Panzer IV (2)', reserve: true }] },
+    us: { add: [{ id: 'AC1', kind: 'm8', name: 'M8 Greyhound' }] },
+    de: { add: [{ id: 'dac1', kind: 'puma', name: 'Puma', reserve: true }] },
   },
   {
     id: 'paris', date: '25 August 1944', name: 'Paris', note: 'A tight city, a new maze of cobbled streets each game: houses, streets and little squares, each with a café and a fountain. The Americans must capture the Eiffel Tower, in the centre of the city. Few tanks: no Sherman 76mm and no Panther; a second bazooka for the Americans, an extra MG 42 for the Germans.',
@@ -217,6 +218,7 @@ const TO_HIT = 3;                // a die needs this or more to hit, before cove
 const MOVE_SHOOT_MOVES = 2;      // fields a Move & shoot can cover (Steve: one more than before)
 const CHARGE_MOVES = 3;          // fields a charge can cover
 const TANK_ROAD_BONUS = 1;       // fields more a tank goes, on a Move & shoot or a Charge, if it starts, stays and ends on road or lane (Steve)
+const CAR_ROAD_BONUS = 2;        // the same for an armoured car (Steve): it is quick on the road
 const CLIMB = 1;                 // extra moves it costs men to climb a hedge bank (tanks drive through; wire stops men)
 const SHAKEN_SHOOT = 1;          // a shaken piece needs one more to hit
 const SHAKEN_MOVE = 0.5;         // a shaken piece still moves and charges, but only half as far (rounded down, at least one field)
@@ -281,6 +283,10 @@ const PIECES = {
   sherman:  { name: 'Sherman 75mm', soft: 1.5, hard: 1, tank: true, armour: 0, cutter: true },
   firefly:  { name: 'Sherman 76mm', soft: 1, hard: 2, tank: true, armour: 0, cutter: true },
   pz4:      { name: 'Panzer IV', soft: 1.5, hard: 1.5, tank: true, armour: 0, cutter: true },
+  // Armoured cars (Steve), on the open maps in place of a tank: on wheels, so no hedge cutters and no getting through
+  // wire, quick on the road (CAR_ROAD_BONUS), thin armour that machine guns can get through (car)
+  m8:       { name: 'M8 Greyhound', soft: 1.5, hard: 0.5, tank: true, armour: 0, car: true },
+  puma:     { name: 'Puma', soft: 1, hard: 1, tank: true, armour: 0, car: true },
   panther:  { name: 'Panther', soft: 1.5, hard: 3, tank: true, armour: 1, cutter: true },
   mg:       { name: '.50 cal team', soft: 5, hard: 0, team: true, men: 3 },        // machine guns fire 5 dice (Steve)
   // extraMove: fields more than other pieces on a Move & shoot or a Charge (Steve: he's got to get to the tank)
