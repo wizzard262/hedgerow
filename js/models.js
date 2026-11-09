@@ -1189,13 +1189,25 @@ const Models = (() => {
     return g;
   }
 
-  // A stretch of the sea wall, one field long, along z: rough stone with a capping
-  function seaWall(length = 1.02) {
-    bridgeMaterials();
-    const g = new T.Group();
-    g.add(at(box(0.1, 0.1, length, M.bridgeStone), 0, 0.05, 0));
-    g.add(at(box(0.12, 0.014, length, M.bridgeCap), 0, 0.106, 0));
-    return castAll(g);
+  // A stretch of the sea wall, along z (Steve: rocky): a bank of rough boulders, big ones at the foot and smaller ones
+  // piled on them, in greys and browns, about as high as a hedge bank. seed: so each stretch is piled differently
+  function seaWall(length = 1.02, seed = 0) {
+    if (!M.rock) M.rock = [mat('#7d776b', 1), mat('#948c7c', 1), mat('#66625a', 1), mat('#8a7a62', 1)];
+    const g = new T.Group(), R = seeded(seed * 97 + 13);
+    // The core the rocks are piled on, dark, so no gap between them shows through
+    g.add(at(box(0.09, 0.06, length, M.rock[2]), 0, 0.03, 0));
+    // Rows of rocks along it: at the foot, in the middle, on top
+    const rows = [{ y: 0.03, r: 0.042, spread: 0.045 }, { y: 0.07, r: 0.033, spread: 0.03 }, { y: 0.1, r: 0.022, spread: 0.015 }];
+    for (const row of rows) {
+      for (let z = -length / 2 + row.r * 0.7; z < length / 2 - row.r * 0.5; z += row.r * (1.1 + R() * 0.5)) {
+        const r = row.r * (0.7 + R() * 0.55);
+        const rock = new T.Mesh(new T.IcosahedronGeometry(r, 0), M.rock[Math.floor(R() * M.rock.length)]);
+        // Lumpy, not round: squashed a little each way and turned at random
+        rock.scale.set(0.8 + R() * 0.5, 0.65 + R() * 0.35, 0.8 + R() * 0.5);
+        g.add(at(rock, (R() - 0.5) * row.spread, row.y + (R() - 0.5) * 0.01, z, R() * 3, R() * 3, R() * 3));
+      }
+    }
+    return mergeParts(castAll(g));
   }
 
   // A bunker (Steve): a U of concrete, open at the back and to the sky so you can see who is in it. The front (+x) is a thick,

@@ -601,10 +601,10 @@ const Board = (() => {
   // A field's stretch of the sea wall along its west edge; with a bunker built into it, only the wall beyond the bunker
   function addSeaWall(st, x, y) {
     const here = (st.units.some(u => u.x === x && u.y === y && Sim.isBunker(u))) || st.wrecks.some(w => w.x === x && w.y === y && PIECES[w.kind].bunker);
-    if (!here) { hedgeGroup.add(at(Models.seaWall(), x, 0, y + 0.5)); return; }
+    if (!here) { hedgeGroup.add(at(Models.seaWall(1.02, x * 31 + y), x, 0, y + 0.5)); return; }
     // The bunker covers the field's edge from BUNKER_GAP.from to .to
-    hedgeGroup.add(at(Models.seaWall(BUNKER_GAP.from), x, 0, y + BUNKER_GAP.from / 2));
-    hedgeGroup.add(at(Models.seaWall(1 - BUNKER_GAP.to), x, 0, y + (1 + BUNKER_GAP.to) / 2));
+    hedgeGroup.add(at(Models.seaWall(BUNKER_GAP.from, x * 31 + y), x, 0, y + BUNKER_GAP.from / 2));
+    hedgeGroup.add(at(Models.seaWall(1 - BUNKER_GAP.to, x * 31 + y + 500), x, 0, y + (1 + BUNKER_GAP.to) / 2));
   }
   const BUNKER_GAP = { from: 0.06, to: 0.63 };
 
