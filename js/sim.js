@@ -673,7 +673,7 @@ const Sim = (() => {
     for (const thing of inTheWay.things) {
       const passing = lineByAreas(a, b, len, inTheWay.piecesCells, thing.field, thing.areas);
       if (passing === 'blocked') return 'blocked';
-      if (passing === 'cover') cover = true;
+      if (passing === 'cover' && !thing.noCorner) cover = true;
     }
     return cover ? 'cover' : null;
   }
@@ -688,7 +688,8 @@ const Sim = (() => {
     }
     for (const w of st.wrecks) things.push({ field: w, areas: w.areas });
     // A building blocks the view as a tank does (Steve)
-    for (const f of st.features) if (f.blocksView) things.push({ field: f, areas: f.areas });
+    // (a wreck on the beach gives cover only to a piece right beside it, Steve, not past its corner)
+    for (const f of st.features) if (f.blocksView) things.push({ field: f, areas: f.areas, noCorner: !!FEATURES[f.kind].coverBeside });
     const piecesCells = [from, target].map(u => (u.kind ? standsIn(u).map(k => cellOf(u, k)) : []));
     return { things, piecesCells };
   }
@@ -1018,16 +1019,48 @@ const Sim = (() => {
   // Cover from the field a target stands in: a village, a hamlet or an orchard
   function placeWhy(st, target, from, shells = false) {
     const n = placeCover(st, target, from, shells);
+    // Beside a wreck: says so, as a hedge does
+    if (n && !PLACE_COVER[tileType(target.x, target.y)] && !shells && besideWreck(st, target)) return [`+${n} wreck`];
     // (Steve: just "cover", not which kind of place)
     return n ? [`+${n} cover`] : [];
   }
+
+  // Where an area is on the board, counted in areas (three to a field each way), for telling which areas touch
+  function areaCell(x, y, k) {
+    const a = areaXY(k);
+    return { i: x * 3 + a.x + 1, j: y * 3 + a.y + 1 };
+  }
+
+  // The wrecks giving cover to a piece standing in these areas of field x, y (Steve: like a hedge): each one with an area
+  // touching one of its areas side to side, in its field or the next, and the way from the wreck to the piece
+  function wrecksBeside(st, x, y, areas) {
+    const cells = areas.map(k => areaCell(x, y, k));
+    const out = [];
+    for (const f of st.features) {
+      if (!FEATURES[f.kind].coverBeside) continue;
+      for (const k of f.areas) {
+        const w = areaCell(f.x, f.y, k);
+        const near = cells.find(c => Math.abs(c.i - w.i) + Math.abs(c.j - w.j) === 1);
+        if (!near) continue;
+        out.push({ feature: f, way: { x: near.i - w.i, y: near.j - w.j } });
+        break;
+      }
+    }
+    return out;
+  }
+  // Is a piece standing right beside a wreck?
+  const besideWreck = (st, u) => wrecksBeside(st, u.x, u.y, standsIn(u)).length > 0;
 
   // The cover a village, hamlet or orchard gives a piece in it (see PLACE_COVER): men, a tank, or against shells; none
   // at all against an enemy inside the same one (Steve). Open fields and lanes give none
   function placeCover(st, target, from, shells = false) {
     const cover = PLACE_COVER[tileType(target.x, target.y)];
-    // Men among tank traps (Steve): one more to hit
-    if (!cover) return !isTank(target) && featuresAt(st, target.x, target.y).some(f => FEATURES[f.kind].cover) ? 1 : 0;
+    if (!cover) {
+      // Men under something that gives cover where they stand (the Eiffel Tower): one more to hit
+      if (!isTank(target) && featuresAt(st, target.x, target.y).some(f => FEATURES[f.kind].cover)) return 1;
+      // Right beside a burnt-out landing craft (Steve): cover as by a hedge, against shots (not shells or bombs)
+      return !shells && besideWreck(st, target) ? COVER.hedge : 0;
+    }
     if (from && samePlace(from, target)) return 0;
     if (shells) return cover.shells;
     return isTank(target) ? cover.tank : cover.men;
@@ -2927,7 +2960,7 @@ const Sim = (() => {
 
   return {
     firesOnTheMove, canAmbush, actAmbush, bestMoveShoot, bomberHeading, bomberAims, bomberLine, bombNeed, bombWhy, bestBomberRun,
-    isBunker, inFrontOf, bunkerFace, shotOnTheMove, isRoad, featuresAt, walkDistance, fireSound, wreckAt, remove, computerSide, isRobot, piecesToAsk, takeCover, enemyOf, gunStats, edgeKey, atCloseRange, closeCells, hailMaryCells,
+    isBunker, inFrontOf, bunkerFace, shotOnTheMove, wrecksBeside, isRoad, featuresAt, walkDistance, fireSound, wreckAt, remove, computerSide, isRobot, piecesToAsk, takeCover, enemyOf, gunStats, edgeKey, atCloseRange, closeCells, hailMaryCells,
     newGame, roll, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, chargeSpots,
     rallyTargets, canAct, canReact, firepower, canCallFire, takesGoal, cannotWin, artilleryTarget, mortarTarget, holdsObjective, roundText, roomFor,
     computerStep, answer, finishRound, startRound, drawToken, endComputerToken, activationOver, passToken, humanCanMove, endRound, canFire, actSkip, actSkipShot, skipSupport,

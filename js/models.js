@@ -970,16 +970,20 @@ const Models = (() => {
     return castAll(g);
   }
 
-  // A duck pond: water in a muddy bank, reeds at one end, and ducks on it
+  // A duck pond (Steve: round, not oval): water in a round muddy bank, as wide as the row of areas it lies in, reeds on
+  // either side, and ducks on it
   function pond() {
     const g = new T.Group(), R = seeded(61);
     if (!M.water) { M.water = mat('#3f5450', 0.15, 0.2); M.bank = mat('#5b4a35', 1); }
     if (!M.duck) { M.duck = mat('#e8e4d6', 0.9); M.duckBrown = mat('#6d5438', 0.9); M.duckHead = mat('#2c5a3a', 0.6); M.duckBill = mat('#d8922e', 0.7); }
-    const bank = cyl(1, 1, 0.006, M.bank, 28); bank.scale.set(0.44, 1, 0.145); g.add(at(bank, 0, 0.003, 0));
-    const water = cyl(1, 1, 0.006, M.water, 28); water.scale.set(0.41, 1, 0.12); g.add(at(water, 0, 0.005, 0));
-    for (const [x, z] of [[-0.36, -0.08], [-0.38, 0.05], [0.37, -0.06], [0.3, 0.1]]) g.add(at(reeds(Math.round(R() * 1000), 6), x, 0, z));
+    // (its row is a third of a field deep: the bank just inside that)
+    const BANK = 0.155, WATER = 0.135;
+    g.add(at(cyl(BANK, BANK, 0.006, M.bank, 36), 0, 0.003, 0));
+    g.add(at(cyl(WATER, WATER, 0.006, M.water, 36), 0, 0.005, 0));
+    // Reeds in clumps round the bank, more at the two ends
+    for (const angle of [2.9, 3.4, 0.1, -0.35, 1.9]) g.add(at(reeds(Math.round(R() * 1000), 5), Math.cos(angle) * (BANK - 0.01), 0, Math.sin(angle) * (BANK - 0.01)));
     // The ducks: a body, a head, a bill; a white one and brown ones
-    for (const [x, z, ry, white] of [[-0.14, 0.02, 0.5, true], [0.02, -0.05, 2.4, false], [0.16, 0.04, 4.2, false], [0.05, 0.07, 1.2, true]]) {
+    for (const [x, z, ry, white] of [[-0.06, 0.02, 0.5, true], [0.03, -0.05, 2.4, false], [0.06, 0.05, 4.2, false]]) {
       const duck = new T.Group();
       const body = new T.Mesh(new T.SphereGeometry(0.018, 10, 8), white ? M.duck : M.duckBrown); body.scale.set(1.5, 0.8, 1);
       duck.add(at(body, 0, 0.012, 0));

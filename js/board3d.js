@@ -671,12 +671,19 @@ const Board = (() => {
             if (k % 4 === 0) strands.push(pt(a, h - 0.005, -0.004), pt(a, h + 0.005, 0.004), pt(a, h + 0.005, -0.004), pt(a, h - 0.005, 0.004));
           }
         }
-        // The concertina: a loose coil rolled along the bottom, its loops leaning back and forth
+        // The concertina (Steve: big loose loops, not a tight coil): about eight wide loops rolled along the foot of the
+        // fence, each a little different in size, leaning back and forth so they overlap
+        const LOOPS = 8, STEPS = 48, RADIUS = 0.06;
+        const wobble = seeded(x * 31 + y * 17 + dx * 7);
+        const sizes = [...Array(LOOPS + 1)].map(() => RADIUS * (0.8 + wobble() * 0.4));
         let prev = null;
-        for (let i = 0; i <= 900; i++) {
-          const turn = i * Math.PI * 2 / 36;
-          const a = -0.45 + i * 0.001 + 0.012 * Math.sin(turn);
-          const next = pt(a, 0.03 + 0.028 * Math.cos(turn), 0.028 * Math.sin(turn));
+        for (let i = 0; i <= LOOPS * STEPS; i++) {
+          const turn = i * Math.PI * 2 / STEPS;
+          const loop = Math.floor(i / STEPS);
+          // (each loop's size eases into the next one's)
+          const r = sizes[loop] + (sizes[Math.min(LOOPS, loop + 1)] - sizes[loop]) * ((i % STEPS) / STEPS);
+          const a = -0.45 + i * (0.9 / (LOOPS * STEPS)) + 0.045 * Math.sin(turn);
+          const next = pt(a, r + 0.004 + r * Math.cos(turn), r * Math.sin(turn));
           if (prev) strands.push(prev, next);
           prev = next;
         }
@@ -1340,13 +1347,26 @@ const Board = (() => {
       const bar = new T.Mesh(new T.PlaneGeometry(along ? 0.9 : 0.11, along ? 0.11 : 0.9), green);
       at(bar, h.x + 0.5 + v[0] * 0.36, 0.02, h.y + 0.5 + v[1] * 0.36, -Math.PI / 2, 0, 0); marks.add(bar);
     }
+    // A bar along each burnt-out landing craft it would be right beside (Steve: cover like a hedge, shown like one)
+    const wrecks = Sim.wrecksBeside(st, h.x, h.y, [h.side || 'c']);
+    for (const { feature: f, way } of wrecks) {
+      // The wreck's middle, then out past its edge towards the piece
+      const mid = Sim.placeXY(f.side);
+      const cx = f.x + 0.5 + mid.x / 3 + way.x * 0.22, cz = f.y + 0.5 + mid.y / 3 + way.y * 0.22;
+      const along = f.side === 'n' || f.side === 's';
+      const bar = new T.Mesh(new T.PlaneGeometry(along ? 0.9 : 0.12, along ? 0.12 : 0.9), green);
+      // (drawn after the wreck, so its hull never hides it)
+      bar.renderOrder = 10;
+      at(bar, cx, 0.02, cz, -Math.PI / 2, 0, 0); marks.add(bar);
+    }
+    const byWreck = wrecks.length > 0;
     // A ring where it would stand
     const p = Sim.placeXY(h.side);
     const ring = new T.Mesh(new T.RingGeometry(0.1, 0.14, 32), new T.MeshBasicMaterial({ color: 0xfff6dc, transparent: true, opacity: 0.9, depthWrite: false, depthTest: false }));
     at(ring, h.x + 0.5 + p.x * 0.3, 0.02, h.y + 0.5 + p.y * 0.3, -Math.PI / 2, 0, 0); marks.add(ring);
     if (inCover) mark(h.x, h.y, 'cover', 0.08);
-    const text = byHedge ? 'Cover: hedge' : inCover ? `Cover: ${type === 'orchard' ? 'trees' : 'houses'}` : 'In the open';
-    const w = word(text, byHedge || inCover ? '#9dff7a' : '#f0e8d6', false);
+    const text = byHedge ? 'Cover: hedge' : inCover ? `Cover: ${type === 'orchard' ? 'trees' : 'houses'}` : byWreck ? 'Cover: wreck' : 'In the open';
+    const w = word(text, byHedge || inCover || byWreck ? '#9dff7a' : '#f0e8d6', false);
     w.position.set(h.x + 0.5 + p.x * 0.2, 0.32, h.y + 0.5 + p.y * 0.2);
     marks.add(w);
   }

@@ -32,8 +32,9 @@ const FEATURES = {
   watertower: { name: 'Water tower', blocksView: true },
   coal: { name: 'Coal heap', blocksView: true },
   // Tank traps (Steve): no tank can enter their field; men go between them, one more to hit
-  tanktrap: { name: 'Tank traps', blocksView: false, stopsTanks: true, cover: 1 },
-  hulk: { name: 'Burnt-out wreck', blocksView: true },
+  // (Steve: tank traps give no cover; a piece right beside a burnt-out landing craft has cover, as by a hedge)
+  tanktrap: { name: 'Tank traps', blocksView: false, stopsTanks: true },
+  hulk: { name: 'Burnt-out wreck', blocksView: true, coverBeside: true },
   // The Eiffel Tower (Steve): the target in Paris. Pieces stand between its legs, so it takes no areas; open ironwork, so it
   // blocks no view; men among its feet have one more to hit
   eiffel: { name: 'Eiffel Tower', blocksView: false, cover: 1 },

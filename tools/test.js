@@ -3571,7 +3571,7 @@ check('the beach: Americans start in the sea and can only leave it; Germans are 
   Sim.newGame(1);
 });
 
-check('tank traps stop tanks, and men among them have cover; the lanes off the beach are always clear', () => {
+check('tank traps stop tanks and give no cover (Steve); the lanes off the beach are always clear', () => {
   for (let seed = 1; seed <= 15; seed++) {
     const st = Sim.newGame(seed, 'us', 'beach');
     for (const f of st.features) if (f.kind === 'tanktrap') assert(![2, 5].includes(f.y) && Sim.tileType(f.x, f.y) === 'beach', `seed ${seed}: a trap across a lane, or off the sand`);
@@ -3582,12 +3582,31 @@ check('tank traps stop tanks, and men among them have cover; the lanes off the b
   T1.at = null; B.at = null;
   assert(!Sim.chargeSpots(st, T1).some(p => p.x === 2 && p.y === 3), 'a tank went into tank traps');
   assert(Sim.chargeSpots(st, B).some(p => p.x === 2 && p.y === 3), 'men could not go among tank traps');
-  // Cover: +1 for men, nothing for a tank
+  // No cover among them (Steve)
   B.x = 2; B.y = 3; B.at = null;
-  const shooter = Sim.unitById(st, 'd2');
-  assert(Sim.cover(st, null, B) === 1, 'men among tank traps had no cover');
-  T1.x = 2; T1.y = 3; T1.at = 'nw';
-  assert(Sim.cover(st, null, T1) === 0, 'a tank among tank traps had cover');
+  assert(Sim.cover(st, null, B) === 0, 'men among tank traps had cover');
+  Sim.newGame(1);
+});
+
+check('a burnt-out landing craft: cover like a hedge for a piece right beside it, in its field or the next; none past its corner', () => {
+  const st = tableWith({ mg1: [2, 3], d2: [11, 0] });
+  // A wreck along the north row of field 2,3
+  st.features = [{ x: 2, y: 3, kind: 'hulk', side: 'n', areas: ['nw', 'n', 'ne'], blocksView: true, name: 'Burnt-out wreck' }];
+  // (a one-area piece, the machine-gun team)
+  const B = Sim.unitById(st, 'mg1');
+  // In the middle row, right beside it: +1, and the label says wreck
+  B.at = 'w';
+  assert(Sim.cover(st, null, B) === COVER.hedge, `right beside the wreck it had ${Sim.cover(st, null, B)} cover`);
+  assert(Sim.wrecksBeside(st, 2, 3, ['w']).length === 1, 'the wreck beside it was not found');
+  // In the bottom row, an area away from it: nothing
+  B.at = 's';
+  assert(Sim.cover(st, null, B) === 0, 'an area away from the wreck had cover');
+  // In the field to the north, against the wreck from the other side: +1
+  B.y = 2; B.at = 's';
+  assert(Sim.cover(st, null, B) === COVER.hedge, 'beside the wreck from the next field had no cover');
+  // No cover against shells
+  B.y = 3; B.at = 'c';
+  assert(Sim.shellNeed(st, B) === TO_HIT + SHELL_HARDER, 'the wreck gave cover against shells');
   Sim.newGame(1);
 });
 
