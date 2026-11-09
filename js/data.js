@@ -43,7 +43,8 @@ const FEATURES = {
 };
 const MAPS = [
   {
-    id: 'hedges', date: '11 July 1944', name: 'Hedge country', note: 'The usual battle: two villages, hedges and lanes.',
+    id: 'hedges', date: '11 July 1944', name: 'Hedge country', note: 'The usual battle: two villages, hedges and lanes. Paratroopers drop in early on.',
+    airdrop: 'paras',
     rows: [
       '..|o.o...o.h',
       '..|.h..vv.o.',
@@ -59,6 +60,7 @@ const MAPS = [
   },
   {
     id: 'river', date: '7 August 1944', name: 'River crossing', note: 'Two bridges are the only way over. The Americans have no bomber, and an M8 Greyhound armoured car in place of the Sherman 75mm; the Germans an extra MG 42, a Puma armoured car in place of their tanks, and their Ju 88.',
+    airdrop: 'crate',
     rows: [
       '..|.or.o..h.',
       '.o|..r.vv..o',
@@ -76,6 +78,7 @@ const MAPS = [
   },
   {
     id: 'town', date: '15 August 1944', name: 'Crossroads town', note: 'A town on each side of the crossroads, and both sides start further forward. The Germans have a second PaK 40 and a Puma armoured car in place of their tanks; the Americans an M8 Greyhound armoured car as well as their two tanks.',
+    airdrop: 'crate',
     rows: [
       '.o...|..o..h',
       '..h..|.....o',
@@ -120,6 +123,7 @@ const MAPS = [
     // A railway across the second row of fields up from the bottom, along their north row of areas (Steve): trains run
     // along it from left to right (see TRAIN)
     train: { row: 6, side: 'n' },
+    airdrop: 'crate',
     us: { add: [{ id: 'AC1', kind: 'm8', name: 'M8 Greyhound' }] },
     de: { add: [{ id: 'dac1', kind: 'puma', name: 'Puma', reserve: true }] },
   },
@@ -181,7 +185,8 @@ const MAPS = [
     },
   },
   {
-    id: 'deep', date: '20 June 1944', name: 'Deep bocage', note: 'Hedges nearly everywhere and few lanes. More infantry and fewer tanks: no Sherman 76mm and no Panther; a fourth American platoon and second bazooka, a sixth German platoon and second Panzerschreck.',
+    id: 'deep', date: '20 June 1944', name: 'Deep bocage', note: 'Hedges nearly everywhere and few lanes. More infantry and fewer tanks: no Sherman 76mm and no Panther; a fourth American platoon and second bazooka, a sixth German platoon and second Panzerschreck. Paratroopers drop in early on.',
+    airdrop: 'paras',
     rows: [
       '..|.o..o.h.o',
       'o.|...hvv...',
@@ -229,6 +234,10 @@ const CAR_ROAD_BONUS = 2;        // the same for an armoured car (Steve): it is 
 // A train (Steve: on Open farmland): an engine pulling four carriages, a field each, moving three fields left to right
 // each round; when one has moved three times another comes on from the left. They block the view like the station's
 const TRAIN = { carriages: 4, step: 3, every: 3 };
+// Airdrops (Steve): once a game, at the start of a round from first to last. Paratroopers (on the bocage maps): a C-47 drops
+// a section of the 101st, elite, onto a field in the middle of the board, off target (a field next to it) half the time.
+// A supply crate (on the open maps): the first side to reach its field gets one more artillery round
+const AIRDROP = { first: 2, last: 4, offTarget: 0.5, crateRounds: 1 };
 const CLIMB = 1;                 // extra moves it costs men to climb a hedge bank (tanks drive through; wire stops men)
 const SHAKEN_SHOOT = 1;          // a shaken piece needs one more to hit
 const SHAKEN_MOVE = 0.5;         // a shaken piece still moves and charges, but only half as far (rounded down, at least one field)

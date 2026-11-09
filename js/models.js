@@ -413,6 +413,51 @@ const Models = (() => {
     return castAll(g);
   }
 
+  // The C-47 Skytrain (Steve: the paratroopers' and supply plane): a round olive fuselage with a solid nose, two radial
+  // engines, a low wing, and the black and white invasion stripes round the wings and the tail
+  function c47() {
+    const g = new T.Group();
+    const paint = mat('#5f6240', 0.6, 0.2), glass = mat('#a9cfdd', 0.2, 0.3), black = mat('#141414', 0.7);
+    const blur = mat('#2c2c2a', 0.5, 0.2, { transparent: true, opacity: 0.35 });
+    const length = 0.7, radius = 0.05, span = 0.98;
+    g.add(at(cyl(radius, radius * 0.4, length, paint), 0, 0, 0, 0, 0, -Math.PI / 2));
+    const nose = new T.Mesh(new T.SphereGeometry(radius, 14, 10), paint); nose.scale.x = 1.4;
+    g.add(at(nose, length / 2, 0, 0));
+    g.add(at(box(0.06, 0.022, radius * 1.2, glass), length * 0.36, radius * 0.75, 0));
+    // The wing, low on the fuselage, and the invasion stripes across it each side
+    g.add(at(box(0.15, 0.012, span * 0.5, paint), length * 0.05, -radius * 0.6, 0));
+    for (const s of [-1, 1]) {
+      g.add(at(box(0.1, 0.01, span * 0.26, paint), length * 0.06, -radius * 0.6, s * span * 0.37));
+      for (let k = 0; k < 5; k++) g.add(at(box(0.1, 0.002, 0.018, k % 2 ? M.white : black), length * 0.06, -radius * 0.6 + 0.007, s * (span * 0.27 + k * 0.018)));
+    }
+    // Stripes round the fuselage near the tail
+    for (let k = 0; k < 5; k++) g.add(at(cyl(radius * 0.72, radius * 0.72, 0.016, k % 2 ? M.white : black, 14), -length * 0.22 - k * 0.016, 0, 0, 0, 0, -Math.PI / 2));
+    // The tailplane and fin
+    g.add(at(box(0.07, 0.008, span * 0.3, paint), -length * 0.44, 0.01, 0));
+    g.add(at(box(0.09, 0.11, 0.01, paint), -length * 0.44, 0.06, 0));
+    // The two engines with their propellers a blur
+    for (const s of [-1, 1]) {
+      g.add(at(cyl(0.03, 0.022, 0.1, M.steel, 12), length * 0.14, -radius * 0.4, s * 0.17, 0, 0, -Math.PI / 2));
+      g.add(at(cyl(0.065, 0.065, 0.003, blur, 20), length * 0.14 + 0.055, -radius * 0.4, s * 0.17, 0, 0, -Math.PI / 2));
+      g.add(at(cyl(0.04, 0.04, 0.002, mat('#1d2c56', 0.7), 20), length * 0.06, -radius * 0.6 + 0.008, s * span * 0.4));
+      g.add(at(cyl(0.022, 0.022, 0.002, M.white, 5), length * 0.06, -radius * 0.6 + 0.01, s * span * 0.4));
+    }
+    return castAll(g);
+  }
+
+  // A supply crate on the table (Steve): a wooden box with its parachute lying crumpled beside it
+  function supplyCrate() {
+    const g = new T.Group();
+    const wood = mat('#8a6a3e', 0.9), chute = mat('#e9e4d4', 0.9);
+    g.add(at(box(0.07, 0.05, 0.05, wood), 0, 0.025, 0));
+    for (const x of [-0.025, 0.025]) g.add(at(box(0.006, 0.052, 0.052, mat('#5c4426', 0.9)), x, 0.025, 0));
+    g.add(at(starMesh(0.012), 0, 0.051, 0, -Math.PI / 2, 0, 0));
+    const silk = new T.Mesh(new T.SphereGeometry(0.06, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2), chute);
+    silk.scale.set(1.3, 0.18, 0.9);
+    g.add(at(silk, -0.08, 0.004, 0.03));
+    return castAll(g);
+  }
+
   // The bomber waiting off the board: smaller, on a wargamer's flying stand
   function bomberOnStand(side) {
     const g = new T.Group();
@@ -1753,5 +1798,5 @@ const Models = (() => {
     return castAll(g);
   }
 
-  return { greyhound, puma, EIFFEL_HEIGHT, eiffel, landingCraft, tankTrap, hulk, crater, seaWall, seaWallRubble, bunker, bunkerCrew, BUNKER, track, bufferStop, engine, carriage, wagon, signalbox, signal, watertower, coal, cow, sheep, lampPost, posterColumn, marketStall, cafe, barn, fountain, pond, reeds, BRIDGE_DECK, materials, M, mergeParts, eliteBand, water, bridge, soldier, squad, team, captain, pak, mortar, bomber, bomberOnStand, howitzer, round, coin, token, sherman, panther, panzer4, hedge, tree, house, die, table, field, lane, at };
+  return { greyhound, puma, c47, supplyCrate, EIFFEL_HEIGHT, eiffel, landingCraft, tankTrap, hulk, crater, seaWall, seaWallRubble, bunker, bunkerCrew, BUNKER, track, bufferStop, engine, carriage, wagon, signalbox, signal, watertower, coal, cow, sheep, lampPost, posterColumn, marketStall, cafe, barn, fountain, pond, reeds, BRIDGE_DECK, materials, M, mergeParts, eliteBand, water, bridge, soldier, squad, team, captain, pak, mortar, bomber, bomberOnStand, howitzer, round, coin, token, sherman, panther, panzer4, hedge, tree, house, die, table, field, lane, at };
 })();

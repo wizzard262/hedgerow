@@ -486,6 +486,47 @@ check('the train on Open farmland (Steve): an engine and four carriages, three f
   Sim.newGame(1);
 });
 
+check('airdrops (Steve): paratroopers on the bocage maps, a supply crate on the open ones, once a game in round 2 to 4', () => {
+  const kinds = { hedges: 'paras', deep: 'paras', farmland: 'crate', town: 'crate', river: 'crate' };
+  for (const [map, kind] of Object.entries(kinds)) assert(Sim.newGame(3, 'us', map).airdrop.kind === kind, `${map}: not ${kind}`);
+  for (const map of ['beach', 'station', 'paris']) assert(!Sim.newGame(3, 'us', map).airdrop, `${map}: an airdrop`);
+  let off = 0, paras = 0;
+  for (let seed = 1; seed <= 30; seed++) {
+    const st = Sim.newGame(seed, 'us', 'hedges');
+    const round = st.airdrop.round;
+    assert(round >= 2 && round <= 4, `seed ${seed}: the drop comes in round ${round}`);
+    // Play the rounds by: nothing until its round, then a section of the 101st, elite, in the middle of the board
+    while (st.turn < round && !st.won && !st.lost) {
+      assert(!Sim.unitById(st, 'para1'), `seed ${seed}: the paratroopers came early`);
+      Sim.finishRound(st);
+    }
+    if (st.won || st.lost) continue;
+    const p = Sim.unitById(st, 'para1');
+    assert(p && p.side === 'us' && p.kind === 'company' && p.platoons === 1 && p.quality === 'elite', `seed ${seed}: no paratroopers`);
+    assert(p.x >= 3 && p.x <= COLS - 4 && !Sim.at(st, p.x, p.y, 'de').length, `seed ${seed}: they came down at ${p.x},${p.y}`);
+    assert(st.report.some(l => l.includes('101st')), `seed ${seed}: nothing in the report`);
+    paras++;
+    if (st.report.some(l => l.includes('off target'))) off++;
+    // Only once
+    Sim.finishRound(st);
+    assert(st.units.filter(u => u.id === 'para1').length === 1, `seed ${seed}: they came twice`);
+  }
+  assert(paras > 20 && off > 3 && off < paras - 3, `${off} of ${paras} drops off target`);
+  // The crate: the first piece into its field takes one more artillery round for its side
+  const st = Sim.newGame(5, 'us', 'farmland');
+  while (st.turn < st.airdrop.round) Sim.finishRound(st);
+  assert(st.crate && !st.crate.taken && !Sim.at(st, st.crate.x, st.crate.y).length, 'no crate on an empty field');
+  const tank = Sim.unitById(st, 'T2');
+  for (const u of st.units) if (u !== tank) u.x = u.y = null;
+  st.hedges = {}; st.wire = {};
+  tank.x = st.crate.x - 1; tank.y = st.crate.y; tank.at = null; tank.acted = false;
+  const before = st.ammo.us.artillery;
+  Sim.startRound(st); st.drawn = 'us'; st.activeId = null;
+  assert(Sim.actCharge(st, tank, st.crate.x, st.crate.y).ok, 'it could not go to the crate');
+  assert(st.crate.taken === 'us' && st.ammo.us.artillery === before + AIRDROP.crateRounds, 'the crate gave nothing');
+  Sim.newGame(1);
+});
+
 check('an armoured car on the road goes two fields further, a tank one', () => {
   // A long straight road: find one on some map and drive along it
   for (const map of ['farmland', 'town', 'river']) for (let seed = 1; seed <= 6; seed++) {
@@ -889,6 +930,8 @@ check('bazooka and Panzerschreck teams go one field further on a Move & shoot an
 function tableWith(places, seed = 3) {
   const st = Sim.newGame(seed);
   st.wire = {}; st.hedges = {};
+  // (a table set up for one check: nothing drops in from the sky)
+  st.airdrop = null;
   for (const u of st.units) if (!(u.id in places)) u.x = u.y = null;
   for (const id in places) { const u = Sim.unitById(st, id); u.x = places[id][0]; u.y = places[id][1]; u.at = null; }
   return st;

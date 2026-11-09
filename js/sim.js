@@ -266,6 +266,11 @@ const Sim = (() => {
     // German teams that start with a company
     st.rand = R;
     deploy(st, 'us'); deploy(st, 'de');
+    // An airdrop (Steve), once a game, at the start of a round from AIRDROP.first to .last
+    // (its round from the seed alone, so the game's own dice go on just as they would without it)
+    const dropDice = rng(seed * 31 + 7);
+    st.airdrop = map.airdrop ? { kind: map.airdrop, round: AIRDROP.first + Math.floor(dropDice() * (AIRDROP.last - AIRDROP.first + 1)), done: false } : null;
+    st.crate = null;
     st.report = [st.noGoal
       ? `${START_DATE}. The company attacks. Destroy every German on the table${TURNS ? ` within ${TURNS} rounds` : ''}.`
       : `${START_DATE}. The company attacks into the bocage. Take ${st.objective.name} and hold it for the whole of the next round${TURNS ? ` within ${TURNS} rounds` : ''}.`];
@@ -341,6 +346,61 @@ const Sim = (() => {
       if (free(x, y) && d < bestD) { bestD = d; best = { x, y }; }
     }
     return best || want;
+  }
+
+  // ---------- Airdrops (Steve) ----------
+  // The airdrop comes at the start of its round: paratroopers, or a supply crate
+  function airdropNow(st) {
+    const drop = st.airdrop;
+    if (!drop || drop.done || st.turn !== drop.round) return;
+    drop.done = true;
+    if (drop.kind === 'paras') dropParas(st);
+    else dropCrate(st);
+  }
+  // Fields in the middle of the board something can come down in: land, not a village or an orchard, nobody of the
+  // enemy's there (for the paratroopers, room for them; for the crate, nobody there at all)
+  function dropFields(st, ok) {
+    const out = [];
+    for (let y = 0; y < ROWS; y++) for (let x = 3; x < COLS - 3; x++) {
+      if (!['field', 'laneNS', 'laneEW', 'crossroads'].includes(tileType(x, y))) continue;
+      if (ok(x, y)) out.push({ x, y });
+    }
+    return out;
+  }
+  // The paratroopers: a C-47 flies over the field they were meant for, and they come down there or (off target) next to it
+  function dropParas(st) {
+    const para = makeUnit({ id: 'para1', kind: 'company', name: 'Paratroopers (101st)', quality: 'elite' }, 'us');
+    para.platoons = 1;
+    const fields = dropFields(st, (x, y) => !at(st, x, y, 'de').length && roomFor(st, para, x, y));
+    if (!fields.length) return;
+    const aim = fields[Math.floor(st.rand() * fields.length)];
+    const near = fields.filter(f => Math.abs(f.x - aim.x) + Math.abs(f.y - aim.y) === 1);
+    const off = near.length && st.rand() < AIRDROP.offTarget;
+    const land = off ? near[Math.floor(st.rand() * near.length)] : aim;
+    para.x = land.x; para.y = land.y; para.at = freePlace(st, para, land.x, land.y, null);
+    st.units.push(para);
+    // The plane over the aimed field, west to east, and the parachutes coming down where they land
+    st.fx.push({ kind: 'flyover', side: 'us', plane: 'c47', x: aim.x, y: aim.y, heading: 4, line: bomberLine(aim.x, aim.y, 4) });
+    st.fx.push({ kind: 'paradrop', what: 'paras', x: land.x, y: land.y });
+    st.news = [`🪂 A C-47 drops paratroopers of the 101st Airborne${off ? ', off target' : ''}. They can move this round.`];
+  }
+  // The supply crate: down on an empty field in the middle of the board
+  function dropCrate(st) {
+    const fields = dropFields(st, (x, y) => !at(st, x, y).length && !featuresAt(st, x, y).length);
+    if (!fields.length) return;
+    const spot = fields[Math.floor(st.rand() * fields.length)];
+    st.crate = { x: spot.x, y: spot.y, taken: null };
+    st.fx.push({ kind: 'flyover', side: 'us', plane: 'c47', x: spot.x, y: spot.y, heading: 4, line: bomberLine(spot.x, spot.y, 4) });
+    st.fx.push({ kind: 'paradrop', what: 'crate', x: spot.x, y: spot.y });
+    st.news = [`📦 A supply crate comes down by parachute: the first side to reach its field gets ${AIRDROP.crateRounds} more artillery round.`];
+  }
+  // A piece arriving in the crate's field: its side takes it, one more artillery round
+  function takeCrate(st, u) {
+    const c = st.crate;
+    if (!c || c.taken || u.x !== c.x || u.y !== c.y || PIECES[u.kind].fixed) return;
+    c.taken = u.side;
+    st.ammo[u.side].artillery += AIRDROP.crateRounds;
+    st.fx.push({ kind: 'crate', x: c.x, y: c.y, side: u.side, to: { id: u.id } });
   }
 
   // ---------- Trains (Steve: Open farmland) ----------
@@ -1320,6 +1380,8 @@ const Sim = (() => {
     }
     const heading = dirTo(u, { x, y });
     u.x = x; u.y = y; u.at = freePlace(st, u, x, y, heading);
+    // The first piece into the supply crate's field takes it for its side (Steve)
+    takeCrate(st, u);
     // The way it is facing, for the table (tanks turn to fire, and turn again when they move)
     u.aim = { e: 0, n: Math.PI / 2, w: Math.PI, s: -Math.PI / 2 }[heading];
     // A tank stops facing the nearest enemy it can see (Steve)
@@ -3023,7 +3085,11 @@ const Sim = (() => {
       st.draw = true;
       rep.unshift(`🤝 Neither side could finish it in ${ROBOT_ROUNDS} rounds. A draw.`);
     }
-    if (!st.won && !st.lost) newRound(st);
+    if (!st.won && !st.lost) {
+      newRound(st);
+      // (what came out of the sky at the start of it, for the report)
+      if (st.news) { rep.push(...st.news); st.news = null; }
+    }
     st.report = rep.length ? rep : ['A quiet round.'];
   }
 
@@ -3044,6 +3110,8 @@ const Sim = (() => {
     st.spin = {};
     // and the trains move on (Steve)
     moveTrains(st);
+    // An airdrop, if this is its round
+    airdropNow(st);
   }
 
   return {

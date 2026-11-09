@@ -959,6 +959,47 @@ const Board = (() => {
     return moving;
   }
 
+  // Parachutes coming down on a field (Steve: airdrops): three for the paratroopers, one with the crate under it, falling
+  // from just under the plane to the table over CHUTE.fall seconds, then the canopies collapse and go
+  const CHUTE = { from: 0.75, fall: 2.6, gone: 0.6, size: 0.07 };
+  function drawChutes(f, t, add) {
+    if (t > CHUTE.fall + CHUTE.gone) return;
+    const spots = f.what === 'paras' ? [[-0.15, -0.1], [0.12, -0.05], [0, 0.14]] : [[0, 0]];
+    const p = Math.min(1, t / CHUTE.fall);
+    const height = CHUTE.from * (1 - p);
+    const sink = t > CHUTE.fall ? 1 - (t - CHUTE.fall) / CHUTE.gone : 1;
+    spots.forEach(([dx, dz], k) => {
+      // Each one swaying a little as it comes down
+      const sway = Math.sin(t * 2.2 + k) * 0.03 * (1 - p);
+      const x = f.x + 0.5 + dx + sway, z = f.y + 0.5 + dz;
+      const canopy = add(new T.Mesh(new T.SphereGeometry(CHUTE.size, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2), new T.MeshStandardMaterial({ color: f.what === 'crate' ? 0xe9e4d4 : 0xd8d2b8, roughness: 0.9, transparent: true, opacity: sink })));
+      canopy.scale.set(1, 0.7 * sink, 1);
+      canopy.position.set(x, height + 0.12, z);
+      // The load under it: a man or the crate
+      const load = add(new T.Mesh(new T.BoxGeometry(f.what === 'crate' ? 0.05 : 0.02, f.what === 'crate' ? 0.035 : 0.04, f.what === 'crate' ? 0.04 : 0.02), new T.MeshStandardMaterial({ color: f.what === 'crate' ? 0x8a6a3e : 0x4f5432, roughness: 0.9, transparent: true, opacity: sink })));
+      load.position.set(x, height + 0.03, z);
+      // The lines from the canopy's edge to the load
+      const pts = [];
+      for (const [ex, ez] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) pts.push(new T.Vector3(x + ex * CHUTE.size * 0.9, height + 0.12, z + ez * CHUTE.size * 0.9), new T.Vector3(x, height + 0.05, z));
+      add(new T.LineSegments(new T.BufferGeometry().setFromPoints(pts), new T.LineBasicMaterial({ color: 0x9a9480, transparent: true, opacity: sink })));
+    });
+  }
+
+  // The supply crate on the table while nobody has taken it (Steve)
+  let crateModel = null, crateAt = '';
+  function drawCrate(st) {
+    const want = st.crate && !st.crate.taken ? `${st.seed}/${st.crate.x},${st.crate.y}` : '';
+    if (want === crateAt) return;
+    if (crateModel) { scene.remove(crateModel); freeObject(crateModel); crateModel = null; }
+    crateAt = want;
+    if (!want) return;
+    crateModel = at(Models.supplyCrate(), st.crate.x + 0.5, 0, st.crate.y + 0.5);
+    // (a little larger than life, so it is easy to spot from across the table)
+    crateModel.scale.setScalar(1.8);
+    scene.add(crateModel);
+    shadowStale = true;
+  }
+
   // How high a piece stands in a field: on the road over a bridge, otherwise on the table
   const standsAt = (x, y) => (Sim.inside(x, y) && Sim.tileType(x, y) === 'bridge' ? Models.BRIDGE_DECK : 0);
 
@@ -1077,7 +1118,8 @@ const Board = (() => {
     const dir = { x: Math.sin(angle), z: -Math.cos(angle) };
     // From before the first field under it to after the last, measured from the chosen field
     const start = f.line[0].t - FLIGHT.lead, end = f.line[f.line.length - 1].t + FLIGHT.lead;
-    const model = Models.mergeParts(Models.bomber(f.side));
+    // (the paratroopers and the crate come in a C-47, Steve)
+    const model = Models.mergeParts(f.plane === 'c47' ? Models.c47() : Models.bomber(f.side));
     model.rotation.y = -Math.atan2(dir.z, dir.x);
     model.scale.setScalar(FLIGHT.size);
     scene.add(model);
@@ -1294,6 +1336,7 @@ const Board = (() => {
     for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) arrange(st, x, y);
     drawSnags(st);
     drawTrains(st);
+    drawCrate(st);
     hideSceneryUnderPieces(st);
     // The way a piece that just moved goes: through each field it passed, keeping its place in the field
     for (const u of st.units) {
@@ -2042,6 +2085,14 @@ const Board = (() => {
       seenFx.add(f);
       // A rally: its words float up off the piece
       if (f.kind === 'rally') { shots.push({ f, t0: performance.now(), objs: [] }); continue; }
+      // The crate taken: its words float up off the field
+      if (f.kind === 'crate') { shots.push({ f, t0: performance.now(), objs: [] }); continue; }
+      // Parachutes: they come down as the plane passes over (see playShots)
+      if (f.kind === 'paradrop') {
+        const over = flight ? Math.max(0, -flight.start / FLIGHT.speed) : 0;
+        shots.push({ f, t0: performance.now() + over * 1000, objs: [] });
+        continue;
+      }
       // The bomber itself
       if (f.kind === 'flyover') { startFlight(f); shots.push({ f, t0: performance.now(), objs: [] }); continue; }
       // A bomb falls as the plane passes over its field
@@ -2150,6 +2201,15 @@ const Board = (() => {
       const add = o => { fxMarks.add(o); return o; };
       if (f.kind === 'melee') { playMelee(f, t, add); continue; }
       if (f.kind === 'flyover') { moveFlight(t); continue; }
+      if (f.kind === 'paradrop') { drawChutes(f, t, add); continue; }
+      // The crate taken (Steve): "+1 artillery round" rising off its field
+      if (f.kind === 'crate') {
+        if (t > 2.2) continue;
+        const w = add(word(`+${AIRDROP.crateRounds} artillery round`, '#ffe08a', true));
+        w.material.opacity = Math.min(1, 2 * (2.2 - t));
+        w.position.set(f.x + 0.5, 0.5 + t * 0.2, f.y + 0.5);
+        continue;
+      }
       // A rally (Steve): "Rallied!" in green (or the captain's "Up and moving"), rising off the piece
       if (f.kind === 'rally') {
         if (t > 1.8 || !pieces[f.to.id]) continue;
