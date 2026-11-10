@@ -1684,6 +1684,10 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - Every train, on both maps, now moves one field after every piece's turn (each token drawn after the first) instead of three a round. On Open farmland the next comes on when the last has gone nine fields. Everything else holds: nothing stands on a line, nothing crosses where a train stands, trains block the view
 - Steve: don't bother running balance tests; when done, just push
 
+## 295. Ideas for new maps (shelved)
+
+- Steve, 2026-11-10: add to the ideas the Battle of the Bulge (just many different tanks), Stalingrad, a stealth mission (SAS or French partisans against German guards) and the Dunkirk idea. Nothing built; they're in the to-do list (`C:\DEV\Claude\Direction_next.md`, Maybe / someday)
+
 ## Sessions
 
 | # | Date | Length | What we did |
