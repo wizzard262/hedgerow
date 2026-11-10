@@ -445,10 +445,11 @@ const Models = (() => {
     return castAll(g);
   }
 
-  // A supply crate on the table (Steve): a wooden box with its parachute lying crumpled beside it
+  // A supply crate on the table (Steve): a wooden box with its parachute lying crumpled beside it, olive drab like
+  // the one it came down under (js/chute.js)
   function supplyCrate() {
     const g = new T.Group();
-    const wood = mat('#8a6a3e', 0.9), chute = mat('#e9e4d4', 0.9);
+    const wood = mat('#8a6a3e', 0.9), chute = mat('#77764a', 0.9);
     g.add(at(box(0.07, 0.05, 0.05, wood), 0, 0.025, 0));
     for (const x of [-0.025, 0.025]) g.add(at(box(0.006, 0.052, 0.052, mat('#5c4426', 0.9)), x, 0.025, 0));
     g.add(at(starMesh(0.012), 0, 0.051, 0, -Math.PI / 2, 0, 0));

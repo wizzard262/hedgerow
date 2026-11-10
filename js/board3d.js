@@ -1014,30 +1014,136 @@ const Board = (() => {
     return moving;
   }
 
-  // Parachutes coming down on a field (Steve: airdrops): three for the paratroopers, one with the crate under it, falling
-  // from just under the plane to the table over CHUTE.fall seconds, then the canopies collapse and go
-  const CHUTE = { from: 0.75, fall: 2.6, gone: 0.6, size: 0.07 };
-  function drawChutes(f, t, add) {
-    if (t > CHUTE.fall + CHUTE.gone) return;
-    const spots = f.what === 'paras' ? [[-0.15, -0.1], [0.12, -0.05], [0, 0.14]] : [[0, 0]];
-    const p = Math.min(1, t / CHUTE.fall);
-    const height = CHUTE.from * (1 - p);
-    const sink = t > CHUTE.fall ? 1 - (t - CHUTE.fall) / CHUTE.gone : 1;
-    spots.forEach(([dx, dz], k) => {
-      // Each one swaying a little as it comes down
-      const sway = Math.sin(t * 2.2 + k) * 0.03 * (1 - p);
-      const x = f.x + 0.5 + dx + sway, z = f.y + 0.5 + dz;
-      const canopy = add(new T.Mesh(new T.SphereGeometry(CHUTE.size, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2), new T.MeshStandardMaterial({ color: f.what === 'crate' ? 0xe9e4d4 : 0xd8d2b8, roughness: 0.9, transparent: true, opacity: sink })));
-      canopy.scale.set(1, 0.7 * sink, 1);
-      canopy.position.set(x, height + 0.12, z);
-      // The load under it: a man or the crate
-      const load = add(new T.Mesh(new T.BoxGeometry(f.what === 'crate' ? 0.05 : 0.02, f.what === 'crate' ? 0.035 : 0.04, f.what === 'crate' ? 0.04 : 0.02), new T.MeshStandardMaterial({ color: f.what === 'crate' ? 0x8a6a3e : 0x4f5432, roughness: 0.9, transparent: true, opacity: sink })));
-      load.position.set(x, height + 0.03, z);
-      // The lines from the canopy's edge to the load
-      const pts = [];
-      for (const [ex, ez] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) pts.push(new T.Vector3(x + ex * CHUTE.size * 0.9, height + 0.12, z + ez * CHUTE.size * 0.9), new T.Vector3(x, height + 0.05, z));
-      add(new T.LineSegments(new T.BufferGeometry().setFromPoints(pts), new T.LineBasicMaterial({ color: 0x9a9480, transparent: true, opacity: sink })));
+  // Parachutes coming down on a field (Steve: airdrops): three paratroopers, or the supply crate, each under a big
+  // olive drab canopy that swings on the way down (Steve picked C in tools/chute-variants.html; the shape and the
+  // swing are in js/chute.js). They are made once a drop and kept until it is over, not made again every frame
+  const chuteDrops = new Map();   // the airdrop effect → its parachutes on the table
+  let chuteGroup = null;
+  // Where the three paratroopers of a field come down (across, up the board), one after another
+  const PARA_SPOTS = [[-0.22, -0.15], [0.2, -0.05], [-0.02, 0.2]];
+
+  // One parachute: the canopy (its points worked out every frame), its lines, and a man or the crate under it
+  function makeChute(load) {
+    const sys = new T.Group();       // swings about the canopy's middle
+    const spinner = new T.Group();   // turns slowly
+    sys.add(spinner);
+    const shape = Chute.shape(Math.random);
+    const canopy = new T.Mesh(canopyGeometry(), new T.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, side: T.DoubleSide, transparent: true }));
+    canopy.castShadow = true;
+    spinner.add(canopy);
+    const lines = new T.LineSegments(new T.BufferGeometry(), new T.LineBasicMaterial({ color: 0x8f8a76, transparent: true, opacity: 0.8 }));
+    spinner.add(lines);
+    // The man, at much the size of the platoon he lands as, or the crate without the parachute it has on the table
+    const model = load === 'crate' ? Models.supplyCrate() : Models.soldier('us', 0, false);
+    if (load === 'crate') model.children[model.children.length - 1].visible = false;
+    model.scale.setScalar(Chute.HANG[load]);
+    // (his own materials, so he can fade away without fading every man on the table)
+    model.traverse(c => { if (c.isMesh) { c.material = c.material.clone(); c.material.transparent = true; } });
+    // The risers: from where the lines meet down to his shoulders (or the crate's lid)
+    const top = Chute.HANG.lines - Chute.HANG.riser[load];
+    model.position.y = top - Chute.LOAD_TOP[load] * Chute.HANG[load];
+    spinner.add(model);
+    return { sys, spinner, shape, canopy, lines, model, load, top };
+  }
+
+  // The canopy's grid of points, every other panel a shade darker (the points themselves are placed every frame)
+  function canopyGeometry() {
+    const { RINGS, SEGS, LOOK } = Chute;
+    const count = (RINGS + 1) * (SEGS + 1);
+    const geo = new T.BufferGeometry();
+    geo.setAttribute('position', new T.BufferAttribute(new Float32Array(count * 3), 3));
+    const colours = new Float32Array(count * 3);
+    const base = new T.Color(LOOK.colour);
+    for (let i = 0; i <= RINGS; i++) {
+      for (let j = 0; j <= SEGS; j++) {
+        // (four points a panel)
+        const dark = Math.floor((j + 0.5) / 4) % 2 === 1;
+        const shade = dark ? 1 - LOOK.panels : 1;
+        const n = (i * (SEGS + 1) + j) * 3;
+        colours[n] = base.r * shade;
+        colours[n + 1] = base.g * shade;
+        colours[n + 2] = base.b * shade;
+      }
+    }
+    geo.setAttribute('color', new T.BufferAttribute(colours, 3));
+    // Two triangles for every little square of the grid
+    const index = [];
+    for (let i = 0; i < RINGS; i++) {
+      for (let j = 0; j < SEGS; j++) {
+        const a = i * (SEGS + 1) + j;
+        const b = a + SEGS + 1;
+        index.push(a, b, a + 1, b, b + 1, a + 1);
+      }
+    }
+    geo.setIndex(index);
+    return geo;
+  }
+
+  // One parachute t seconds into its fall, at x, z on the table
+  function placeChute(c, x, z, t) {
+    const { RINGS, SEGS, LOOK } = Chute;
+    // Where it is: coming down, swinging, drifting with the wind, turning
+    const height = Chute.height(t, c.load);
+    const swing = Chute.swing(c.shape, t);
+    c.sys.position.set(x + LOOK.drift * (Chute.progress(t) - 0.5), height, z);
+    c.sys.rotation.set(swing.across, 0, swing.along);
+    c.spinner.rotation.y = LOOK.spin * t;
+    // The canopy's shape this moment
+    const pos = c.canopy.geometry.attributes.position;
+    for (let i = 0; i <= RINGS; i++) {
+      for (let j = 0; j <= SEGS; j++) pos.setXYZ(i * (SEGS + 1) + j, ...Chute.point(c.shape, i, j, t));
+    }
+    pos.needsUpdate = true;
+    c.canopy.geometry.computeVertexNormals();
+    // The lines: from every panel's corner on the hem to one point, then two risers to the shoulders
+    const meet = new T.Vector3(0, Chute.HANG.lines, 0);
+    const pts = [];
+    for (let g = 0; g < LOOK.gores; g++) pts.push(new T.Vector3(...Chute.point(c.shape, RINGS, g * 4, t)), meet);
+    pts.push(meet, new T.Vector3(0.03, c.top, 0.03), meet, new T.Vector3(-0.03, c.top, -0.03));
+    c.lines.geometry.dispose();
+    c.lines.geometry = new T.BufferGeometry().setFromPoints(pts);
+    // Landed: the canopy falls over downwind and flattens, its lines go slack (not drawn), then it all fades
+    const over = Chute.over(t);
+    c.canopy.rotation.set(0, 0, -over * 1.25);
+    c.canopy.position.set(over * LOOK.R * 1.1, -over * (height - 0.02) * 0.85, 0);
+    c.canopy.scale.set(1, 1 - over * 0.8, 1);
+    c.lines.visible = over === 0;
+    const fade = Chute.opacity(t);
+    c.canopy.material.opacity = fade;
+    c.model.traverse(o => { if (o.isMesh) o.material.opacity = fade; });
+  }
+
+  // Every parachute of a drop, t seconds after the plane passed over its field
+  function drawChutes(f, t) {
+    const spots = f.what === 'paras' ? PARA_SPOTS : [[0, 0]];
+    // Over: take them off the table
+    if (t > Chute.lasts(spots.length)) { removeChutes(f); return; }
+    // The first frame: make them
+    if (!chuteDrops.has(f)) {
+      if (!chuteGroup) { chuteGroup = new T.Group(); scene.add(chuteGroup); }
+      const made = spots.map(() => makeChute(f.what === 'crate' ? 'crate' : 'man'));
+      made.forEach(c => chuteGroup.add(c.sys));
+      chuteDrops.set(f, made);
+    }
+    // Each one in its place, the men landing one after another (not shown before their turn)
+    chuteDrops.get(f).forEach((c, k) => {
+      const own = t - k * Chute.TIME.apart;
+      c.sys.visible = own >= 0;
+      if (own >= 0) placeChute(c, f.x + 0.5 + spots[k][0], f.y + 0.5 + spots[k][1], own);
     });
+    shadowStale = true;
+  }
+  function removeChutes(f) {
+    const made = chuteDrops.get(f);
+    if (!made) return;
+    made.forEach(c => { chuteGroup.remove(c.sys); freeObject(c.sys); });
+    chuteDrops.delete(f);
+    shadowStale = true;
+  }
+  // Drops no longer playing (a new game, or cleared early): their parachutes go too
+  function tidyChutes() {
+    const playing = new Set(shots.map(s => s.f));
+    for (const f of [...chuteDrops.keys()]) if (!playing.has(f)) removeChutes(f);
   }
 
   // The supply crate on the table while nobody has taken it (Steve)
@@ -2248,15 +2354,17 @@ const Board = (() => {
     while (fxMarks.children.length) { const o = fxMarks.children[0]; fxMarks.remove(o); freeObject(o); }
     // (a hand-to-hand fight stays as long as its blows take)
     // (the bomber stays until it has flown off, a bomb until its words have faded)
-    const lasts = f => (f.kind === 'melee' ? (f.strikes.length * MELEE_BLOW + 2) * 1000 : f.kind === 'flyover' ? f.length * 1000 + 200 : f.kind === 'bomb' ? ((f.fall || 0) + 3) * 1000 : 5000);
+    // (parachutes until the last one has landed and gone)
+    const lasts = f => (f.kind === 'melee' ? (f.strikes.length * MELEE_BLOW + 2) * 1000 : f.kind === 'flyover' ? f.length * 1000 + 200 : f.kind === 'bomb' ? ((f.fall || 0) + 3) * 1000 : f.kind === 'paradrop' ? Chute.lasts(3) * 1000 + 200 : 5000);
     shots = shots.filter(s => now - s.t0 < lasts(s.f));
+    tidyChutes();
     for (const s of shots) {
       const f = s.f, t = (now - s.t0) / 1000;
       if (t < 0) continue;
       const add = o => { fxMarks.add(o); return o; };
       if (f.kind === 'melee') { playMelee(f, t, add); continue; }
       if (f.kind === 'flyover') { moveFlight(t); continue; }
-      if (f.kind === 'paradrop') { drawChutes(f, t, add); continue; }
+      if (f.kind === 'paradrop') { drawChutes(f, t); continue; }
       // The crate taken (Steve): "+1 artillery round" rising off its field
       if (f.kind === 'crate') {
         if (t > 2.2) continue;
@@ -2785,6 +2893,7 @@ const Board = (() => {
     homing = []; homingDone = null;
     clearTokenNow();
     shots = [];
+    tidyChutes();
     for (const id in held) delete held[id];
     meleeUntil = 0;
     endFlight(); flightUntil = 0;

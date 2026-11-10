@@ -4297,5 +4297,37 @@ check('one more American artillery round in Hedge country, Deep bocage and the T
   Sim.newGame(1);
 });
 
+check('parachutes (Steve picked C): big, uneven, olive drab, swinging less near the table and still once down, gone at the end', () => {
+  const Chute = require('../js/chute.js');
+  const seeded = n => () => { n = (n * 16807) % 2147483647; return n / 2147483647; };
+  const a = Chute.shape(seeded(7)), b = Chute.shape(seeded(99));
+  // Bigger: the hem reaches well past the old canopy's 0.07
+  const hem = s => Array.from({ length: Chute.SEGS }, (_, j) => Chute.point(s, Chute.RINGS, j, 0));
+  const reach = hem(a).map(([x, , z]) => Math.hypot(x, z));
+  assert(Math.min(...reach) > 0.2, `the hem only reaches ${Math.min(...reach).toFixed(2)}`);
+  // Not evenly round: the hem's reach differs round the canopy, and no two parachutes are alike
+  assert(Math.max(...reach) - Math.min(...reach) > 0.02, 'the hem is evenly round');
+  assert(JSON.stringify(hem(a)) !== JSON.stringify(hem(b)), 'two parachutes alike');
+  // A hole at the top
+  const [vx, , vz] = Chute.point(a, 0, 0, 0);
+  assert(Math.hypot(vx, vz) > 0.02, 'no vent hole');
+  // Olive drab
+  assert(Chute.LOOK.colour === '#77764a', 'not olive drab');
+  // Swinging: more just after it opens than near the table, and still soon after landing
+  const most = (from, to) => { let m = 0; for (let t = from; t < to; t += 0.02) m = Math.max(m, Math.abs(Chute.swing(a, t).along)); return m; };
+  const early = most(0, Chute.LOOK.period), late = most(Chute.TIME.fall - Chute.LOOK.period, Chute.TIME.fall);
+  assert(early > 0.12 && late < early, `swing early ${early.toFixed(2)}, late ${late.toFixed(2)}`);
+  assert(most(Chute.TIME.fall + 0.31, Chute.TIME.fall + 1) === 0, 'still swinging on the table');
+  // It starts just over the plane and lands with the man's feet (or the crate) on the table
+  for (const load of ['man', 'crate']) {
+    const feet = Chute.height(Chute.TIME.fall, load) + Chute.HANG.lines - Chute.HANG.riser[load] - Chute.LOAD_TOP[load] * Chute.HANG[load];
+    assert(Math.abs(feet) < 1e-9, `${load} lands ${feet} off the table`);
+  }
+  assert(Chute.height(0, 'man') === Chute.HANG.top, 'not starting at the top');
+  // Gone by the end, the last of three landing after the others
+  assert(Chute.opacity(Chute.TIME.fall + Chute.TIME.settle) === 0 && Chute.opacity(Chute.TIME.fall) === 1, 'fading wrong');
+  assert(Chute.lasts(3) === 2 * Chute.TIME.apart + Chute.TIME.fall + Chute.TIME.settle, 'the drop ends too soon');
+});
+
 console.log(failed ? `\n${failed} failed` : '\nall passed');
 process.exit(failed ? 1 : 0);

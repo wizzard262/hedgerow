@@ -1688,6 +1688,12 @@ How the game was made: each prompt, what was built, and the assumptions made.
 
 - Steve, 2026-11-10: add to the ideas the Battle of the Bulge (just many different tanks), Stalingrad, a stealth mission (SAS or French partisans against German guards) and the Dunkirk idea. Nothing built; they're in the to-do list (`C:\DEV\Claude\Direction_next.md`, Maybe / someday)
 
+## 296. Parachute variations
+
+- Steve: I don't like the parachute; show me variations; it's got to be bigger and less uniformly round, and swing on the way in a bit
+- `tools/chute-variants.html` (open it straight from the folder): the one in the game now beside four new ones, each with a real man of the table's size (or the crate) under it. A: silk panels with a scalloped hem, gentle swing; B: breathing, uneven, wider swing; C: olive drab panels, a vent hole, a slow turn; D: biggest, lopsided, a flapping hem, a big swing. Every new one is 4 to 5 times the old canopy's width, swings like a pendulum (less near the ground), drifts with the wind, has its own shape so no two are alike, and on landing the canopy falls over and flattens before it goes
+- Steve picked C, for the paratroopers and the supply crate alike (v164). Its shape and swing are in `js/chute.js`; `board3d.js` makes each drop's parachutes once and keeps them until the last has gone (the old ones were made again every frame). Each man hangs at a little under the size of the platoon he lands as (2.0 against 2.45), since the plane flies so low; the canopy starts just above the plane. The three of a field land half a second apart. The crate's parachute lying beside it on the table is olive drab too (assumption)
+
 ## Sessions
 
 | # | Date | Length | What we did |
