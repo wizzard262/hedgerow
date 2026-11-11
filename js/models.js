@@ -1141,6 +1141,33 @@ const Models = (() => {
     return castAll(g);
   }
 
+  // A little ship (Steve: Dunkirk): a wooden boat lying along the shore (z), its bow to the north, a wheelhouse and funnel
+  // on the seaward side (-x) and an open deck for the men to stand on. Its paint, from the seed, so no two are alike
+  const SHIP_PAINT = [['#e9e4d6', '#2d4f7c'], ['#2f5a3e', '#e2dccb'], ['#7c2a24', '#e9e4d6'], ['#33465c', '#d9c38a'], ['#e9e4d6', '#8a2b22']];
+  function littleShip(seed = 1) {
+    const g = new T.Group();
+    const paint = SHIP_PAINT[Math.abs(seed) % SHIP_PAINT.length];
+    const hull = mat(paint[0], 0.7, 0.05), trim = mat(paint[1], 0.7, 0.05);
+    if (!M.deck) { M.deck = mat('#8a6a44', 0.85, 0); M.funnel = mat('#2a2622', 0.7, 0.1); }
+    const long = 0.78, wide = 0.6, tall = 0.06;
+    // The deck, and the hull sides with a painted stripe along the top
+    g.add(at(box(wide, 0.014, long, M.deck), 0, 0.012, 0.03));
+    for (const s of [-1, 1]) {
+      g.add(at(box(0.02, tall, long, hull), s * wide / 2, tall / 2, 0.03));
+      g.add(at(box(0.024, 0.012, long, trim), s * wide / 2, tall, 0.03));
+    }
+    g.add(at(box(wide, tall, 0.02, hull), 0, tall / 2, 0.03 + long / 2));
+    // The bow: two sides meeting in a point to the north
+    for (const s of [-1, 1]) g.add(at(box(0.02, tall, 0.36, hull), s * wide / 4, tall / 2, -long / 2 - 0.1, 0, s * 1.0, 0));
+    // The wheelhouse and its roof on the seaward side, a funnel behind it, a short mast with a pennant
+    g.add(at(box(0.16, 0.1, 0.2, hull), -wide / 2 + 0.1, 0.06, 0.18));
+    g.add(at(box(0.18, 0.012, 0.22, trim), -wide / 2 + 0.1, 0.115, 0.18));
+    g.add(at(cyl(0.022, 0.026, 0.1, M.funnel, 10), -wide / 2 + 0.1, 0.16, 0.34));
+    g.add(at(cyl(0.005, 0.005, 0.26, M.funnel, 6), -wide / 2 + 0.1, 0.2, -0.05));
+    g.add(at(box(0.004, 0.03, 0.06, trim), -wide / 2 + 0.1, 0.31, -0.02));
+    return castAll(g);
+  }
+
   // A steel tank trap: three crossed girders, in a loose row across the field
   function tankTrap() {
     const g = new T.Group();
@@ -1799,5 +1826,5 @@ const Models = (() => {
     return castAll(g);
   }
 
-  return { greyhound, puma, c47, supplyCrate, EIFFEL_HEIGHT, eiffel, landingCraft, tankTrap, hulk, crater, seaWall, seaWallRubble, bunker, bunkerCrew, BUNKER, track, bufferStop, engine, carriage, wagon, signalbox, signal, watertower, coal, cow, sheep, lampPost, posterColumn, marketStall, cafe, barn, fountain, pond, reeds, BRIDGE_DECK, materials, M, mergeParts, eliteBand, water, bridge, soldier, squad, team, captain, pak, mortar, bomber, bomberOnStand, howitzer, round, coin, token, sherman, panther, panzer4, hedge, tree, house, die, table, field, lane, at };
+  return { greyhound, puma, c47, supplyCrate, EIFFEL_HEIGHT, eiffel, landingCraft, littleShip, tankTrap, hulk, crater, seaWall, seaWallRubble, bunker, bunkerCrew, BUNKER, track, bufferStop, engine, carriage, wagon, signalbox, signal, watertower, coal, cow, sheep, lampPost, posterColumn, marketStall, cafe, barn, fountain, pond, reeds, BRIDGE_DECK, materials, M, mergeParts, eliteBand, water, bridge, soldier, squad, team, captain, pak, mortar, bomber, bomberOnStand, howitzer, round, coin, token, sherman, panther, panzer4, hedge, tree, house, die, table, field, lane, at };
 })();

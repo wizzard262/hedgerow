@@ -103,7 +103,8 @@ const Board = (() => {
     de: { artillery: { x: COLS + 0.7, z: 2.55, pileX: COLS + 1.25, pileZ: 2.3 }, mortars: { x: COLS + 0.7, z: 4.05, pileX: COLS + 1.25, pileZ: 3.85 }, bomber: { x: COLS + 0.5, z: 5.5 } },
   };
   // (each gun by its name for the time, Steve; see MORTARS and the rest in data.js)
-  const GUN_NAMES = { us: { artillery: ARTILLERY.name, mortars: MORTARS.name, bomber: `US ${BOMBER_NAMES.us}` }, de: { artillery: DE_ARTILLERY.name, mortars: DE_MORTAR.name, bomber: `German ${BOMBER_NAMES.de}` } };
+  // A side's gun or bomber by name; the map can rename the guns (Steve: Dunkirk's destroyers)
+  const gunNameOf = (side, which) => (which === 'bomber' ? `${side === 'us' ? 'US' : 'German'} ${BOMBER_NAMES[side]}` : Sim.gunStats(which, side).name);
   const SUPPORT = ['artillery', 'mortars', 'bomber'];
   const PILE_MAX = 12;
   let support = null;           // side → which → { model, rounds: [] }
@@ -134,7 +135,7 @@ const Board = (() => {
           rounds.push(r);
         }
         // Its name, small, on the table in front
-        const name = word(GUN_NAMES[side][which], '#efe6d2', false);
+        const name = word(gunNameOf(side, which), '#efe6d2', false);
         name.scale.multiplyScalar(1.5);
         name.material.depthTest = true;
         // (the plane stands near the edge of the screen: its name goes in towards the board)
@@ -436,7 +437,8 @@ const Board = (() => {
   }
   function addSea(st) {
     if (sea) { scene.remove(sea.group); freeObject(sea.group); sea = null; }
-    if (!st.map.landing) return;
+    // (the beach landing, and Dunkirk's beach, Steve)
+    if (!st.map.landing && !st.map.evacuate) return;
     const group = new T.Group();
     const R = seeded(st.seed + 5);
     // The deep water, its ripples drifting back and forth
@@ -468,13 +470,15 @@ const Board = (() => {
     const foam = ribbon(new T.MeshBasicMaterial({ color: 0xf2f4ee, transparent: true, opacity: 0.92, depthWrite: false }), 0.0075);
     const oldFoam = ribbon(new T.MeshBasicMaterial({ color: 0xe6e8e0, transparent: true, opacity: 0.45, depthWrite: false }), 0.007);
     group.add(sheet, foam, oldFoam);
-    // A landing craft in each field of the sea
+    // A landing craft in each field of the sea; at Dunkirk a little ship in each, shown only while a boat is in that field
     const craft = [];
     for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
       if (Sim.tileType(x, y) !== 'sea') continue;
-      const m = Models.mergeParts(Models.landingCraft());
+      const boat = !!st.map.evacuate;
+      const m = Models.mergeParts(boat ? Models.littleShip(st.seed + y * 3) : Models.landingCraft());
       group.add(at(m, x + 0.46, 0.006, y + 0.5));
-      craft.push({ mesh: m, phase: R() * 6.28 });
+      if (boat) m.visible = false;
+      craft.push({ mesh: m, phase: R() * 6.28, x, y, boat });
     }
     // Smoke rising from the wrecks
     const plumes = [];
@@ -488,6 +492,11 @@ const Board = (() => {
     }
     scene.add(group);
     sea = { group, ripples, sheet, foam, oldFoam, craft, plumes };
+  }
+  // Dunkirk's little ships (Steve): on show in the fields where the round's boats are
+  function showBoats(st) {
+    if (!sea || !st.evac) return;
+    for (const c of sea.craft) if (c.boat) c.mesh.visible = st.evac.boats.some(b => b.x === c.x && b.y === c.y);
   }
   // Where the water's edge is, along the shore, at a moment (t in seconds): the main surge in and out, with slower and quicker
   // waves running along it so it is never a straight line
@@ -750,6 +759,8 @@ const Board = (() => {
   // The models that make up a piece, each a base on the table, scaled: a rifle platoon's three section bases, a tank
   // (one to a unit, Steve), or a team's (or the captain's) one base. Used for the table and for the panel's picture
   function buildBases(side, kind, elite = false) {
+    // (a new piece borrows another's model until it has its own, Steve: Dunkirk's 1940 pieces)
+    if (PIECES[kind] && PIECES[kind].look) kind = PIECES[kind].look;
     if (kind === 'company') {
       // One base a section; the bases are shown or hidden as sections are lost. Elite: in camouflage (Steve)
       return [0, 1, 2].map(() => { const s = Models.mergeParts(Models.squad(side, elite)); markerSpots(s); s.scale.setScalar(MEN); return s; });
@@ -1533,6 +1544,7 @@ const Board = (() => {
       marker(u, ':shock', '#9b2a22', '!', u.shocked, 'back');
     }
     updateWrecks(st);
+    showBoats(st);
   }
 
   // ---------- Wrecks (Steve): a knocked-out tank burns where it died, black and scorched, and stays ----------
@@ -2770,7 +2782,7 @@ const Board = (() => {
   // ["1st Platoon", "needs 5+ · 2 hits"]: who fired, then the score each die needed and the hits
   function shotTagText(st, f) {
     const shooter = f.from ? st.units.find(u => u.id === f.from.id) : null;
-    const gunName = f.support === 'bomber' ? BOMBER_NAMES[f.side] : GUN_NAMES[f.side][f.support];
+    const gunName = f.support === 'bomber' ? BOMBER_NAMES[f.side] : gunNameOf(f.side, f.support);
     // ("Our" only with one human playing: two humans, or two robots, have no "our")
     const onePlayer = st.mode === 'us' || st.mode === 'de';
     const whose = onePlayer && f.side === st.human ? 'Our' : f.side === 'de' ? 'German' : 'American';
@@ -2851,7 +2863,7 @@ const Board = (() => {
     if (m.gun) {
       // Their mortars or artillery, off the board
       const g = GUNS[side][m.gun];
-      spot = new T.Vector3(g.x, 0, g.z); name = GUN_NAMES[side][m.gun]; big = true;
+      spot = new T.Vector3(g.x, 0, g.z); name = gunNameOf(side, m.gun); big = true;
     } else {
       // A piece: gone from the table (wiped out in a fight) means nothing to ring
       const u = Sim.unitById(st, m.id);

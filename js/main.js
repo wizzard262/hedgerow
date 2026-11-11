@@ -389,13 +389,14 @@ window.Game = (() => {
   function openResult() {
     resultWaiting = false;
     const twoAlike = st.mode === 'both' || st.mode === 'none';
-    const ending = parisLiberated() ? PARIS_LIBERATED : twoAlike ? plainEnding() : st.mode === 'de' ? germanEnding() : americanEnding();
+    const ending = parisLiberated() ? PARIS_LIBERATED : st.evac ? evacEnding() : twoAlike ? plainEnding() : st.mode === 'de' ? germanEnding() : americanEnding();
     $('#result-title').textContent = ending.title;
     $('#result-text').textContent = ending.text;
     // The one button: won, on to the next battle; lost or drawn, this one again (Steve). Named either way
     const next = MAPS.find(m => m.id === nextMapId());
     const word = playerWon() ? 'Next battle' : 'Try again';
-    $('#again-btn').textContent = `${word}: ${CAMPAIGN.indexOf(next.id) + 1}. ${next.name} ›`;
+    const number = CAMPAIGN.includes(next.id) ? `${CAMPAIGN.indexOf(next.id) + 1}. ` : '';
+    $('#again-btn').textContent = `${word}: ${number}${next.name} ›`;
     $('#result').hidden = false;
   }
 
@@ -405,6 +406,15 @@ window.Game = (() => {
     title: '🎆 Paris is liberated!',
     text: '25 August 1944. "Paris! Paris outraged! Paris broken! Paris martyred! But Paris liberated!" (General de Gaulle, at the Hôtel de Ville that evening). The bells of Notre-Dame ring out across the city for the first time in four years.',
   };
+
+  // How Dunkirk ended (Steve): the British got away or were trapped, said for whoever is playing
+  function evacEnding() {
+    if (st.draw) return { title: '🤝 A draw', text: st.report[0] };
+    // Playing the Germans, the British getting away is a loss
+    const germanPlayer = st.mode === 'de';
+    if (st.won) return { title: germanPlayer ? '💀 The British got away' : '⛵ The British get away', text: st.report[0] };
+    return { title: germanPlayer ? '🏆 The beach is yours' : '💀 The British are trapped', text: st.report[0] };
+  }
 
   // How it ended with no one player to win or lose it: two humans, or two robots
   function plainEnding() {
@@ -609,9 +619,11 @@ window.Game = (() => {
   // A card for each map, in the campaign's order, with its picture (made by tools/map-pictures.js) and date; what the one
   // lit does is said under them
   function lightMap() {
-    for (const b of document.querySelectorAll('#map-choice button')) b.classList.toggle('on', b.dataset.map === chosenMap);
+    for (const b of document.querySelectorAll('#map-choice button, #bonus-choice button')) b.classList.toggle('on', b.dataset.map === chosenMap);
     const map = MAPS.find(m => m.id === chosenMap);
     $('#map-note').textContent = map.note;
+    // Who the 'us' side is in this battle (Steve: the British at Dunkirk)
+    $('#us-side-name').textContent = (map.names && map.names.us) || 'Americans';
   }
   // One card, for the campaign or the bonus battles. stamp: a word across the picture of one that can't be played yet
   function mapCard(id, title, date, picture, into = '#map-choice', stamp = '') {
@@ -632,10 +644,10 @@ window.Game = (() => {
     const map = MAPS.find(m => m.id === id);
     mapCard(id, `${i + 1}. ${map.name}`, map.date, `assets/maps/${id}.jpg`);
   });
-  // The bonus battles, top right: what each is shows when the mouse is over it, as it can't be lit yet
+  // The bonus battles, top right. One not ready yet says what it is when the mouse is over it, as it can't be lit
   for (const bonus of BONUS) {
     const card = mapCard(bonus.id, bonus.name, bonus.date, `assets/maps/${bonus.id}.svg`, '#bonus-choice', bonus.stamp);
-    card.title = bonus.note;
+    if (bonus.note) card.title = bonus.note;
   }
 
   // The four variations, from the two choices

@@ -9,13 +9,17 @@ const UI = (() => {
   const view = { sel: null, mode: null };
 
   const KIND = { company: 'Rifle platoon', captain: 'Captain', sherman: 'Sherman 75mm', firefly: 'Sherman 76mm', mg: '.50 cal team', bazooka: 'Bazooka team', sniper: 'Sniper team',
-                 pz4: 'Panzer IV', panther: 'Panther', m8: 'M8 Greyhound armoured car', puma: 'Puma armoured car', mg42: 'MG 42 team', schreck: 'Panzerschreck team', pak: 'PaK 40 anti-tank gun', bunker_mg: 'MG bunker', bunker_gun: 'PaK 40 bunker' };
+                 pz4: 'Panzer IV', panther: 'Panther', m8: 'M8 Greyhound armoured car', puma: 'Puma armoured car', mg42: 'MG 42 team', schreck: 'Panzerschreck team', pak: 'PaK 40 anti-tank gun', bunker_mg: 'MG bunker', bunker_gun: 'PaK 40 bunker',
+                 // Dunkirk, 1940 (Steve)
+                 matilda: 'Matilda II', carrier: 'Universal Carrier (Bren)', boys: 'Boys anti-tank rifle team', pz1: 'Panzer I', pz2: 'Panzer II', pz3: 'Panzer III', sdkfz231: 'Sd.Kfz. 231 armoured car' };
 
   function setState(s) { st = s; view.sel = null; view.mode = null; view.support = null; }
 
   // The other side, for the words and the checks: the side the player isn't
   const enemy = () => Sim.enemyOf(st.human);
-  const foes = () => (st.human === 'us' ? 'Germans' : 'Americans');
+  const foes = () => Sim.sideName(st, enemy());
+  // One of a side, as a word before a noun: 'American', 'British', 'German'
+  const adjective = side => ({ Americans: 'American', British: 'British', Germans: 'German' })[Sim.sideName(st, side)];
 
   // ---------- Your mortars and artillery, off the board ----------
   // Clicking one chooses it like a piece (Steve): its targets show at once if it can fire this round
@@ -33,10 +37,12 @@ const UI = (() => {
   }
   const selected = () => (view.sel ? Sim.unitById(st, view.sel) : null);
   // A gun's name and its state, for its menu and its card
-  const GUN_TITLES = {
-    us: { mortars: `💥 ${MORTARS.name}`, artillery: `💣 ${ARTILLERY.name}`, bomber: `✈️ ${BOMBER_NAMES.us} bomber` },
-    de: { mortars: `💥 ${DE_MORTAR.name}`, artillery: `💣 ${DE_ARTILLERY.name}`, bomber: `✈️ ${BOMBER_NAMES.de} bomber` },
-  };
+  // (the map can rename the guns, Steve: Dunkirk's destroyers)
+  const GUN_ICONS = { mortars: '💥', artillery: '💣' };
+  function gunTitle(side, which) {
+    if (which === 'bomber') return `✈️ ${BOMBER_NAMES[side]} bomber`;
+    return `${GUN_ICONS[which]} ${Sim.gunStats(which, side).name}`;
+  }
   function gunState(which) {
     if (canFire(which)) return '<span class="pill ready">Ready</span>';
     if (st.ammo[st.human][which] <= 0) return `<span class="pill bad">${which === 'bomber' ? 'Flown' : 'No rounds'}</span>`;
@@ -294,6 +300,13 @@ const UI = (() => {
     return '<span class="pill ready">Ready</span>';
   }
 
+  // Why a piece takes no orders (Dunkirk, Steve): aboard a boat, or stragglers running for one on their own. '' otherwise
+  function ownWay(u) {
+    if (Sim.isAboard(st, u)) return 'Aboard a little ship: it sails at the end of the round';
+    if (u.auto) return 'Stragglers: they run for the boats on their own at the start of each round';
+    return '';
+  }
+
   // The menu by a piece on the table: for each of your pieces in the field, its name and state and the actions it can take now
   function openMenu(pieces, left, top, box) {
     const menu = document.querySelector('#menu');
@@ -317,7 +330,9 @@ const UI = (() => {
         menu.append(b);
       }
       // A captain in cover: why there is no Rally (Steve)
-      if (u.kind === 'captain' && u.down) menu.append(el('div', 'mnote', 'In cover: he can\'t rally anyone until next round'));
+      const own = ownWay(u);
+      if (own) menu.append(el('div', 'mnote', own));
+      else if (u.kind === 'captain' && u.down) menu.append(el('div', 'mnote', 'In cover: he can\'t rally anyone until next round'));
       else if (!acts.some(a => a.ok)) menu.append(el('div', 'mnote', u.shocked ? 'Shaken: it has moved this round; the captain can rally it' : 'It has moved this round'));
       else if (u.shocked) menu.append(el('div', 'mnote', 'Shaken: it needs one more to hit and moves or charges half as far until it rallies'));
       if (acts.some(a => a.ok) && !u.acted && !PIECES[u.kind].fixed && !Sim.chargeSpots(st, u).length) {
@@ -333,7 +348,7 @@ const UI = (() => {
     const menu = document.querySelector('#menu');
     menu.innerHTML = '';
     // Its state: ready, out of rounds, or already fired this round
-    menu.append(el('div', 'mhead', `<b>${GUN_TITLES[st.human][which]}</b><span>${gunState(which)}</span>`));
+    menu.append(el('div', 'mhead', `<b>${gunTitle(st.human, which)}</b><span>${gunState(which)}</span>`));
     // Skip turn: hold fire this round, using the token
     const skip = el('button', '', '⏭️ Skip turn');
     skip.disabled = !canFire(which);
@@ -539,7 +554,7 @@ const UI = (() => {
     if (!u && view.support) {
       const which = view.support, S = Sim.gunStats(which, st.human);
       picture(box, st.human, which);
-      box.append(el('div', 'name', GUN_TITLES[st.human][which]));
+      box.append(el('div', 'name', gunTitle(st.human, which)));
       box.append(el('div', 'sub', which === 'bomber' ? 'Off the board' : `${S.name}, off the board`));
       // What a mission does, one fact a line (Steve): where it can fire, the dice on the field, and the blast round it
       // (German mortars drop on the one piece, Steve: the differences between the sides stay)
@@ -566,7 +581,7 @@ const UI = (() => {
     }
     if (!u || u.x === null) {
       box.className = '';
-      const theirs = st.human === 'us' ? 'a German' : 'an American';
+      const theirs = st.human === 'us' ? 'a German' : st.evac ? 'a British' : 'an American';
       const words = st.mode === 'none' ? 'Click any piece on the table to see what it is.' : `Click one of your pieces on the table (or ${theirs} one to see what it is).`;
       box.innerHTML = `<div class="sub">${words}</div>`;
       return;
@@ -585,13 +600,17 @@ const UI = (() => {
     const status = statePill(u, inCover, 'Shaken: +1 to hit, half moves');
     box.append(el('div', 'name', `${u.name}${u.quality === 'elite' ? ' ★' : ''}`));
     // Elite troops say so (Steve): Rangers or Fallschirmjäger, one less needed to hit
-    const elite = u.quality === 'elite' ? ` · <b class="elite">Elite</b> (${u.side === 'us' ? 'Rangers' : 'Fallschirmjäger'}: −1 to hit)` : '';
-    const nation = u.side === st.human && st.mode !== 'none' ? '' : u.side === 'de' ? 'German · ' : 'American · ';
+    const eliteName = u.side === 'de' ? 'Fallschirmjäger' : st.evac ? 'Guards' : 'Rangers';
+    const elite = u.quality === 'elite' ? ` · <b class="elite">Elite</b> (${eliteName}: −1 to hit)` : '';
+    const nation = u.side === st.human && st.mode !== 'none' ? '' : `${adjective(u.side)} · `;
     box.append(el('div', 'sub', `${nation}${KIND[u.kind]}${elite}${Sim.hasCutters(u) ? ' · hedge cutters' : ''}`));
     const where = `📍 At ${Sim.placeName(u.at)}`;
     box.append(el('div', 'stats', [strength, dice, armour, where, status].filter(Boolean).map(s => `<span>${s}</span>`).join('')));
+    // Aboard a boat, or stragglers on their own: no orders to give
+    const own = ownWay(u);
+    if (own) box.append(el('div', 'sub', own));
     // The enemy's piece: just what it is (Steve), no actions
-    if (u.side !== st.human || st.mode === 'none') return;
+    if (u.side !== st.human || st.mode === 'none' || own) return;
     const acts = el('div'); acts.id = 'actions'; acts.style.marginTop = '6px';
     // (Ambush is in the piece's pop-up menu only, Steve: the panel has no room for a fifth button)
     for (const a of actionButtons(u).filter(o => o.mode !== 'ambush')) {
@@ -606,9 +625,9 @@ const UI = (() => {
   function hint() {
     const u = selected();
     const computerToken = st.drawn && Sim.isRobot(st, st.drawn);
-    const theirToken = st.drawn === 'de' ? 'German token: a German piece moves…' : 'American token: an American piece moves…';
+    const theirToken = st.drawn ? `${adjective(st.drawn)} token: a ${adjective(st.drawn)} piece moves…` : '';
     // Two humans (Steve): whose token it is, as they share the screen
-    const yours = st.mode === 'both' ? `${st.human === 'us' ? 'American' : 'German'} player, your token` : 'Your token';
+    const yours = st.mode === 'both' ? `${adjective(st.human)} player, your token` : 'Your token';
     const myToken = st.activeId ? 'Finish its move (or Skip in its menu).' : `${yours}: pick one piece and give it its move (or Skip turn in its menu).`;
     const noAction = computerToken ? theirToken : st.drawn === st.human ? myToken : 'Drawing a token…';
     const text = !view.mode ? noAction
@@ -634,9 +653,19 @@ const UI = (() => {
     return `🎯 Destroy every German on the table${TURNS ? `, within ${TURNS} rounds` : ' (no time limit for now)'}. There is no goal to take here.`;
   }
 
+  // The goal at Dunkirk (Steve): get enough away on the boats, or stop them; with the count so far
+  function goalEvacuate() {
+    const E = st.map.evacuate;
+    const count = `${st.evac.saved} of ${E.need} away so far.`;
+    if (st.mode === 'none') return `🎯 Two robots: the British must get ${E.need} pieces away on the little ships within ${E.rounds} rounds, the Germans stop them. ${count}`;
+    if (st.human === 'de') return `🎯 Stop the British getting ${E.need} pieces away on the little ships within ${E.rounds} rounds. ${count}`;
+    return `🎯 Get ${E.need} pieces away on the little ships within ${E.rounds} rounds: move men onto a boat in the surf; it sails at the end of the round. Tanks and carriers can't go. ${count}`;
+  }
+
   function update() {
-    $('#clock').innerHTML = `<b>Round ${st.turn}</b>${TURNS ? ` of ${TURNS}` : ''} · ${st.map.name}`;
-    $('#goal').textContent = st.noGoal ? goalWithout()
+    const rounds = st.evac ? st.map.evacuate.rounds : TURNS;
+    $('#clock').innerHTML = `<b>Round ${st.turn}</b>${rounds ? ` of ${rounds}` : ''} · ${st.map.name}`;
+    $('#goal').textContent = st.evac ? goalEvacuate() : st.noGoal ? goalWithout()
       : st.mode === 'none'
       ? `🎯 Two robots: the Americans attack ${st.objective.name}, the Germans hold it. Click any piece to see what it is.`
       : st.human === 'de'

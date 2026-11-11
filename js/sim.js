@@ -272,6 +272,13 @@ const Sim = (() => {
     const dropDice = rng(seed * 31 + 7);
     st.airdrop = map.airdrop ? { kind: map.airdrop, round: AIRDROP.first + Math.floor(dropDice() * (AIRDROP.last - AIRDROP.first + 1)), done: false } : null;
     st.crate = null;
+    // An evacuation (Steve: Dunkirk): how many have got away, the boats in now and how many lorries have come
+    st.evac = map.evacuate ? { saved: 0, boats: [], lorries: 0 } : null;
+    if (st.evac) {
+      newBoats(st);
+      st.report = [`${map.date}. The ${sideName(st, 'us')} hold the line while the little ships come in. Get ${map.evacuate.need} pieces away within ${map.evacuate.rounds} rounds.`];
+      return st;
+    }
     st.report = [st.noGoal
       ? `${START_DATE}. The company attacks. Destroy every German on the table${TURNS ? ` within ${TURNS} rounds` : ''}.`
       : `${START_DATE}. The company attacks into the bocage. Take ${st.objective.name} and hold it for the whole of the next round${TURNS ? ` within ${TURNS} rounds` : ''}.`];
@@ -281,6 +288,8 @@ const Sim = (() => {
   // Who starts on a side on this map: the usual list, less those it takes away, and those it adds
   function startingPieces(usual, changes) {
     if (!changes) return usual;
+    // (a map with its own armies, Steve: Dunkirk's British and Germans of 1940)
+    if (changes.only) return changes.only;
     const kept = usual.filter(d => !(changes.remove || []).includes(d.id));
     return kept.concat(changes.add || []);
   }
@@ -291,7 +300,9 @@ const Sim = (() => {
     // (a landing: the Americans all start out in the sea, in the landing craft)
     const landing = st.map.landing && side === 'us';
     const cols = landing ? 1 : Math.max(1, Math.round(COLS * (st.map.deploy || DEPLOY)));
-    const xs = side === 'us' ? [...Array(cols).keys()] : [...Array(cols).keys()].map(i => COLS - 1 - i);
+    // (the first column a side starts in: its own end, unless the map says, Steve: Dunkirk's British hold the front)
+    const from = (st.map.from && st.map.from[side]) || 0;
+    const xs = side === 'us' ? [...Array(cols).keys()].map(i => from + i) : [...Array(cols).keys()].map(i => COLS - 1 - i);
     const fields = [];
     for (const x of xs) for (let y = 0; y < ROWS; y++) if (tileType(x, y) !== 'river') fields.push({ x, y });
     // How good a field is to start in: cover towards the enemy, then a little luck
@@ -411,6 +422,176 @@ const Sim = (() => {
     st.ammo[u.side].artillery += AIRDROP.crateRounds;
     st.fx.push({ kind: 'crate', x: c.x, y: c.y, side: u.side, to: { id: u.id } });
   }
+
+  // ---------- The evacuation (Steve: Dunkirk) ----------
+  // Little ships come into the surf at new places each round, two or three of them, and sail at its end with whoever is
+  // aboard: men only, who go out to one as they would into any field. Getting enough pieces away wins for the British.
+  // From round trucks.first lorries bring stragglers along the coast road behind the front; they run for the boats on
+  // their own, without orders or tokens
+
+  // What each side is called on this map (the 'us' side is the British at Dunkirk)
+  function sideName(st, side) {
+    const names = st.map && st.map.names;
+    if (names && names[side]) return names[side];
+    return side === 'us' ? 'Americans' : 'Germans';
+  }
+  // Who can go aboard: men, not tanks, carriers or guns
+  const canBoard = u => !isTank(u) && !PIECES[u.kind].fixed && !isBunker(u);
+  // Is there a boat in this field that this piece can go out to
+  function boardsAt(st, u, x, y) {
+    if (!st.evac || u.side !== 'us' || !canBoard(u)) return false;
+    return st.evac.boats.some(b => b.x === x && b.y === y);
+  }
+  // Aboard: a British piece standing in the sea, on a boat
+  const isAboard = (st, u) => !!st.evac && u.x !== null && u.x !== undefined && tileType(u.x, u.y) === 'sea';
+
+  // The round's boats: two or three, each in a different field of the sea
+  function newBoats(st) {
+    const E = st.map.evacuate;
+    const rows = [];
+    for (let y = 0; y < ROWS; y++) if (tileType(0, y) === 'sea') rows.push(y);
+    const count = Math.min(rows.length, between(st.rand, E.boats));
+    st.evac.boats = [];
+    for (let i = 0; i < count; i++) {
+      const y = rows.splice(Math.floor(st.rand() * rows.length), 1)[0];
+      st.evac.boats.push({ x: 0, y });
+    }
+  }
+
+  // The end of the round: every boat sails with whoever is aboard, and they are safe
+  function sailBoats(st, rep) {
+    for (const u of st.units) {
+      if (u.side !== 'us' || !isAboard(st, u)) continue;
+      st.fx.push({ kind: 'sail', x: u.x, y: u.y, to: { id: u.id } });
+      u.x = null; u.y = null;
+      u.saved = true;
+      st.evac.saved++;
+      rep.push(`⛵ ${u.name} gets away on a little ship.`);
+    }
+    st.evac.boats = [];
+  }
+
+  // How many more could still get away: men on the table, and the most the lorries still to come could bring
+  function stillToSave(st) {
+    const E = st.map.evacuate, T = E.trucks;
+    const onTable = st.units.filter(u => u.side === 'us' && u.x !== null && canBoard(u)).length;
+    // (lorries come at the start of each round from first to last; the next round is turn + 1)
+    const roundsLeft = Math.max(0, Math.min(T.last, E.rounds) - Math.max(T.first, st.turn + 1) + 1);
+    return onTable + roundsLeft * T.each[1];
+  }
+
+  // Won, lost, or on to the next round. germansLeft: any German still on the table
+  function evacOutcome(st, rep, germansLeft) {
+    const E = st.map.evacuate, saved = st.evac.saved, us = sideName(st, 'us');
+    if (saved >= E.need) {
+      st.won = true;
+      rep.unshift(`🏆 ${saved} pieces have got away on the little ships in ${roundText(st.turn)}! The ${us} are home.`);
+    } else if (!germansLeft) {
+      st.won = true;
+      rep.unshift(`🏆 Every German on the field is destroyed in ${roundText(st.turn)}!`);
+    } else if (saved + stillToSave(st) < E.need) {
+      st.lost = true;
+      rep.unshift(`💀 Only ${saved} pieces got away, and too few are left to make ${E.need}. The ${us} are trapped.`);
+    } else if (st.turn >= E.rounds) {
+      st.lost = true;
+      rep.unshift(`⌛ After ${E.rounds} rounds only ${saved} of the ${E.need} pieces needed got away. The Germans have the beach.`);
+    }
+  }
+
+  // Lorries along the coast road (Steve: from the side, behind the front line): each brings a few sections of stragglers
+  // in at the top or bottom edge of the board, to the first field along the road with room and no Germans
+  function lorriesArrive(st) {
+    const T = st.map.evacuate.trucks;
+    if (st.turn < T.first || st.turn > T.last) return;
+    const count = between(st.rand, T.each);
+    for (let i = 0; i < count; i++) {
+      st.evac.lorries++;
+      const men = makeUnit({ id: `lorry${st.evac.lorries}`, kind: 'company', name: `Stragglers (lorry ${st.evac.lorries})`, auto: true }, 'us');
+      men.platoons = between(st.rand, T.sections);
+      // Which end of the road it comes in by, and the first field along it with room
+      const fromTop = st.rand() < 0.5;
+      const ys = [...Array(ROWS).keys()];
+      if (!fromTop) ys.reverse();
+      const y = ys.find(row => !at(st, T.road, row, 'de').length && roomFor(st, men, T.road, row));
+      if (y === undefined) continue;
+      men.x = T.road; men.y = y; men.at = freePlace(st, men, T.road, y, null);
+      st.units.push(men);
+      st.fx.push({ kind: 'lorry', x: T.road, y, from: fromTop ? 'n' : 's', to: { id: men.id } });
+      st.news = st.news || [];
+      st.news.push(`🚚 A lorry brings ${men.platoons} section${men.platoons > 1 ? 's' : ''} of stragglers along the coast road. They run for the boats on their own.`);
+    }
+  }
+
+  // The stragglers run for the boats on their own, at the start of the round: onto one if they can reach it, otherwise as
+  // near to one as they can get. Germans lying in ambush can't fire yet (an ambush ends with the round)
+  function stragglersRun(st) {
+    for (const u of st.units) {
+      if (!u.auto || u.x === null || isAboard(st, u)) continue;
+      // Their go for the round: no token
+      u.acted = true;
+      const route = routeToBoat(st, u);
+      if (!route) continue;
+      followRoute(st, u, route);
+      if (u.snagged || u.x === null) continue;
+      const goal = route[route.length - 1];
+      step(st, u, goal.x, goal.y);
+      setTrail(st, u, route);
+      st.news = st.news || [];
+      st.news.push(isAboard(st, u) ? `🏃 ${u.name} wade out to a boat.` : `🏃 ${u.name} run for the boats.`);
+    }
+  }
+
+  // The way to a boat for a British piece: onto one in reach, or the way that ends nearest one. null if no boat or no way
+  function routeToBoat(st, u) {
+    const boats = st.evac.boats;
+    if (!boats.length) return null;
+    const routes = routesFor(st, u, reach(u, CHARGE_MOVES), false);
+    const endOf = r => r[r.length - 1];
+    const onBoat = routes.find(r => tileType(endOf(r).x, endOf(r).y) === 'sea');
+    if (onBoat) return onBoat;
+    const nearest = p => Math.min(...boats.map(b => fieldsApart(b, p)));
+    let best = null, bestD = nearest(u);
+    for (const r of routes) {
+      const d = nearest(endOf(r));
+      if (d < bestD) { bestD = d; best = r; }
+    }
+    return best;
+  }
+
+  // What one British piece does on the computer's token: rally; men go out to a boat they can reach; anyone with a shot
+  // takes it; men with nothing to shoot fall back towards the boats once the Germans are near or the round is late; the
+  // Matilda and the carriers fight it out as the American computer's tanks do
+  function britishAct(st, u) {
+    const rep = st.computer.rep;
+    computerSays(st, 'Holds its ground');
+    if (computerRallies(st, u)) return null;
+    const route = canBoard(u) ? routeToBoat(st, u) : null;
+    const end = route && route[route.length - 1];
+    if (end && tileType(end.x, end.y) === 'sea') {
+      computerSays(st, 'Goes out to a boat');
+      computerMove(st, u, route);
+      rep.push(`⛵ ${u.name} goes out to a boat.`);
+      return null;
+    }
+    const t = bestTarget(st, u);
+    if (t) { computerSays(st, `Fires on ${t.name}`); return { shooter: u.id, target: t.id }; }
+    const germansNear = st.units.some(g => g.side === 'de' && g.x !== null && fieldsApart(g, u) <= 3);
+    if (route && (germansNear || st.turn >= 4)) {
+      computerSays(st, 'Falls back towards the boats');
+      computerMove(st, u, route);
+      return null;
+    }
+    const moved = computerMovesToFire(st, u);
+    if (moved) return moved.shot;
+    // The tanks and carriers go for the nearest German; the men hold where they are
+    if (isTank(u)) {
+      const goal = computerGoal(st, u);
+      const way = routeToward(st, u, goal);
+      if (way) { computerSays(st, `Moves up towards ${goal.name}`); computerMove(st, u, way); return null; }
+    }
+    return computerLastResort(st, u);
+  }
+
 
   // ---------- Trains (Steve: Open farmland, the Train station) ----------
   // Each map's lines (st.map.trains): the row and side of it, which way they run (dir: 1 left to right, -1 right to left),
@@ -1363,6 +1544,8 @@ const Sim = (() => {
   // uses the move it still has). You are asked; the Germans decide for themselves (computerTakesCover)
   function canReact(st, u) {
     // Tanks can't take cover (Steve): they just take it
+    // (nor men aboard a boat or running for one, Steve: Dunkirk)
+    if (u.auto || isAboard(st, u)) return false;
     return u.x !== null && !isTank(u) && !PIECES[u.kind].fixed && !u.spentNext && !u.down && !u.acted;
   }
 
@@ -1593,7 +1776,7 @@ const Sim = (() => {
     if (!left('de')) {
       st.won = true;
       st.report = [`🏆 Every German on the field is destroyed in ${roundText(st.turn)}!`];
-    } else if (!left('us')) {
+    } else if (!left('us') && !st.evac) {
       st.lost = true;
       st.report = ['💀 Nothing is left of the company. The attack has failed.'];
     }
@@ -1603,6 +1786,8 @@ const Sim = (() => {
   // Each returns { ok, lines }. A piece acts once a round
 
   function canAct(st, u) {
+    // (aboard a boat, or stragglers running for one on their own, Steve: nobody gives them orders)
+    if (u && (u.auto || isAboard(st, u))) return false;
     return !!u && u.side === st.human && u.x !== null && !st.won && !st.lost && !st.computer && !u.acted && tokenAllows(st, u);
   }
 
@@ -1755,8 +1940,9 @@ const Sim = (() => {
   // What it costs to go from one field into the next (Steve): one move, and CLIMB more for men climbing a hedge bank (it
   // stays standing); barbed wire stops men; tanks drive straight through both. null where it can't go at all
   function stepCost(st, u, fx, fy, x, y) {
-    // (nobody goes into the sea: the Americans only leave it)
-    if (!inside(x, y) || tileType(x, y) === 'river' || tileType(x, y) === 'sea' || PIECES[u.kind].fixed) return null;
+    // (nobody goes into the sea: the Americans only leave it; at Dunkirk, men go out to a boat there, Steve)
+    if (!inside(x, y) || tileType(x, y) === 'river' || PIECES[u.kind].fixed) return null;
+    if (tileType(x, y) === 'sea' && !boardsAt(st, u, x, y)) return null;
     // Tank traps stop tanks (Steve)
     if (isTank(u) && featuresAt(st, x, y).some(f => FEATURES[f.kind].stopsTanks)) return null;
     // Nothing crosses a train (Steve): no going over the railway's side of a field an engine or carriage stands in
@@ -1797,6 +1983,8 @@ const Sim = (() => {
       const here = open.shift();
       // Houses: a route can end in a village or hamlet but not go on through it
       if (here.path.length && ['village', 'hamlet'].includes(tileType(here.x, here.y))) continue;
+      // A boat: the way ends on it (Steve: Dunkirk)
+      if (here.path.length && tileType(here.x, here.y) === 'sea') continue;
       for (const [dx, dy] of NEIGHBOURS) {
         const x = here.x + dx, y = here.y + dy, key = x + ',' + y;
         const c = stepCost(st, u, here.x, here.y, x, y);
@@ -2159,8 +2347,11 @@ const Sim = (() => {
 
   // A side's mortars or artillery: their numbers (Steve: the differences between the sides stay)
   function gunStats(which, side) {
-    if (which === 'mortars') return side === 'de' ? DE_MORTAR : MORTARS;
-    return side === 'de' ? DE_ARTILLERY : ARTILLERY;
+    const usual = which === 'mortars' ? (side === 'de' ? DE_MORTAR : MORTARS) : (side === 'de' ? DE_ARTILLERY : ARTILLERY);
+    // A map can give a side's guns another name (Steve: Dunkirk's destroyers), with the same numbers
+    const renamed = currentMap.guns && currentMap.guns[side] && currentMap.guns[side][which];
+    if (!renamed) return usual;
+    return Object.assign({}, usual, { name: renamed });
   }
 
   // The fields a fire mission's shells fall on (Steve: shown round the target before firing): the target's field (main),
@@ -2635,13 +2826,13 @@ const Sim = (() => {
   // Would this field shut the American computer's rifle platoons out of the village? Only a platoon or the captain takes it
   // (Steve), so nothing else stops there
   function blocksTheVillage(st, u, field) {
-    return u.side === 'us' && !takesGoal(u) && field.x === st.objective.x && field.y === st.objective.y;
+    return u.side === 'us' && !st.evac && !takesGoal(u) && field.x === st.objective.x && field.y === st.objective.y;
   }
 
   // The charge a rifle platoon of the American computer would make: into the village if nobody is there or it has more
   // bases than they have, or at any field it outnumbers. Standing in the village, it stays and holds it. null if none
   function americanCharge(st, u) {
-    if (u.kind !== 'company') return null;
+    if (u.kind !== 'company' || st.evac) return null;
     const inVillage = u.x === st.objective.x && u.y === st.objective.y;
     if (inVillage) return null;
     const endOf = route => route[route.length - 1];
@@ -2663,6 +2854,8 @@ const Sim = (() => {
   // What one American piece does on the computer's token: rally, charge, shoot from here, line a hedge, Move & shoot,
   // march on its goal; a Hail Mary or an ambush with nothing better. Returns a planned shot, as germanAct does
   function americanAct(st, u) {
+    // (Dunkirk: the British computer, Steve)
+    if (st.evac) return britishAct(st, u);
     const rep = st.computer.rep;
     computerSays(st, 'Holds its ground');
     if (computerRallies(st, u)) return null;
@@ -3106,7 +3299,11 @@ const Sim = (() => {
     const germansLeft = st.units.some(u => u.side === 'de' && u.x !== null);
     checkHold(st);
     const held = holdsObjective(st);
-    if (held && st.holdUntil === st.turn) {
+    // Dunkirk (Steve): the boats sail with whoever is aboard, then the count decides
+    if (st.evac) {
+      sailBoats(st, rep);
+      evacOutcome(st, rep, germansLeft);
+    } else if (held && st.holdUntil === st.turn) {
       st.won = true;
       // Held for the whole of this round
       rep.unshift(`🏆 ${st.objective.name} is held for the whole of ${roundText(st.turn)}!`);
@@ -3163,6 +3360,12 @@ const Sim = (() => {
     st.spin = {};
     // An airdrop, if this is its round
     airdropNow(st);
+    // Dunkirk (Steve): new boats come in, lorries bring stragglers, and the stragglers run for the boats
+    if (st.evac) {
+      newBoats(st);
+      lorriesArrive(st);
+      stragglersRun(st);
+    }
   }
 
   return {
@@ -3177,6 +3380,7 @@ const Sim = (() => {
     cover, wire, lineSides, actLine, atHedge, acrossHedge, SIDE_NAMES, PLACES, placeXY, placeName, lines,
     sizeOf, footprint, spotXY, occupant, fitsAt, freePlace,
     hasCutters: u => cutter(u),
+    sideName, isAboard, boardsAt, routeToBoat, stillToSave,
   };
 })();
 

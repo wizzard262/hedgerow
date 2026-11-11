@@ -1712,6 +1712,18 @@ How the game was made: each prompt, what was built, and the assumptions made.
   - **Trucks** in later rounds of the one battle: from about round 3, a truck or two a round drives onto the beach and drops men, who run on their own to the nearest little ship
   - Not picked: the East Mole and a destroyer, a lorry jetty, Stuka raids, burning oil smoke, flooded fields, a canal line. Numbers (how many to save, how many rounds) to be set by trying it
 
+## 299. Dunkirk, part 1: playable (v168)
+
+- Steve: build part 1 now: the map, little ships, lorries and the win rule first, with other pieces' models as stand-ins. The lorries must come in from the side, on a road behind the front line
+- **The map**: the sea down the left, two columns of sand, the coast road behind the front (the lorries' road), then flat Flanders fields with few hedges and little wire. The British start along the front (columns 5 to 7), the Germans at the far end; nobody has a village to take
+- **Little ships**: 2 or 3 a round, each in a different field of the sea, new places every round. Men (rifle platoons, the captain, teams) go out to one as to any field; tanks, carriers and guns can't. Aboard, a piece takes no orders and can't take cover; the boats sail at the end of the round with everyone aboard, who are safe and counted. Germans can still shoot men waiting aboard (assumption: that is the "shot up" part for now; a boat itself can't be sunk yet)
+- **Winning**: the British win with 8 pieces away within 12 rounds (or every German destroyed); the Germans win once too few are left to make 8 (counting every lorry still to come) or when the 12 rounds run out. 8 because the lorries can bring at most 6, so the stragglers alone can never win it: doing nothing never wins (assumption; Steve said numbers by trying it)
+- **Lorries**: from round 3 to 8, one a round comes in at the top or bottom of the coast road and drops 1 or 2 sections of stragglers in the first field along it with room. They run for the boats on their own at the start of each round (onto one in reach, or as near as they get), with no orders and no token. No lorry model yet: they just appear
+- **Pieces**: British: the 1st Platoon of the Coldstream Guards (elite), two platoons with Brens, the captain, a Matilda II (armour +2, one field slower), two Universal Carriers, a Vickers MG, a Boys anti-tank rifle team. Germans: four platoons, the Hauptmann, two MG 34 teams, a Panzer I (machine guns only), a Panzer II, a Panzer III and an Sd.Kfz. 231 armoured car. Stand-in models (`look` in PIECES): the Matilda is a Sherman, the carriers M8s, the Panzers Panzer IVs, the 231 a Puma, the Boys a bazooka team, the Vickers the .50 cal. The British mortars are 3-inch mortars; the British artillery is the Royal Navy destroyers (same numbers, stand-in model); no bombers
+- **New model**: the little ship itself, a painted wooden boat with a wheelhouse, funnel and mast, a different paint each, shown only in the fields with a boat this round
+- The British computer: men go out to a boat they can reach, otherwise shoot; with nothing to shoot they fall back towards the boats once the Germans are within 3 fields or from round 4; the Matilda and carriers fight. The Germans march on the beach. Twelve robot games: the British won 4. No balance runs (Steve)
+- The sides are named for the map: British and Germans on the New game choice, the panel, the tokens and the endings
+
 ## Sessions
 
 | # | Date | Length | What we did |

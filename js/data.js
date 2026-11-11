@@ -213,13 +213,72 @@ const MAPS = [
     us: { remove: ['T2'], add: [{ id: 'D', kind: 'company', name: '4th Platoon', quality: 'standard' }, { id: 'bz2', kind: 'bazooka', name: 'Bazooka Team 2' }] },
     de: { remove: ['dt2'], add: [{ id: 'd6', kind: 'company', name: '6. Zug', quality: 'standard', reserve: true }, { id: 'dps2', kind: 'schreck', name: 'Panzerschreck Team', reserve: true }] },
   },
+  {
+    // Dunkirk (Steve, 2026-11-11): a bonus battle, not in the campaign. The British hold the Germans off while little ships
+    // take their men off the beach. The 'us' side is the British here (names), the Germans attack from the east. The
+    // village is only where the Germans make for: the beach; nobody has to take or hold it
+    id: 'dunkirk', bonus: true, date: '31 May 1940', name: 'Dunkirk',
+    note: 'The British hold the Germans back while little ships take them off the beach. Get 8 pieces away on the boats within 12 rounds; 2 or 3 boats come in at new places each round and sail at its end. From round 3 to 8 a lorry a round brings stragglers along the coast road, who run for the boats on their own. A Matilda II, Universal Carriers, a Vickers and a Boys rifle against Panzer Is, IIs, a III and an armoured car. Destroyers offshore fire for the British.',
+    noGoal: true,
+    names: { us: 'British', de: 'Germans' },
+    rows: [
+      'wbb|...o..h.',
+      'wbb|.h....o.',
+      'wbb+========',
+      'wbb|..o..h..',
+      'wbb|.o...o..',
+      'wbb+========',
+      'wbb|...h..o.',
+      'wbb|.o....h.',
+    ],
+    villages: [{ x: 1, y: 4, name: 'the beach' }],
+    // Flanders: flat and open, few hedges, little wire
+    gap: 0.7, wire: 0.15,
+    // The British start along the front, from this column; both sides take this share of the width
+    from: { us: 4 }, deploy: 0.25,
+    // need: pieces to get away; rounds: to do it in; boats: how many come each round, from to; trucks: lorries of
+    // stragglers along the coast road (this column), from round first to last, how many a round, sections in each
+    // (need is more than the lorries can ever bring, so the stragglers alone never win it: the men at the front must get away too)
+    evacuate: { need: 8, rounds: 12, boats: [2, 3], trucks: { road: 3, first: 3, last: 8, each: [1, 1], sections: [1, 2] } },
+    // The destroyers stand in for the British artillery (Steve); no bombers either side for now
+    guns: { us: { artillery: 'Royal Navy destroyers', mortars: '3-inch mortars' } },
+    ammo: { us: { artillery: 3, bomber: 0 }, de: { bomber: 0 } },
+    us: {
+      only: [
+        { id: 'A', kind: 'company', name: '1st Platoon, Coldstream Guards', quality: 'elite' },
+        { id: 'B', kind: 'company', name: '2nd Platoon (Brens)', quality: 'standard' },
+        { id: 'C', kind: 'company', name: '3rd Platoon (Brens)', quality: 'standard' },
+        { id: 'cap', kind: 'captain', name: 'Captain (company HQ)' },
+        { id: 'T1', kind: 'matilda', name: 'Matilda II' },
+        { id: 'UC1', kind: 'carrier', name: 'Universal Carrier 1' },
+        { id: 'UC2', kind: 'carrier', name: 'Universal Carrier 2' },
+        { id: 'mg1', kind: 'mg', name: 'Vickers MG' },
+        { id: 'at1', kind: 'boys', name: 'Boys Anti-tank Rifle' },
+      ],
+    },
+    de: {
+      only: [
+        { id: 'd1', kind: 'company', name: '1. Zug', quality: 'elite', reserve: true },
+        { id: 'd2', kind: 'company', name: '2. Zug', quality: 'standard', reserve: true },
+        { id: 'd3', kind: 'company', name: '3. Zug', quality: 'standard', reserve: true },
+        { id: 'd4', kind: 'company', name: '4. Zug', quality: 'standard', reserve: true },
+        { id: 'dcap', kind: 'captain', name: 'Hauptmann (company HQ)', reserve: true },
+        { id: 'dmg1', kind: 'mg42', name: 'MG 34 Team', reserve: true },
+        { id: 'dmg2', kind: 'mg42', name: 'MG 34 Team', reserve: true },
+        { id: 'dt1', kind: 'pz1', name: 'Panzer I', reserve: true },
+        { id: 'dt2', kind: 'pz2', name: 'Panzer II', reserve: true },
+        { id: 'dt3', kind: 'pz3', name: 'Panzer III', reserve: true },
+        { id: 'dac1', kind: 'sdkfz231', name: 'Sd.Kfz. 231', reserve: true },
+      ],
+    },
+  },
 ];
 // The maps as a campaign (Steve): in order across France, from the beaches through the bocage and the farms to Paris
 const CAMPAIGN = ['beach', 'deep', 'hedges', 'farmland', 'river', 'town', 'station', 'paris'];
 // Bonus battles (Steve, 2026-11-11): outside the campaign, shown at the top right of the New game choice, Dunkirk on the
-// left and Stalingrad on the right. stamp: the word across its picture while it can't be played yet (no map in MAPS)
+// left and Stalingrad on the right. stamp: the word across its picture while it can't be played yet (no map in MAPS). One with a map takes its note from there
 const BONUS = [
-  { id: 'dunkirk', name: 'Dunkirk', date: 'May to June 1940', stamp: 'Coming soon', note: 'The British hold the beaches while boats take them off. Being planned.' },
+  { id: 'dunkirk', name: 'Dunkirk', date: '31 May 1940' },
   { id: 'stalingrad', name: 'Stalingrad', date: 'Winter 1942', stamp: 'TBC', note: 'To be decided.' },
 ];
 const COLS = MAPS[0].rows[0].length, ROWS = MAPS[0].rows.length;
@@ -337,6 +396,14 @@ const PIECES = {
   bunker_mg:  { name: 'MG bunker', soft: 5, hard: 0, team: true, fixed: true, bunker: true },
   bunker_gun: { name: 'PaK 40 bunker', soft: 0.5, hard: 3, team: true, fixed: true, bunker: true },
   captain:  { name: 'Captain', soft: 3, hard: 0, men: 1, closeOnly: true },
+  // Dunkirk, 1940 (Steve). look: the model a piece borrows until it has its own. extraMove -1: the Matilda is slow
+  matilda:  { name: 'Matilda II', soft: 1, hard: 1, tank: true, armour: 2, cutter: true, extraMove: -1, look: 'sherman' },
+  carrier:  { name: 'Universal Carrier', soft: 2, hard: 0, tank: true, armour: 0, car: true, look: 'm8' },   // a Bren on a small tracked carrier
+  boys:     { name: 'Boys anti-tank rifle team', soft: 0, hard: 1, team: true, men: 2, look: 'bazooka' },
+  pz1:      { name: 'Panzer I', soft: 1.5, hard: 0, tank: true, armour: 0, cutter: true, look: 'pz4' },   // two machine guns, no gun
+  pz2:      { name: 'Panzer II', soft: 1, hard: 0.5, tank: true, armour: 0, cutter: true, look: 'pz4' },  // a 2 cm cannon
+  pz3:      { name: 'Panzer III', soft: 1.5, hard: 1, tank: true, armour: 0, cutter: true, look: 'pz4' },
+  sdkfz231: { name: 'Sd.Kfz. 231', soft: 1, hard: 0.5, tank: true, armour: 0, car: true, look: 'puma' },   // eight-wheeled armoured car
 };
 
 // Hand to hand (a charge into the enemy, Steve): the two sides strike in turn, the attacker first, a die for each base
