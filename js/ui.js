@@ -11,7 +11,7 @@ const UI = (() => {
   const KIND = { company: 'Rifle platoon', captain: 'Captain', sherman: 'Sherman 75mm', firefly: 'Sherman 76mm', mg: '.50 cal team', bazooka: 'Bazooka team', sniper: 'Sniper team',
                  pz4: 'Panzer IV', panther: 'Panther', m8: 'M8 Greyhound armoured car', puma: 'Puma armoured car', mg42: 'MG 42 team', schreck: 'Panzerschreck team', pak: 'PaK 40 anti-tank gun', bunker_mg: 'MG bunker', bunker_gun: 'PaK 40 bunker',
                  // Dunkirk, 1940 (Steve)
-                 matilda: 'Matilda II', carrier: 'Universal Carrier (Bren)', boys: 'Boys anti-tank rifle team', pz1: 'Panzer I', pz2: 'Panzer II', pz3: 'Panzer III', sdkfz231: 'Sd.Kfz. 231 armoured car' };
+                 matilda: 'Matilda II', carrier: 'Universal Carrier (Bren)', lorry: 'Lorry of men for the boats', boys: 'Boys anti-tank rifle team', pz1: 'Panzer I', pz2: 'Panzer II', pz3: 'Panzer III', sdkfz231: 'Sd.Kfz. 231 armoured car' };
 
   function setState(s) { st = s; view.sel = null; view.mode = null; view.support = null; }
 
@@ -300,10 +300,10 @@ const UI = (() => {
     return '<span class="pill ready">Ready</span>';
   }
 
-  // Why a piece takes no orders (Dunkirk, Steve): aboard a boat, or stragglers running for one on their own. '' otherwise
+  // Why a piece takes no orders (Dunkirk, Steve): aboard a boat, or a lorry driving itself to one. '' otherwise
   function ownWay(u) {
     if (Sim.isAboard(st, u)) return 'Aboard a little ship: it sails at the end of the round';
-    if (u.auto) return 'Stragglers: they run for the boats on their own at the start of each round';
+    if (u.auto) return 'A lorry-load of men for the boats: it drives itself to a boat at the start of each round';
     return '';
   }
 
@@ -542,7 +542,7 @@ const UI = (() => {
 
   // How strong a piece is, in words for the panel
   function strengthWords(u) {
-    if (u.kind === 'company') return `${u.platoons} section${u.platoons > 1 ? 's' : ''} (${u.platoons * MEN_A_BASE} men)`;
+    if (u.kind === 'company' || Sim.isLorry(u)) return `${u.platoons} section${u.platoons > 1 ? 's' : ''} (${u.platoons * MEN_A_BASE} men)`;
     if (Sim.isTank(u)) return `${u.platoons} tank${u.platoons > 1 ? 's' : ''}`;
     return PIECES[u.kind].men ? `${PIECES[u.kind].men} men` : '';
   }
@@ -606,7 +606,7 @@ const UI = (() => {
     box.append(el('div', 'sub', `${nation}${KIND[u.kind]}${elite}${Sim.hasCutters(u) ? ' · hedge cutters' : ''}`));
     const where = `📍 At ${Sim.placeName(u.at)}`;
     box.append(el('div', 'stats', [strength, dice, armour, where, status].filter(Boolean).map(s => `<span>${s}</span>`).join('')));
-    // Aboard a boat, or stragglers on their own: no orders to give
+    // Aboard a boat, or a lorry driving itself: no orders to give
     const own = ownWay(u);
     if (own) box.append(el('div', 'sub', own));
     // The enemy's piece: just what it is (Steve), no actions
@@ -657,9 +657,9 @@ const UI = (() => {
   function goalEvacuate() {
     const E = st.map.evacuate;
     const count = `${st.evac.saved} of ${E.need} away so far.`;
-    if (st.mode === 'none') return `🎯 Two robots: the British must get ${E.need} pieces away on the little ships within ${E.rounds} rounds, the Germans stop them. ${count}`;
-    if (st.human === 'de') return `🎯 Stop the British getting ${E.need} pieces away on the little ships within ${E.rounds} rounds. ${count}`;
-    return `🎯 Get ${E.need} pieces away on the little ships within ${E.rounds} rounds: move men onto a boat in the surf; it sails at the end of the round. Tanks and carriers can't go. ${count}`;
+    if (st.mode === 'none') return `🎯 Two robots: the British must get ${E.need} lorry-loads away on the little ships within ${E.rounds} rounds, the Germans stop them. ${count}`;
+    if (st.human === 'de') return `🎯 Stop the British getting ${E.need} lorry-loads away within ${E.rounds} rounds: shoot the lorries, or reach the coast road. ${count}`;
+    return `🎯 Hold the Germans off the coast road while the lorries take the men to the boats: ${E.need} lorry-loads away within ${E.rounds} rounds wins; a German on the road loses. ${count}`;
   }
 
   function update() {
@@ -679,6 +679,8 @@ const UI = (() => {
   // (right); the round beside them in big letters
   const TOKEN = {
     us: '<span class="tok us">★</span>',
+    // The British (Steve: a proper Union Jack on the token)
+    uk: '<span class="tok uk"><svg viewBox="15 0 30 30" preserveAspectRatio="xMidYMid slice"><path d="M0,0v30h60v-30z" fill="#012169"/><path d="M0,0 L60,30 M60,0 L0,30" stroke="#fff" stroke-width="6"/><path d="M0,0 L60,30 M60,0 L0,30" stroke="#C8102E" stroke-width="2.5"/><path d="M30,0 v30 M0,15 h60" stroke="#fff" stroke-width="10"/><path d="M30,0 v30 M0,15 h60" stroke="#C8102E" stroke-width="6"/></svg></span>',
     timer: '<span class="tok timer" title="Timer: drawn, it ends the round"><svg viewBox="0 0 20 20"><path d="M5 2h10M5 18h10M6.5 2C5 7 9.6 8 9.6 10S5 13 6.5 18M13.5 2C15 7 10.4 8 10.4 10S15 13 13.5 18" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>',
     de: '<span class="tok de"><svg viewBox="0 0 20 20"><path d="M7 2h6v5h5v6h-5v5H7v-5H2V7h5z" fill="#111" stroke="#eee" stroke-width="1.4"/></svg></span>',
   };
@@ -687,7 +689,7 @@ const UI = (() => {
     // never drawn are still in the bag (Steve)
     const left = st.leftInBag ? Object.assign({ timer: 0 }, st.leftInBag) : null;
     const b = view.bagShown || left || st.bag || { us: 0, de: 0 };
-    $('#bag-us').innerHTML = TOKEN.us.repeat(b.us);
+    $('#bag-us').innerHTML = (st.evac ? TOKEN.uk : TOKEN.us).repeat(b.us);
     $('#bag-de').innerHTML = TOKEN.de.repeat(b.de);
     // The timer token, between the two sides' tokens (Steve)
     $('#bag-timer').innerHTML = b.timer ? TOKEN.timer + '<span class="timer-label">TIMER</span>' : '';

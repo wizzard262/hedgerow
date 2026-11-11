@@ -560,7 +560,8 @@ window.Game = (() => {
     if (!f) { tip.style.display = 'none'; return; }
     const NAMES = { field: 'Field', orchard: 'Orchard', village: 'Village', hamlet: 'Hamlet', river: 'River', sea: 'Sea', beach: 'Beach', street: 'Street', square: 'Square', yard: 'Railway tracks', bridge: 'Bridge', laneEW: 'Lane', laneNS: 'Lane', crossroads: 'Crossroads' };
     const here = Sim.at(st, f.x, f.y);
-    const lines = here.map(u => `${u.side === 'us' ? 'US' : 'German'} · ${u.name}${u.kind === 'company' ? ` · ${u.platoons} sections` : ''}${u.ambush ? ' · in ambush' : ''}${u.shocked ? ' · shaken' : ''}`);
+    // (Dunkirk's 'us' side is British, Steve)
+    const lines = here.map(u => `${u.side === 'us' ? (st.evac ? 'British' : 'US') : 'German'} · ${u.name}${u.kind === 'company' ? ` · ${u.platoons} sections` : ''}${u.ambush ? ' · in ambush' : ''}${u.shocked ? ' · shaken' : ''}`);
     // A wreck in the field: it is there to be hidden behind
     if (Sim.wreckAt(st, f.x, f.y)) lines.push('Burnt-out tank: blocks the view, +1 cover past its corner');
     // A café, a barn, a fountain or a pond: what it takes, and whether it blocks the view

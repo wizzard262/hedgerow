@@ -98,13 +98,24 @@ const Board = (() => {
 
   // The mortars and artillery of each side, off the board behind its own back line, near the top (Steve): the Americans
   // left of the board, the Germans right. Where each stands, and where its pile of rounds goes (behind it)
-  const GUNS = {
+  const USUAL_GUNS = {
     us: { artillery: { x: -0.7, z: 2.55, pileX: -1.45, pileZ: 2.3 }, mortars: { x: -0.7, z: 4.05, pileX: -1.45, pileZ: 3.85 }, bomber: { x: -0.6, z: 5.5 } },
     de: { artillery: { x: COLS + 0.7, z: 2.55, pileX: COLS + 1.25, pileZ: 2.3 }, mortars: { x: COLS + 0.7, z: 4.05, pileX: COLS + 1.25, pileZ: 3.85 }, bomber: { x: COLS + 0.5, z: 5.5 } },
   };
+  // Dunkirk and the Normandy beach (Steve): the artillery is a warship lying broadside to the shore, its shells piled on
+  // its deck; the mortars stand on a headland out into the sea (see addSea)
+  const DUNKIRK_GUNS = {
+    us: Object.assign({}, USUAL_GUNS.us, { artillery: { x: -1.35, z: 2.4, pileX: -1.42, pileZ: 2.6, pileY: 0.076 } }),
+    de: USUAL_GUNS.de,
+  };
+  let GUNS = USUAL_GUNS;
+  // The British at Dunkirk (Steve): their own flag, their destroyer
+  let british = false;
+  // The warship for the 'us' artillery on this map, if it has one (Steve): 'destroyer' or 'battleship'
+  let navy = null;
   // (each gun by its name for the time, Steve; see MORTARS and the rest in data.js)
   // A side's gun or bomber by name; the map can rename the guns (Steve: Dunkirk's destroyers)
-  const gunNameOf = (side, which) => (which === 'bomber' ? `${side === 'us' ? 'US' : 'German'} ${BOMBER_NAMES[side]}` : Sim.gunStats(which, side).name);
+  const gunNameOf = (side, which) => (which === 'bomber' ? `${side === 'us' ? (british ? 'RAF' : 'US') : 'German'} ${BOMBER_NAMES[side]}` : Sim.gunStats(which, side).name);
   const SUPPORT = ['artillery', 'mortars', 'bomber'];
   const PILE_MAX = 12;
   let support = null;           // side → which → { model, rounds: [] }
@@ -113,16 +124,19 @@ const Board = (() => {
   const gunFacing = side => (side === 'us' ? 0 : Math.PI);
   const gunDir = side => ({ x: side === 'us' ? 1 : -1, z: 0 });
 
-  function buildSupport() {
+  function buildSupport(st) {
+    // (the guns' places for this map)
+    GUNS = st && st.map.navy ? DUNKIRK_GUNS : USUAL_GUNS;
     support = {};
     for (const side of ['us', 'de']) {
       support[side] = {};
       for (const which of SUPPORT) {
         const spot = GUNS[side][which];
         const makers = { artillery: Models.howitzer, mortars: Models.mortar, bomber: Models.bomberOnStand };
-        const model = Models.mergeParts(makers[which](side));
+        const ship = side === 'us' && which === 'artillery' && st && st.map.navy;
+        const model = Models.mergeParts(ship ? Models[st.map.navy]() : makers[which](side));
         const sizes = { artillery: TANKS * 1.7, mortars: MEN * 1.3, bomber: 1 };
-        model.scale.setScalar(sizes[which]);
+        model.scale.setScalar(ship ? 1 : sizes[which]);
         built.add(at(model, spot.x, 0, spot.z, 0, gunFacing(side), 0));
         // The pile of rounds beside it: shells standing in rows of three, mortar bombs lying in rows of four
         // (the bomber carries its own)
@@ -131,7 +145,7 @@ const Board = (() => {
           const r = Models.round(which === 'artillery' ? 'shell' : 'bomb');
           r.scale.setScalar(which === 'artillery' ? TANKS * 1.7 : MEN * 1.3);
           const perRow = which === 'artillery' ? 3 : 4, gap = which === 'artillery' ? 0.07 : 0.075;
-          built.add(at(r, spot.pileX + (k % perRow) * gap, which === 'artillery' ? 0 : 0.02, spot.pileZ + Math.floor(k / perRow) * gap));
+          built.add(at(r, spot.pileX + (k % perRow) * gap, (spot.pileY || 0) + (which === 'artillery' ? 0 : 0.02), spot.pileZ + Math.floor(k / perRow) * gap));
           rounds.push(r);
         }
         // Its name, small, on the table in front
@@ -184,11 +198,15 @@ const Board = (() => {
   // Where a side's drawn token lands on the table: just above its artillery, a little further out (the dice sit beside it)
   function coinSpot(side) {
     const gun = GUNS[side].artillery;
+    // (Dunkirk and the Normandy beach: above the warship, clear of its bow, Steve)
+    if (side === 'us' && GUNS === DUNKIRK_GUNS) return { x: gun.x, z: gun.z - 2.05 };
     return { x: gun.x + (side === 'us' ? -0.1 : 0.1), z: gun.z - 1.15 };
   }
+  // Which face a side's token has: the British their Union Jack (Steve)
+  const coinFace = side => (side === 'us' && british ? 'uk' : side);
   function flyToken(side, clientX, clientY, done) {
     clearTokenNow();
-    const mesh = Models.coin(side);
+    const mesh = Models.coin(coinFace(side));
     mesh.scale.set(COIN_SIZE, COIN_SIZE, COIN_SIZE);
     // Where it starts: the bar's spot, carried down onto the table's plane (off the bottom of the screen)
     const r = renderer.domElement.getBoundingClientRect();
@@ -248,7 +266,7 @@ const Board = (() => {
 
   // One small coin on its way home, not on the table until it sets off
   function homeCoin(side, from, to, t0, landed) {
-    const mesh = Models.coin(side);
+    const mesh = Models.coin(coinFace(side));
     mesh.visible = false;
     mesh.position.copy(from);
     scene.add(mesh);
@@ -321,8 +339,20 @@ const Board = (() => {
 
   function build(st) {
     if (built) { scene.remove(built); freeObject(built); }
+    british = !!(st.map.names && st.map.names.us === 'British');
+    Models.setBritish(british);
+    navy = st.map.navy || null;
     built = new T.Group();
     built.add(Models.table(COLS, ROWS));
+    // Dunkirk (Steve): the beach and the coast road run on past the top and bottom of the board to the table's edge
+    if (st.map.evacuate) {
+      const road = st.map.evacuate.trucks.road;
+      for (const y of [-6, -5, -4, -3, -2, -1, ROWS, ROWS + 1, ROWS + 2, ROWS + 3, ROWS + 4, ROWS + 5]) {
+        for (let x = 0; x < road; x++) built.add(at(Models.field('beach', false, x * 7 + y * 13), x + 0.5, -0.001, y + 0.5, -Math.PI / 2, 0, 0));
+        built.add(at(Models.field('field', false, road * 7 + y * 13), road + 0.5, -0.001, y + 0.5, -Math.PI / 2, 0, 0));
+        built.add(at(Models.lane(0.3, 1), road + 0.5, 0.0002, y + 0.5, -Math.PI / 2, 0, 0));
+      }
+    }
     for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
       const t = Sim.tileType(x, y), seed = x * 7 + y * 13;
       built.add(at(Models.field(t, t === 'field' && seed % 5 === 0, seed), x + 0.5, 0, y + 0.5, -Math.PI / 2, 0, 0));
@@ -425,13 +455,15 @@ const Board = (() => {
   // The sea's own surface over the first column, then the surf: a sheet of shallow water whose edge runs in and out over the
   // sand, uneven along the shore, with a line of foam along that edge and another left behind it as it draws back. The landing
   // craft ride on it. Moved every frame in moveSea
-  const SURF = { shore: 1, steps: 64, in: 0.2, slow: 0.65 };
+  // from, long: where the shore starts and how long it runs (Dunkirk: the table's whole length); cut: where the headland
+  // is, with no surf
+  const SURF = { shore: 1, steps: 64, in: 0.2, slow: 0.65, from: 0, long: ROWS, cut: null };
   let sea = null;
   function ribbon(material, y) {
-    const geo = new T.PlaneGeometry(1, ROWS, 1, SURF.steps);
+    const geo = new T.PlaneGeometry(1, SURF.long, 1, SURF.steps);
     const mesh = new T.Mesh(geo, material);
     mesh.rotation.x = -Math.PI / 2;
-    mesh.position.set(0, y, ROWS / 2);
+    mesh.position.set(0, y, SURF.from + SURF.long / 2);
     mesh.renderOrder = 1;
     return mesh;
   }
@@ -439,6 +471,16 @@ const Board = (() => {
     if (sea) { scene.remove(sea.group); freeObject(sea.group); sea = null; }
     // (the beach landing, and Dunkirk's beach, Steve)
     if (!st.map.landing && !st.map.evacuate) return;
+    // Dunkirk (Steve): the sea is off the board, from its edge out to the table's; the landing has it in the first column
+    const offBoard = !!st.map.evacuate;
+    SURF.shore = offBoard ? 0 : 1;
+    SURF.from = offBoard ? -6 : 0;
+    SURF.long = offBoard ? ROWS + 12 : ROWS;
+    SURF.steps = offBoard ? 160 : 64;
+    const mortars = USUAL_GUNS.us.mortars;
+    SURF.cut = offBoard ? { from: mortars.z - 0.8, to: mortars.z + 0.7 } : null;
+    // The water out to the table's edge (Steve: Dunkirk, and the Normandy beach the same), past the top and bottom too
+    const toEdge = offBoard || !!st.map.navy;
     const group = new T.Group();
     const R = seeded(st.seed + 5);
     // The deep water, its ripples drifting back and forth
@@ -453,33 +495,49 @@ const Board = (() => {
     }
     const ripples = new T.CanvasTexture(c);
     ripples.wrapS = ripples.wrapT = T.RepeatWrapping;
-    ripples.repeat.set(1, ROWS);
+    // (out to the table's edge at Dunkirk: the table runs 7 fields past the board, and 6 past its top and bottom)
+    const wide = toEdge ? 7 + SURF.shore : SURF.shore, long = toEdge ? ROWS + 12 : ROWS;
+    ripples.repeat.set(wide, long);
     ripples.encoding = T.sRGBEncoding;
-    const deep = new T.Mesh(new T.PlaneGeometry(SURF.shore, ROWS), new T.MeshStandardMaterial({ map: ripples, roughness: 0.2, metalness: 0.15 }));
+    const deep = new T.Mesh(new T.PlaneGeometry(wide, long), new T.MeshStandardMaterial({ map: ripples, roughness: 0.2, metalness: 0.15 }));
     deep.rotation.x = -Math.PI / 2;
-    deep.position.set(SURF.shore / 2, 0.004, ROWS / 2);
+    deep.position.set(SURF.shore - wide / 2, 0.004, ROWS / 2);
     deep.receiveShadow = true;
     group.add(deep);
-    // Sand the water has just left, darker
-    const wet = new T.Mesh(new T.PlaneGeometry(0.42, ROWS), new T.MeshBasicMaterial({ color: 0x4d3f2b, transparent: true, opacity: 0.32, depthWrite: false }));
-    wet.rotation.x = -Math.PI / 2;
-    wet.position.set(SURF.shore + 0.13, 0.0035, ROWS / 2);
-    group.add(wet);
+    // Sand the water has just left, darker: the whole length of the beach (Steve), but not across the headland's root
+    const wetMat = new T.MeshBasicMaterial({ color: 0x4d3f2b, transparent: true, opacity: 0.32, depthWrite: false });
+    const wetRuns = SURF.cut ? [[SURF.from, SURF.cut.from], [SURF.cut.to, SURF.from + SURF.long]] : [[SURF.from, SURF.from + SURF.long]];
+    for (const [z0, z1] of wetRuns) {
+      const wet = new T.Mesh(new T.PlaneGeometry(0.42, z1 - z0), wetMat);
+      wet.rotation.x = -Math.PI / 2;
+      wet.position.set(SURF.shore + 0.13, 0.0035, (z0 + z1) / 2);
+      group.add(wet);
+    }
     // The sheet of shallow water, and the two lines of foam
     const sheet = ribbon(new T.MeshStandardMaterial({ color: 0x4f8f96, transparent: true, opacity: 0.72, roughness: 0.15, metalness: 0.1, depthWrite: false }), 0.006);
     const foam = ribbon(new T.MeshBasicMaterial({ color: 0xf2f4ee, transparent: true, opacity: 0.92, depthWrite: false }), 0.0075);
     const oldFoam = ribbon(new T.MeshBasicMaterial({ color: 0xe6e8e0, transparent: true, opacity: 0.45, depthWrite: false }), 0.007);
     group.add(sheet, foam, oldFoam);
-    // A landing craft in each field of the sea; at Dunkirk a little ship in each, shown only while a boat is in that field
+    // A landing craft in each field of the sea
     const craft = [];
     for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
       if (Sim.tileType(x, y) !== 'sea') continue;
-      const boat = !!st.map.evacuate;
-      const m = Models.mergeParts(boat ? Models.littleShip(st.seed + y * 3) : Models.landingCraft());
+      const m = Models.mergeParts(Models.landingCraft());
       group.add(at(m, x + 0.46, 0.006, y + 0.5));
-      if (boat) m.visible = false;
-      craft.push({ mesh: m, phase: R() * 6.28, x, y, boat });
+      craft.push({ mesh: m, phase: R() * 6.28, x, y, boat: false });
     }
+    // Dunkirk (Steve): a little ship for each row, a tug or a cabin cruiser, out at sea until a boat comes in off that field
+    // of the beach; it sails in, waits, and sails out again with the men aboard shown as icons over it
+    if (offBoard) {
+      for (let y = 0; y < ROWS; y++) {
+        const m = Models.mergeParts(Models.littleShip(st.seed + y * 3));
+        group.add(at(m, BOATS.out, 0.006, y + 0.5));
+        m.visible = false;
+        craft.push({ mesh: m, phase: R() * 6.28, x: 0, y, boat: true, icons: [], load: 0 });
+      }
+    }
+    // The headland for the mortars (Steve): at Dunkirk and on the Normandy beach
+    if (toEdge) group.add(headland(st));
     // Smoke rising from the wrecks
     const plumes = [];
     for (const f of st.features) {
@@ -491,13 +549,104 @@ const Board = (() => {
       }
     }
     scene.add(group);
-    sea = { group, ripples, sheet, foam, oldFoam, craft, plumes };
+    sea = { group, ripples, sheet, foam, oldFoam, craft, plumes, st: null };
   }
-  // Dunkirk's little ships (Steve): on show in the fields where the round's boats are
+
+  // Dunkirk's boats (Steve: we see them move in and out): where one lies off the beach, and where it waits out at sea
+  const BOATS = { in: -0.45, out: -4.6, speed: 0.9 };
+  // The headland (Steve): a spit of sand and grass out into the sea for the British mortars to stand on
+  function headland(st) {
+    const g = new T.Group();
+    const gun = GUNS === DUNKIRK_GUNS ? DUNKIRK_GUNS.us.mortars : USUAL_GUNS.us.mortars;
+    const z0 = gun.z - 0.75, z1 = gun.z + 0.65;
+    const shape = new T.Shape();
+    // (the shape is drawn in x and -z: it is laid flat below)
+    shape.moveTo(0.05, -z0);
+    shape.bezierCurveTo(-0.7, -z0 + 0.05, -1.75, -z0 - 0.1, -1.95, -gun.z);
+    shape.bezierCurveTo(-1.75, -z1 + 0.1, -0.7, -z1 - 0.05, 0.05, -z1);
+    shape.lineTo(0.05, -z0);
+    // (the beach's own sand, Steve: so it runs on from the beach with no join)
+    const beachMat = Models.field('beach', false, 0).material;
+    const map = beachMat.map.clone();
+    map.wrapS = map.wrapT = T.RepeatWrapping;
+    map.needsUpdate = true;
+    const sand = new T.Mesh(new T.ShapeGeometry(shape, 24), new T.MeshStandardMaterial({ map, roughness: 1 }));
+    sand.rotation.x = -Math.PI / 2;
+    sand.position.y = 0.008;
+    sand.receiveShadow = true;
+    g.add(sand);
+    // Rough grass on its top, a few tufts
+    const R = seeded(st.seed + 17);
+    const grass = new T.MeshStandardMaterial({ color: 0x7d8a4a, roughness: 1 });
+    for (let k = 0; k < 14; k++) {
+      const tuft = new T.Mesh(new T.ConeGeometry(0.03 + R() * 0.02, 0.05 + R() * 0.04, 6), grass);
+      g.add(at(tuft, -0.25 - R() * 1.4, 0.03, gun.z - 0.45 + R() * 0.9));
+    }
+    return g;
+  }
+  // The icon over a boat for each section of men aboard (Steve): a khaki disc with a man in a tin hat, made once
+  let manIconTex = null;
+  function manIcon() {
+    if (!manIconTex) {
+      const c = document.createElement('canvas'); c.width = c.height = 128;
+      const g = c.getContext('2d');
+      g.fillStyle = '#5f5d3c'; g.beginPath(); g.arc(64, 64, 58, 0, Math.PI * 2); g.fill();
+      g.lineWidth = 8; g.strokeStyle = '#f2ead2'; g.stroke();
+      g.fillStyle = '#f2ead2';
+      // The Brodie helmet, the head, the shoulders
+      g.beginPath(); g.ellipse(64, 44, 34, 9, 0, 0, Math.PI * 2); g.fill();
+      g.beginPath(); g.arc(64, 42, 18, Math.PI, 0); g.fill();
+      g.beginPath(); g.arc(64, 60, 12, 0, Math.PI * 2); g.fill();
+      g.beginPath(); g.moveTo(32, 108); g.quadraticCurveTo(64, 66, 96, 108); g.fill();
+      manIconTex = new T.CanvasTexture(c);
+    }
+    const s = new T.Sprite(new T.SpriteMaterial({ map: manIconTex, transparent: true, depthTest: false }));
+    s.scale.set(0.26, 0.26, 1);
+    s.renderOrder = 5;
+    return s;
+  }
+  // The table's view of the boats: which are in this round, and how many sections are aboard each (see moveSea)
   function showBoats(st) {
     if (!sea || !st.evac) return;
-    for (const c of sea.craft) if (c.boat) c.mesh.visible = st.evac.boats.some(b => b.x === c.x && b.y === c.y);
+    sea.st = st;
   }
+  // The lorries left on the beach once their men have sailed (Steve: Dunkirk): a lorry where each one stopped
+  let lorriesLeft = null;
+  function leftLorries(st) {
+    const left = (st.evac && st.evac.left) || [];
+    const gone = left.filter(l => { const u = Sim.unitById(st, l.id); return u && u.saved; });
+    if (lorriesLeft && lorriesLeft.userData.count === gone.length && lorriesLeft.parent === built) return;
+    if (lorriesLeft) { if (lorriesLeft.parent) lorriesLeft.parent.remove(lorriesLeft); freeObject(lorriesLeft); }
+    lorriesLeft = new T.Group();
+    lorriesLeft.userData.count = gone.length;
+    for (const l of gone) {
+      const m = Models.mergeParts(Models.lorry());
+      m.scale.setScalar(TANKS);
+      const p = Sim.placeXY(l.at);
+      lorriesLeft.add(at(m, l.x + 0.5 + p.x * 0.22, 0, l.y + 0.5 + p.y * 0.22, 0, (l.aim || 0) + Math.PI, 0));
+    }
+    built.add(lorriesLeft);
+  }
+
+  // One of Dunkirk's little ships for a frame: in towards the beach while a boat lies off its field this round, out to
+  // sea when not; the icons of the sections aboard ride over it, and go out with it when it sails
+  function sailBoat(c, t, dt) {
+    const st = sea.st;
+    const here = !!st && st.evac && st.evac.boats.some(b => b.y === c.y);
+    const want = here ? BOATS.in : BOATS.out;
+    const dx = want - c.mesh.position.x;
+    c.mesh.position.x += Math.sign(dx) * Math.min(Math.abs(dx), BOATS.speed * dt * (0.4 + Math.min(1, Math.abs(dx))));
+    c.mesh.visible = c.mesh.position.x > BOATS.out + 0.05;
+    // The sections aboard, while it lies off the beach (when it sails they have gone from the rules: it keeps the count)
+    if (here && st) c.load = st.units.filter(u => u.aboard && u.x === 0 && u.y === c.y).reduce((n, u) => n + u.platoons, 0);
+    if (!c.mesh.visible) c.load = 0;
+    while (c.icons.length < c.load) { const s = manIcon(); sea.group.add(s); c.icons.push(s); }
+    c.icons.forEach((s, i) => {
+      s.visible = i < c.load && c.mesh.visible;
+      s.position.set(c.mesh.position.x, 0.5 + Math.sin(t * 2 + i) * 0.01, c.y + 0.5 + (i - (c.load - 1) / 2) * 0.27);
+    });
+  }
+
   // Where the water's edge is, along the shore, at a moment (t in seconds): the main surge in and out, with slower and quicker
   // waves running along it so it is never a straight line
   function surfEdge(z, t) {
@@ -510,8 +659,10 @@ const Board = (() => {
     const p = mesh.geometry.attributes.position;
     for (let i = 0; i < p.count; i++) {
       // (a plane's vertices come in rows from one end to the other, two to a row: left, then right)
-      const row = Math.floor(i / 2), z = (row / SURF.steps) * ROWS;
-      p.setX(i, i % 2 === 0 ? inner(z) : outer(z));
+      const row = Math.floor(i / 2), z = SURF.from + (row / SURF.steps) * SURF.long;
+      // (no surf where the headland is, Steve: the ribbon closes up to nothing there, under the sand)
+      const cut = SURF.cut && z > SURF.cut.from && z < SURF.cut.to;
+      p.setX(i, i % 2 === 0 || cut ? inner(z) : outer(z));
     }
     p.needsUpdate = true;
     mesh.geometry.computeBoundingSphere();
@@ -527,7 +678,10 @@ const Board = (() => {
     setRibbon(sea.sheet, () => SURF.shore - 0.32, edge);
     setRibbon(sea.foam, z => edge(z) - 0.022 - Math.abs(Math.sin(z * 11 + t)) * 0.012, z => edge(z) + 0.004);
     setRibbon(sea.oldFoam, z => left(z) - 0.008, z => left(z));
+    const dt = Math.min(0.1, sea.last ? t - sea.last : 0);
+    sea.last = t;
     for (const c of sea.craft) {
+      if (c.boat) sailBoat(c, t, dt);
       c.mesh.position.y = 0.006 + Math.sin(t * 0.9 + c.phase) * 0.004;
       c.mesh.rotation.z = Math.sin(t * 0.7 + c.phase) * 0.012;
       c.mesh.rotation.x = Math.sin(t * 0.55 + c.phase * 2) * 0.01;
@@ -575,6 +729,8 @@ const Board = (() => {
     };
     // The tower stands over its whole field, on no areas of its own
     if (f.kind === 'eiffel') { built.add(at(MAKERS.eiffel(), f.x + 0.5, 0, f.y + 0.5)); return; }
+    // A strongpoint's sandbags round its field (Steve: Dunkirk)
+    if (f.kind === 'strongpoint') { built.add(at(Models.mergeParts(Models.strongpoint(f.seed || 1)), f.x + 0.5, 0, f.y + 0.5)); return; }
     // A railway line: a length of track along its row of areas (the trains run on it, see drawTrains)
     if (f.kind === 'rail') { if (Sim.tileType(f.x, f.y) !== 'yard') built.add(at(Models.track(1), f.x + 0.5, 0.002, f.y + 0.5 + Sim.placeXY(f.side).y / 3, -Math.PI / 2, 0, 0)); return; }
     const spots = f.areas.map(k => Sim.placeXY(k === 'c' ? null : k));
@@ -766,11 +922,17 @@ const Board = (() => {
       return [0, 1, 2].map(() => { const s = Models.mergeParts(Models.squad(side, elite)); markerSpots(s); s.scale.setScalar(MEN); return s; });
     }
     if (PIECES[kind].tank) {
-      const make = { sherman: () => Models.sherman(Models.M.olive), firefly: () => Models.sherman(Models.M.olive, true), pz4: Models.panzer4, panther: Models.panther, m8: Models.greyhound, puma: Models.puma }[kind];
+      const make = { sherman: () => Models.sherman(Models.M.olive), firefly: () => Models.sherman(Models.M.olive, true), pz4: Models.panzer4, panther: Models.panther, m8: Models.greyhound, puma: Models.puma,
+        // Dunkirk, 1940 (Steve)
+        matilda: Models.matilda, carrier: Models.carrier, pz1: Models.panzer1, pz2: Models.panzer2, pz3: Models.panzer3, sdkfz231: Models.sdkfz231 }[kind];
       return [0].map(() => { const m = Models.mergeParts(make()); markerSpots(m); m.scale.setScalar(TANKS); m.userData.slowTurn = true; return m; });
     }
     if (PIECES[kind].bunker) return [bunkerBase(kind === 'bunker_gun')];
-    const m = Models.mergeParts(kind === 'captain' ? Models.captain(side) : kind === 'pak' ? Models.pak() : Models.team(side, kind));
+    // A lorry-load of men (Steve: Dunkirk): the lorry, at the tanks' scale
+    if (PIECES[kind].lorry) { const m = Models.mergeParts(Models.lorry()); markerSpots(m); m.scale.setScalar(TANKS); m.userData.slowTurn = true; return [m]; }
+    // (the British captain carries the Union Jack, Steve)
+    const flag = side === 'us' && british ? 'uk' : '';
+    const m = Models.mergeParts(kind === 'captain' ? Models.captain(side, flag) : kind === 'pak' ? Models.pak() : Models.team(side, kind));
     markerSpots(m);
     m.scale.setScalar(kind === 'pak' ? TANKS * 1.3 : MEN);
     // The PaK swings round onto its target before it fires, as a tank does (Steve)
@@ -786,7 +948,12 @@ const Board = (() => {
     // Elite, yours or theirs (Steve): a gold band round the edge of every base
     if (u.quality === 'elite') for (const b of g.userData.bases) Models.eliteBand(b);
     // A tank drives (Steve): it turns towards where it is going and goes forward, in curves, instead of sliding
-    if (Sim.isTank(u)) g.userData.drives = g.userData.bases[0];
+    if (Sim.isTank(u) || Sim.isLorry(u)) g.userData.drives = g.userData.bases[0];
+    if (Sim.isLorry(u)) {
+      g.position.set(u.x + 0.5, 0, -0.9);
+      g.userData.bases[0].rotation.y = -Math.PI / 2;
+      g.userData.placed = true;
+    }
     // The Germans face west
     g.userData.face = u.side === 'us' ? 0 : Math.PI;
     scene.add(g);
@@ -808,7 +975,8 @@ const Board = (() => {
   // A yard with a wreck in it: a platoon pushes on out to the far corner, to clear the hull
   const YARD_WITH_WRECK = { platoon: 0.31, spread: 0.7, tank: 0.2, small: 0.2 };
   function arrange(st, x, y) {
-    const here = Sim.at(st, x, y);
+    // (a lorry whose men are aboard stays where it stopped, Steve: Dunkirk)
+    const here = st.units.filter(u => u.x === x && u.y === y);
     const loose = (u, k) => { const R = seeded(u.id.length * 977 + x * 131 + y * 71 + k * 7 + u.id.charCodeAt(0)); return [(R() - 0.5) * 0.05, (R() - 0.5) * 0.05, (R() - 0.5) * 0.5]; };
     // A field with houses round it: the pieces keep to the yard inside the houses (Steve: never under a house), so they
     // stand closer to the middle and closer together
@@ -1545,6 +1713,7 @@ const Board = (() => {
     }
     updateWrecks(st);
     showBoats(st);
+    leftLorries(st);
   }
 
   // ---------- Wrecks (Steve): a knocked-out tank burns where it died, black and scorched, and stays ----------
@@ -2260,6 +2429,8 @@ const Board = (() => {
       if (f.kind === 'rally') { shots.push({ f, t0: performance.now(), objs: [] }); continue; }
       // The crate taken: its words float up off the field
       if (f.kind === 'crate') { shots.push({ f, t0: performance.now(), objs: [] }); continue; }
+      // Dunkirk: the men run out of the back of a lorry into the boat (see playShots)
+      if (f.kind === 'embark') { shots.push({ f, t0: performance.now() + EMBARK.wait * 1000, objs: [] }); continue; }
       // Parachutes: they come down as the plane passes over (see playShots)
       if (f.kind === 'paradrop') {
         const over = flight ? Math.max(0, -flight.start / FLIGHT.speed) : 0;
@@ -2362,12 +2533,38 @@ const Board = (() => {
     return { from, to };
   }
 
+  // The men running from the back of the lorry out to the boat: a few at a time, over a second and a half
+  const EMBARK = { wait: 1.6, run: 1.5, men: 6 };
+  function runToBoat(s, f, t) {
+    if (!s.men) {
+      s.men = [];
+      for (let k = 0; k < Math.min(EMBARK.men, f.sections * 3); k++) {
+        const m = Models.mergeParts(Models.soldier('us', 0, false));
+        m.scale.setScalar(MEN);
+        scene.add(m);
+        s.men.push(m);
+      }
+      s.cleanup = () => { for (const m of s.men) { scene.remove(m); freeObject(m); } };
+    }
+    const lorry = pieces[f.to.id];
+    const from = lorry ? lorry.position : new T.Vector3(f.x + 0.5, 0, f.y + 0.5);
+    s.men.forEach((m, k) => {
+      const p = Math.max(0, Math.min(1, (t - k * 0.15) / EMBARK.run));
+      m.visible = p > 0 && p < 1;
+      const z = from.z + ((k % 3) - 1) * 0.06;
+      m.position.set(from.x - 0.15 + (BOATS.in - from.x + 0.15) * p, Math.abs(Math.sin(p * 18)) * 0.01, z + (f.y + 0.5 - z) * p);
+      m.rotation.y = Math.PI;
+    });
+  }
+
   function playShots(now) {
     while (fxMarks.children.length) { const o = fxMarks.children[0]; fxMarks.remove(o); freeObject(o); }
     // (a hand-to-hand fight stays as long as its blows take)
     // (the bomber stays until it has flown off, a bomb until its words have faded)
     // (parachutes until the last one has landed and gone)
-    const lasts = f => (f.kind === 'melee' ? (f.strikes.length * MELEE_BLOW + 2) * 1000 : f.kind === 'flyover' ? f.length * 1000 + 200 : f.kind === 'bomb' ? ((f.fall || 0) + 3) * 1000 : f.kind === 'paradrop' ? Chute.lasts(3) * 1000 + 200 : 5000);
+    const lasts = f => (f.kind === 'melee' ? (f.strikes.length * MELEE_BLOW + 2) * 1000 : f.kind === 'flyover' ? f.length * 1000 + 200 : f.kind === 'bomb' ? ((f.fall || 0) + 3) * 1000 : f.kind === 'paradrop' ? Chute.lasts(3) * 1000 + 200 : f.kind === 'embark' ? (EMBARK.run + 1) * 1000 : 5000);
+    // (anything a show made for itself goes with it)
+    for (const s of shots) if (now - s.t0 >= lasts(s.f) && s.cleanup) s.cleanup();
     shots = shots.filter(s => now - s.t0 < lasts(s.f));
     tidyChutes();
     for (const s of shots) {
@@ -2377,6 +2574,7 @@ const Board = (() => {
       if (f.kind === 'melee') { playMelee(f, t, add); continue; }
       if (f.kind === 'flyover') { moveFlight(t); continue; }
       if (f.kind === 'paradrop') { drawChutes(f, t); continue; }
+      if (f.kind === 'embark') { runToBoat(s, f, t); continue; }
       // The crate taken (Steve): "+1 artillery round" rising off its field
       if (f.kind === 'crate') {
         if (t > 2.2) continue;
@@ -2785,7 +2983,7 @@ const Board = (() => {
     const gunName = f.support === 'bomber' ? BOMBER_NAMES[f.side] : gunNameOf(f.side, f.support);
     // ("Our" only with one human playing: two humans, or two robots, have no "our")
     const onePlayer = st.mode === 'us' || st.mode === 'de';
-    const whose = onePlayer && f.side === st.human ? 'Our' : f.side === 'de' ? 'German' : 'American';
+    const whose = onePlayer && f.side === st.human ? 'Our' : f.side === 'de' ? 'German' : british ? 'British' : 'American';
     const who = shooter ? shooter.name : `${whose} ${gunName}`;
     const need = f.need > MAX_NEED ? 'HAIL MARY: 6, then 6' : `needs ${f.need}+`;
     const hits = f.faces.filter(r => r.hit).length;
@@ -2929,7 +3127,7 @@ const Board = (() => {
     const gap = lastT ? (now - lastT) / 1000 : 0, dt = lastT ? Math.min(0.1, gap) : 0.016;
     lastT = now;
     if (gap) watchFrames(gap, drawingOn);
-    if (!built || built.userData.seed !== st.seed || built.userData.map !== st.map) { clearDice(true); for (const id in pieces) { scene.remove(pieces[id]); freeObject(pieces[id]); } for (const id in tokens) scene.remove(tokens[id]); pieces = {}; tokens = {}; build(st); buildSupport(); built.userData.seed = st.seed; built.userData.map = st.map; }
+    if (!built || built.userData.seed !== st.seed || built.userData.map !== st.map) { clearDice(true); for (const id in pieces) { scene.remove(pieces[id]); freeObject(pieces[id]); } for (const id in tokens) scene.remove(tokens[id]); pieces = {}; tokens = {}; build(st); buildSupport(st); built.userData.seed = st.seed; built.userData.map = st.map; }
     updateSupport(st);
     buildHedges(st);
     // New attacks: they play out, and their dice go in the corner once they have landed (Steve)
@@ -3085,7 +3283,7 @@ const Board = (() => {
   let studio = null;
   // elite: as the piece looks on the table (Steve: Rangers, Fallschirmjäger, the gold band)
   function portrait(side, kind, elite = false) {
-    const key = side + ':' + kind + (elite ? ':elite' : '');
+    const key = side + ':' + kind + (elite ? ':elite' : '') + (british && side === 'us' ? ':uk' : '') + (navy && side === 'us' ? ':' + navy : '');
     if (portraits[key]) return portraits[key];
     // One small renderer, scene and camera for every picture
     if (!studio) {
@@ -3102,6 +3300,7 @@ const Board = (() => {
     const g = new T.Group();
     let bases;
     if (kind === 'bomber') bases = [Models.bomberOnStand(side)];
+    else if (kind === 'artillery' && side === 'us' && navy) bases = [Models[navy]()];
     else if (kind === 'mortars' || kind === 'artillery') {
       const m = kind === 'artillery' ? Models.howitzer(side) : Models.mortar(side);
       m.scale.setScalar(kind === 'artillery' ? TANKS * 1.7 : MEN * 1.3);

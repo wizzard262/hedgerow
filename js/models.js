@@ -178,11 +178,24 @@ const Models = (() => {
   // before the game scales the men up (they are bigger models than the tanks: 1:54 against 1:76)
   // elite (Steve): the Americans are Rangers in brown, with the orange diamond on the helmet; the Germans are
   // Fallschirmjäger in a camouflage jump smock and the black rimless helmet
+  // The British (Steve: Dunkirk): the 'us' side's men in light brown battledress and a green Brodie helmet. Set for each
+  // game's table (see Board's build)
+  let britishLook = false;
+  function setBritish(on) {
+    britishLook = on;
+    if (!M.ukUniform) {
+      M.ukUniform = mat('#9a7d52', 0.9);       // khaki battledress, a light brown
+      M.ukTrousers = mat('#8a6f48', 0.9);
+      M.ukWebbing = mat('#b3a67c', 0.9);       // pale blancoed webbing
+      M.ukHelmet = mat('#4f5434', 0.6);        // the Brodie helmet, green
+    }
+  }
   function soldier(side, pose = 0, base = true, elite = false) {
     const us = side === 'us', g = new T.Group();
-    const fj = !us && elite, ranger = us && elite;
-    const uni = fj ? camoCloth('de') : ranger ? M.rangerJacket : us ? M.usUniform : M.deUniform;
-    const legs = ranger ? M.rangerTrousers : us ? M.usTrousers : M.deTrousers, web = us ? M.usWebbing : M.deWebbing;
+    const uk = us && britishLook;
+    const fj = !us && elite, ranger = us && elite && !uk;
+    const uni = fj ? camoCloth('de') : uk ? M.ukUniform : ranger ? M.rangerJacket : us ? M.usUniform : M.deUniform;
+    const legs = uk ? M.ukTrousers : ranger ? M.rangerTrousers : us ? M.usTrousers : M.deTrousers, web = uk ? M.ukWebbing : us ? M.usWebbing : M.deWebbing;
     // Base: a black disc with a bevel
     if (base) g.add(at(cyl(0.032, 0.034, 0.008, M.base, 24), 0, 0.004, 0));
     // Legs apart, boots (US leggings are paler)
@@ -208,7 +221,11 @@ const Models = (() => {
     g.add(at(sphere(0.0045, M.flesh, 8, 6), 0.02, 0.083, 0.004));
     // Head and helmet: the round American M1, the flared German Stahlhelm
     g.add(at(sphere(0.0085, M.flesh, 12, 10), 0, 0.104, 0));
-    if (us) {
+    if (uk) {
+      // The Brodie: a shallow dome on a wide flat brim
+      const h = sphere(0.0105, M.ukHelmet, 16, 10); h.scale.set(1, 0.55, 1); g.add(at(h, 0, 0.11, 0));
+      g.add(at(cyl(0.0175, 0.0175, 0.0018, M.ukHelmet, 18), 0, 0.109, 0));
+    } else if (us) {
       const h = sphere(0.0125, M.usHelmet, 16, 10); h.scale.set(1, 0.72, 1.05); g.add(at(h, 0, 0.11, 0));
       g.add(at(cyl(0.0135, 0.0135, 0.002, M.usHelmet, 16), 0, 0.106, 0));
       // Rangers: the orange diamond on the back of the helmet
@@ -290,6 +307,17 @@ const Models = (() => {
       const loader = soldier(side, 1, false); loader.scale.y = 0.75; g.add(at(loader, 0.0, 0.008, 0.035, 0, -0.4, 0));
       g.add(at(soldier(side, -1, false), -0.04, 0.008, -0.035, 0, 0.3, 0));
       for (const z of [-0.012, 0.006]) g.add(at(box(0.012, 0.01, 0.016, side === 'us' ? M.usHelmet : M.deHelmet), -0.045, 0.013, z));
+    } else if (kind === 'boys') {
+      const gunner = soldier(side, 0, false); gunner.scale.y = 0.55; g.add(at(gunner, -0.025, 0.008, -0.006, 0, 0, 0));
+      const rifle = new T.Group();
+      rifle.add(at(cyl(0.0032, 0.0032, 0.13, M.steel, 8), 0.065, 0, 0, 0, 0, Math.PI / 2));
+      rifle.add(at(cyl(0.0058, 0.0058, 0.012, M.steel, 10), 0.132, 0, 0, 0, 0, Math.PI / 2));   // the muzzle brake
+      rifle.add(at(box(0.05, 0.01, 0.009, M.wood), -0.012, -0.002, 0));                          // the body and grip
+      rifle.add(at(box(0.016, 0.016, 0.007, M.steel), 0.0, 0.012, 0));                          // the box magazine on top
+      rifle.add(at(box(0.012, 0.02, 0.012, M.wood), -0.04, -0.004, 0));                          // the padded butt
+      rifle.add(at(cyl(0.0016, 0.0016, 0.04, M.steel, 6), 0.06, -0.02, 0, 0, 0, 0.2));           // the monopod
+      g.add(at(rifle, 0.0, 0.05, -0.006));
+      const mate = soldier(side, 1, false); mate.scale.y = 0.74; g.add(at(mate, -0.024, 0.008, 0.03, 0, 0.3, 0));
     } else if (kind === 'sniper') {
       // The sniper kneeling with his long scoped rifle, his spotter beside him with binoculars
       const shot = soldier(side, 0, false); shot.scale.y = 0.72; g.add(at(shot, 0.0, 0.008, -0.012, 0, 0, 0));
@@ -318,7 +346,7 @@ const Models = (() => {
 
   // The captain: the company commander on his own base, with a tall company guidon (blue, crossed rifles in white),
   // so he is easy to find on the table. There is one for the whole company
-  function captain(side) {
+  function captain(side, flagOf = '') {
     const g = new T.Group();
     g.add(at(new T.Mesh(new T.CylinderGeometry(0.045, 0.047, 0.008, 28), [mat('#3b3326', 0.8), baseTop(side), M.base]), 0, 0.004, 0));
     g.add(at(soldier(side, 0, false), 0.01, 0.008, 0.008));
@@ -327,11 +355,29 @@ const Models = (() => {
     g.add(at(sphere(0.003, mat('#c9a53a', 0.4, 0.6), 8, 6), -0.022, 0.25, -0.018));
     const flag = new T.Group();
     // Blue with crossed rifles in white for the Americans; plain red for the Germans (Steve)
-    flag.add(at(box(0.07, 0.045, 0.002, mat(side === 'us' ? '#2f4f86' : '#c0261c', 0.8)), 0.035, 0, 0));
-    if (side === 'us') for (const r of [0.6, -0.6]) flag.add(at(box(0.05, 0.004, 0.0025, mat('#f2efe6', 0.8)), 0.035, 0, 0, 0, 0, r));
+    if (flagOf === 'uk') unionJack(flag);
+    else {
+      flag.add(at(box(0.07, 0.045, 0.002, mat(side === 'us' ? '#2f4f86' : '#c0261c', 0.8)), 0.035, 0, 0));
+      if (side === 'us') for (const r of [0.6, -0.6]) flag.add(at(box(0.05, 0.004, 0.0025, mat('#f2efe6', 0.8)), 0.035, 0, 0, 0, 0, r));
+    }
     at(flag, -0.022, 0.222, -0.018, 0, 0.35, 0);
     g.add(flag);
     return castAll(g);
+  }
+
+  // The Union Jack (Steve: the British need their own flag): blue, the white and red diagonals, the white and red cross
+  function unionJack(flag) {
+    const blue = mat('#22356b', 0.8), white = mat('#f2efe6', 0.8), red = mat('#c0261c', 0.8);
+    const w = 0.07, h = 0.045, slant = Math.atan2(h, w);
+    flag.add(at(box(w, h, 0.002, blue), 0.035, 0, 0));
+    for (const r of [slant, -slant]) {
+      flag.add(at(box(0.083, 0.008, 0.0024, white), 0.035, 0, 0, 0, 0, r));
+      flag.add(at(box(0.083, 0.003, 0.0028, red), 0.035, 0, 0, 0, 0, r));
+    }
+    flag.add(at(box(w, 0.012, 0.0032, white), 0.035, 0, 0));
+    flag.add(at(box(0.012, h, 0.0032, white), 0.035, 0, 0));
+    flag.add(at(box(w, 0.006, 0.0036, red), 0.035, 0, 0));
+    flag.add(at(box(0.006, h, 0.0036, red), 0.035, 0, 0));
   }
 
   // A PaK 40 anti-tank gun: split trail, wheels, the angled shield and a long barrel with its muzzle brake
@@ -541,7 +587,36 @@ const Models = (() => {
   // A move token from the bag (Steve): a thick coin. American: green with a gold star; German: grey with a black cross
   // edged in white. Its faces are painted on a canvas; the rim is a darker shade
   const coinTex = {};
+  // A token face with the Union Jack across it (Steve: Dunkirk's British), cut to the round and edged in dark blue. The
+  // flag as its 60 by 30 pattern, the red diagonals counterchanged as on the real one
+  function unionJackCoin() {
+    const c = document.createElement('canvas'); c.width = c.height = 256;
+    const g = c.getContext('2d');
+    g.save();
+    // (turned a quarter, as the timer's sand-glass is, so it is the right way up as the coin lies on the table)
+    g.translate(128, 128); g.rotate(-Math.PI / 2); g.translate(-128, -128);
+    g.beginPath(); g.arc(128, 128, 128, 0, Math.PI * 2); g.clip();
+    // (the flag is twice as wide as high: drawn 512 by 256, its middle on the token)
+    g.translate(-128, 0); g.scale(512 / 60, 256 / 30);
+    g.fillStyle = '#012169'; g.fillRect(0, 0, 60, 30);
+    g.lineCap = 'butt';
+    g.strokeStyle = '#ffffff'; g.lineWidth = 6; g.stroke(new Path2D('M0,0 L60,30 M60,0 L0,30'));
+    g.save(); g.clip(new Path2D('M30,15 h30 v15 z v15 h-30 z h-30 v-15 z v-15 h30 z'));
+    g.strokeStyle = '#c8102e'; g.lineWidth = 4; g.stroke(new Path2D('M0,0 L60,30 M60,0 L0,30'));
+    g.restore();
+    g.strokeStyle = '#ffffff'; g.lineWidth = 10; g.stroke(new Path2D('M30,0 v30 M0,15 h60'));
+    g.strokeStyle = '#c8102e'; g.lineWidth = 6; g.stroke(new Path2D('M30,0 v30 M0,15 h60'));
+    g.restore();
+    g.lineWidth = 14; g.strokeStyle = '#0d1a4a';
+    g.beginPath(); g.arc(128, 128, 121, 0, Math.PI * 2); g.stroke();
+    const tex = new T.CanvasTexture(c);
+    tex.encoding = T.sRGBEncoding;
+    return tex;
+  }
+
   function coin(side) {
+    // The British token (Steve: a proper Union Jack on it)
+    if (side === 'uk' && !coinTex.uk) coinTex.uk = unionJackCoin();
     if (!coinTex[side]) {
       const c = document.createElement('canvas'); c.width = c.height = 256;
       const g = c.getContext('2d');
@@ -1141,30 +1216,338 @@ const Models = (() => {
     return castAll(g);
   }
 
-  // A little ship (Steve: Dunkirk): a wooden boat lying along the shore (z), its bow to the north, a wheelhouse and funnel
-  // on the seaward side (-x) and an open deck for the men to stand on. Its paint, from the seed, so no two are alike
-  const SHIP_PAINT = [['#e9e4d6', '#2d4f7c'], ['#2f5a3e', '#e2dccb'], ['#7c2a24', '#e9e4d6'], ['#33465c', '#d9c38a'], ['#e9e4d6', '#8a2b22']];
-  function littleShip(seed = 1) {
-    const g = new T.Group();
-    const paint = SHIP_PAINT[Math.abs(seed) % SHIP_PAINT.length];
-    const hull = mat(paint[0], 0.7, 0.05), trim = mat(paint[1], 0.7, 0.05);
-    if (!M.deck) { M.deck = mat('#8a6a44', 0.85, 0); M.funnel = mat('#2a2622', 0.7, 0.1); }
-    const long = 0.78, wide = 0.6, tall = 0.06;
-    // The deck, and the hull sides with a painted stripe along the top
-    g.add(at(box(wide, 0.014, long, M.deck), 0, 0.012, 0.03));
-    for (const s of [-1, 1]) {
-      g.add(at(box(0.02, tall, long, hull), s * wide / 2, tall / 2, 0.03));
-      g.add(at(box(0.024, 0.012, long, trim), s * wide / 2, tall, 0.03));
+  // ---------- Dunkirk, 1940 (Steve) ----------
+  // British khaki green, and the shared bits: a man's head and Brodie helmet, a canvas tilt
+  function britishPaint() {
+    if (!M.khaki) {
+      M.khaki = mat('#5f5d3c', 0.7, 0.12);
+      M.canvas = mat('#8a8460', 0.9, 0);
+      M.skin = M.skin || mat('#c9a07a', 0.8, 0);
+      M.glass = mat('#1d2328', 0.3, 0.4);
+      M.sandbag = mat('#b3a175', 0.95, 0);
+      M.navy = mat('#727b80', 0.6, 0.3);
+      M.navyDark = mat('#4b5256', 0.6, 0.3);
+      M.redLead = mat('#8a2b22', 0.8, 0);
     }
-    g.add(at(box(wide, tall, 0.02, hull), 0, tall / 2, 0.03 + long / 2));
-    // The bow: two sides meeting in a point to the north
-    for (const s of [-1, 1]) g.add(at(box(0.02, tall, 0.36, hull), s * wide / 4, tall / 2, -long / 2 - 0.1, 0, s * 1.0, 0));
-    // The wheelhouse and its roof on the seaward side, a funnel behind it, a short mast with a pennant
-    g.add(at(box(0.16, 0.1, 0.2, hull), -wide / 2 + 0.1, 0.06, 0.18));
-    g.add(at(box(0.18, 0.012, 0.22, trim), -wide / 2 + 0.1, 0.115, 0.18));
-    g.add(at(cyl(0.022, 0.026, 0.1, M.funnel, 10), -wide / 2 + 0.1, 0.16, 0.34));
-    g.add(at(cyl(0.005, 0.005, 0.26, M.funnel, 6), -wide / 2 + 0.1, 0.2, -0.05));
-    g.add(at(box(0.004, 0.03, 0.06, trim), -wide / 2 + 0.1, 0.31, -0.02));
+    return M.khaki;
+  }
+  // A man's head and shoulders in a Brodie helmet, for the carrier's crew
+  function crewman(g, x, y, z) {
+    g.add(at(box(0.022, 0.03, 0.03, M.khaki), x, y, z));
+    g.add(at(sphere(0.011, M.skin, 10, 8), x, y + 0.025, z));
+    g.add(at(cyl(0.018, 0.018, 0.003, M.khaki, 14), x, y + 0.034, z));
+    g.add(at(cyl(0.01, 0.012, 0.007, M.khaki, 12), x, y + 0.038, z));
+  }
+
+  // The Matilda II (Steve: much flatter): a long low hull, full-length armoured skirts over the tracks with their mud
+  // chutes, a small cast turret, the thin 2-pounder
+  function matilda() {
+    const paint = britishPaint();
+    const g = new T.Group(), W = 0.2, L = 0.4;
+    for (const s of [-1, 1]) {
+      const z = s * W * 0.4;
+      g.add(trackRun(L * 0.92, 0.034, 0.04, 0.02, z));
+      // The skirt over the top run, its top, and the mud chutes along it
+      g.add(at(box(L * 0.9, 0.04, 0.012, paint), 0, 0.05, z + s * 0.024));
+      g.add(at(box(L * 0.9, 0.006, 0.05, paint), 0, 0.072, z + s * 0.006));
+      for (let k = 0; k < 6; k++) g.add(at(box(0.02, 0.012, 0.014, M.black), -0.15 + k * 0.06, 0.038, z + s * 0.025));
+    }
+    // The hull between: low, with its glacis
+    g.add(at(profile([[-0.2, 0.035], [0.17, 0.035], [0.2, 0.055], [0.16, 0.088], [-0.19, 0.088]], W * 0.62, paint, 0.006), 0, 0, 0));
+    for (let k = 0; k < 4; k++) g.add(at(box(0.004, 0.003, 0.08, M.black), -0.16 + k * 0.014, 0.09, 0));
+    // The small low turret, a little forward of the middle, the 2-pounder and the Besa beside it
+    g.add(at(cyl(0.05, 0.056, 0.032, paint, 22), 0.005, 0.104, 0));
+    g.add(at(hatch(0.016, paint), -0.015, 0.121, 0.018));
+    g.add(at(box(0.016, 0.022, 0.04, paint), 0.058, 0.104, 0));
+    g.add(at(cyl(0.0038, 0.0045, 0.11, M.steel, 10), 0.12, 0.106, -0.006, 0, 0, Math.PI / 2));
+    g.add(at(cyl(0.003, 0.003, 0.03, M.steel, 6), 0.078, 0.1, 0.012, 0, 0, Math.PI / 2));
+    return castAll(g);
+  }
+
+  // The Universal Carrier (Steve: a small open tracked vehicle): a low open steel box on short tracks, the crew's heads
+  // showing, a Bren on the front
+  function carrier() {
+    const paint = britishPaint();
+    const g = new T.Group(), L = 0.26, W = 0.15;
+    for (const s of [-1, 1]) {
+      const z = s * W * 0.4;
+      g.add(trackRun(L * 0.95, 0.032, 0.032, 0.018, z));
+      for (const x of [-0.075, 0, 0.075]) g.add(at(wheel(0.013, 0.03, M.steel), x, 0.018, z));
+      // The track guard over it
+      g.add(at(box(L * 0.95, 0.004, 0.036, paint), 0, 0.038, z));
+    }
+    // The open box: its floor, low sides and back, the sloped front with the gun slot, the engine cover in the middle
+    g.add(at(box(L * 0.92, 0.01, W * 0.62, paint), 0, 0.04, 0));
+    for (const s of [-1, 1]) g.add(at(box(L * 0.92, 0.034, 0.006, paint), 0, 0.06, s * W * 0.31));
+    g.add(at(box(0.006, 0.034, W * 0.62, paint), -L * 0.46, 0.06, 0));
+    g.add(at(box(0.006, 0.046, W * 0.62, paint), L * 0.45, 0.064, 0, 0, 0, -0.45));
+    g.add(at(box(0.07, 0.026, 0.036, paint), -0.01, 0.058, 0));
+    // The crew: driver and Bren gunner up front
+    crewman(g, 0.07, 0.06, 0.028);
+    crewman(g, 0.07, 0.06, -0.028);
+    // The Bren on the front plate: barrel, body, the curved magazine on top
+    g.add(at(cyl(0.003, 0.003, 0.05, M.steel, 6), 0.14, 0.088, -0.028, 0, 0, Math.PI / 2));
+    g.add(at(box(0.03, 0.008, 0.007, M.steel), 0.108, 0.088, -0.028));
+    g.add(at(box(0.006, 0.014, 0.005, M.steel), 0.108, 0.098, -0.028, 0, 0, 0.3));
+    return castAll(g);
+  }
+
+  // The Panzer I (Steve: a short turret, unlike the Panzer II): small, four road wheels a side with the girder outside
+  // them, a low turret set off to the right with its two machine guns
+  function panzer1() {
+    const paint = M.panzerGrey;
+    const g = new T.Group(), W = 0.16, L = 0.3;
+    g.add(at(box(0.28, 0.04, W * 0.56, paint), 0, 0.05, 0));
+    g.add(at(profile([[-0.15, 0.068], [0.125, 0.068], [0.15, 0.084], [0.12, 0.106], [-0.15, 0.106]], W * 0.74, paint, 0.004), 0, 0, 0));
+    for (const s of [-1, 1]) {
+      const z = s * W * 0.4;
+      g.add(trackRun(L * 0.9, 0.04, 0.028, 0.026, z));
+      for (let k = 0; k < 4; k++) g.add(at(wheel(0.017, 0.022, M.steel), -0.09 + k * 0.06, 0.022, z));
+      g.add(at(box(0.2, 0.008, 0.004, paint), 0, 0.034, z + s * 0.017));
+      g.add(at(box(L * 0.95, 0.004, 0.034, paint), 0, 0.072, z));
+      g.add(at(sprocket(0.016, 0.026, paint), 0.13, 0.04, z));
+    }
+    // The low turret, off to the right, and its twin machine guns
+    g.add(at(profile([[-0.038, 0], [0.034, 0], [0.034, 0.024], [-0.034, 0.026]], 0.058, paint, 0.003), 0.0, 0.106, 0.016));
+    for (const dz of [-0.008, 0.008]) g.add(at(cyl(0.0028, 0.0028, 0.055, M.steel, 6), 0.06, 0.118, 0.016 + dz, 0, 0, Math.PI / 2));
+    for (const s of [-1, 1]) g.add(at(crossMesh(0.016), -0.04, 0.086, s * (W * 0.37 + 0.002), 0, s > 0 ? 0 : Math.PI, 0));
+    return castAll(g);
+  }
+
+  // The Panzer II (Steve: a short turret): five big road wheels a side and no girder, a low turret in the middle with the
+  // 2 cm cannon and a machine gun beside it, a hatch on top
+  function panzer2() {
+    const paint = M.panzerGrey;
+    const g = new T.Group(), W = 0.17, L = 0.33;
+    g.add(at(box(0.31, 0.045, W * 0.58, paint), 0, 0.055, 0));
+    g.add(at(profile([[-0.165, 0.074], [0.14, 0.074], [0.165, 0.092], [0.13, 0.116], [-0.165, 0.116]], W * 0.78, paint, 0.004), 0, 0, 0));
+    for (const s of [-1, 1]) {
+      const z = s * W * 0.4;
+      g.add(trackRun(L * 0.9, 0.048, 0.03, 0.028, z));
+      for (let k = 0; k < 5; k++) g.add(at(wheel(0.022, 0.026, M.steel), -0.11 + k * 0.055, 0.026, z));
+      for (let k = 0; k < 4; k++) g.add(at(wheel(0.006, 0.014, M.steel), -0.09 + k * 0.06, 0.054, z));
+      g.add(at(box(L * 0.95, 0.004, 0.036, paint), 0, 0.078, z));
+      g.add(at(sprocket(0.018, 0.028, paint), 0.145, 0.045, z));
+    }
+    g.add(at(profile([[-0.045, 0], [0.038, 0], [0.04, 0.026], [-0.042, 0.028]], 0.072, paint, 0.003), -0.01, 0.116, 0));
+    g.add(at(hatch(0.014, paint), -0.03, 0.145, 0));
+    g.add(at(box(0.014, 0.018, 0.03, paint), 0.034, 0.128, 0));
+    g.add(at(cyl(0.0038, 0.0042, 0.08, M.steel, 10), 0.08, 0.13, -0.007, 0, 0, Math.PI / 2));
+    g.add(at(cyl(0.0026, 0.0026, 0.04, M.steel, 6), 0.06, 0.126, 0.009, 0, 0, Math.PI / 2));
+    for (const s of [-1, 1]) g.add(at(crossMesh(0.017), -0.05, 0.095, s * (W * 0.39 + 0.002), 0, s > 0 ? 0 : Math.PI, 0));
+    return castAll(g);
+  }
+
+  // The Panzer III (1940): a box hull, six road wheels a side and three return rollers, a turret with its cupola at the
+  // back and the short 37 mm
+  function panzer3() {
+    const paint = M.panzerGrey;
+    const g = new T.Group(), W = 0.18, L = 0.36;
+    g.add(at(box(0.34, 0.05, W * 0.6, paint), 0, 0.06, 0));
+    g.add(at(profile([[-0.18, 0.085], [0.155, 0.085], [0.18, 0.102], [0.15, 0.13], [-0.18, 0.13]], W, paint, 0.004), 0, 0, 0));
+    for (const s of [-1, 1]) {
+      const z = s * W * 0.42;
+      g.add(trackRun(L * 0.9, 0.05, 0.033, 0.03, z));
+      for (let k = 0; k < 6; k++) g.add(at(wheel(0.02, 0.025, M.steel), -0.125 + k * 0.05, 0.024, z));
+      for (let k = 0; k < 3; k++) g.add(at(wheel(0.006, 0.015, M.steel), -0.08 + k * 0.07, 0.055, z));
+      g.add(at(sprocket(0.02, 0.03, paint), 0.165, 0.045, z));
+      g.add(at(wheel(0.017, 0.03, M.steel), -0.165, 0.04, z));
+    }
+    g.add(at(profile([[-0.055, 0], [0.045, 0], [0.05, 0.036], [-0.05, 0.04]], 0.1, paint, 0.004), -0.01, 0.13, 0));
+    g.add(at(cyl(0.015, 0.017, 0.016, paint, 16), -0.05, 0.178, 0));
+    g.add(at(box(0.02, 0.026, 0.04, paint), 0.045, 0.148, 0));
+    g.add(at(cyl(0.005, 0.006, 0.12, M.steel, 12), 0.11, 0.15, 0, 0, 0, Math.PI / 2));
+    for (const s of [-1, 1]) g.add(at(crossMesh(0.02), -0.03, 0.105, s * (W / 2 + 0.002), 0, s > 0 ? 0 : Math.PI, 0));
+    return castAll(g);
+  }
+
+  // The Sd.Kfz. 231 (8-rad) (Steve: its turret further forward than the Puma's): the long eight-wheeled hull, the turret
+  // well forward with its 2 cm gun, the bed-frame aerial over the back
+  function sdkfz231() {
+    const paint = M.panzerGrey;
+    const g = new T.Group(), W = 0.18;
+    g.add(at(profile([[-0.21, 0.07], [-0.16, 0.045], [0.16, 0.045], [0.215, 0.075], [0.15, 0.115], [-0.16, 0.115]], W * 0.78, paint, 0.004), 0, 0, 0));
+    for (const s of [-1, 1]) {
+      const z = s * W * 0.43;
+      g.add(at(box(0.27, 0.03, 0.03, paint), 0, 0.085, z));
+      for (const x of [-0.135, -0.055, 0.055, 0.135]) {
+        g.add(at(wheel(0.03, 0.028, M.black), x, 0.03, z));
+        g.add(at(wheel(0.014, 0.03, M.steel), x, 0.03, z));
+      }
+    }
+    // The turret, well forward, and its short 2 cm gun with the machine gun beside it
+    g.add(at(profile([[-0.045, 0], [0.042, 0], [0.036, 0.036], [-0.04, 0.038]], 0.09, paint, 0.004), 0.07, 0.115, 0));
+    g.add(at(cyl(0.004, 0.0045, 0.09, M.steel, 10), 0.155, 0.135, -0.006, 0, 0, Math.PI / 2));
+    g.add(at(cyl(0.0026, 0.0026, 0.04, M.steel, 6), 0.13, 0.132, 0.01, 0, 0, Math.PI / 2));
+    // The bed-frame aerial on its four posts, over the back of the hull
+    for (const s of [-1, 1]) {
+      g.add(at(box(0.2, 0.004, 0.004, M.steel), -0.08, 0.17, s * 0.06));
+      for (const x of [-0.17, 0.01]) g.add(at(cyl(0.0018, 0.0018, 0.055, M.steel, 4), x, 0.143, s * 0.06));
+    }
+    g.add(at(box(0.004, 0.004, 0.12, M.steel), -0.18, 0.17, 0));
+    for (const s of [-1, 1]) g.add(at(crossMesh(0.018), -0.07, 0.085, s * (W * 0.43 + 0.017), 0, s > 0 ? 0 : Math.PI, 0));
+    return castAll(g);
+  }
+
+  // A lorry (Steve: the men come in on lorries): the cab and bonnet at the front, the load bed with its canvas tilt
+  // behind, open at the back for the men to jump down
+  function lorry() {
+    const paint = britishPaint();
+    const g = new T.Group();
+    g.add(at(box(0.4, 0.02, 0.1, M.black), 0, 0.05, 0));
+    for (const s of [-1, 1]) {
+      for (const x of [0.14, -0.1, -0.15]) g.add(at(wheel(0.03, 0.026, M.black), x, 0.03, s * 0.068));
+      g.add(at(box(0.07, 0.006, 0.034, paint), 0.14, 0.066, s * 0.068));
+    }
+    // The bonnet, the cab and its windscreen
+    g.add(at(box(0.08, 0.05, 0.1, paint), 0.16, 0.085, 0));
+    g.add(at(box(0.07, 0.085, 0.13, paint), 0.09, 0.1, 0));
+    g.add(at(box(0.003, 0.03, 0.11, M.glass), 0.126, 0.125, 0));
+    for (const s of [-1, 1]) g.add(at(box(0.04, 0.025, 0.003, M.glass), 0.09, 0.125, s * 0.066));
+    // The load bed, its sides, and the canvas tilt with a flat roof (Steve), a seam along its top edges
+    g.add(at(box(0.24, 0.02, 0.15, paint), -0.07, 0.07, 0));
+    for (const s of [-1, 1]) g.add(at(box(0.24, 0.03, 0.006, paint), -0.07, 0.095, s * 0.075));
+    g.add(at(box(0.24, 0.075, 0.15, M.canvas), -0.07, 0.1475, 0));
+    for (const s of [-1, 1]) g.add(at(box(0.242, 0.004, 0.004, M.khaki), -0.07, 0.185, s * 0.074));
+    // The open back, dark inside
+    g.add(at(box(0.003, 0.07, 0.13, M.black), -0.191, 0.145, 0));
+    return castAll(g);
+  }
+
+  // A Royal Navy destroyer (Steve: broadside on to the shore): long and narrow along z, the bow to the north, the bridge,
+  // two funnels, four turrets with their guns trained on the shore (+x), a mast, the boot-topping red at the waterline
+  function destroyer() {
+    britishPaint();
+    const g = new T.Group(), L = 1.6, B = 0.26;
+    g.add(at(box(B * 1.02, 0.014, L, M.redLead), 0, 0.007, 0));
+    g.add(at(box(B, 0.06, L, M.navy), 0, 0.04, 0));
+    // The bow, coming to a point, and the round stern
+    const bow = box(B * 0.72, 0.068, B * 0.72, M.navy);
+    g.add(at(bow, 0, 0.042, -L / 2, 0, Math.PI / 4, 0));
+    g.add(at(cyl(B / 2, B / 2, 0.06, M.navy, 20), 0, 0.04, L / 2));
+    g.add(at(box(B * 0.96, 0.004, L * 0.98, M.navyDark), 0, 0.072, 0));
+    // The bridge and its top, the mast behind it
+    g.add(at(box(0.15, 0.09, 0.17, M.navy), 0, 0.115, -0.38));
+    g.add(at(box(0.17, 0.025, 0.11, M.navyDark), 0, 0.17, -0.39));
+    g.add(at(cyl(0.006, 0.006, 0.34, M.navyDark, 6), 0, 0.27, -0.28));
+    g.add(at(box(0.004, 0.004, 0.12, M.navyDark), 0, 0.38, -0.28));
+    // Two funnels, black-topped
+    for (const z of [-0.12, 0.08]) {
+      g.add(at(cyl(0.035, 0.04, 0.15, M.navy, 14), 0, 0.15, z));
+      g.add(at(cyl(0.036, 0.036, 0.02, M.black, 14), 0, 0.23, z));
+    }
+    // Four gun turrets, A and B forward (B raised), X and Y aft, their guns trained on the shore
+    for (const [z, y] of [[-0.6, 0.09], [-0.5, 0.115], [0.42, 0.115], [0.6, 0.09]]) {
+      g.add(at(box(0.07, 0.04, 0.075, M.navy), 0, y, z));
+      g.add(at(cyl(0.005, 0.006, 0.12, M.navyDark, 8), 0.09, y + 0.005, z, 0, 0, Math.PI / 2));
+    }
+    // Torpedo tubes amidships
+    g.add(at(cyl(0.012, 0.012, 0.14, M.navyDark, 8), 0, 0.088, 0.25, 0, 0, Math.PI / 2));
+    return castAll(g);
+  }
+
+  // A battleship (Steve: the Americans' guns at the Normandy beach): bigger than the destroyer, broadside on to the shore,
+  // three big triple turrets trained on it, a tall bridge tower and one wide funnel
+  function battleship() {
+    britishPaint();
+    if (!M.usNavy) M.usNavy = mat('#6b7378', 0.6, 0.3);
+    const g = new T.Group(), L = 1.7, B = 0.36;
+    g.add(at(box(B * 1.02, 0.016, L, M.redLead), 0, 0.008, 0));
+    g.add(at(box(B, 0.08, L, M.usNavy), 0, 0.05, 0));
+    g.add(at(box(B * 0.72, 0.088, B * 0.72, M.usNavy), 0, 0.052, -L / 2, 0, Math.PI / 4, 0));
+    g.add(at(cyl(B / 2, B / 2, 0.08, M.usNavy, 20), 0, 0.05, L / 2));
+    g.add(at(box(B * 0.96, 0.004, L * 0.98, M.navyDark), 0, 0.092, 0));
+    // The bridge tower in steps, the tripod mast on it, the wide funnel aft of it
+    g.add(at(box(0.2, 0.1, 0.26, M.usNavy), 0, 0.14, -0.2));
+    g.add(at(box(0.16, 0.08, 0.18, M.usNavy), 0, 0.23, -0.22));
+    g.add(at(box(0.12, 0.04, 0.12, M.navyDark), 0, 0.29, -0.23));
+    g.add(at(cyl(0.008, 0.008, 0.3, M.navyDark, 6), 0, 0.42, -0.24));
+    g.add(at(cyl(0.06, 0.065, 0.16, M.usNavy, 16), 0, 0.17, 0.12));
+    g.add(at(cyl(0.061, 0.061, 0.02, M.black, 16), 0, 0.25, 0.12));
+    // Three triple turrets: two forward, one aft, the guns trained on the shore (+x)
+    for (const [z, y] of [[-0.66, 0.115], [-0.46, 0.14], [0.55, 0.115]]) {
+      g.add(at(box(0.12, 0.05, 0.12, M.usNavy), 0, y, z));
+      for (const dz of [-0.03, 0, 0.03]) g.add(at(cyl(0.006, 0.008, 0.2, M.navyDark, 8), 0.15, y + 0.008, z + dz, 0, 0, Math.PI / 2));
+    }
+    // Secondary guns along the sides
+    for (const z of [-0.05, 0.3]) for (const s of [-1, 1]) g.add(at(box(0.04, 0.03, 0.05, M.usNavy), s * 0.13, 0.11, z));
+    return castAll(g);
+  }
+
+  // The little ships (Steve: proper closed-top tugs and cabin cruisers), lying along the shore (z), the bow to the north.
+  // seed: which, and its paint, so no two alike
+  function tugBoat(seed) {
+    britishPaint();
+    const g = new T.Group(), L = 0.72, B = 0.28;
+    const house = mat(['#e6dfcc', '#7a4a2c', '#c9b48a'][seed % 3], 0.75, 0);
+    const funnel = mat(['#c9a13a', '#b23a2a', '#2a2a2a'][seed % 3], 0.7, 0);
+    g.add(at(box(B * 1.02, 0.012, L, M.redLead), 0, 0.006, 0));
+    g.add(at(box(B, 0.07, L, M.black), 0, 0.04, 0));
+    g.add(at(box(B * 0.72, 0.074, B * 0.72, M.black), 0, 0.042, -L / 2, 0, Math.PI / 4, 0));
+    g.add(at(cyl(B / 2, B / 2, 0.07, M.black, 18), 0, 0.04, L / 2));
+    g.add(at(box(B * 0.95, 0.004, L * 0.95, M.deck || M.canvas), 0, 0.077, 0));
+    // The closed deckhouse, the wheelhouse on it with its windows, the big funnel, the mast
+    g.add(at(box(0.18, 0.07, 0.32, house), 0, 0.11, 0.02));
+    g.add(at(box(0.15, 0.06, 0.12, house), 0, 0.175, -0.08));
+    for (const s of [-1, 1]) g.add(at(box(0.002, 0.02, 0.09, M.glass), s * 0.076, 0.185, -0.08));
+    g.add(at(box(0.12, 0.02, 0.002, M.glass), 0, 0.185, -0.141));
+    g.add(at(cyl(0.04, 0.045, 0.14, funnel, 14), 0, 0.2, 0.09));
+    g.add(at(cyl(0.041, 0.041, 0.025, M.black, 14), 0, 0.27, 0.09));
+    g.add(at(cyl(0.005, 0.005, 0.24, M.black, 6), 0, 0.24, -0.22));
+    // Old tyres hung along the sides as fenders
+    for (const s of [-1, 1]) for (const z of [-0.2, 0, 0.2]) {
+      const tyre = new T.Mesh(new T.TorusGeometry(0.018, 0.007, 6, 12), M.black);
+      g.add(at(tyre, s * (B / 2 + 0.006), 0.05, z, 0, Math.PI / 2, 0));
+    }
+    return castAll(g);
+  }
+  function cabinCruiser(seed) {
+    britishPaint();
+    const g = new T.Group(), L = 0.62, B = 0.24;
+    const hull = mat(['#ecebe4', '#2f4f6e', '#e8e2d0'][seed % 3], 0.6, 0.05);
+    const trim = mat(['#2d4f7c', '#e9e4d6', '#7c2a24'][seed % 3], 0.6, 0.05);
+    const wood = mat('#8a6440', 0.6, 0.05);
+    g.add(at(box(B, 0.06, L, hull), 0, 0.035, 0));
+    g.add(at(box(B * 1.01, 0.01, L, trim), 0, 0.064, 0));
+    g.add(at(box(B * 0.72, 0.064, B * 0.72, hull), 0, 0.037, -L / 2, 0, Math.PI / 4, 0));
+    g.add(at(cyl(B / 2, B / 2, 0.06, hull, 18), 0, 0.035, L / 2));
+    g.add(at(box(B * 0.94, 0.004, L * 0.95, wood), 0, 0.067, 0));
+    // The closed cabin with a row of windows each side, the raised wheelhouse at its front with a windscreen
+    g.add(at(box(0.17, 0.06, 0.34, hull), 0, 0.1, 0.04));
+    g.add(at(box(0.18, 0.008, 0.35, wood), 0, 0.134, 0.04));
+    for (const s of [-1, 1]) for (let k = 0; k < 4; k++) g.add(at(box(0.002, 0.016, 0.045, M.glass), s * 0.086, 0.104, -0.07 + k * 0.075));
+    g.add(at(box(0.15, 0.045, 0.1, hull), 0, 0.16, -0.08));
+    g.add(at(box(0.13, 0.025, 0.002, M.glass), 0, 0.165, -0.131));
+    // A short mast with the ensign at the stern
+    g.add(at(cyl(0.003, 0.003, 0.12, wood, 6), 0, 0.12, 0.28));
+    g.add(at(box(0.002, 0.025, 0.04, mat('#b8262c', 0.8)), 0, 0.17, 0.3));
+    return castAll(g);
+  }
+  // One of the little ships: a tug or a cabin cruiser
+  function littleShip(seed = 1) {
+    const n = Math.abs(seed);
+    return n % 2 ? tugBoat(Math.floor(n / 2)) : cabinCruiser(Math.floor(n / 2));
+  }
+
+  // A strongpoint (Steve: the British are defending): sandbag walls round a field, thickest facing the Germans (east),
+  // with gaps to get in and out at the back. Built round the middle of the field
+  function strongpoint(seed = 1) {
+    britishPaint();
+    const g = new T.Group();
+    const R = (() => { let a = seed * 9301 + 49297; return () => { a = (a * 233280 + 49297) % 233280; return a / 233280; }; })();
+    // A wall of bags: along x or z, from one point, so many bags long and high
+    const wall = (x, z, alongX, count, high) => {
+      for (let h = 0; h < high; h++) for (let k = 0; k < count; k++) {
+        const off = (k + (h % 2 ? 0.5 : 0)) * 0.05 - count * 0.025;
+        const bag = box(alongX ? 0.046 : 0.03, 0.02, alongX ? 0.03 : 0.046, M.sandbag);
+        g.add(at(bag, x + (alongX ? off : 0), 0.011 + h * 0.019, z + (alongX ? 0 : off), 0, (R() - 0.5) * 0.15, 0));
+      }
+    };
+    // The front, facing east: three bags high, almost the whole field
+    wall(0.44, 0, false, 16, 3);
+    // The north and south sides: two high, the front half, leaving the back open
+    wall(0.22, -0.44, true, 9, 2);
+    wall(0.22, 0.44, true, 9, 2);
     return castAll(g);
   }
 
@@ -1826,5 +2209,5 @@ const Models = (() => {
     return castAll(g);
   }
 
-  return { greyhound, puma, c47, supplyCrate, EIFFEL_HEIGHT, eiffel, landingCraft, littleShip, tankTrap, hulk, crater, seaWall, seaWallRubble, bunker, bunkerCrew, BUNKER, track, bufferStop, engine, carriage, wagon, signalbox, signal, watertower, coal, cow, sheep, lampPost, posterColumn, marketStall, cafe, barn, fountain, pond, reeds, BRIDGE_DECK, materials, M, mergeParts, eliteBand, water, bridge, soldier, squad, team, captain, pak, mortar, bomber, bomberOnStand, howitzer, round, coin, token, sherman, panther, panzer4, hedge, tree, house, die, table, field, lane, at };
+  return { greyhound, puma, c47, supplyCrate, EIFFEL_HEIGHT, eiffel, landingCraft, littleShip, matilda, carrier, panzer1, panzer2, panzer3, sdkfz231, lorry, destroyer, battleship, strongpoint, setBritish, tankTrap, hulk, crater, seaWall, seaWallRubble, bunker, bunkerCrew, BUNKER, track, bufferStop, engine, carriage, wagon, signalbox, signal, watertower, coal, cow, sheep, lampPost, posterColumn, marketStall, cafe, barn, fountain, pond, reeds, BRIDGE_DECK, materials, M, mergeParts, eliteBand, water, bridge, soldier, squad, team, captain, pak, mortar, bomber, bomberOnStand, howitzer, round, coin, token, sherman, panther, panzer4, hedge, tree, house, die, table, field, lane, at };
 })();

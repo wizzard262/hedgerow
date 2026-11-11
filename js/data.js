@@ -40,6 +40,9 @@ const FEATURES = {
   // The Eiffel Tower (Steve): the target in Paris. Pieces stand between its legs, so it takes no areas; open ironwork, so it
   // blocks no view; men among its feet have one more to hit
   eiffel: { name: 'Eiffel Tower', blocksView: false, cover: 1 },
+  // A strongpoint (Steve: Dunkirk): sandbag walls round the field; men in it have two more to hit (one against shells).
+  // It takes no areas and blocks no view
+  strongpoint: { name: 'Strongpoint', blocksView: false, cover: 2 },
 };
 const MAPS = [
   {
@@ -180,6 +183,9 @@ const MAPS = [
     ],
     villages: [{ x: 8, y: 4, name: 'Main bunker' }],
     ammo: { us: { bomber: 1 }, de: { artillery: 2, bomber: 0 } },
+    // The American guns are a battleship out at sea, the mortars on a headland (Steve: like Dunkirk)
+    navy: 'battleship',
+    guns: { us: { artillery: 'USS Texas' } },
     us: { add: [{ id: 'D', kind: 'company', name: '4th Platoon', quality: 'standard' }, { id: 'bz2', kind: 'bazooka', name: 'Bazooka Team 2' }] },
     de: {
       remove: ['pak1', 'dmg2', 'dmg4', 'dps1', 'd3', 'd5', 'dt1', 'dt2'],
@@ -218,30 +224,43 @@ const MAPS = [
     // take their men off the beach. The 'us' side is the British here (names), the Germans attack from the east. The
     // village is only where the Germans make for: the beach; nobody has to take or hold it
     id: 'dunkirk', bonus: true, date: '31 May 1940', name: 'Dunkirk',
-    note: 'The British hold the Germans back while little ships take them off the beach. Get 8 pieces away on the boats within 12 rounds; 2 or 3 boats come in at new places each round and sail at its end. From round 3 to 8 a lorry a round brings stragglers along the coast road, who run for the boats on their own. A Matilda II, Universal Carriers, a Vickers and a Boys rifle against Panzer Is, IIs, a III and an armoured car. Destroyers offshore fire for the British.',
+    note: 'The British hold the Germans back while little ships take them off the beach. Lorries come down the coast road from the top and drive to the little ships lying off the beach, and the men run out of the back into the boats: one a round from round 2; get 8 lorry-loads away within 12 rounds. If a German reaches the coast road, the way to the boats is cut and you lose. Your men do not go: they hold the strongpoints along the front and keep the Germans off the road and the beach. 2 or 3 boats come in each round and sail at its end. A Matilda II, Universal Carriers, a Vickers and a Boys rifle against Panzer Is, IIs, a III and an armoured car. Destroyers offshore fire for the British.',
     noGoal: true,
     names: { us: 'British', de: 'Germans' },
+    // (the sea is off the board, out to the table's edge, Steve: the boats lie off the beach)
     rows: [
-      'wbb|...o..h.',
-      'wbb|.h....o.',
-      'wbb+========',
-      'wbb|..o..h..',
-      'wbb|.o...o..',
-      'wbb+========',
-      'wbb|...h..o.',
-      'wbb|.o....h.',
+      'bbb|...o..h.',
+      'bbb|.h....o.',
+      'bbb+========',
+      'bbb|..o..h..',
+      'bbb|.o...o..',
+      'bbb+========',
+      'bbb|...h..o.',
+      'bbb|.o....h.',
+    ],
+    // Strongpoints (Steve: the British are defending): sandbagged positions along the front, cover for the men in them
+    features: [
+      { x: 5, y: 0, kind: 'strongpoint', areas: [], seed: 1 },
+      { x: 4, y: 1, kind: 'strongpoint', areas: [], seed: 2 },
+      { x: 4, y: 3, kind: 'strongpoint', areas: [], seed: 3 },
+      { x: 6, y: 4, kind: 'strongpoint', areas: [], seed: 4 },
+      { x: 5, y: 6, kind: 'strongpoint', areas: [], seed: 5 },
+      { x: 6, y: 7, kind: 'strongpoint', areas: [], seed: 6 },
     ],
     villages: [{ x: 1, y: 4, name: 'the beach' }],
     // Flanders: flat and open, few hedges, little wire
     gap: 0.7, wire: 0.15,
     // The British start along the front, from this column; both sides take this share of the width
     from: { us: 4 }, deploy: 0.25,
-    // need: pieces to get away; rounds: to do it in; boats: how many come each round, from to; trucks: lorries of
-    // stragglers along the coast road (this column), from round first to last, how many a round, sections in each
-    // (need is more than the lorries can ever bring, so the stragglers alone never win it: the men at the front must get away too)
-    evacuate: { need: 8, rounds: 12, boats: [2, 3], trucks: { road: 3, first: 3, last: 8, each: [1, 1], sections: [1, 2] } },
+    // need: lorry-loads to get away; rounds: to do it in; boats: how many come each round, from to; trucks: the lorries,
+    // in at the top of the coast road (this column), from round first to last, how many a round, sections of men in each,
+    // and how many fields each drives a round
+    // noBoats: rows of the water's edge the headland takes (Steve: the British mortars stand on it), where no boat comes
+    evacuate: { need: 8, rounds: 12, boats: [2, 3], noBoats: [3, 4], trucks: { road: 3, first: 2, last: 12, each: [1, 1], sections: [1, 2], moves: 4 } },
     // The destroyers stand in for the British artillery (Steve); no bombers either side for now
     guns: { us: { artillery: 'Royal Navy destroyers', mortars: '3-inch mortars' } },
+    // The British artillery is a destroyer out at sea; the mortars on a headland (Steve)
+    navy: 'destroyer',
     ammo: { us: { artillery: 3, bomber: 0 }, de: { bomber: 0 } },
     us: {
       only: [
@@ -396,14 +415,16 @@ const PIECES = {
   bunker_mg:  { name: 'MG bunker', soft: 5, hard: 0, team: true, fixed: true, bunker: true },
   bunker_gun: { name: 'PaK 40 bunker', soft: 0.5, hard: 3, team: true, fixed: true, bunker: true },
   captain:  { name: 'Captain', soft: 3, hard: 0, men: 1, closeOnly: true },
-  // Dunkirk, 1940 (Steve). look: the model a piece borrows until it has its own. extraMove -1: the Matilda is slow
-  matilda:  { name: 'Matilda II', soft: 1, hard: 1, tank: true, armour: 2, cutter: true, extraMove: -1, look: 'sherman' },
-  carrier:  { name: 'Universal Carrier', soft: 2, hard: 0, tank: true, armour: 0, car: true, look: 'm8' },   // a Bren on a small tracked carrier
-  boys:     { name: 'Boys anti-tank rifle team', soft: 0, hard: 1, team: true, men: 2, look: 'bazooka' },
-  pz1:      { name: 'Panzer I', soft: 1.5, hard: 0, tank: true, armour: 0, cutter: true, look: 'pz4' },   // two machine guns, no gun
-  pz2:      { name: 'Panzer II', soft: 1, hard: 0.5, tank: true, armour: 0, cutter: true, look: 'pz4' },  // a 2 cm cannon
-  pz3:      { name: 'Panzer III', soft: 1.5, hard: 1, tank: true, armour: 0, cutter: true, look: 'pz4' },
-  sdkfz231: { name: 'Sd.Kfz. 231', soft: 1, hard: 0.5, tank: true, armour: 0, car: true, look: 'puma' },   // eight-wheeled armoured car
+  // Dunkirk, 1940 (Steve). extraMove -1: the Matilda is slow
+  matilda:  { name: 'Matilda II', soft: 1, hard: 1, tank: true, armour: 2, cutter: true, extraMove: -1 },
+  carrier:  { name: 'Universal Carrier', soft: 2, hard: 0, tank: true, armour: 0, car: true },   // a Bren on a small open tracked carrier
+  // A lorry-load of men for the boats (Steve): no weapons, no orders; it drives itself. big: a corner block, as a tank
+  lorry:    { name: 'Lorry', soft: 0, hard: 0, big: true, lorry: true },
+  boys:     { name: 'Boys anti-tank rifle team', soft: 0, hard: 1, team: true, men: 2 },
+  pz1:      { name: 'Panzer I', soft: 1.5, hard: 0, tank: true, armour: 0, cutter: true },   // two machine guns, no gun
+  pz2:      { name: 'Panzer II', soft: 1, hard: 0.5, tank: true, armour: 0, cutter: true },  // a 2 cm cannon
+  pz3:      { name: 'Panzer III', soft: 1.5, hard: 1, tank: true, armour: 0, cutter: true },
+  sdkfz231: { name: 'Sd.Kfz. 231', soft: 1, hard: 0.5, tank: true, armour: 0, car: true },   // eight-wheeled armoured car
 };
 
 // Hand to hand (a charge into the enemy, Steve): the two sides strike in turn, the attacker first, a die for each base

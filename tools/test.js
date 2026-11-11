@@ -4345,9 +4345,9 @@ check('parachutes (Steve picked C): big, uneven, olive drab, swinging less near 
 });
 
 const DUNKIRK = MAPS.find(m => m.id === 'dunkirk').evacuate;
-// ---------- Dunkirk (Steve, 2026-11-11): a bonus battle, the British getting away on little ships ----------
+// ---------- Dunkirk (Steve, 2026-11-11): a bonus battle, lorry-loads of British getting away on little ships ----------
 
-// A Dunkirk table set up for one check: only the pieces named, where they are put, no hedges or wire, these boats
+// A Dunkirk table set up for one check: only the pieces named, where they are put, no hedges or wire, boats off these rows
 function dunkirkWith(places, boats = [3], seed = 3) {
   const st = Sim.newGame(seed, 'us', 'dunkirk');
   st.wire = {}; st.hedges = {};
@@ -4356,8 +4356,16 @@ function dunkirkWith(places, boats = [3], seed = 3) {
   st.evac.boats = boats.map(y => ({ x: 0, y }));
   return st;
 }
+// The British at the front, enough of them that the game isn't lost before a check
+const FRONT = { A: [5, 1], B: [5, 3], C: [5, 5], cap: [5, 6], mg1: [5, 2], at1: [5, 4], d1: [10, 3] };
+// A lorry put on the table by hand
+function lorryAt(st, x, y, sections = 2) {
+  const u = { id: 'lorryT', kind: 'lorry', name: 'Lorry T', side: 'us', auto: true, platoons: sections, x, y, at: null, quality: 'standard', shocked: false, acted: false };
+  st.units.push(u);
+  return u;
+}
 
-check('Dunkirk: the British hold the front, the Germans start at the far end, 2 or 3 boats in the surf, the destroyers', () => {
+check('Dunkirk: the British start in the strongpoints along the front, the Germans at the far end, 2 or 3 boats off the beach, the destroyers', () => {
   for (let seed = 1; seed <= 20; seed++) {
     const st = Sim.newGame(seed, 'us', 'dunkirk');
     for (const u of live(st)) {
@@ -4365,9 +4373,15 @@ check('Dunkirk: the British hold the front, the Germans start at the far end, 2 
       else assert(u.x >= 9, `seed ${seed}: ${u.name} starts at ${u.x}`);
     }
     assert(st.evac.boats.length >= 2 && st.evac.boats.length <= 3, `seed ${seed}: ${st.evac.boats.length} boats`);
-    assert(st.evac.boats.every(b => Sim.tileType(b.x, b.y) === 'sea'), `seed ${seed}: a boat out of the sea`);
-    assert(new Set(st.evac.boats.map(b => b.y)).size === st.evac.boats.length, `seed ${seed}: two boats in one field`);
+    assert(st.evac.boats.every(b => b.x === 0 && Sim.tileType(b.x, b.y) === 'beach'), `seed ${seed}: a boat off no beach`);
+    assert(new Set(st.evac.boats.map(b => b.y)).size === st.evac.boats.length, `seed ${seed}: two boats off one field`);
+    // Every rifle platoon starts in a strongpoint
+    const inStrongpoint = u => st.features.some(f => f.kind === 'strongpoint' && f.x === u.x && f.y === u.y);
+    assert(live(st).filter(u => u.side === 'us' && u.kind === 'company').every(inStrongpoint), `seed ${seed}: a platoon out of the strongpoints`);
   }
+  // No sea on the board: it is off the edge, with the boats
+  const played = Sim.newGame(1, 'us', 'dunkirk').map;
+  assert(played.rows.every(r => !r.includes('w')), 'the sea is on the board');
   assert(Sim.sideName(Sim.newGame(1), 'us') === 'Americans', 'the Americans are misnamed');
   const st = Sim.newGame(1, 'us', 'dunkirk');
   assert(Sim.sideName(st, 'us') === 'British', 'the British are misnamed');
@@ -4377,73 +4391,102 @@ check('Dunkirk: the British hold the front, the Germans start at the far end, 2 
   assert(Sim.gunStats('artillery', 'us').name === ARTILLERY.name, 'the destroyers stayed for another map');
 });
 
-check('Dunkirk: men go out to a boat, tanks, carriers and Germans can\'t; aboard, they take no orders', () => {
-  const st = dunkirkWith({ B: [1, 3], T1: [1, 2], UC1: [1, 4], d1: [2, 5] }, [3, 2, 4, 5]);
-  const B = Sim.unitById(st, 'B');
-  assert(Sim.chargeSpots(st, B).some(f => f.x === 0 && f.y === 3), 'the platoon can\'t reach the boat');
-  assert(!Sim.chargeSpots(st, B).some(f => f.x === 0 && f.y === 6), 'the platoon can go into the sea with no boat');
-  assert(!Sim.chargeSpots(st, Sim.unitById(st, 'T1')).some(f => f.x === 0), 'the Matilda can go out to a boat');
-  assert(!Sim.chargeSpots(st, Sim.unitById(st, 'UC1')).some(f => f.x === 0), 'a carrier can go out to a boat');
-  st.human = 'de';
-  assert(!Sim.chargeSpots(st, Sim.unitById(st, 'd1')).some(f => f.x === 0), 'a German can go out to a boat');
-  st.human = 'us';
-  assert(Sim.actCharge(st, B, 0, 3).ok && B.x === 0 && Sim.isAboard(st, B), 'the platoon did not go aboard');
-  B.acted = false;
-  assert(!Sim.canAct(st, B) && !Sim.canReact(st, B), 'a piece aboard can still be given orders');
+check('Dunkirk: a strongpoint gives the men in it two more to hit, one against shells; nothing for a tank', () => {
+  const st = dunkirkWith({ A: [5, 0], d1: [8, 0] });
+  const A = Sim.unitById(st, 'A'), d1 = Sim.unitById(st, 'd1');
+  const inOpen = dunkirkWith({ A: [5, 2], d1: [8, 2] });
+  const A2 = Sim.unitById(inOpen, 'A'), d2 = Sim.unitById(inOpen, 'd1');
+  A2.at = null;
+  // (the label says what each thing adds)
+  assert(Sim.needWhy(st, d1, A).includes('+2 cover') && !Sim.needWhy(inOpen, d2, A2).some(w => w.includes('cover')), 'a strongpoint does not give +2 cover');
+  assert(Sim.shellNeed(st, A) - Sim.shellNeed(inOpen, A2) === 1, 'shells: not one more');
+  const tank = dunkirkWith({ T1: [5, 0], dt3: [8, 0] });
+  assert(!Sim.needWhy(tank, Sim.unitById(tank, 'dt3'), Sim.unitById(tank, 'T1')).some(w => w.includes('cover')), 'a tank has cover in a strongpoint');
+  Sim.newGame(1);
+});
+
+check('Dunkirk: the men at the front never go to the boats; lorries come in at the top of the coast road from round 2', () => {
+  const st = dunkirkWith(FRONT, [3]);
+  // No British piece can get off the board onto a boat: the boats are off it
+  for (const u of live(st).filter(o => o.side === 'us')) assert(!Sim.chargeSpots(st, u).some(f => f.x < 0), `${u.name} can go into the sea`);
+  st.turn = DUNKIRK.trucks.first - 1;
+  Sim.finishRound(st);
+  const lorries = st.units.filter(u => Sim.isLorry(u));
+  assert(lorries.length >= 1 && lorries.length <= DUNKIRK.trucks.each[1], `${lorries.length} lorries in round ${st.turn}`);
+  for (const l of lorries) {
+    assert(l.auto && l.acted && !Sim.canAct(st, l), 'a lorry takes orders');
+    assert(l.platoons >= 1 && l.platoons <= 2, `${l.platoons} sections in a lorry`);
+    // It came in at the top of the road and drove on from there, no further than it can
+    assert(Math.abs(l.x - DUNKIRK.trucks.road) + l.y <= DUNKIRK.trucks.moves, `${l.name} got to ${l.x},${l.y}`);
+  }
+  // Before round 2: none
+  const early = dunkirkWith(FRONT, [3]);
+  Sim.finishRound(early);
+  assert(early.turn === 2 && early.units.some(u => Sim.isLorry(u)), 'no lorry in round 2');
+  Sim.newGame(1);
+});
+
+check('Dunkirk: a lorry drives to the field off which a boat lies; the men go aboard, out of every field and out of sight', () => {
+  const st = dunkirkWith(FRONT, [1]);
+  const l = lorryAt(st, 3, 0);
+  st.turn = DUNKIRK.trucks.last + 1;   // (no more lorries to come)
+  st.evac.boats = [{ x: 0, y: 1 }];
+  // A new round brings new boats: put one off row 1 again by hand, then drive
+  const route = Sim.routeToBoat(st, l, DUNKIRK.trucks.moves);
+  assert(route && route[route.length - 1].x === 0 && route[route.length - 1].y === 1, 'no way to the boat');
+  assert(Sim.boatOff(st, 0, 1) && !Sim.boatOff(st, 1, 1) && !Sim.boatOff(st, 0, 2), 'boats off the wrong fields');
+  // Aboard: in no field, seen by nobody, a target for nobody
+  l.x = 0; l.y = 1; l.aboard = true;
+  const g = Sim.unitById(st, 'd1');
+  g.x = 1; g.y = 1;
+  assert(!Sim.at(st, 0, 1).includes(l) && !Sim.sees(st, 'de', l) && !Sim.targets(st, g).includes(l), 'men aboard can be got at');
+  assert(Sim.isAboard(st, l) && !Sim.canAct(st, l), 'not aboard, or takes orders');
+  Sim.newGame(1);
 });
 
 check('Dunkirk: the boats sail at the end of the round with whoever is aboard; enough away wins, too few left loses', () => {
-  const st = dunkirkWith({ A: [0, 3], B: [0, 2], C: [5, 3], d1: [10, 3] }, [3, 2]);
+  const st = dunkirkWith(FRONT, [3]);
+  const l = lorryAt(st, 0, 3);
+  l.aboard = true;
   Sim.finishRound(st);
-  assert(st.evac.saved === 2 && Sim.unitById(st, 'A').saved && Sim.unitById(st, 'A').x === null, `saved ${st.evac.saved}`);
+  assert(st.evac.saved === 1 && l.saved && l.x === null, `saved ${st.evac.saved}`);
   assert(!st.won && !st.lost, 'over too soon');
   assert(st.evac.boats.length >= 2, 'no new boats for the next round');
   // Enough away: the British win
-  const win = dunkirkWith({ A: [0, 3], C: [5, 3], d1: [10, 3] }, [3]);
+  const win = dunkirkWith(FRONT, [3]);
+  lorryAt(win, 0, 3).aboard = true;
   win.evac.saved = DUNKIRK.need - 1;
   Sim.finishRound(win);
   assert(win.won && !win.lost, 'getting enough away did not win');
   // Too few left to make it, even with every lorry still to come: the Germans win
-  const lose = dunkirkWith({ C: [5, 3], d1: [10, 3] }, [3]);
+  const lose = dunkirkWith(FRONT, [3]);
   lose.turn = DUNKIRK.trucks.last;
   Sim.finishRound(lose);
   assert(lose.lost && !lose.won, 'too few left did not lose');
   // Out of time
-  const late = dunkirkWith({ A: [5, 1], B: [5, 3], C: [5, 5], cap: [5, 6], mg1: [5, 2], at1: [5, 4], d1: [10, 3] }, [3]);
-  late.evac.saved = DUNKIRK.need - 2;
+  const late = dunkirkWith(FRONT, [3]);
+  late.evac.saved = DUNKIRK.need - 3;
   late.turn = DUNKIRK.rounds;
+  for (let k = 0; k < 4; k++) { const o = lorryAt(late, 3, k); o.id = 'lorryL' + k; }
   Sim.finishRound(late);
   assert(late.lost, 'the time limit did not end it');
   Sim.newGame(1);
 });
 
-check('Dunkirk: lorries bring stragglers along the coast road from round 3, and they run for the boats on their own', () => {
-  const front = { A: [5, 1], B: [5, 3], C: [5, 5], cap: [5, 6], mg1: [5, 2], at1: [5, 4], d1: [10, 3] };
-  const st = dunkirkWith(front, [3]);
-  st.turn = DUNKIRK.trucks.first - 2;
-  Sim.finishRound(st);
-  assert(!st.units.some(u => u.auto), 'a lorry came too early');
-  Sim.finishRound(st);
-  const men = st.units.filter(u => u.auto);
-  assert(men.length === 1, `${men.length} lorries in round ${st.turn}`);
-  const m = men[0];
-  // On the road, or gone on from it towards a boat, with no orders and no token
-  assert(m.x !== null && m.x <= DUNKIRK.trucks.road, `the stragglers are at ${m.x},${m.y}`);
-  assert(m.acted && !Sim.canAct(st, m), 'the stragglers take orders');
-  assert(m.platoons >= 1 && m.platoons <= 2, `${m.platoons} sections`);
-  // A boat in reach: they go out to it
-  const near = dunkirkWith(front, [3]);
-  near.turn = DUNKIRK.trucks.first - 1;
-  Sim.finishRound(near);
-  const run = near.units.find(u => u.auto);
-  const boatRows = near.evac.boats.map(b => b.y);
-  assert(run.x === 0 ? boatRows.includes(run.y) : true, 'the stragglers went into the sea with no boat');
+check('tanks and armoured cars always roll at least one die at a tank (Steve: half a die often rolled none), and their machine guns count against carriers', () => {
+  let none = 0;
+  for (let seed = 1; seed <= 60; seed++) {
+    const st = dunkirkWith({ UC1: [5, 3], dt2: [7, 3], A: [5, 1], B: [5, 5], C: [5, 6], cap: [4, 6], mg1: [4, 2], at1: [4, 4] }, [3], seed);
+    st.fx = [];
+    Sim.fireAt(st, Sim.unitById(st, 'dt2'), Sim.unitById(st, 'UC1'));
+    const shot = st.fx.find(f => f.to && f.to.id === 'UC1');
+    if (!shot || !shot.faces.length) none++;
+  }
+  assert(none === 0, `${none} shots of 60 rolled no dice`);
+  // A Panzer I (machine guns only) can fire on a carrier, as a machine gun can on an armoured car
+  const st = dunkirkWith({ UC1: [5, 2], dt1: [7, 2] });
+  assert(Sim.targets(st, Sim.unitById(st, 'dt1')).some(t => t.id === 'UC1'), 'the Panzer I can\'t fire on a carrier');
   Sim.newGame(1);
-});
-
-check('Dunkirk: the stragglers alone can never win it: the men at the front must get away too', () => {
-  const most = (DUNKIRK.trucks.last - DUNKIRK.trucks.first + 1) * DUNKIRK.trucks.each[1];
-  assert(most < DUNKIRK.need, `the lorries can bring ${most}, and ${DUNKIRK.need} wins`);
 });
 
 console.log(failed ? `\n${failed} failed` : '\nall passed');
