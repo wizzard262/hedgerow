@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180">
+  <!-- Stalingrad (a stand-in picture: the battle is still to be decided): ruined factories in the snow -->
+  <rect width="320" height="180" fill="#9aa0a3"/>
+  <path d="M0 0h320v95H0z" fill="#b9bdbf"/>
+  <g fill="#3a3c3d">
+    <path d="M10 120V70h20v15h10V60h25v30l8-10v40z"/>
+    <path d="M90 120V55h12v-15h8v15h30v25l-10 8v32z"/>
+    <path d="M150 120V75l15-10 5 12 12-8v51z"/>
+    <path d="M195 120V50h35v20l-8 6 10 5v39z"/>
+    <path d="M245 120V80h18V62h14v22l20 8v28z"/>
+  </g>
+  <g fill="#9aa0a3"><rect x="100" y="65" width="6" height="8"/><rect x="115" y="65" width="6" height="8"/><rect x="205" y="60" width="6" height="8"/><rect x="218" y="60" width="6" height="8"/><rect x="205" y="80" width="6" height="8"/></g>
+  <rect y="118" width="320" height="62" fill="#e8ecee"/>
+  <path d="M0 130c60-6 120 6 180 0s100-4 140 2" stroke="#c9d0d3" stroke-width="3" fill="none"/>
+</svg>

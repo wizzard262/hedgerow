@@ -613,19 +613,30 @@ window.Game = (() => {
     const map = MAPS.find(m => m.id === chosenMap);
     $('#map-note').textContent = map.note;
   }
-  function mapCard(id, title, date, picture) {
+  // One card, for the campaign or the bonus battles. stamp: a word across the picture of one that can't be played yet
+  function mapCard(id, title, date, picture, into = '#map-choice', stamp = '') {
     const b = document.createElement('button');
     b.id = 'map-' + id;
     b.className = 'map-card';
     b.dataset.map = id;
-    b.innerHTML = `<img src="${picture}" alt=""><b>${title}</b><span class="map-date">${date}</span>`;
-    b.onclick = () => { chosenMap = id; lightMap(); };
-    $('#map-choice').append(b);
+    // The stamp sits over the picture
+    const stampHtml = stamp ? `<span class="map-stamp">${stamp}</span>` : '';
+    b.innerHTML = `<span class="map-pic"><img src="${picture}" alt="">${stampHtml}</span><b>${title}</b><span class="map-date">${date}</span>`;
+    // Not ready: it can't be picked
+    if (stamp) b.disabled = true;
+    else b.onclick = () => { chosenMap = id; lightMap(); };
+    $(into).append(b);
+    return b;
   }
   CAMPAIGN.forEach((id, i) => {
     const map = MAPS.find(m => m.id === id);
     mapCard(id, `${i + 1}. ${map.name}`, map.date, `assets/maps/${id}.jpg`);
   });
+  // The bonus battles, top right: what each is shows when the mouse is over it, as it can't be lit yet
+  for (const bonus of BONUS) {
+    const card = mapCard(bonus.id, bonus.name, bonus.date, `assets/maps/${bonus.id}.svg`, '#bonus-choice', bonus.stamp);
+    card.title = bonus.note;
+  }
 
   // The four variations, from the two choices
   function pickedMode() {

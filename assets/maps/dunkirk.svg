@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180">
+  <!-- Dunkirk, 1940 (a stand-in picture until the map is built): smoke over the town, the sea, little ships, the beach -->
+  <rect width="320" height="180" fill="#8a7d6a"/>
+  <path d="M0 0h320v70H0z" fill="#b39a76"/>
+  <g fill="#3b342c" opacity=".75"><circle cx="70" cy="62" r="14"/><circle cx="88" cy="48" r="16"/><circle cx="108" cy="34" r="18"/><circle cx="132" cy="22" r="20"/><circle cx="160" cy="14" r="22"/></g>
+  <g fill="#2a251f"><rect x="62" y="58" width="12" height="12"/><rect x="78" y="62" width="10" height="8"/></g>
+  <rect y="70" width="320" height="55" fill="#4f6b78"/>
+  <path d="M0 78h320M0 92h320M0 106h320" stroke="#7d97a1" stroke-width="1.5" opacity=".6"/>
+  <g fill="#1f1d1a">
+    <path d="M190 84h40l-6 7h-30z"/><rect x="205" y="77" width="4" height="7"/>
+    <path d="M250 96h26l-4 5h-19z"/><rect x="260" y="91" width="3" height="5"/>
+    <path d="M120 100h22l-3 5h-16z"/>
+    <path d="M60 88h70l-8 8H66z"/><rect x="88" y="78" width="6" height="10"/><rect x="100" y="80" width="5" height="8"/>
+  </g>
+  <rect y="125" width="320" height="55" fill="#d9c8a0"/>
+  <g fill="#3f4a2e">
+    <circle cx="70" cy="140" r="3"/><circle cx="78" cy="141" r="3"/><circle cx="86" cy="140" r="3"/><circle cx="94" cy="141" r="3"/><circle cx="102" cy="140" r="3"/>
+    <circle cx="170" cy="150" r="3"/><circle cx="178" cy="151" r="3"/><circle cx="186" cy="150" r="3"/><circle cx="194" cy="151" r="3"/>
+  </g>
+</svg>

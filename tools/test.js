@@ -42,6 +42,17 @@ check('every script on the page parses (a slip in one stops the whole game loadi
   }
 });
 
+check('the bonus battles are Dunkirk then Stalingrad, outside the campaign, each with a picture, and stamped while they have no map', () => {
+  assert(BONUS.map(b => b.id).join() === 'dunkirk,stalingrad', `the bonus battles are ${BONUS.map(b => b.id).join()}`);
+  assert(BONUS.find(b => b.id === 'stalingrad').stamp === 'TBC', 'Stalingrad is not stamped TBC');
+  for (const b of BONUS) {
+    assert(!CAMPAIGN.includes(b.id), `${b.name} is in the campaign`);
+    assert(fs.existsSync(path.join(__dirname, '..', 'assets', 'maps', b.id + '.svg')), `${b.name} has no picture`);
+    // One with no map can't be started: it must carry a stamp, which stops it being picked
+    if (!MAPS.some(m => m.id === b.id)) assert(b.stamp, `${b.name} has no map but no stamp either`);
+  }
+});
+
 check('the same seed plays the same game', () => {
   const a = play(7, true), b = play(7, true);
   assert(JSON.stringify(a.units) === JSON.stringify(b.units) && a.turn === b.turn, 'two games with seed 7 ended differently');

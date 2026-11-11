@@ -1699,6 +1699,12 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - Steve, 2026-11-11: I hit a tank that was shaken, got "Shaken", and it didn't die
 - Checked the rules: every hit on a shaken tank knocks it out (400 shots from each kind of piece, and mortar and artillery missions, all did). A tank stops being shaken only when its captain rallies it, it pulls itself together, or it wins a charge; most likely one of those happened just before the shot. Steve: leave it. Nothing changed
 
+## 298. Two bonus battles: Dunkirk and Stalingrad (v166)
+
+- Steve, 2026-11-11: in the level select at the top right add two bonus battles, Dunkirk on the left and Stalingrad on the right; Stalingrad in the to-do list and its card says TBC. For Dunkirk: what should we do? Early-war British (Bren guns, Universal Carriers; a Cromwell, or is that later?), Germans with Panzer Is and IIs; a new game dynamic, both sides still playable: the British have machine-gun posts and try to drive the Germans back before everyone gets off the beach; in later levels British arrive on the beach in trucks and run on their own to random boats that come to help. Give options of cool elements
+- Built: a **Bonus battles** box at the top right of the New game choice, beside who commands each side, the same cards and widths as the campaign's. Dunkirk (May to June 1940) stamped **Coming soon**, Stalingrad (Winter 1942) stamped **TBC**; neither can be picked yet, and the mouse over one says what it is. Stand-in pictures drawn as SVGs (`assets/maps/dunkirk.svg`, `stalingrad.svg`) until the maps are built. Their names, dates and stamps are in `BONUS` in `js/data.js` (assumption: Dunkirk is stamped too, as it can't be played until it is designed)
+- Answered: the Cromwell is too late (first in action 1944); the British tank of 1940 is the Matilda II (the Arras counter-attack, 21 May 1940). Germans in 1940: Panzer I, II, III, 38(t) and a few IVs; MG 34s, not MG 42s (1942); the 3.7 cm PaK 36; Stukas. Design options for Dunkirk sent to Steve
+
 ## Sessions
 
 | # | Date | Length | What we did |

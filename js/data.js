@@ -216,6 +216,12 @@ const MAPS = [
 ];
 // The maps as a campaign (Steve): in order across France, from the beaches through the bocage and the farms to Paris
 const CAMPAIGN = ['beach', 'deep', 'hedges', 'farmland', 'river', 'town', 'station', 'paris'];
+// Bonus battles (Steve, 2026-11-11): outside the campaign, shown at the top right of the New game choice, Dunkirk on the
+// left and Stalingrad on the right. stamp: the word across its picture while it can't be played yet (no map in MAPS)
+const BONUS = [
+  { id: 'dunkirk', name: 'Dunkirk', date: 'May to June 1940', stamp: 'Coming soon', note: 'The British hold the beaches while boats take them off. Being planned.' },
+  { id: 'stalingrad', name: 'Stalingrad', date: 'Winter 1942', stamp: 'TBC', note: 'To be decided.' },
+];
 const COLS = MAPS[0].rows[0].length, ROWS = MAPS[0].rows.length;
 // Sharing a field (Steve): each field is nine areas; pieces share it while their areas don't overlap (see footprint in
 // sim.js: most pieces one area, the PaK two, a tank or a platoon of two or three sections four)
