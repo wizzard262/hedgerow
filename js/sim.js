@@ -261,6 +261,10 @@ const Sim = (() => {
       for (const [dx, dy] of [[1, 0], [0, 1]]) {
         const bx = x + dx, by = y + dy;
         if (!inside(bx, by) || !hedgeWanted(x, y, bx, by)) continue;
+        // A courtyard (Steve: Stalingrad's Univermag): open inside, walled all round its outside
+        const yardA = inCourtyard(map, x, y), yardB = inCourtyard(map, bx, by);
+        if (yardA && yardB) continue;
+        if (yardA || yardB) { st.hedges[edgeKey(x, y, bx, by)] = true; continue; }
         // On the beach, nothing grows round a bunker (Steve: its sides must be plain to get at); the sea wall stays
         if (bunkerFields.some(f => (f.x === x && f.y === y) || (f.x === bx && f.y === by)) && tileType(x, y) !== 'beach') continue;
         // Nor across the railway (Steve: the train never runs through a hedge), and no wire there either
@@ -737,6 +741,12 @@ const Sim = (() => {
     return { rows: tiles.map(row => row.join('')), villages: [CITY_TOWER], features };
   }
 
+  // Is a field inside the map's courtyard (Steve: Stalingrad's Univermag, open inside, walled round)
+  function inCourtyard(map, x, y) {
+    const c = map.courtyard;
+    return !!c && x >= c.x && x < c.x + c.w && y >= c.y && y < c.y + c.h;
+  }
+
   // Stalingrad's ruins (Steve): piles of rubble here and there, each in one area of its field, and a few minefields in
   // the middle of the board, new each game; never in the objective, nor where either side starts
   const RUINS = { rubble: 10, mines: 3, minesFrom: 4, minesTo: 7, starts: 3 };
@@ -745,8 +755,8 @@ const Sim = (() => {
     const open = [];
     for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
       const t = map.rows[y][x];
-      // (not in the store, nor on the streets: the rubble has been pushed off them)
-      if (t === 'v' || t === '=' || t === '|' || t === '+') continue;
+      // (not in the store's courtyard, nor on the streets: the rubble has been pushed off them)
+      if (t === 'v' || t === '=' || t === '|' || t === '+' || inCourtyard(map, x, y)) continue;
       open.push({ x, y });
     }
     // One at a time from what is left, so no field gets two
@@ -3533,7 +3543,7 @@ const Sim = (() => {
 
   return {
     firesOnTheMove, canAmbush, actAmbush, bestMoveShoot, bomberHeading, bomberAims, bomberLine, bombNeed, bombWhy, bestBomberRun,
-    isBunker, isCar, hurtsCars, trainCars, lineSideOf, moveTrains, inFrontOf, bunkerFace, shotOnTheMove, wrecksBeside, isRoad, featuresAt, walkDistance, fireSound, wreckAt, remove, computerSide, isRobot, piecesToAsk, takeCover, enemyOf, gunStats, bomberName, boatKind, armyOf, hedgeWord, closeRangeOnly, isAtGun, isEmplaced, edgeKey, atCloseRange, closeCells, hailMaryCells,
+    isBunker, isCar, hurtsCars, trainCars, lineSideOf, moveTrains, inFrontOf, bunkerFace, shotOnTheMove, wrecksBeside, isRoad, featuresAt, walkDistance, fireSound, wreckAt, remove, computerSide, isRobot, piecesToAsk, takeCover, enemyOf, gunStats, bomberName, boatKind, armyOf, hedgeWord, inCourtyard, closeRangeOnly, isAtGun, isEmplaced, edgeKey, atCloseRange, closeCells, hailMaryCells,
     newGame, roll, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, chargeSpots,
     rallyTargets, canAct, canReact, firepower, canCallFire, takesGoal, cannotWin, artilleryTarget, mortarTarget, holdsObjective, roundText, roomFor,
     computerStep, answer, finishRound, startRound, drawToken, endComputerToken, activationOver, passToken, humanCanMove, endRound, canFire, actSkip, actSkipShot, skipSupport,

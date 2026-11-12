@@ -307,7 +307,7 @@ const MAPS = [
     // Piles of rubble and minefields made new each game (generated: 'ruins'). The 'us' side is the Soviets (army 'su');
     // the table is seen from the other side (flip), so they come in from the right and the Germans hold the left (Steve)
     id: 'stalingrad', bonus: true, date: 'November 1942', name: 'Stalingrad',
-    note: 'A bombed-out city. The Soviets attack the Germans holding the ruins of the Univermag store. The walls of ruined buildings stand between the fields and work as hedges do: you see over one only from right beside it, men climb through the windows, and lining one is cover. Lines of rubble do the same; piles of rubble give cover, and minefields may blow up whoever goes in. Each side has a section of submachine gunners: two bases of three men, 3 dice a base (6 in all), at close range only. The Germans have an 8.8 cm Flak in a fixed position on a crossroads, looking down an open street; the Soviets a T-34.',
+    note: 'A bombed-out city. The Soviets attack the Germans holding the ruins of the Univermag store: an open courtyard of four fields, walled all round. The walls of ruined buildings stand between the fields and work as hedges do: you see over one only from right beside it, men climb through the windows, and lining one is cover. Lines of rubble do the same; piles of rubble give cover, and minefields may blow up whoever goes in. Each side has a section of submachine gunners: two bases of three men, 3 dice a base (6 in all), at close range only. The Germans have an 8.8 cm Flak in a fixed position on a crossroads, looking down an open street; the Soviets a T-34.',
     generated: 'ruins',
     ruins: true,
     army: 'su',
@@ -319,13 +319,16 @@ const MAPS = [
       '..|...|...|.',
       '..|...|...|.',
       '==+===+===+=',
-      '..|...|vv.|.',
-      '..|...|vv.|.',
+      '..|...|...|.',
+      '..|...|...|.',
       '==+===+===+=',
       '..|...|...|.',
       '..|...|...|.',
     ],
     villages: [{ x: 8, y: 4, name: 'the Univermag' }],
+    // The Univermag (Steve: a fully open courtyard, not like a village): four plain fields with no walls between them and
+    // ruined walls all round the outside, which work as hedges do
+    courtyard: { x: 7, y: 3, w: 2, h: 2 },
     // The walls: more of them than hedges in the bocage; a little wire across the gaps
     gap: 0.35, wire: 0.1,
     // The Soviet guns by name; no Soviet bomber for now

@@ -1802,6 +1802,14 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - **The box shown on hover** (what is in a field): with a piece chosen, it is placed the same way, clear of the lit fields, targets and pieces to rally, instead of always just below and right of the pointer
 - Assumed: "the brown word bubble" is the piece's pop-up menu; the hover box got the same fix in case it was that one
 
+## 309. The Univermag an open courtyard; ground clicks charge; Dunkirk's boats raised; the menu clear of red bubbles (v178)
+
+- Steve: in the Univermag there seem to be invisible walls: I can see someone across it diagonally, or go in for hand to hand; it should be a fully open courtyard, not like villages, just 4 squares surrounded by ruins (that is, hedges); I want hand to hand, so I click the ground, but it shoots instead; the small boats at Dunkirk still glitch, the sea under them, raise them up a few pixels; add the red info bubble on a target to the things the brown word bubble must not cover
+- **The Univermag**: no longer village fields (houses' cover, seen only at their edges). Four plain fields (a courtyard in the map) with no walls between them and ruined walls on every edge out of it, three to five storeys, always building fronts; no rubble or mines inside. Assumed: no gap in the outside walls (men climb in through the windows, tanks smash through)
+- **Charging**: in a field the chosen piece can charge into to fight hand to hand, a click on the ground charges; only a click right on the red cross-hair (within 26 pixels) shoots
+- **Dunkirk's boats**: raised a little above the sea and the surf (they had been lowered into the water last time, which made it worse)
+- **The menu**: placed again once the table has drawn the targets' red score bubbles, so it keeps clear of those too
+
 ## Sessions
 
 | # | Date | Length | What we did |

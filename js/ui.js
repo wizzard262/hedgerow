@@ -399,6 +399,12 @@ const UI = (() => {
   // Put the menu where it covers none of the fields you can move to or shoot at (Steve), trying spots round the
   // piece nearest first, and point a word-bubble tail from it back to the piece. extra: more boxes to keep clear of
   function placeMenu(menu, left, top, box, extra = []) {
+    placeMenuNow(menu, left, top, box, extra);
+    // Once the table has drawn the targets' red score bubbles (the frame after the piece was picked), placed again
+    // clear of them too (Steve: the menu covered a target's red bubble)
+    requestAnimationFrame(() => requestAnimationFrame(() => { if (!menu.hidden) placeMenuNow(menu, left, top, box, extra); }));
+  }
+  function placeMenuNow(menu, left, top, box, extra) {
     const w = menu.offsetWidth, h = menu.offsetHeight;
     // What it must not cover: each lit field, the targets, pieces to rally and score bubbles (these matter most), and
     // the piece itself
@@ -529,6 +535,12 @@ const UI = (() => {
   // Does a click in this field carry out the chosen piece's action (a lit field for it)?
   function actsOn(x, y) {
     return !!view.mode && spots().some(p => p.x === x && p.y === y);
+  }
+  // Is a field one the chosen piece can charge into to fight hand to hand (an enemy there)?
+  function chargesInto(x, y) {
+    if (!view.mode || !['go', 'charge'].includes(view.mode)) return false;
+    const charge = spots().some(p => p.x === x && p.y === y && (p.act === 'charge' || view.mode === 'charge') && p.kind !== 'line');
+    return charge && Sim.at(st, x, y, enemy()).length > 0;
   }
 
   // How strong a piece is, in words for the panel
@@ -723,7 +735,7 @@ const UI = (() => {
   }
 
   return {
-    init, setState, update, asksForShot, asksForField, clickField, openMenu, openGunMenu, openAsk, closeMenu, litFieldRects,
+    init, setState, update, asksForShot, asksForField, clickField, openMenu, openGunMenu, openAsk, closeMenu, litFieldRects, chargesInto,
     inspect, actsOn, spots, moveSpotsFor, targets, shootTarget, rallies, rallyTarget, view, selected,
     selectSupport, supportState, flyToken, returnTokens, KIND,
   };

@@ -477,8 +477,11 @@ window.Game = (() => {
     // The captain rallying: the blue target nearest the click (Steve)
     const rallied = Board.targetAt(UI.rallies(), e.clientX, e.clientY);
     if (rallied && UI.rallyTarget(rallied)) { changed(); return; }
-    // Shooting: the red cross-hair nearest the click, even one over a house
-    const aimed = Board.targetAt(UI.targets(), e.clientX, e.clientY);
+    // Shooting: the red cross-hair nearest the click, even one over a house. In a field it can charge into for hand to
+    // hand (Steve: clicking the ground there fired instead), only a click right on the cross-hair shoots
+    const ground = Board.fieldAt(e.clientX, e.clientY);
+    const fightThere = ground && UI.chargesInto(ground.x, ground.y);
+    const aimed = Board.targetAt(UI.targets(), e.clientX, e.clientY, fightThere ? AIM_EXACT : undefined);
     const shotAsks = aimed ? UI.asksForShot(aimed) : null;
     if (shotAsks) {
       askThenFire(shotAsks, () => {
@@ -515,6 +518,9 @@ window.Game = (() => {
     if (fieldAsks && fieldAsks.length) { askThenFire(fieldAsks, () => clickOnField(f, clicked)); return; }
     clickOnField(f, clicked);
   });
+
+  // How close to a cross-hair, in pixels, a click must be to shoot rather than charge into that field (Steve)
+  const AIM_EXACT = 26;
 
   // A click on a field: the chosen piece's action there, or the piece under the pointer chosen
   function clickOnField(f, clicked) {

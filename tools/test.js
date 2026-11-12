@@ -3445,7 +3445,8 @@ check('every map is the same size, has real tiles, and its villages are villages
     }
     assert(played.villages.length >= 1 && map.name && map.note, `${map.id}: not filled in`);
     // (Dunkirk's is the beach, where the Germans make for, not a village to take)
-    if (!played.landing && !played.evacuate && played.generated !== 'city') for (const v of played.villages) assert(Sim.tileType(v.x, v.y) === 'village', `${map.id}: ${v.name} is not in a village`);
+    // (Stalingrad's is the Univermag's open courtyard, Steve)
+    if (!played.landing && !played.evacuate && played.generated !== 'city') for (const v of played.villages) assert(Sim.tileType(v.x, v.y) === 'village' || Sim.inCourtyard(played, v.x, v.y), `${map.id}: ${v.name} is not in a village`);
   }
   // Ids are all different
   assert(new Set(MAPS.map(m => m.id)).size === MAPS.length, 'two maps with the same id');
@@ -4407,6 +4408,28 @@ check('Stalingrad: the Soviets against the Germans, the table seen from the far 
   assert(kinds('de').includes('flak88') && kinds('de').includes('company:smg'), kinds('de').join());
   Sim.newGame(1);
   assert(Sim.hedgeWord() === 'hedge', 'hedges are still called ruins elsewhere');
+});
+
+check('Stalingrad: the Univermag is an open courtyard of four plain fields, walled all round its outside (Steve)', () => {
+  for (const seed of [1, 2, 3, 4, 5]) {
+    const st = Sim.newGame(seed, 'us', 'stalingrad');
+    const yard = st.map.courtyard;
+    for (let y = yard.y; y < yard.y + yard.h; y++) for (let x = yard.x; x < yard.x + yard.w; x++) {
+      assert(Sim.tileType(x, y) === 'field', `the courtyard is ${Sim.tileType(x, y)} at ${x},${y}`);
+      assert(!st.features.some(f => f.x === x && f.y === y), `rubble or a minefield in the courtyard at ${x},${y}`);
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = x + dx, ny = y + dy;
+        if (!Sim.inside(nx, ny)) continue;
+        const inside = Sim.inCourtyard(st.map, nx, ny);
+        // No wall between two of its fields; a wall on every edge out of it
+        assert(Sim.hedge(st, x, y, nx, ny) === !inside, `seed ${seed}: ${inside ? 'a wall inside' : 'a gap in the outside wall'} at ${x},${y} to ${nx},${ny}`);
+      }
+    }
+    // Seen across it: from one corner field to the far one, nothing in the way
+    const a = { side: 'us', kind: 'company', x: yard.x, y: yard.y, at: null, platoons: 3 }, b = { side: 'de', kind: 'company', x: yard.x + 1, y: yard.y + 1, at: null, platoons: 3 };
+    assert(Sim.sight(st, a, b), `seed ${seed}: no sight across the courtyard`);
+  }
+  Sim.newGame(1);
 });
 
 check('Stalingrad: a section of submachine gunners is two bases of three men, 3 dice a base, at close range only (Steve)', () => {

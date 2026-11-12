@@ -445,8 +445,7 @@ const Board = (() => {
         if (t === 'river') addReeds(x, y, seed);
       }
       if (t === 'orchard') for (const [ox, oz] of orchardTrees(seed)) built.add(at(Models.tree(seed + ox * 10 + oz * 3, 0.68 + ((ox * 31 + oz * 17) % 1) * 0.15), x + ox, 0, y + oz));
-      if ((t === 'village' || t === 'hamlet') && st.map.ruins) addRuinedBlock(x, y, seed);
-      else if (t === 'village' || t === 'hamlet') addHouses(x, y, seed);
+      if (t === 'village' || t === 'hamlet') addHouses(x, y, seed);
     }
     if (st.map.joins) addTracks(st);
     addSea(st);
@@ -630,7 +629,7 @@ const Board = (() => {
     if (offBoard) {
       for (let y = 0; y < ROWS; y++) {
         const m = Models.mergeParts(Models.littleShip(st.seed + y * 3));
-        // (sitting a little down in the water: level with the sea's surface, its bottom flickered through, Steve)
+        // (raised clear of the sea's surface and the surf over it, Steve: level with them, its bottom flickered through)
         group.add(at(m, BOATS.out, BOATS.sit, y + 0.5));
         m.visible = false;
         craft.push({ mesh: m, phase: R() * 6.28, x: 0, y, boat: true, icons: [], load: 0 });
@@ -653,7 +652,7 @@ const Board = (() => {
   // Dunkirk's boats (Steve: we see them move in and out): where one lies off the beach, and where it waits out at sea
   // inwards, alongside, outwards: the turn of a boat heading for the shore, lying along it, heading out to sea;
   // pullUp: how far out it starts to turn alongside; turn: how fast it turns (radians a second)
-  const BOATS = { in: -0.45, out: -4.6, speed: 0.9, inwards: -Math.PI / 2, alongside: 0, outwards: Math.PI / 2, pullUp: 0.6, turn: 1.8, sit: -0.004 };
+  const BOATS = { in: -0.45, out: -4.6, speed: 0.9, inwards: -Math.PI / 2, alongside: 0, outwards: Math.PI / 2, pullUp: 0.6, turn: 1.8, sit: 0.012 };
   // The icon over a boat for each section of men aboard (Steve): a khaki disc with a man in a tin hat, made once
   let manIconTex = null;
   function manIcon() {
@@ -848,37 +847,6 @@ const Board = (() => {
     built.add(at(MAKERS[f.kind](length, f.seed, f.load), f.x + 0.5 + midX / 3, 0, f.y + 0.5 + midY / 3, 0, facing, 0));
   }
 
-  // A field of the ruined store (Steve: Stalingrad's tall buildings): its outside walls stand along each side of the
-  // field that faces out of the block, tallest at the back as the table is seen, lowest at the front, so the pieces
-  // inside still show; where two outside walls meet, a corner taller still
-  function addRuinedBlock(x, y, seed) {
-    const inBlock = (xx, yy) => Sim.inside(xx, yy) && Sim.tileType(xx, yy) === Sim.tileType(x, y);
-    const ruins = new T.Group();
-    // For each side of the field: which way it runs, where, and whether it is at the back (up the screen)
-    const sides = [
-      { open: !inBlock(x, y - 1), along: 'x', cx: x + 0.5, cz: y + 0.04, back: screenUp() < 0 },
-      { open: !inBlock(x, y + 1), along: 'x', cx: x + 0.5, cz: y + 0.96, back: screenUp() > 0 },
-      { open: !inBlock(x - 1, y), along: 'z', cx: x + 0.04, cz: y + 0.5, back: false },
-      { open: !inBlock(x + 1, y), along: 'z', cx: x + 0.96, cz: y + 0.5, back: false },
-    ];
-    sides.forEach((sd, i) => {
-      if (!sd.open) return;
-      // (the front walls, between the camera and the pieces, a storey or two; the back ones five)
-      const storeys = sd.along === 'z' ? 4 : sd.back ? 5 : 2;
-      const wall = Models.ruinWall(0.92, storeys, seed * 7 + i);
-      ruins.add(at(wall, sd.cx, 0, sd.cz, 0, sd.along === 'z' ? Math.PI / 2 : 0, 0));
-    });
-    // The corners where two outside walls meet
-    const corners = [[0, 0, 'n', 'w'], [1, 0, 'n', 'e'], [0, 1, 's', 'w'], [1, 1, 's', 'e']];
-    for (const [cx, cz, ns, ew] of corners) {
-      const nsOpen = ns === 'n' ? sides[0].open : sides[1].open, ewOpen = ew === 'w' ? sides[2].open : sides[3].open;
-      if (!nsOpen || !ewOpen) continue;
-      const arms = [ns === 'n' ? 's' : 'n', ew === 'w' ? 'e' : 'w'];
-      ruins.add(at(Models.ruinCorner(6, arms, seed + cx * 3 + cz * 5), x + cx + (cx ? -0.04 : 0.04), 0, y + cz + (cz ? -0.04 : 0.04)));
-    }
-    built.add(ruins);
-  }
-
   function addHouses(x, y, seed) {
     // Along each side: which way it runs, which edge, and which way the front faces (into the field)
     const sides = [
@@ -948,7 +916,7 @@ const Board = (() => {
     // Stalingrad (Steve): the "hedges" are the walls of ruined buildings, or lines of rubble, with tall corners where
     // walls meet; one a tank has driven through is a heap of rubble with its two ends still standing
     if (st.map.ruins) {
-      ruinWalls(runs);
+      ruinWalls(runs, st.map);
       runs.length = 0;
     }
     const lumps = [[], []], bases = [];
@@ -1011,15 +979,24 @@ const Board = (() => {
   //   screen two to four storeys, those running across it one to three (they would hide what is behind them);
   //   draw it broken, ends only, if a tank has gone through
   // then put a tall corner wherever two walls meet at right angles
-  const RUIN_LOOK = { rubble: 0.25, across: [2, 3], upward: [3, 5], corner: [5, 7] };
-  function ruinWalls(runs) {
+  const RUIN_LOOK = { rubble: 0.25, across: [2, 3], upward: [3, 5], corner: [5, 7], storeAcross: [3, 4], storeUp: [5, 5] };
+  // Is a run on the outside of the map's courtyard: one of its two fields in it, the other not
+  function edgeOfCourtyard(r, map) {
+    if (!map.courtyard) return false;
+    const a = r.along === 'z' ? [r.cx - 1, Math.floor(r.cz)] : [Math.floor(r.cx), r.cz - 1];
+    const b = r.along === 'z' ? [r.cx, Math.floor(r.cz)] : [Math.floor(r.cx), r.cz];
+    return Sim.inCourtyard(map, a[0], a[1]) !== Sim.inCourtyard(map, b[0], b[1]);
+  }
+  function ruinWalls(runs, map) {
     const ruins = new T.Group();
     const ends = new Map();
     for (const r of runs) {
       const R = seeded(r.seed * 3 + 7);
       const turn = r.along === 'z' ? Math.PI / 2 : 0;
-      const rubble = R() < RUIN_LOOK.rubble;
-      const [lo, hi] = r.along === 'z' ? RUIN_LOOK.upward : RUIN_LOOK.across;
+      // The store's outside walls (Steve: the Univermag's courtyard) are always building fronts, and tall
+      const store = edgeOfCourtyard(r, map);
+      const rubble = !store && R() < RUIN_LOOK.rubble;
+      const [lo, hi] = store ? (r.along === 'z' ? RUIN_LOOK.storeUp : RUIN_LOOK.storeAcross) : r.along === 'z' ? RUIN_LOOK.upward : RUIN_LOOK.across;
       const storeys = lo + Math.floor(R() * (hi - lo + 1));
       if (r.trampled) {
         // Driven through: rubble across the middle, the two ends still standing
@@ -2223,9 +2200,10 @@ const Board = (() => {
   const reticleSpot = u => { const home = reticleHome(u), nudge = reticleNudges.get(u.id); return nudge ? home.add(nudge) : home; };
 
   // The red target nearest the pointer on the screen, within easy reach (a cross-hair over a house can be clicked)
-  function targetAt(list, clientX, clientY) {
+  // reach: how far from a cross-hair, in pixels, a click still picks it
+  function targetAt(list, clientX, clientY, reach = 70) {
     const r = renderer.domElement.getBoundingClientRect();
-    let best = null, bestD = 70;
+    let best = null, bestD = reach;
     for (const u of list) {
       const p = reticleSpot(u).project(camera);
       const d = Math.hypot(r.left + (p.x + 1) / 2 * r.width - clientX, r.top + (1 - p.y) / 2 * r.height - clientY);
