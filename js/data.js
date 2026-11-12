@@ -477,7 +477,8 @@ const PIECES = {
   // Armoured cars (Steve), on the open maps in place of a tank: on wheels, so no hedge cutters: no driving through
   // hedges, quick on the road (CAR_ROAD_BONUS), snagged in barbed wire half the time (CAR_WIRE_SNAG), thin armour that
   // machine guns can get through (car)
-  m8:       { name: 'M8 Greyhound', soft: 1.5, hard: 1, he: 1, tank: true, armour: 0, car: true },
+  // smallGun: a light cannon, one more needed against any tank (SMALL_GUN)
+  m8:       { name: 'M8 Greyhound', soft: 1.5, hard: 1, he: 1, tank: true, armour: 0, car: true, smallGun: true },
   puma:     { name: 'Puma', soft: 1, hard: 1, he: 1, tank: true, armour: 0, car: true },
   panther:  { name: 'Panther', soft: 1.5, hard: 3, he: 1.5, tank: true, armour: 1, cutter: true },
   mg:       { name: '.50 cal team', soft: 5, hard: 0, team: true, men: 3 },        // machine guns fire 5 dice (Steve)
@@ -505,9 +506,9 @@ const PIECES = {
   lorry:    { name: 'Lorry', soft: 0, hard: 0, big: true, lorry: true },
   boys:     { name: 'Boys anti-tank rifle team', soft: 0, hard: 1, vsMen: 1, team: true, men: 2 },
   pz1:      { name: 'Panzer I', soft: 1.5, hard: 0, he: 0, tank: true, armour: 0, cutter: true },   // two machine guns, no gun
-  pz2:      { name: 'Panzer II', soft: 1, hard: 1, he: 1, tank: true, armour: 0, cutter: true },  // a 2 cm cannon
+  pz2:      { name: 'Panzer II', soft: 1, hard: 1, he: 1, tank: true, armour: 0, cutter: true, smallGun: true },  // a 2 cm cannon
   pz3:      { name: 'Panzer III', soft: 1.5, hard: 1, he: 1, tank: true, armour: 0, cutter: true },
-  sdkfz231: { name: 'Sd.Kfz. 231', soft: 1, hard: 1, he: 1, tank: true, armour: 0, car: true },   // eight-wheeled armoured car
+  sdkfz231: { name: 'Sd.Kfz. 231', soft: 1, hard: 1, he: 1, tank: true, armour: 0, car: true, smallGun: true },   // eight-wheeled armoured car
 };
 
 // Hand to hand (a charge into the enemy, Steve): the two sides strike in turn, the attacker first, a die for each base
@@ -537,6 +538,8 @@ const BOMBER = { need: 5, dice: 1, ammo: 1, directions: 16, worth: 2 };
 const SMG = { bases: 2, dice: 3 };
 // A gun shield covers this wide an arc in front of the gun, in degrees (Steve: the 88 has 2 cover from the front)
 const SHIELD_ARC = 90;
+// A small gun (Steve: the 2 cm of the Panzer II and the Sd.Kfz. 231, the M8's 37 mm) needs this many more to hit a tank
+const SMALL_GUN = 1;
 // Minefields (Steve: Stalingrad): each piece going into one rolls a die; this or more sets off a mine, a hit on it
 // (an anti-tank hit on a tank)
 const MINES = { need: 5 };

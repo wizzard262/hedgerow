@@ -1826,6 +1826,14 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - Steve: which pieces roll under one die, shown or in the data; can't we just change the underlying data rather than store 0.5 and round it up?
 - **The numbers**: no piece has less than one die in PIECES now: the Panzer II, M8 Greyhound and Sd.Kfz. 231 have 1 anti-tank die (was 0.5); each tank has its own `he`, its gun's dice at men (was half its anti-tank dice: 0.25 to 0.75 for most), 1 for most, 1.5 for the Panther, 0 for those with no gun; the Boys/PTRD rifle has `vsMen` 1 (was half a die); the PaK 40 and its bunker 1 rifle die and `vsMen` 2 (was 0.5 and 2). What every piece rolls is the same as before (it was already rounded up); a test checks every number is 0 or at least 1
 
+## 313. Balance: snipers and rifles against crewed guns, small guns against tanks (v181)
+
+- Steve: do any of these rounding-ups ruin the balance between the relative strengths of the pieces; does anything seem unbalanced; I wonder about a sniper against the 88; we want realistic ratios but also a good game. His picks: small arms only shake a crewed gun, but a shaken on top of shaken kills, as everywhere else; small guns need 1 more to hit, listed in the red bubble as "+1 small gun"
+- **Found**: a sniper ignores cover (the 88's shield too) and needed only 3+ from anywhere on the board, and any wound wiped a gun out: about one round in three it destroyed the 88; a rifle platoon two fields off about 4 times in 10. The small guns (Panzer II and Sd.Kfz. 231 2 cm, the M8's 37 mm) rolled the same anti-tank die as a 75 mm. Also noted, not changed: the Matilda's 2-pounder had no high explosive yet rolls 1 at men; the Sherman 75 mm's high explosive was better than the 76 mm's, both 1
+- **Crewed guns** (the PaK, the 88): a hit from rifles, machine guns, submachine guns or a sniper only shakes it (no coin toss for a wound); a hit on one already shaken kills it. Tank guns, anti-tank weapons, shells, bombs and hand to hand as before
+- **Small guns**: one more needed against any tank (armoured cars and carriers too), "+1 small gun" in the red bubble
+- Robots at Stalingrad (20 games): Soviets 12, Germans 8
+
 ## Sessions
 
 | # | Date | Length | What we did |

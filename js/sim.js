@@ -1367,7 +1367,11 @@ const Sim = (() => {
     // Taking cover: two more from every weapon (Steve), but not the sniper (no cover helps against him)
     const down = target.down ? TAKE_COVER : 0;
     if (PIECES[shooter.kind].sniper) return TO_HIT + small + (moving ? ON_THE_MOVE : 0) + (shooter.shocked ? SHAKEN_SHOOT : 0) - QUALITY[shooter.quality || 'standard'].shoot - close;
-    return TO_HIT + cover(st, shooter, target) + small + down + (moving ? ON_THE_MOVE : 0) + (shooter.shocked ? SHAKEN_SHOOT : 0) - QUALITY[shooter.quality || 'standard'].shoot - close;
+    return TO_HIT + cover(st, shooter, target) + small + down + smallGunAt(shooter, target) + (moving ? ON_THE_MOVE : 0) + (shooter.shocked ? SHAKEN_SHOOT : 0) - QUALITY[shooter.quality || 'standard'].shoot - close;
+  }
+  // A small gun at a tank (Steve: the 2 cm and 37 mm): one more needed
+  function smallGunAt(shooter, target) {
+    return PIECES[shooter.kind].smallGun && isTank(target) ? SMALL_GUN : 0;
   }
 
   // Where a piece (or a bare field) stands on the board, as one point in fields: the middle of the areas it is in
@@ -1441,6 +1445,8 @@ const Sim = (() => {
     if (moving) why.push(`+${ON_THE_MOVE} moving`);
     if (shooter.shocked) why.push(`+${SHAKEN_SHOOT} shaken`);
     if (armourOf(target)) why.push(`+${armourOf(target)} armour`);
+    // (Steve: said in the red bubble as "+1 small gun")
+    if (smallGunAt(shooter, target)) why.push(`+${smallGunAt(shooter, target)} small gun`);
     if (QUALITY[shooter.quality || 'standard'].shoot) why.push(`−${QUALITY[shooter.quality || 'standard'].shoot} elite`);
     if (atCloseRange(shooter, target)) why.push(`−${CLOSE_BONUS} close range`);
     why.push(...bunkerWhy(shooter, target));
@@ -1600,7 +1606,10 @@ const Sim = (() => {
     // Which hits kill outright: every one from a bazooka, Panzerschreck, PaK or gun bunker; only a tank's gun hits, not
     // its machine guns' (Steve: those are 50/50)
     const deadly = isTank(shooter) ? gunHits : ['bazooka', 'schreck', 'bunker_gun'].includes(shooter.kind) || isAtGun(shooter);
-    const out = (pre ? [pre.line] : []).concat(damage(st, target, softHits, hardHits, deadly));
+    // A crewed gun (Steve: the 88, the PaK) under small arms, rifles, machine guns, submachine guns or a sniper: a hit
+    // only shakes it (its crew pinned, the gun still there), but one on a gun already shaken kills it, as everywhere
+    const smallArms = isAtGun(target) && ['rifle', 'mg'].includes(weaponOf(shooter)) && !isTank(shooter);
+    const out = (pre ? [pre.line] : []).concat(damage(st, target, softHits, hardHits, deadly, smallArms));
     // In a word, what the shot did, for the words that float up off the target
     const lost = before.strength - (target.x === null ? 0 : target.platoons);
     const result = target.x === null ? (isTank(target) ? 'Destroyed' : 'Wiped out')

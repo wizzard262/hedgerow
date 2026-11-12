@@ -4485,6 +4485,33 @@ check('Stalingrad: the 88 has 2 cover from the front (its gun shield), and it ca
   Sim.newGame(1);
 });
 
+check('small arms only shake a crewed gun; a hit on one already shaken kills it (Steve: the sniper against the 88)', () => {
+  const st = Sim.newGame(3, 'us', 'stalingrad');
+  const sn = Sim.unitById(st, 'sn1'), gun = Sim.unitById(st, 'd88');
+  for (const u of st.units) if (u !== sn && u !== gun) u.x = u.y = null;
+  sn.x = 0; sn.y = gun.y; sn.at = null;
+  // Every die a 6: still only shaken (no coin toss for a wound)
+  st.rand = () => 0.999;
+  gun.shocked = false;
+  Sim.fireAt(st, sn, gun);
+  assert(gun.x !== null && gun.shocked, 'a sniper wiped out a fresh 88');
+  // Shaken already: the next hit kills it
+  Sim.fireAt(st, sn, gun);
+  assert(gun.x === null, 'a hit on a shaken 88 did not kill it');
+  Sim.newGame(1);
+});
+
+check('a small gun needs one more against a tank, said as "+1 small gun" (Steve)', () => {
+  const st = Sim.newGame(1, 'us', 'dunkirk');
+  const pz2 = st.units.find(u => u.kind === 'pz2'), pz3 = st.units.find(u => u.kind === 'pz3'), mat = Sim.unitById(st, 'T1');
+  for (const u of st.units) if (![pz2, pz3, mat].includes(u)) u.x = u.y = null;
+  st.hedges = {}; st.wire = {}; st.features = [];
+  mat.x = 6; mat.y = 4; mat.at = null; pz2.x = 8; pz2.y = 4; pz2.at = null; pz3.x = 8; pz3.y = 4; pz3.at = 'nw';
+  assert(Sim.needFor(st, pz2, mat) === Sim.needFor(st, pz3, mat) + 1, `Panzer II ${Sim.needFor(st, pz2, mat)}, Panzer III ${Sim.needFor(st, pz3, mat)}`);
+  assert(Sim.needWhy(st, pz2, mat).includes('+1 small gun') && !Sim.needWhy(st, pz3, mat).includes('+1 small gun'), Sim.needWhy(st, pz2, mat).join(' '));
+  Sim.newGame(1);
+});
+
 check('Stalingrad: a piece going into a minefield rolls a die; 5 or 6 sets off a mine (Steve)', () => {
   const st = Sim.newGame(3, 'us', 'stalingrad');
   st.hedges = {}; st.wire = {};
