@@ -182,8 +182,9 @@ const MAPS = [
       'wbbbb.o.h..o',
     ],
     villages: [{ x: 8, y: 4, name: 'Main bunker' }],
-    ammo: { us: { bomber: 1 }, de: { artillery: 2, bomber: 0 } },
-    // The American guns are a battleship out at sea, the mortars on a headland (Steve: like Dunkirk)
+    // (Steve, 2026-11-12: no American mortars on either beach, and one more round for the warship)
+    ammo: { us: { bomber: 1, artillery: 3, mortars: 0 }, de: { artillery: 2, bomber: 0 } },
+    // The American guns are a battleship out at sea (Steve: like Dunkirk)
     navy: 'battleship',
     guns: { us: { artillery: 'USS Texas' } },
     us: { add: [{ id: 'D', kind: 'company', name: '4th Platoon', quality: 'standard' }, { id: 'bz2', kind: 'bazooka', name: 'Bazooka Team 2' }] },
@@ -255,13 +256,15 @@ const MAPS = [
     // need: lorry-loads to get away; rounds: to do it in; boats: how many come each round, from to; trucks: the lorries,
     // in at the top of the coast road (this column), from round first to last, how many a round, sections of men in each,
     // and how many fields each drives a round
-    // noBoats: rows of the water's edge the headland takes (Steve: the British mortars stand on it), where no boat comes
-    evacuate: { need: 8, rounds: 12, boats: [2, 3], noBoats: [3, 4], trucks: { road: 3, first: 2, last: 12, each: [1, 1], sections: [1, 2], moves: 4 } },
-    // The destroyers stand in for the British artillery (Steve); no bombers either side for now
-    guns: { us: { artillery: 'Royal Navy destroyers', mortars: '3-inch mortars' } },
-    // The British artillery is a destroyer out at sea; the mortars on a headland (Steve)
+    // (noBoats: rows of the water's edge where no boat comes; none since the headland went, Steve 2026-11-12)
+    evacuate: { need: 8, rounds: 12, boats: [2, 3], trucks: { road: 3, first: 2, last: 12, each: [1, 1], sections: [1, 2], moves: 4 } },
+    // The destroyers stand in for the British artillery (Steve); the RAF's bomber in 1940 a Bristol Blenheim (Steve asked
+    // for a Lancaster: it only came in 1942), one run; no German bomber
+    guns: { us: { artillery: 'Royal Navy destroyers', bomber: 'Blenheim' } },
+    // The British artillery is a destroyer out at sea (Steve); no British mortars, and one more round for the destroyer
+    // (Steve, 2026-11-12)
     navy: 'destroyer',
-    ammo: { us: { artillery: 3, bomber: 0 }, de: { bomber: 0 } },
+    ammo: { us: { artillery: 4, mortars: 0, bomber: 1 }, de: { bomber: 0 } },
     us: {
       only: [
         { id: 'A', kind: 'company', name: '1st Platoon, Coldstream Guards', quality: 'elite' },

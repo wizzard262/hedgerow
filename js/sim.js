@@ -452,7 +452,7 @@ const Sim = (() => {
   // The round's boats: two or three, each off a different field of the water's edge
   function newBoats(st) {
     const E = st.map.evacuate;
-    // (not off the headland, Steve)
+    // (not off any rows the map keeps clear)
     const rows = [...Array(ROWS).keys()].filter(y => !(E.noBoats || []).includes(y));
     const count = Math.min(rows.length, between(st.rand, E.boats));
     st.evac.boats = [];
@@ -1112,8 +1112,12 @@ const Sim = (() => {
     return f.soft + f.hard * 0.5;
   }
 
-  // Whole dice from a firepower: the fraction is a chance of one more
-  const dice = (st, f) => Math.floor(f) + (st.rand() < f - Math.floor(f) ? 1 : 0);
+  // Whole dice from a firepower: the fraction is a chance of one more. Less than one die (half a die, say) is always one
+  // (Steve, 2026-11-12: everyone who shoots should roll)
+  function dice(st, f) {
+    if (f > 0 && f < 1) return 1;
+    return Math.floor(f) + (st.rand() < f - Math.floor(f) ? 1 : 0);
+  }
 
   // Roll n six-sided dice needing `need` or more. Past MAX_NEED it is a Hail Mary (Steve): a die that throws a 6 throws
   // again, and only a second 6 hits (lead: the first 6; the second die follows it). The faces go into `faces` for the dice on the table
@@ -2365,6 +2369,12 @@ const Sim = (() => {
     return Object.assign({}, usual, { name: renamed });
   }
 
+  // A side's bomber by name: the map can name its own (Steve: the RAF's Blenheim at Dunkirk)
+  function bomberName(side) {
+    const renamed = currentMap.guns && currentMap.guns[side] && currentMap.guns[side].bomber;
+    return renamed || BOMBER_NAMES[side];
+  }
+
   // The fields a fire mission's shells fall on (Steve: shown round the target before firing): the target's field (main),
   // and for guns with splash the four fields next to it
   function shellFields(which, x, y, side = 'us') {
@@ -2559,7 +2569,7 @@ const Sim = (() => {
     st.fired[side].bomber = true;
     st.ammo[side].bomber--;
     const lines = dropBombs(st, side, x, y);
-    return { ok: true, lines: [`✈️ The ${BOMBER_NAMES[side]} flies over: ${lines.length ? lines.join(', ') : 'no hits'}.`] };
+    return { ok: true, lines: [`✈️ The ${bomberName(side)} flies over: ${lines.length ? lines.join(', ') : 'no hits'}.`] };
   }
 
   // ---------- The Germans ----------
@@ -3067,7 +3077,7 @@ const Sim = (() => {
       st.computer.run = null;
       st.ammo[side].bomber--;
       const lines = dropBombs(st, side, run.x, run.y);
-      st.computer.rep.push(`🔺 The ${BOMBER_NAMES[side]} flies over: ${lines.length ? lines.join(', ') : 'no hits'}.`);
+      st.computer.rep.push(`🔺 The ${bomberName(side)} flies over: ${lines.length ? lines.join(', ') : 'no hits'}.`);
     }
     return { done: true };
   }
@@ -3123,7 +3133,7 @@ const Sim = (() => {
     if (!canFire(st, which)) return { ok: false };
     st.fired[st.human][which] = true;
     if (st.tokens) { st.activeId = 'gun:' + which; activated(st, { side: st.human, gun: which }); }
-    if (which === 'bomber') return { ok: true, lines: [`⏭️ The ${BOMBER_NAMES[st.human]} stays away this round.`] };
+    if (which === 'bomber') return { ok: true, lines: [`⏭️ The ${bomberName(st.human)} stays away this round.`] };
     return { ok: true, lines: [`⏭️ The ${which === 'mortars' ? 'mortars' : 'artillery'} hold fire this round.`] };
   }
 
@@ -3386,11 +3396,11 @@ const Sim = (() => {
 
   return {
     firesOnTheMove, canAmbush, actAmbush, bestMoveShoot, bomberHeading, bomberAims, bomberLine, bombNeed, bombWhy, bestBomberRun,
-    isBunker, isCar, hurtsCars, trainCars, lineSideOf, moveTrains, inFrontOf, bunkerFace, shotOnTheMove, wrecksBeside, isRoad, featuresAt, walkDistance, fireSound, wreckAt, remove, computerSide, isRobot, piecesToAsk, takeCover, enemyOf, gunStats, edgeKey, atCloseRange, closeCells, hailMaryCells,
+    isBunker, isCar, hurtsCars, trainCars, lineSideOf, moveTrains, inFrontOf, bunkerFace, shotOnTheMove, wrecksBeside, isRoad, featuresAt, walkDistance, fireSound, wreckAt, remove, computerSide, isRobot, piecesToAsk, takeCover, enemyOf, gunStats, bomberName, edgeKey, atCloseRange, closeCells, hailMaryCells,
     newGame, roll, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, chargeSpots,
     rallyTargets, canAct, canReact, firepower, canCallFire, takesGoal, cannotWin, artilleryTarget, mortarTarget, holdsObjective, roundText, roomFor,
     computerStep, answer, finishRound, startRound, drawToken, endComputerToken, activationOver, passToken, humanCanMove, endRound, canFire, actSkip, actSkipShot, skipSupport,
-    smallTarget, menDice, armourOf, shotNeed, mayFire, shootCells, tokensHome, captainCanRally, fireAt,
+    smallTarget, menDice, armourOf, shotNeed, mayFire, shootCells, tokensHome, captainCanRally, fireAt, wholeDice: dice,
     actShoot, actMoveShoot, moveShootSpots, chargeRoutes, DIRS, needWhy, shellNeed, shellWhy, shellFields,
     canRally, needFor, canSelfRally, actSelfRally, actHalfShot, actCharge, actRally, actFire, sight, isSmall,
     cover, wire, lineSides, actLine, atHedge, acrossHedge, SIDE_NAMES, PLACES, placeXY, placeName, lines,

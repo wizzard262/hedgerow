@@ -419,6 +419,8 @@ const Models = (() => {
   // A bomber (Steve), nose towards +x: the Americans' four-engined B-17 in olive drab with white stars, the Germans'
   // twin-engined Ju 88 in grey-green with crosses
   function bomber(side) {
+    // (the British at Dunkirk fly the Blenheim, Steve)
+    if (side === 'us' && britishLook) return blenheim();
     const g = new T.Group(), us = side === 'us';
     const paint = us ? mat('#5f6240', 0.6, 0.2) : mat('#57675a', 0.6, 0.2);
     const glass = mat('#a9cfdd', 0.2, 0.3);
@@ -506,6 +508,44 @@ const Models = (() => {
   }
 
   // The bomber waiting off the board: smaller, on a wargamer's flying stand
+  // The Bristol Blenheim IV (Steve: the RAF's bomber at Dunkirk, 1940): smaller than the Ju 88, a short glazed nose
+  // stepped down in front of the cockpit, two radial engines in nacelles close to the fuselage, a turret half sunk in its
+  // back, one fin; dark earth and dark green, blue and red roundels on the wings. Front +x, as the others
+  function blenheim() {
+    const g = new T.Group();
+    const green = mat('#4b5234', 0.65, 0.15), earth = mat('#6b5a3a', 0.65, 0.15);
+    const glass = mat('#a9cfdd', 0.2, 0.3), black = mat('#1c1c1a', 0.6, 0.2);
+    const blur = mat('#2c2c2a', 0.5, 0.2, { transparent: true, opacity: 0.35 });
+    const length = 0.6, radius = 0.042, span = 0.78;
+    // The fuselage, narrowing to the tail, and the short glazed nose
+    g.add(at(cyl(radius, radius * 0.4, length, green), 0, 0, 0, 0, 0, -Math.PI / 2));
+    const nose = new T.Mesh(new T.SphereGeometry(radius, 14, 10), glass);
+    nose.scale.x = 1.1;
+    g.add(at(nose, length / 2, 0, 0));
+    // The cockpit glazing running back from the nose, and the dorsal turret half sunk behind the wing
+    g.add(at(box(0.07, 0.022, radius * 1.2, glass), length * 0.36, radius * 0.75, 0));
+    const turret = new T.Mesh(new T.SphereGeometry(0.022, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), glass);
+    g.add(at(turret, -length * 0.1, radius * 0.85, 0));
+    // The wings, a dark earth patch across each, and the roundels
+    g.add(at(box(0.14, 0.011, span * 0.5, green), length * 0.08, -0.008, 0));
+    for (const s of [-1, 1]) {
+      g.add(at(box(0.095, 0.009, span * 0.26, green), length * 0.09, -0.008, s * span * 0.37));
+      g.add(at(box(0.07, 0.002, span * 0.14, earth), length * 0.07, -0.002, s * span * 0.32, 0, 0.35 * s, 0));
+      g.add(at(cyl(0.036, 0.036, 0.002, mat('#1d2c56', 0.7), 20), length * 0.09, -0.002, s * span * 0.4));
+      g.add(at(cyl(0.016, 0.016, 0.002, mat('#9a2a24', 0.7), 16), length * 0.09, 0, s * span * 0.4));
+    }
+    // The tailplane and the single fin
+    g.add(at(box(0.07, 0.008, span * 0.32, green), -length * 0.44, 0.008, 0));
+    g.add(at(box(0.08, 0.09, 0.01, green), -length * 0.44, 0.05, 0));
+    // Two radial engines in long nacelles just out from the fuselage, each with its propeller a blur in front
+    for (const s of [-1, 1]) {
+      g.add(at(cyl(0.026, 0.016, 0.16, green, 12), length * 0.12, -0.01, s * 0.13, 0, 0, -Math.PI / 2));
+      g.add(at(cyl(0.027, 0.027, 0.02, black, 14), length * 0.12 + 0.08, -0.01, s * 0.13, 0, 0, -Math.PI / 2));
+      g.add(at(cyl(0.06, 0.06, 0.003, blur, 20), length * 0.12 + 0.095, -0.01, s * 0.13, 0, 0, -Math.PI / 2));
+    }
+    return castAll(g);
+  }
+
   function bomberOnStand(side) {
     const g = new T.Group();
     g.add(at(cyl(0.11, 0.115, 0.012, M.base, 24), 0, 0.006, 0));
@@ -2209,5 +2249,5 @@ const Models = (() => {
     return castAll(g);
   }
 
-  return { greyhound, puma, c47, supplyCrate, EIFFEL_HEIGHT, eiffel, landingCraft, littleShip, matilda, carrier, panzer1, panzer2, panzer3, sdkfz231, lorry, destroyer, battleship, strongpoint, setBritish, tankTrap, hulk, crater, seaWall, seaWallRubble, bunker, bunkerCrew, BUNKER, track, bufferStop, engine, carriage, wagon, signalbox, signal, watertower, coal, cow, sheep, lampPost, posterColumn, marketStall, cafe, barn, fountain, pond, reeds, BRIDGE_DECK, materials, M, mergeParts, eliteBand, water, bridge, soldier, squad, team, captain, pak, mortar, bomber, bomberOnStand, howitzer, round, coin, token, sherman, panther, panzer4, hedge, tree, house, die, table, field, lane, at };
+  return { greyhound, puma, c47, supplyCrate, EIFFEL_HEIGHT, eiffel, landingCraft, littleShip, matilda, carrier, panzer1, panzer2, panzer3, sdkfz231, lorry, destroyer, battleship, strongpoint, setBritish, tankTrap, hulk, crater, seaWall, seaWallRubble, bunker, bunkerCrew, BUNKER, track, bufferStop, engine, carriage, wagon, signalbox, signal, watertower, coal, cow, sheep, lampPost, posterColumn, marketStall, cafe, barn, fountain, pond, reeds, BRIDGE_DECK, materials, M, mergeParts, eliteBand, water, bridge, soldier, squad, team, captain, pak, mortar, bomber, blenheim, bomberOnStand, howitzer, round, coin, token, sherman, panther, panzer4, hedge, tree, house, die, table, field, lane, at };
 })();

@@ -1741,6 +1741,17 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - **On the table**: the warship's name now sits on the water just off its bow (north), not across the ship; its shells stand in one line on the water between the name and the bow, a little bigger and further apart, one per shot left (Dunkirk 3, the Normandy beach's USS Texas 2). The drawn token lands a little further up to clear them
 - Assumed: the same for the battleship on the Normandy beach, as it shares the warship's place
 
+## 302. The beaches: no mortars or headland, more shells, the beach past the board; Dunkirk's Blenheim, boats, score and lorries; at least one die (v171)
+
+- Steve (several messages while it was being built): on both beach levels lose the US and British mortars and the land spit, and give the destroyer one more hit; extend the beach to the top of the screen on the US beach as on Dunkirk; Dunkirk had UK bombers, one run of the right plane ("Lancaster?"); with the spit gone boats can land there, and they should come in forwards, pull up sideways and leave forwards; the score is too small, put "0 of 8 ... evacuated" on the beach above the board; round up all dice under one (half a die) to one, everyone should shoot; a solid lorry overlapped a ghost lorry
+- **Both beaches**: no American or British mortars, no headland; the warship has one more round (Dunkirk's destroyer 4, the Normandy beach's USS Texas 3). Boats can now come in off every field of the Dunkirk shore
+- **Normandy beach**: the sand, surf and wet sand run on past the top and bottom of the board to the table's edge, with the sea wall and a strip of grass behind it, as at Dunkirk
+- **Dunkirk's bomber**: one run of an RAF **Bristol Blenheim** (new model: twin radial engines, short glazed nose, dorsal turret, dark earth and green, blue and red roundels). Assumed: the Lancaster only came into service in 1942, so the Blenheim, which bombed the German columns round Dunkirk, is the right plane for 1940. No German bomber
+- **Boats**: come in bow first, turn to lie alongside the beach for the last stretch, then turn and sail out bow first; the icons of the men aboard line up along the boat whichever way it points
+- **The score**: written large on the beach just above the board: "0 of 8 lorry-loads evacuated". Assumed: lorry-loads, not sections, because that is what the rules count (each lorry carries 1 or 2 sections)
+- **Dice**: less than one die (half a die, say) is now always one die, so every shot rolls. This means a Sherman 75mm's gun at men (half a die) always rolls one die that kills on a hit
+- **Lorries**: a lorry left on the beach is not drawn while another piece stands in its field, and only the last one left in each field is drawn (they were overlapping the next lorry in)
+
 ## Sessions
 
 | # | Date | Length | What we did |

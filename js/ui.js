@@ -40,7 +40,7 @@ const UI = (() => {
   // (the map can rename the guns, Steve: Dunkirk's destroyers)
   const GUN_ICONS = { mortars: '💥', artillery: '💣' };
   function gunTitle(side, which) {
-    if (which === 'bomber') return `✈️ ${BOMBER_NAMES[side]} bomber`;
+    if (which === 'bomber') return `✈️ ${Sim.bomberName(side)} bomber`;
     return `${GUN_ICONS[which]} ${Sim.gunStats(which, side).name}`;
   }
   function gunState(which) {

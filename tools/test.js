@@ -1562,14 +1562,20 @@ check('a tank at men: its machine guns are a coin toss, only its gun kills outri
     de.x = 1; de.y = 6; de.platoons = 3; de.at = null; de.shocked = false; de.quality = 'standard';
     // (it has moved this round, so it can't take cover: every die rolls)
     de.acted = true;
-    // Every die a 6, no half die rounded up, every coin toss tails: only the rules themselves kill
+    // Every die a 6, no fraction of a die past one taken, every coin toss tails: only the rules themselves kill
     st.rand = () => 0.99;
     return { st, T1, de };
   };
-  // A Sherman 75mm: one machine-gun die, no gun die. The hit shakes, and tails means no section lost
-  let g = setUp('sherman');
+  // A tank with machine guns only: one machine-gun die. The hit shakes, and tails means no section lost
+  PIECES.mgTestTank = { name: 'Test tank', soft: 1.5, hard: 0, tank: true, armour: 0 };
+  let g = setUp('mgTestTank');
   Sim.actShoot(g.st, g.T1, g.de);
   assert(g.de.platoons === 3 && g.de.shocked, `a machine-gun hit from a tank killed outright (sections ${g.de.platoons})`);
+  delete PIECES.mgTestTank;
+  // A Sherman 75mm: its gun's half die at men is rounded up to one (Steve, 2026-11-12), which kills a section
+  g = setUp('sherman');
+  Sim.actShoot(g.st, g.T1, g.de);
+  assert(g.de.platoons === 2, `a Sherman's rounded-up gun die did not kill a section (sections ${g.de.platoons})`);
   // A Panther: one machine-gun die (shakes, tails) then one gun die, which kills a section
   g = setUp('panther');
   Sim.actShoot(g.st, g.T1, g.de);
@@ -4248,7 +4254,8 @@ check('the captain can take the goal too, as a rifle platoon can; nobody else ca
 
 check('half the bomber runs: nine over the campaign, at most one a side on each map, given to the side that needs it', () => {
   const runs = {};
-  for (const map of MAPS) {
+  // (the campaign only: the bonus battles have their own, Steve: the RAF's Blenheim at Dunkirk)
+  for (const map of MAPS.filter(m => !m.bonus)) {
     const st = Sim.newGame(1, 'us', map.id);
     runs[map.id] = [st.ammo.us.bomber, st.ammo.de.bomber];
   }
@@ -4303,11 +4310,43 @@ check('mortars and artillery: half the rounds, one more to hit, and nobody takes
   Sim.newGame(1);
 });
 
-check('one more American artillery round in Hedge country, Deep bocage and the Train station; one fewer in Crossroads town; three at Dunkirk; two elsewhere', () => {
+check('one more American artillery round in Hedge country, Deep bocage, the Train station and on the beach; one fewer in Crossroads town; four at Dunkirk; two elsewhere', () => {
   for (const map of MAPS) {
-    // (Dunkirk: three for the destroyers)
-    const want = ['hedges', 'deep', 'station', 'dunkirk'].includes(map.id) ? 3 : map.id === 'town' ? 1 : 2;
+    // (Dunkirk: four for the destroyers; the beach: three for USS Texas, Steve 2026-11-12)
+    const want = map.id === 'dunkirk' ? 4 : ['hedges', 'deep', 'station', 'beach'].includes(map.id) ? 3 : map.id === 'town' ? 1 : 2;
     assert(Sim.newGame(1, 'us', map.id).ammo.us.artillery === want, `${map.id}: ${Sim.newGame(1, 'us', map.id).ammo.us.artillery} rounds`);
+  }
+  Sim.newGame(1);
+});
+
+check('no American or British mortars on either beach (Steve), and no rows of the shore kept clear of boats at Dunkirk', () => {
+  for (const id of ['beach', 'dunkirk']) {
+    const g = Sim.newGame(1, 'us', id);
+    assert(g.ammo.us.mortars === 0, `${id}: ${g.ammo.us.mortars} mortar rounds`);
+    // (the Germans keep theirs)
+    assert(g.ammo.de.mortars > 0, `${id}: the Germans lost their mortars`);
+  }
+  assert(!(MAPS.find(m => m.id === 'dunkirk').evacuate.noBoats || []).length, 'Dunkirk still keeps rows clear of boats');
+  Sim.newGame(1);
+});
+
+check('the British at Dunkirk have one run of the RAF Blenheim; the Germans none; other maps keep the B-17 and Ju 88', () => {
+  const g = Sim.newGame(1, 'us', 'dunkirk');
+  assert(g.ammo.us.bomber === 1 && g.ammo.de.bomber === 0, `Dunkirk bombers ${g.ammo.us.bomber} and ${g.ammo.de.bomber}`);
+  assert(Sim.bomberName('us') === 'Blenheim', `the British bomber is the ${Sim.bomberName('us')}`);
+  Sim.newGame(1, 'us', 'hedges');
+  assert(Sim.bomberName('us') === 'B-17' && Sim.bomberName('de') === 'Ju 88', 'the usual bombers renamed');
+  Sim.newGame(1);
+});
+
+check('less than one die is always one die (Steve: everyone who shoots rolls); none stays none; whole dice stay whole', () => {
+  const st = Sim.newGame(1);
+  for (let k = 0; k < 50; k++) {
+    assert(Sim.wholeDice(st, 0.5) === 1 && Sim.wholeDice(st, 0.25) === 1, 'a fraction of a die rolled none');
+    assert(Sim.wholeDice(st, 0) === 0, 'no dice rolled one');
+    assert(Sim.wholeDice(st, 2) === 2, 'two dice rolled other than two');
+    const n = Sim.wholeDice(st, 1.5);
+    assert(n === 1 || n === 2, `one and a half dice rolled ${n}`);
   }
   Sim.newGame(1);
 });

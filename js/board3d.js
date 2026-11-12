@@ -102,8 +102,8 @@ const Board = (() => {
     us: { artillery: { x: -0.7, z: 2.55, pileX: -1.45, pileZ: 2.3 }, mortars: { x: -0.7, z: 4.05, pileX: -1.45, pileZ: 3.85 }, bomber: { x: -0.6, z: 5.5 } },
     de: { artillery: { x: COLS + 0.7, z: 2.55, pileX: COLS + 1.25, pileZ: 2.3 }, mortars: { x: COLS + 0.7, z: 4.05, pileX: COLS + 1.25, pileZ: 3.85 }, bomber: { x: COLS + 0.5, z: 5.5 } },
   };
-  // Dunkirk and the Normandy beach (Steve): the artillery is a warship lying broadside to the shore; the mortars stand on
-  // a headland out into the sea (see addSea). The ship's name sits on the water off its bow, not on the ship, so it can
+  // Dunkirk and the Normandy beach (Steve): the artillery is a warship lying broadside to the shore (no mortars on
+  // these maps, and no headland, Steve 2026-11-12). The ship's name sits on the water off its bow, not on the ship, so it can
   // be read, and its shells stand in one line between the name and the bow, so the shots left can be counted (Steve)
   // nameX, nameZ: where its name goes; pileRow: the rounds in a single line, not rows of three
   const DUNKIRK_GUNS = {
@@ -116,8 +116,8 @@ const Board = (() => {
   // The warship for the 'us' artillery on this map, if it has one (Steve): 'destroyer' or 'battleship'
   let navy = null;
   // (each gun by its name for the time, Steve; see MORTARS and the rest in data.js)
-  // A side's gun or bomber by name; the map can rename the guns (Steve: Dunkirk's destroyers)
-  const gunNameOf = (side, which) => (which === 'bomber' ? `${side === 'us' ? (british ? 'RAF' : 'US') : 'German'} ${BOMBER_NAMES[side]}` : Sim.gunStats(which, side).name);
+  // A side's gun or bomber by name; the map can rename them (Steve: Dunkirk's destroyers and Blenheim)
+  const gunNameOf = (side, which) => (which === 'bomber' ? `${side === 'us' ? (british ? 'RAF' : 'US') : 'German'} ${Sim.bomberName(side)}` : Sim.gunStats(which, side).name);
   const SUPPORT = ['artillery', 'mortars', 'bomber'];
   const PILE_MAX = 12;
   let support = null;           // side → which → { model, rounds: [] }
@@ -156,7 +156,9 @@ const Board = (() => {
         // Its name, small, on the table in front
         const name = word(gunNameOf(side, which), '#efe6d2', false);
         name.scale.multiplyScalar(1.5);
-        name.material.depthTest = true;
+        // (at sea, Dunkirk and the Normandy beach: drawn over the boats sailing past, so it can always be read)
+        name.material.depthTest = GUNS !== DUNKIRK_GUNS;
+        if (GUNS === DUNKIRK_GUNS) name.renderOrder = 3;
         // (the plane stands near the edge of the screen: its name goes in towards the board)
         const nameOut = which === 'bomber' ? 0 : 0.2;
         // (unless the gun has its own place for it: the warship's, off its bow)
@@ -325,6 +327,24 @@ const Board = (() => {
     return p < 1;
   }
 
+  // Dunkirk's score in big letters on the beach just above the board (Steve: the panel's was too small)
+  const EVAC_SIGN = { x: 1.55, z: -0.5, scale: 1.9, colour: '#f4ead0' };
+  let evacSign = null;               // { sprite, text }
+  function updateEvacSign(st) {
+    if (!st.map.evacuate || !st.evac) return;
+    const text = `${st.evac.saved} of ${st.map.evacuate.need} lorry-loads evacuated`;
+    // (the same words, and still on this table: nothing to do)
+    if (evacSign && evacSign.text === text && evacSign.sprite.parent === built) return;
+    if (evacSign && evacSign.sprite.parent) evacSign.sprite.parent.remove(evacSign.sprite);
+    const sprite = word(text, EVAC_SIGN.colour, true);
+    sprite.scale.multiplyScalar(EVAC_SIGN.scale);
+    sprite.position.set(EVAC_SIGN.x, 0.08, EVAC_SIGN.z);
+    // (drawn after the surf, so the water's edge never shows through the words)
+    sprite.renderOrder = 3;
+    built.add(sprite);
+    evacSign = { sprite, text };
+  }
+
   // Show as many rounds beside each gun as it has shots left
   function updateSupport(st) {
     if (!support) return;
@@ -353,15 +373,8 @@ const Board = (() => {
     navy = st.map.navy || null;
     built = new T.Group();
     built.add(Models.table(COLS, ROWS));
-    // Dunkirk (Steve): the beach and the coast road run on past the top and bottom of the board to the table's edge
-    if (st.map.evacuate) {
-      const road = st.map.evacuate.trucks.road;
-      for (const y of [-6, -5, -4, -3, -2, -1, ROWS, ROWS + 1, ROWS + 2, ROWS + 3, ROWS + 4, ROWS + 5]) {
-        for (let x = 0; x < road; x++) built.add(at(Models.field('beach', false, x * 7 + y * 13), x + 0.5, -0.001, y + 0.5, -Math.PI / 2, 0, 0));
-        built.add(at(Models.field('field', false, road * 7 + y * 13), road + 0.5, -0.001, y + 0.5, -Math.PI / 2, 0, 0));
-        built.add(at(Models.lane(0.3, 1), road + 0.5, 0.0002, y + 0.5, -Math.PI / 2, 0, 0));
-      }
-    }
+    // Dunkirk and the Normandy beach (Steve): the beach runs on past the top and bottom of the board to the table's edge
+    if (st.map.evacuate || st.map.landing) addBeachBeyond(st);
     for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
       const t = Sim.tileType(x, y), seed = x * 7 + y * 13;
       built.add(at(Models.field(t, t === 'field' && seed % 5 === 0, seed), x + 0.5, 0, y + 0.5, -Math.PI / 2, 0, 0));
@@ -389,6 +402,33 @@ const Board = (() => {
     scene.add(built);
     shadowStale = true;
     hedgeKey = '';
+  }
+
+  // The beach past the top and bottom of the board, out to the table's edge (Steve)
+  const BEYOND_ROWS = [-6, -5, -4, -3, -2, -1, ROWS, ROWS + 1, ROWS + 2, ROWS + 3, ROWS + 4, ROWS + 5];
+  function addBeachBeyond(st) {
+    // For each row off the board we must:
+    for (const y of BEYOND_ROWS) {
+      // Dunkirk: the sand, then the coast road down a column of grass
+      if (st.map.evacuate) {
+        const road = st.map.evacuate.trucks.road;
+        for (let x = 0; x < road; x++) built.add(at(Models.field('beach', false, x * 7 + y * 13), x + 0.5, -0.001, y + 0.5, -Math.PI / 2, 0, 0));
+        built.add(at(Models.field('field', false, road * 7 + y * 13), road + 0.5, -0.001, y + 0.5, -Math.PI / 2, 0, 0));
+        built.add(at(Models.lane(0.3, 1), road + 0.5, 0.0002, y + 0.5, -Math.PI / 2, 0, 0));
+        continue;
+      }
+      // The Normandy beach: the sand as wide as the board's (the sea is drawn by addSea), the sea wall at its top, then a
+      // column of grass behind it
+      const edgeRow = y < 0 ? 0 : ROWS - 1;
+      let land = 0;
+      while (land < COLS && ['sea', 'beach'].includes(Sim.tileType(land, edgeRow))) land++;
+      for (let x = 0; x < land; x++) {
+        if (Sim.tileType(x, edgeRow) !== 'beach') continue;
+        built.add(at(Models.field('beach', false, x * 7 + y * 13), x + 0.5, -0.001, y + 0.5, -Math.PI / 2, 0, 0));
+      }
+      built.add(at(Models.field('field', false, land * 7 + y * 13), land + 0.5, -0.001, y + 0.5, -Math.PI / 2, 0, 0));
+      built.add(at(Models.seaWall(1.02, land * 31 + y), land, 0, y + 0.5));
+    }
   }
 
   // Where an orchard's trees stand (Steve: a couple more, staggered at random): six trees, each pushed about its own
@@ -464,9 +504,8 @@ const Board = (() => {
   // The sea's own surface over the first column, then the surf: a sheet of shallow water whose edge runs in and out over the
   // sand, uneven along the shore, with a line of foam along that edge and another left behind it as it draws back. The landing
   // craft ride on it. Moved every frame in moveSea
-  // from, long: where the shore starts and how long it runs (Dunkirk: the table's whole length); cut: where the headland
-  // is, with no surf
-  const SURF = { shore: 1, steps: 64, in: 0.2, slow: 0.65, from: 0, long: ROWS, cut: null };
+  // from, long: where the shore starts and how long it runs (Dunkirk: the table's whole length)
+  const SURF = { shore: 1, steps: 64, in: 0.2, slow: 0.65, from: 0, long: ROWS };
   let sea = null;
   function ribbon(material, y) {
     const geo = new T.PlaneGeometry(1, SURF.long, 1, SURF.steps);
@@ -483,11 +522,10 @@ const Board = (() => {
     // Dunkirk (Steve): the sea is off the board, from its edge out to the table's; the landing has it in the first column
     const offBoard = !!st.map.evacuate;
     SURF.shore = offBoard ? 0 : 1;
-    SURF.from = offBoard ? -6 : 0;
-    SURF.long = offBoard ? ROWS + 12 : ROWS;
-    SURF.steps = offBoard ? 160 : 64;
-    const mortars = USUAL_GUNS.us.mortars;
-    SURF.cut = offBoard ? { from: mortars.z - 0.8, to: mortars.z + 0.7 } : null;
+    // (the surf on both runs the table's whole length, past the top and bottom of the board, Steve)
+    SURF.from = -6;
+    SURF.long = ROWS + 12;
+    SURF.steps = 160;
     // The water out to the table's edge (Steve: Dunkirk, and the Normandy beach the same), past the top and bottom too
     const toEdge = offBoard || !!st.map.navy;
     const group = new T.Group();
@@ -513,15 +551,12 @@ const Board = (() => {
     deep.position.set(SURF.shore - wide / 2, 0.004, ROWS / 2);
     deep.receiveShadow = true;
     group.add(deep);
-    // Sand the water has just left, darker: the whole length of the beach (Steve), but not across the headland's root
+    // Sand the water has just left, darker: the whole length of the beach (Steve)
     const wetMat = new T.MeshBasicMaterial({ color: 0x4d3f2b, transparent: true, opacity: 0.32, depthWrite: false });
-    const wetRuns = SURF.cut ? [[SURF.from, SURF.cut.from], [SURF.cut.to, SURF.from + SURF.long]] : [[SURF.from, SURF.from + SURF.long]];
-    for (const [z0, z1] of wetRuns) {
-      const wet = new T.Mesh(new T.PlaneGeometry(0.42, z1 - z0), wetMat);
-      wet.rotation.x = -Math.PI / 2;
-      wet.position.set(SURF.shore + 0.13, 0.0035, (z0 + z1) / 2);
-      group.add(wet);
-    }
+    const wet = new T.Mesh(new T.PlaneGeometry(0.42, SURF.long), wetMat);
+    wet.rotation.x = -Math.PI / 2;
+    wet.position.set(SURF.shore + 0.13, 0.0035, SURF.from + SURF.long / 2);
+    group.add(wet);
     // The sheet of shallow water, and the two lines of foam
     const sheet = ribbon(new T.MeshStandardMaterial({ color: 0x4f8f96, transparent: true, opacity: 0.72, roughness: 0.15, metalness: 0.1, depthWrite: false }), 0.006);
     const foam = ribbon(new T.MeshBasicMaterial({ color: 0xf2f4ee, transparent: true, opacity: 0.92, depthWrite: false }), 0.0075);
@@ -545,8 +580,6 @@ const Board = (() => {
         craft.push({ mesh: m, phase: R() * 6.28, x: 0, y, boat: true, icons: [], load: 0 });
       }
     }
-    // The headland for the mortars (Steve): at Dunkirk and on the Normandy beach
-    if (toEdge) group.add(headland(st));
     // Smoke rising from the wrecks
     const plumes = [];
     for (const f of st.features) {
@@ -562,37 +595,9 @@ const Board = (() => {
   }
 
   // Dunkirk's boats (Steve: we see them move in and out): where one lies off the beach, and where it waits out at sea
-  const BOATS = { in: -0.45, out: -4.6, speed: 0.9 };
-  // The headland (Steve): a spit of sand and grass out into the sea for the British mortars to stand on
-  function headland(st) {
-    const g = new T.Group();
-    const gun = GUNS === DUNKIRK_GUNS ? DUNKIRK_GUNS.us.mortars : USUAL_GUNS.us.mortars;
-    const z0 = gun.z - 0.75, z1 = gun.z + 0.65;
-    const shape = new T.Shape();
-    // (the shape is drawn in x and -z: it is laid flat below)
-    shape.moveTo(0.05, -z0);
-    shape.bezierCurveTo(-0.7, -z0 + 0.05, -1.75, -z0 - 0.1, -1.95, -gun.z);
-    shape.bezierCurveTo(-1.75, -z1 + 0.1, -0.7, -z1 - 0.05, 0.05, -z1);
-    shape.lineTo(0.05, -z0);
-    // (the beach's own sand, Steve: so it runs on from the beach with no join)
-    const beachMat = Models.field('beach', false, 0).material;
-    const map = beachMat.map.clone();
-    map.wrapS = map.wrapT = T.RepeatWrapping;
-    map.needsUpdate = true;
-    const sand = new T.Mesh(new T.ShapeGeometry(shape, 24), new T.MeshStandardMaterial({ map, roughness: 1 }));
-    sand.rotation.x = -Math.PI / 2;
-    sand.position.y = 0.008;
-    sand.receiveShadow = true;
-    g.add(sand);
-    // Rough grass on its top, a few tufts
-    const R = seeded(st.seed + 17);
-    const grass = new T.MeshStandardMaterial({ color: 0x7d8a4a, roughness: 1 });
-    for (let k = 0; k < 14; k++) {
-      const tuft = new T.Mesh(new T.ConeGeometry(0.03 + R() * 0.02, 0.05 + R() * 0.04, 6), grass);
-      g.add(at(tuft, -0.25 - R() * 1.4, 0.03, gun.z - 0.45 + R() * 0.9));
-    }
-    return g;
-  }
+  // inwards, alongside, outwards: the turn of a boat heading for the shore, lying along it, heading out to sea;
+  // pullUp: how far out it starts to turn alongside; turn: how fast it turns (radians a second)
+  const BOATS = { in: -0.45, out: -4.6, speed: 0.9, inwards: -Math.PI / 2, alongside: 0, outwards: Math.PI / 2, pullUp: 0.6, turn: 1.8 };
   // The icon over a boat for each section of men aboard (Steve): a khaki disc with a man in a tin hat, made once
   let manIconTex = null;
   function manIcon() {
@@ -619,16 +624,18 @@ const Board = (() => {
     if (!sea || !st.evac) return;
     sea.st = st;
   }
-  // The lorries left on the beach once their men have sailed (Steve: Dunkirk): a lorry where each one stopped
+  // The lorries left on the beach once their men have sailed (Steve: Dunkirk): a lorry where each one stopped. Only the
+  // last one left in a field, and none in a field where a piece stands now (Steve: a solid lorry overlapped the next
+  // lorry to drive in there)
   let lorriesLeft = null;
   function leftLorries(st) {
-    const left = (st.evac && st.evac.left) || [];
-    const gone = left.filter(l => { const u = Sim.unitById(st, l.id); return u && u.saved; });
-    if (lorriesLeft && lorriesLeft.userData.count === gone.length && lorriesLeft.parent === built) return;
+    const shown = shownLeftLorries(st);
+    const key = shown.map(l => l.id).join();
+    if (lorriesLeft && lorriesLeft.userData.key === key && lorriesLeft.parent === built) return;
     if (lorriesLeft) { if (lorriesLeft.parent) lorriesLeft.parent.remove(lorriesLeft); freeObject(lorriesLeft); }
     lorriesLeft = new T.Group();
-    lorriesLeft.userData.count = gone.length;
-    for (const l of gone) {
+    lorriesLeft.userData.key = key;
+    for (const l of shown) {
       const m = Models.mergeParts(Models.lorry());
       m.scale.setScalar(TANKS);
       const p = Sim.placeXY(l.at);
@@ -636,24 +643,58 @@ const Board = (() => {
     }
     built.add(lorriesLeft);
   }
+  // Which left lorries to draw: those whose men have sailed, the last one in each field, and only where no piece stands
+  function shownLeftLorries(st) {
+    const left = (st.evac && st.evac.left) || [];
+    const gone = left.filter(l => { const u = Sim.unitById(st, l.id); return u && u.saved; });
+    const lastInField = {};
+    for (const l of gone) lastInField[l.x + ',' + l.y] = l;
+    const shown = [];
+    for (const l of Object.values(lastInField)) {
+      const occupied = st.units.some(u => u.x === l.x && u.y === l.y);
+      if (!occupied) shown.push(l);
+    }
+    return shown;
+  }
 
   // One of Dunkirk's little ships for a frame: in towards the beach while a boat lies off its field this round, out to
-  // sea when not; the icons of the sections aboard ride over it, and go out with it when it sails
+  // sea when not; the icons of the sections aboard ride over it, and go out with it when it sails.
+  // Steve: it comes in bow first, pulls up sideways to the beach, and leaves bow first again
   function sailBoat(c, t, dt) {
     const st = sea.st;
     const here = !!st && st.evac && st.evac.boats.some(b => b.y === c.y);
     const want = here ? BOATS.in : BOATS.out;
     const dx = want - c.mesh.position.x;
-    c.mesh.position.x += Math.sign(dx) * Math.min(Math.abs(dx), BOATS.speed * dt * (0.4 + Math.min(1, Math.abs(dx))));
+    // Which way it should point: bow to the shore coming in, out to sea going out, along the shore once it lies off it
+    const goal = boatHeading(dx);
+    if (c.heading === undefined) c.heading = goal;
+    // It turns towards that, and goes slowly while it is still turning
+    const turn = goal - c.heading;
+    c.heading += Math.sign(turn) * Math.min(Math.abs(turn), BOATS.turn * dt);
+    const pointing = Math.max(0.25, Math.cos(goal - c.heading));
+    const step = BOATS.speed * dt * (0.4 + Math.min(1, Math.abs(dx))) * pointing;
+    c.mesh.position.x += Math.sign(dx) * Math.min(Math.abs(dx), step);
+    c.mesh.rotation.y = c.heading;
     c.mesh.visible = c.mesh.position.x > BOATS.out + 0.05;
+    // (out of sight at sea: ready to come in bow first next time)
+    if (!c.mesh.visible) c.heading = BOATS.inwards;
     // The sections aboard, while it lies off the beach (when it sails they have gone from the rules: it keeps the count)
     if (here && st) c.load = st.units.filter(u => u.aboard && u.x === 0 && u.y === c.y).reduce((n, u) => n + u.platoons, 0);
     if (!c.mesh.visible) c.load = 0;
     while (c.icons.length < c.load) { const s = manIcon(); sea.group.add(s); c.icons.push(s); }
+    // (the icons in a line along the boat, bow to stern, whichever way it points)
+    const alongX = -Math.sin(c.heading), alongZ = -Math.cos(c.heading);
     c.icons.forEach((s, i) => {
       s.visible = i < c.load && c.mesh.visible;
-      s.position.set(c.mesh.position.x, 0.5 + Math.sin(t * 2 + i) * 0.01, c.y + 0.5 + (i - (c.load - 1) / 2) * 0.27);
+      const d = (i - (c.load - 1) / 2) * 0.27;
+      s.position.set(c.mesh.position.x + alongX * d, 0.5 + Math.sin(t * 2 + i) * 0.01, c.y + 0.5 + alongZ * d);
     });
+  }
+  // A boat's heading for how far it still has to go (dx: + towards the shore): bow first while under way, then
+  // broadside on for the last stretch in (the model's bow is to the north at no turn)
+  function boatHeading(dx) {
+    if (Math.abs(dx) < BOATS.pullUp) return dx > 0 || Math.abs(dx) < 0.01 ? BOATS.alongside : BOATS.outwards;
+    return dx > 0 ? BOATS.inwards : BOATS.outwards;
   }
 
   // Where the water's edge is, along the shore, at a moment (t in seconds): the main surge in and out, with slower and quicker
@@ -669,9 +710,7 @@ const Board = (() => {
     for (let i = 0; i < p.count; i++) {
       // (a plane's vertices come in rows from one end to the other, two to a row: left, then right)
       const row = Math.floor(i / 2), z = SURF.from + (row / SURF.steps) * SURF.long;
-      // (no surf where the headland is, Steve: the ribbon closes up to nothing there, under the sand)
-      const cut = SURF.cut && z > SURF.cut.from && z < SURF.cut.to;
-      p.setX(i, i % 2 === 0 || cut ? inner(z) : outer(z));
+      p.setX(i, i % 2 === 0 ? inner(z) : outer(z));
     }
     p.needsUpdate = true;
     mesh.geometry.computeBoundingSphere();
@@ -2989,7 +3028,7 @@ const Board = (() => {
   // ["1st Platoon", "needs 5+ · 2 hits"]: who fired, then the score each die needed and the hits
   function shotTagText(st, f) {
     const shooter = f.from ? st.units.find(u => u.id === f.from.id) : null;
-    const gunName = f.support === 'bomber' ? BOMBER_NAMES[f.side] : gunNameOf(f.side, f.support);
+    const gunName = f.support === 'bomber' ? Sim.bomberName(f.side) : gunNameOf(f.side, f.support);
     // ("Our" only with one human playing: two humans, or two robots, have no "our")
     const onePlayer = st.mode === 'us' || st.mode === 'de';
     const whose = onePlayer && f.side === st.human ? 'Our' : f.side === 'de' ? 'German' : british ? 'British' : 'American';
@@ -3138,6 +3177,7 @@ const Board = (() => {
     if (gap) watchFrames(gap, drawingOn);
     if (!built || built.userData.seed !== st.seed || built.userData.map !== st.map) { clearDice(true); for (const id in pieces) { scene.remove(pieces[id]); freeObject(pieces[id]); } for (const id in tokens) scene.remove(tokens[id]); pieces = {}; tokens = {}; build(st); buildSupport(st); built.userData.seed = st.seed; built.userData.map = st.map; }
     updateSupport(st);
+    updateEvacSign(st);
     buildHedges(st);
     // New attacks: they play out, and their dice go in the corner once they have landed (Steve)
     // (the rolls are kept now: a tank's shot lands late, and the next token may have cleared the attacks by then)
