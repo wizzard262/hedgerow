@@ -1815,6 +1815,12 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - Steve: the Panzer II still has a 0.5 dice
 - **The panel**: shows the dice as they are rolled: less than one die is one (the Panzer II: 1 vs tanks, and 2 vs men, its machine guns' die and its gun's high explosive, each at least one). Other fractions still show as they are (1.5: one die and a half chance of a second)
 
+## 311. The Panzer II's cannon and the Matilda's armour (checked, left as it is)
+
+- Steve: I don't think the Panzer II has any anti-tank, just a machine gun; it's got to be weaker than the Matilda; why does the Matilda have armour 2 when the Shermans have less, is it rebalanced as these are early-war tanks?
+- **Answered**: the Panzer II did carry a 2 cm cannon (and a machine gun). Armour is how hard a tank is for the guns it faced: the Matilda II's 78 mm front shrugged off the German 2 cm and 3.7 cm guns of 1940 (armour 2), while by 1944 the Germans' 7.5 cm and 8.8 cm guns went through a Sherman (armour 0). Not rebalanced by period
+- **Steve's choice: leave it as it is**: the Panzer II keeps 1 anti-tank die, needing 5 or more against the Matilda
+
 ## Sessions
 
 | # | Date | Length | What we did |
