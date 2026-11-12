@@ -1787,6 +1787,14 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - **The 88**: on the crossroads behind the store, looking west down the open street at the Soviets, nothing in the way; no sandbags round it, and no "dug in" in its name
 - **Words**: at Stalingrad the hedge is a ruin everywhere it is named: "+1 ruin", "Cover: ruin", "climbs through the ruin", "smashes through the ruin", "lining its ruin", and no "hedge cutters"
 
+## 307. Stalingrad: the 88's shield, it turns, dead centre of the crossroads, a quarter bigger (v176)
+
+- Steve: the Flak 88 has 2 cover from the front, and it can turn; put the 88 dead centre of the crossroads, make it 25% larger (he first typed 335%, then said 25%)
+- **Gun shield**: a shot at the 88 from in front of it, within 45° either side of the way it faces, needs 2 more ("+2 gun shield" in the reasons); none from the side or behind. It faces what it fires at, so the shield swings with it
+- **Turning**: it still never moves, but its move can be a turn: click an area of its own field and it faces out that way, and may lie in ambush. The German computer, with no shot, turns it to face the nearest Soviet it can see and lies in ambush
+- **On the table**: drawn in the very middle of its crossroads, and 25% bigger
+- Robots (20 games) after the shield: Soviets 6, Germans 13, a draw. Not tuned (no balance runs asked)
+
 ## Sessions
 
 | # | Date | Length | What we did |

@@ -1206,7 +1206,21 @@ const Sim = (() => {
     let c = 0;
     if (from) { const s2 = sight(st, from, target); if (s2) c += s2.cover; }
     c += placeCover(st, target, from);
+    c += shieldCover(target, from);
     return c;
+  }
+
+  // A gun shield (Steve: the 88): its cover against a shot from in front of the gun, within SHIELD_ARC of the way it
+  // faces; nothing from the side or behind
+  function shieldCover(target, from) {
+    const shield = PIECES[target.kind].shield || 0;
+    if (!shield || !from || from.x === null) return 0;
+    const gun = boardPoint(target), shooter = boardPoint(from);
+    const facing = target.aim === undefined ? (target.side === 'us' ? 0 : Math.PI) : target.aim;
+    const toShooter = Math.atan2(-(shooter.y - gun.y), shooter.x - gun.x);
+    let off = Math.abs(toShooter - facing) % (Math.PI * 2);
+    if (off > Math.PI) off = Math.PI * 2 - off;
+    return off <= SHIELD_ARC / 2 * Math.PI / 180 + 1e-9 ? shield : 0;
   }
 
   // What hits do to a piece (Steve): every hit shakes it, and each hit is a coin toss whether it wounds: a section
@@ -1390,6 +1404,7 @@ const Sim = (() => {
     if (covered && s && s.hedge) why.push(`+${COVER.hedge} ${hedgeWord()}`);
     if (covered && s && s.tankCorner) why.push(`+${COVER.tankCorner} tank's corner`);
     if (covered && s && s.placeCorner) why.push(`+${COVER.placeCorner} cover`);
+    if (covered && shieldCover(target, shooter)) why.push(`+${shieldCover(target, shooter)} gun shield`);
     if (covered) why.push(...placeWhy(st, target, shooter));
     if (target.down) why.push(`+${TAKE_COVER} take cover`);
     // Two men or fewer (Steve)
@@ -1518,6 +1533,8 @@ const Sim = (() => {
 
   function fireAt(st, shooter, target, withdraw = false, moving = false, blast = false) {
     const f = firepower(st, shooter);
+    // An anti-tank gun swings round onto what it fires at, and stays facing it (Steve: its shield faces that way)
+    if (isAtGun(shooter)) shooter.aim = Math.atan2(-(target.y - shooter.y), target.x - shooter.x);
     // The computer's piece fired on takes cover when it is wise to (Steve), as you can
     if (!withdraw && isRobot(st, target.side) && computerTakesCover(st, target, menDice(f), needFor(st, shooter, target, moving))) withdraw = true;
     // Taking cover happens before the dice roll: its men are already down (and two more are needed)
@@ -2322,7 +2339,9 @@ const Sim = (() => {
   // The other places in its own field a piece could move to (not where it is; where it fits among the others). The PaK
   // too (Steve): it never leaves its field, but it can be moved about in it
   function lineSides(st, u) {
-    if (isBunker(u) || isEmplaced(u)) return [];
+    if (isBunker(u)) return [];
+    // A gun in a fixed position can't move, but it can turn (Steve): any pair of areas round it, to face out that way
+    if (isEmplaced(u)) return anchorsFor(u).filter(p => p !== u.at);
     return anchorsFor(u).filter(p => p !== u.at && fitsAt(st, u, u.x, u.y, p));
   }
 
@@ -2368,6 +2387,15 @@ const Sim = (() => {
   function actLine(st, u, side) {
     if (!canAct(st, u) || !lineSides(st, u).length) return { ok: false };
     const isPak = !!PIECES[u.kind].fixed;
+    // The 88 (Steve: it can turn): it stays where it is, facing out of its field the way clicked
+    if (isEmplaced(u)) {
+      const way = side && side !== 'c' ? side : null;
+      if (!way) return { ok: false };
+      spend(st, u);
+      u.aim = FACING[way];
+      u.mayAmbush = true;
+      return { ok: true, lines: [`↪️ ${u.name} turns to face ${SIDE_NAMES[way[0]] || way}${way.length > 1 ? (way[1] === 'e' ? '-east' : '-west') : ''}.`] };
+    }
     const to = isPak ? pakPlaceFor(st, u, side) : freePlace(st, u, u.x, u.y, side);
     if (to === u.at || !lineSides(st, u).includes(to)) return { ok: false };
     spend(st, u);
@@ -2857,6 +2885,22 @@ const Sim = (() => {
     if (t) { computerSays(st, `Fires on ${t.name}`); return { shooter: u.id, target: t.id }; }
     // The PaK with no shot from here (Steve: it can move within its field): to a place in the field that has one. It
     // can't fire after moving, but it lies in ambush there on the same go
+    // The 88 with no shot (Steve: it can turn): its shield round to the nearest enemy it can see, and it waits for them
+    if (isEmplaced(u)) {
+      const seen = st.units.filter(e => e.side !== u.side && e.x !== null && sight(st, u, e));
+      if (seen.length) {
+        const far = e => Math.hypot(e.x - u.x, e.y - u.y);
+        const e = seen.sort((a, b) => far(a) - far(b))[0];
+        const way = Math.round(Math.atan2(-(e.y - u.y), e.x - u.x) / (Math.PI / 4)) * (Math.PI / 4);
+        if (Math.abs(way - (u.aim === undefined ? Math.PI : u.aim)) > 1e-6) {
+          u.aim = way;
+          computerSays(st, `Turns to face ${e.name}`);
+          rep.push(`↪️ ${u.name} turns to face ${e.name} and lies in ambush.`);
+          u.ambush = true;
+          return null;
+        }
+      }
+    }
     if (isAtGun(u) && !isEmplaced(u)) {
       const spot = placeWithAShot(st, u);
       if (spot) {

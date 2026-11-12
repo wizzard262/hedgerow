@@ -1127,7 +1127,8 @@ const Board = (() => {
     const gunModel = { pak: Models.pak, flak88: Models.flak88 }[kind];
     const m = Models.mergeParts(kind === 'captain' ? Models.captain(side, flag) : gunModel ? gunModel() : Models.team(side, kind));
     markerSpots(m);
-    m.scale.setScalar(kind === 'pak' ? TANKS * 1.3 : kind === 'flak88' ? TANKS * 1.15 : MEN);
+    // (the 88 a quarter bigger again, Steve)
+    m.scale.setScalar(kind === 'pak' ? TANKS * 1.3 : kind === 'flak88' ? TANKS * 1.15 * 1.25 : MEN);
     // The PaK (and the 88) swings round onto its target before it fires, as a tank does (Steve)
     if (PIECES[kind].atGun) m.userData.slowTurn = true;
     return [m];
@@ -1216,7 +1217,9 @@ const Board = (() => {
       } else {
         // The PaK faces the way it last fired (Steve: it turns to shoot); everyone else the enemy's side
         const facing = Sim.isAtGun(u) && u.aim !== undefined ? u.aim : g.userData.face;
-        aim(g.userData.bases[0], 0.5 + p.x * reach.small, 0.5 + p.y * reach.small, facing);
+        // (the 88 stands dead in the middle of its crossroads, Steve, whatever areas it takes)
+        const centred = Sim.isEmplaced(u);
+        aim(g.userData.bases[0], centred ? 0.5 : 0.5 + p.x * reach.small, centred ? 0.5 : 0.5 + p.y * reach.small, facing);
       }
       aim(g, x, y, 0);
       // On a bridge it stands up on the road

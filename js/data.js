@@ -483,7 +483,8 @@ const PIECES = {
   // atGun: an anti-tank gun (swings round to fire, its hits on men kill); emplaced: in a fixed position, it never moves
   // at all, not even within its field (Steve: Stalingrad's 88)
   pak:      { name: 'PaK 40 gun', soft: 0.5, hard: 3, team: true, fixed: true, atGun: true },
-  flak88:   { name: '8.8 cm Flak 36', soft: 1, hard: 4, team: true, fixed: true, atGun: true, emplaced: true },
+  // shield: what its gun shield adds to a shot from in front of it, within SHIELD_ARC of the way it faces (Steve: the 88)
+  flak88:   { name: '8.8 cm Flak 36', soft: 1, hard: 4, team: true, fixed: true, atGun: true, emplaced: true, shield: 2 },
   // Stalingrad, 1942 (Steve)
   t34:      { name: 'T-34/76', soft: 1.5, hard: 1.5, tank: true, armour: 1, cutter: true },
   // His submachine gun (Steve): three dice, and closeOnly: he can't shoot beyond close range at all
@@ -528,6 +529,8 @@ const BOMBER = { need: 5, dice: 1, ammo: 1, directions: 16, worth: 2 };
 // `bases` bases of three men, each rolling `dice` dice, at close range only, as the captain's submachine gun
 // (Steve: two bases of three men, still six shots)
 const SMG = { bases: 2, dice: 3 };
+// A gun shield covers this wide an arc in front of the gun, in degrees (Steve: the 88 has 2 cover from the front)
+const SHIELD_ARC = 90;
 // Minefields (Steve: Stalingrad): each piece going into one rolls a die; this or more sets off a mine, a hit on it
 // (an anti-tank hit on a tank)
 const MINES = { need: 5 };

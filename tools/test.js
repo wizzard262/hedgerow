@@ -4426,6 +4426,29 @@ check('Stalingrad: the 88 is dug in for good: it never moves, not even within it
   Sim.newGame(1);
 });
 
+check('Stalingrad: the 88 has 2 cover from the front (its gun shield), and it can turn on the spot (Steve)', () => {
+  const st = Sim.newGame(3, 'de', 'stalingrad');
+  const gun = Sim.unitById(st, 'd88'), sov = Sim.unitById(st, 'B');
+  for (const u of st.units) if (u !== gun && u !== sov) u.x = u.y = null;
+  st.hedges = {}; st.wire = {}; st.features = [];
+  // Facing west: a shot from two fields west needs two more than one from two fields north (off to its side)
+  sov.x = gun.x - 2; sov.y = gun.y; sov.at = null; sov.shocked = false;
+  const front = Sim.needFor(st, sov, gun);
+  assert(Sim.needWhy(st, sov, gun).some(w => w.includes('gun shield')), 'no gun shield in the reasons');
+  sov.x = gun.x; sov.y = gun.y - 2;
+  const beside = Sim.needFor(st, sov, gun);
+  assert(front === beside + 2, `from the front ${front}, from the side ${beside}`);
+  // Turning: its move, it stays where it is and faces the way clicked
+  st.drawn = 'de'; st.activeId = null; gun.acted = false;
+  const was = { x: gun.x, y: gun.y, at: gun.at };
+  const turned = Sim.actLine(st, gun, 'e');
+  assert(turned.ok && gun.x === was.x && gun.y === was.y && gun.at === was.at && Math.abs(gun.aim) < 1e-6, 'the 88 did not turn on the spot');
+  // Turned to face north, the shot from the north is the one into its shield
+  Sim.actLine(Object.assign(st, { activeId: null }), Object.assign(gun, { acted: false }), 'n');
+  assert(Sim.needFor(st, sov, gun) === beside + 2, 'the shield did not turn with it');
+  Sim.newGame(1);
+});
+
 check('Stalingrad: a piece going into a minefield rolls a die; 5 or 6 sets off a mine (Steve)', () => {
   const st = Sim.newGame(3, 'us', 'stalingrad');
   st.hedges = {}; st.wire = {};
