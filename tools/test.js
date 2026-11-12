@@ -4404,7 +4404,10 @@ check('Stalingrad: the Soviets against the Germans, the table seen from the far 
   assert(rubble.every(f => f.areas.length === 1 && f.areas[0] !== 'c') && mines.every(f => !f.areas.length), 'wrong areas');
   // Their armies: the Soviets' T-34 and PPSh section, the Germans' 88 and MP 40 section
   const kinds = side => st.units.filter(u => u.side === side).map(u => u.kind + (u.arms ? ':' + u.arms : ''));
-  assert(kinds('us').includes('t34') && kinds('us').includes('company:smg'), kinds('us').join());
+  assert(kinds('us').includes('t34') && kinds('us').includes('kv2') && kinds('us').includes('company:smg'), kinds('us').join());
+  // (Steve: the Germans rebalanced for the KV-2)
+  assert(kinds('de').filter(k => k === 'pak').length === 2 && kinds('de').includes('pz4f2'), kinds('de').join());
+  assert(PIECES.kv2.armour === 2 && PIECES.kv2.extraMove < 0 && PIECES.pz4f2.hard > PIECES.pz4.hard, 'the KV-2 or the F2 numbers are wrong');
   assert(kinds('de').includes('flak88') && kinds('de').includes('company:smg'), kinds('de').join());
   Sim.newGame(1);
   assert(Sim.hedgeWord() === 'hedge', 'hedges are still called ruins elsewhere');

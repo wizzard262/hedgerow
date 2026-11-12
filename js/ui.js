@@ -13,7 +13,7 @@ const UI = (() => {
                  // Dunkirk, 1940 (Steve)
                  matilda: 'Matilda II', carrier: 'Universal Carrier (Bren)', lorry: 'Lorry of men for the boats', boys: 'Boys anti-tank rifle team', pz1: 'Panzer I', pz2: 'Panzer II', pz3: 'Panzer III', sdkfz231: 'Sd.Kfz. 231 armoured car',
                  // Stalingrad, 1942 (Steve)
-                 t34: 'T-34/76', flak88: '8.8 cm Flak 36' };
+                 t34: 'T-34/76', kv2: 'KV-2 heavy tank (152 mm)', pz4f2: 'Panzer IV F2 (long 7.5 cm)', flak88: '8.8 cm Flak 36' };
   // What a piece is, in words: a rifle platoon with submachine guns is a section of submachine gunners (Steve)
   const kindName = u => (u.arms === 'smg' ? 'Submachine-gun section' : KIND[u.kind]);
 

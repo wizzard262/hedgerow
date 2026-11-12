@@ -612,6 +612,34 @@ const Models = (() => {
     return castAll(g);
   }
 
+  // The KV-2 (Steve): the long, boxy KV hull on six road wheels a side with return rollers, and the huge, tall slab-sided
+  // turret with its short, fat 152 mm howitzer in a big mantlet. Front +x
+  function kv2() {
+    const paint = sovietPaint();
+    const g = new T.Group(), W = 0.21, L = 0.4;
+    g.add(at(box(L * 0.92, 0.05, W * 0.64, paint), 0, 0.06, 0));
+    g.add(at(profile([[-0.2, 0.085], [0.16, 0.085], [0.205, 0.065], [0.205, 0.085], [0.17, 0.12], [-0.19, 0.12], [-0.2, 0.105]], W, paint, 0.004), 0, 0, 0));
+    for (const s of [-1, 1]) {
+      const z = s * W * 0.43;
+      g.add(trackRun(L * 0.95, 0.05, 0.042, 0.03, z));
+      for (let k = 0; k < 6; k++) g.add(at(wheel(0.024, 0.03, M.steel), -0.15 + k * 0.06, 0.028, z));
+      for (let k = 0; k < 3; k++) g.add(at(wheel(0.008, 0.02, M.steel), -0.1 + k * 0.09, 0.056, z));
+      g.add(at(sprocket(0.024, 0.034, paint), -0.19, 0.04, z));
+      g.add(at(wheel(0.022, 0.034, M.steel), 0.19, 0.04, z));
+    }
+    // The huge turret: a tall box with sloped front, standing high over the hull
+    const turret = profile([[-0.08, 0], [0.06, 0], [0.075, 0.03], [0.065, 0.1], [-0.08, 0.1]], 0.15, paint, 0.006);
+    g.add(at(turret, -0.01, 0.12, 0));
+    g.add(at(box(0.05, 0.006, 0.06, paint), -0.04, 0.224, 0));
+    // The 152 mm howitzer: a big round mantlet and a short, fat barrel
+    g.add(at(box(0.024, 0.05, 0.06, paint), 0.072, 0.165, 0));
+    g.add(at(cyl(0.012, 0.012, 0.11, M.steel, 14), 0.13, 0.165, 0, 0, 0, Math.PI / 2));
+    g.add(at(cyl(0.014, 0.014, 0.012, M.steel, 14), 0.186, 0.165, 0, 0, 0, Math.PI / 2));
+    // Spare track links on the turret side, a white slogan panel
+    for (const s of [-1, 1]) g.add(at(box(0.06, 0.02, 0.002, mat('#e8e4d8', 0.8)), -0.01, 0.17, s * 0.076));
+    return castAll(g);
+  }
+
   // The 8.8 cm Flak 36 (Steve: a fixed position): the cross-shaped platform on its four outriggers, the pedestal, the
   // long barrel with its shield, and its crew of three (no sandbags round it, Steve). Front +x
   function flak88() {
@@ -2491,5 +2519,5 @@ const Models = (() => {
     return castAll(g);
   }
 
-  return { greyhound, puma, c47, supplyCrate, EIFFEL_HEIGHT, eiffel, landingCraft, littleShip, matilda, carrier, panzer1, panzer2, panzer3, sdkfz231, lorry, destroyer, battleship, strongpoint, setBritish, tankTrap, hulk, crater, seaWall, seaWallRubble, bunker, bunkerCrew, BUNKER, track, bufferStop, engine, carriage, wagon, signalbox, signal, watertower, coal, cow, sheep, lampPost, posterColumn, marketStall, cafe, barn, fountain, pond, reeds, BRIDGE_DECK, materials, M, mergeParts, eliteBand, water, bridge, soldier, squad, team, captain, pak, mortar, bomber, blenheim, bomberOnStand, setArmy, t34, flak88, ruinWall, ruinCorner, rubbleLine, rubblePile, minefield, STOREY, howitzer, round, coin, token, sherman, panther, panzer4, hedge, tree, house, die, table, field, lane, at };
+  return { greyhound, puma, c47, supplyCrate, EIFFEL_HEIGHT, eiffel, landingCraft, littleShip, matilda, carrier, panzer1, panzer2, panzer3, sdkfz231, lorry, destroyer, battleship, strongpoint, setBritish, tankTrap, hulk, crater, seaWall, seaWallRubble, bunker, bunkerCrew, BUNKER, track, bufferStop, engine, carriage, wagon, signalbox, signal, watertower, coal, cow, sheep, lampPost, posterColumn, marketStall, cafe, barn, fountain, pond, reeds, BRIDGE_DECK, materials, M, mergeParts, eliteBand, water, bridge, soldier, squad, team, captain, pak, mortar, bomber, blenheim, bomberOnStand, setArmy, t34, kv2, flak88, ruinWall, ruinCorner, rubbleLine, rubblePile, minefield, STOREY, howitzer, round, coin, token, sherman, panther, panzer4, hedge, tree, house, die, table, field, lane, at };
 })();

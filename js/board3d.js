@@ -1093,7 +1093,7 @@ const Board = (() => {
         // Dunkirk, 1940 (Steve)
         matilda: Models.matilda, carrier: Models.carrier, pz1: Models.panzer1, pz2: Models.panzer2, pz3: Models.panzer3, sdkfz231: Models.sdkfz231,
         // Stalingrad, 1942 (Steve)
-        t34: Models.t34 }[kind];
+        t34: Models.t34, kv2: Models.kv2 }[kind];
       return [0].map(() => { const m = Models.mergeParts(make()); markerSpots(m); m.scale.setScalar(TANKS); m.userData.slowTurn = true; return m; });
     }
     if (PIECES[kind].bunker) return [bunkerBase(kind === 'bunker_gun')];

@@ -1834,6 +1834,13 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - **Small guns**: one more needed against any tank (armoured cars and carriers too), "+1 small gun" in the red bubble
 - Robots at Stalingrad (20 games): Soviets 12, Germans 8
 
+## 314. Stalingrad: a KV-2 for the Soviets, the Germans rebalanced (v182)
+
+- Steve: give the Russians at Stalingrad a KV-2 and rebalance the German force to account for it
+- **The KV-2** (new model: the long KV hull on six road wheels, the huge tall turret, the short fat 152 mm howitzer): armour 2, as the Matilda; one field slower; 1 die against tanks (slow to load, few rounds) and 1.5 for its gun at men (its hits kill)
+- **The Germans**: two PaK 40s by the store (each side of it) and the Panzer IV now a long-gunned Panzer IV F2 (2.5 anti-tank dice, the Panzer IV's model)
+- **The numbers tried** (robots, 40 games each): the KV-2 at armour 2 with 2 anti-tank dice and 3 at men, Germans unchanged: Soviets 36, Germans 2; with one PaK 40 more: 34 to 6; the KV-2 at 1.5 and 2, and the F2: 32 to 7; armour 1: 29 to 11; without the KV-2 at all (with the German additions): 18 to 21. **Chosen**: armour 2 kept (realistic), its guns cut to 1 and 1.5, and a second PaK 40: Soviets 23, Germans 15, 2 draws (before the KV-2, 12 to 8 in 20). The KV-2 still survives most games (24 of 40): the German computer does not go after it hard
+
 ## Sessions
 
 | # | Date | Length | What we did |

@@ -307,7 +307,7 @@ const MAPS = [
     // Piles of rubble and minefields made new each game (generated: 'ruins'). The 'us' side is the Soviets (army 'su');
     // the table is seen from the other side (flip), so they come in from the right and the Germans hold the left (Steve)
     id: 'stalingrad', bonus: true, date: 'November 1942', name: 'Stalingrad',
-    note: 'A bombed-out city. The Soviets attack the Germans holding the ruins of the Univermag store: an open courtyard of four fields, walled all round. The walls of ruined buildings stand between the fields and work as hedges do: you see over one only from right beside it, men climb through the windows, and lining one is cover. Lines of rubble do the same; piles of rubble give cover, and minefields may blow up whoever goes in. Each side has a section of submachine gunners: two bases of three men, 3 dice a base (6 in all), at close range only. The Germans have an 8.8 cm Flak in a fixed position on a crossroads, looking down an open street; the Soviets a T-34.',
+    note: 'A bombed-out city. The Soviets attack the Germans holding the ruins of the Univermag store: an open courtyard of four fields, walled all round. The walls of ruined buildings stand between the fields and work as hedges do: you see over one only from right beside it, men climb through the windows, and lining one is cover. Lines of rubble do the same; piles of rubble give cover, and minefields may blow up whoever goes in. Each side has a section of submachine gunners: two bases of three men, 3 dice a base (6 in all), at close range only. The Germans have an 8.8 cm Flak in a fixed position on a crossroads, looking down an open street; the Soviets a T-34 and a KV-2 heavy tank; the Germans two PaK 40s and a long-gunned Panzer IV F2 to meet it.',
     generated: 'ruins',
     ruins: true,
     army: 'su',
@@ -343,6 +343,7 @@ const MAPS = [
         { id: 'smg1', kind: 'company', arms: 'smg', name: 'PPSh Section', quality: 'standard' },
         { id: 'cap', kind: 'captain', name: 'Kapitan (company HQ)' },
         { id: 'T1', kind: 't34', name: 'T-34/76' },
+        { id: 'T2', kind: 'kv2', name: 'KV-2' },
         { id: 'mg1', kind: 'mg', name: 'Maxim MG' },
         { id: 'at1', kind: 'boys', name: 'PTRD Anti-tank Rifle' },
         { id: 'sn1', kind: 'sniper', name: 'Sniper Team' },
@@ -360,8 +361,11 @@ const MAPS = [
         { id: 'dsmg', kind: 'company', arms: 'smg', name: 'MP 40 Section', quality: 'standard', post: [0, -1] },
         { id: 'dmg2', kind: 'mg42', name: 'MG 34 Team', post: [-1, -1] },
         { id: 'd3', kind: 'company', name: '3. Zug', quality: 'standard', reserve: true },
-        { id: 'dt1', kind: 'pz4', name: 'Panzer IV', reserve: true },
+        { id: 'dt1', kind: 'pz4f2', name: 'Panzer IV F2', reserve: true },
         { id: 'dt2', kind: 'pz3', name: 'Panzer III', reserve: true },
+        // (Steve: the Germans rebalanced for the KV-2: two PaK 40s by the store, and the Panzer IV a long-gunned F2)
+        { id: 'dpak1', kind: 'pak', name: 'PaK 40', post: [-1, 1], garrison: true },
+        { id: 'dpak2', kind: 'pak', name: 'PaK 40', post: [-1, -1], garrison: true },
       ],
     },
   },
@@ -494,6 +498,12 @@ const PIECES = {
   flak88:   { name: '8.8 cm Flak 36', soft: 1, hard: 4, team: true, fixed: true, atGun: true, emplaced: true, shield: 2 },
   // Stalingrad, 1942 (Steve)
   t34:      { name: 'T-34/76', soft: 1.5, hard: 1.5, he: 1, tank: true, armour: 1, cutter: true },
+  // The Panzer IV F2 (Steve: the Germans' answer to the KV-2 at Stalingrad): the long 7.5 cm gun; the Panzer IV's model
+  pz4f2:    { name: 'Panzer IV F2', soft: 1.5, hard: 2.5, he: 1, tank: true, armour: 0, cutter: true, look: 'pz4' },
+  // The KV-2 (Steve): the heavy tank with the huge turret and its 152 mm howitzer: thick armour (2, as the Matilda),
+  // slow; a big shell among men, but few rounds and slow to load, so one die against tanks. Balanced by robots (40
+  // games): with the Germans' Panzer IV F2 and two PaK 40s, Soviets 23, Germans 15, 2 draws
+  kv2:      { name: 'KV-2', soft: 1, hard: 1, he: 1.5, tank: true, armour: 2, cutter: true, extraMove: -1 },
   // His submachine gun (Steve): three dice, and closeOnly: he can't shoot beyond close range at all
   // Bunkers (Steve): they can't move, take two areas, and fire only out of the front. BUNKER says how they are hurt
   bunker_mg:  { name: 'MG bunker', soft: 5, hard: 0, team: true, fixed: true, bunker: true },
