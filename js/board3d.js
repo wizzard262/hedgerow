@@ -102,10 +102,12 @@ const Board = (() => {
     us: { artillery: { x: -0.7, z: 2.55, pileX: -1.45, pileZ: 2.3 }, mortars: { x: -0.7, z: 4.05, pileX: -1.45, pileZ: 3.85 }, bomber: { x: -0.6, z: 5.5 } },
     de: { artillery: { x: COLS + 0.7, z: 2.55, pileX: COLS + 1.25, pileZ: 2.3 }, mortars: { x: COLS + 0.7, z: 4.05, pileX: COLS + 1.25, pileZ: 3.85 }, bomber: { x: COLS + 0.5, z: 5.5 } },
   };
-  // Dunkirk and the Normandy beach (Steve): the artillery is a warship lying broadside to the shore, its shells piled on
-  // its deck; the mortars stand on a headland out into the sea (see addSea)
+  // Dunkirk and the Normandy beach (Steve): the artillery is a warship lying broadside to the shore; the mortars stand on
+  // a headland out into the sea (see addSea). The ship's name sits on the water off its bow, not on the ship, so it can
+  // be read, and its shells stand in one line between the name and the bow, so the shots left can be counted (Steve)
+  // nameX, nameZ: where its name goes; pileRow: the rounds in a single line, not rows of three
   const DUNKIRK_GUNS = {
-    us: Object.assign({}, USUAL_GUNS.us, { artillery: { x: -1.35, z: 2.4, pileX: -1.42, pileZ: 2.6, pileY: 0.076 } }),
+    us: Object.assign({}, USUAL_GUNS.us, { artillery: { x: -1.35, z: 2.4, pileX: -1.75, pileZ: 1.2, pileRow: true, nameX: -1.35, nameZ: 0.86 } }),
     de: USUAL_GUNS.de,
   };
   let GUNS = USUAL_GUNS;
@@ -143,8 +145,11 @@ const Board = (() => {
         const rounds = [];
         for (let k = 0; k < PILE_MAX && which !== 'bomber'; k++) {
           const r = Models.round(which === 'artillery' ? 'shell' : 'bomb');
-          r.scale.setScalar(which === 'artillery' ? TANKS * 1.7 : MEN * 1.3);
-          const perRow = which === 'artillery' ? 3 : 4, gap = which === 'artillery' ? 0.07 : 0.075;
+          // (the warship's line of shells a little bigger, so they can be counted from across the table, Steve)
+          r.scale.setScalar((which === 'artillery' ? TANKS * 1.7 : MEN * 1.3) * (spot.pileRow ? 1.4 : 1));
+          // (one long line when the gun asks for it: the warship's shells, Steve)
+          const perRow = spot.pileRow ? PILE_MAX : which === 'artillery' ? 3 : 4;
+          const gap = spot.pileRow ? 0.11 : which === 'artillery' ? 0.07 : 0.075;
           built.add(at(r, spot.pileX + (k % perRow) * gap, (spot.pileY || 0) + (which === 'artillery' ? 0 : 0.02), spot.pileZ + Math.floor(k / perRow) * gap));
           rounds.push(r);
         }
@@ -154,7 +159,10 @@ const Board = (() => {
         name.material.depthTest = true;
         // (the plane stands near the edge of the screen: its name goes in towards the board)
         const nameOut = which === 'bomber' ? 0 : 0.2;
-        name.position.set(spot.x + (side === 'us' ? -nameOut : nameOut), 0.05, spot.z + 0.55);
+        // (unless the gun has its own place for it: the warship's, off its bow)
+        const nameX = spot.nameX !== undefined ? spot.nameX : spot.x + (side === 'us' ? -nameOut : nameOut);
+        const nameZ = spot.nameZ !== undefined ? spot.nameZ : spot.z + 0.55;
+        name.position.set(nameX, 0.05, nameZ);
         built.add(name);
         support[side][which] = { model, rounds, name };
       }
@@ -199,7 +207,8 @@ const Board = (() => {
   function coinSpot(side) {
     const gun = GUNS[side].artillery;
     // (Dunkirk and the Normandy beach: above the warship, clear of its bow, Steve)
-    if (side === 'us' && GUNS === DUNKIRK_GUNS) return { x: gun.x, z: gun.z - 2.05 };
+    // (moved up a little to clear the ship's name and shells off its bow)
+    if (side === 'us' && GUNS === DUNKIRK_GUNS) return { x: gun.x, z: gun.z - 2.3 };
     return { x: gun.x + (side === 'us' ? -0.1 : 0.1), z: gun.z - 1.15 };
   }
   // Which face a side's token has: the British their Union Jack (Steve)

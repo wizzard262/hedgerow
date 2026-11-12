@@ -1735,6 +1735,12 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - **Normandy beach**: the American artillery is the battleship USS Texas out at sea, the mortars on a headland, the sea out to the table's edge
 - Numbers tried (no balance runs, Steve): with the British doing nothing, the Germans win every one of 16 games; robot against robot, the British win 13 of 16 in about 9 rounds
 
+## 301. The destroyer's name off the ship, its shells in a line beside it (v170)
+
+- Steve: move the Royal Navy destroyers text so we can read it off the boat, then line up the shells next to it so we can see how many shots we get; the shells on the boat: line them up next to it instead (he also asked why a destroyer shot showed only 3 dice, then saw it was at a tank: no change)
+- **On the table**: the warship's name now sits on the water just off its bow (north), not across the ship; its shells stand in one line on the water between the name and the bow, a little bigger and further apart, one per shot left (Dunkirk 3, the Normandy beach's USS Texas 2). The drawn token lands a little further up to clear them
+- Assumed: the same for the battleship on the Normandy beach, as it shares the warship's place
+
 ## Sessions
 
 | # | Date | Length | What we did |
