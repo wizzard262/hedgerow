@@ -647,7 +647,10 @@ window.Game = (() => {
   });
   // The bonus battles, top right. One not ready yet says what it is when the mouse is over it, as it can't be lit
   for (const bonus of BONUS) {
-    const card = mapCard(bonus.id, bonus.name, bonus.date, `assets/maps/${bonus.id}.svg`, '#bonus-choice', bonus.stamp);
+    // (a bonus battle with its map built has a picture of its table, as the others do, Steve; a drawing until then)
+    const hasMap = MAPS.some(m => m.id === bonus.id);
+    const picture = hasMap ? `assets/maps/${bonus.id}.jpg` : `assets/maps/${bonus.id}.svg`;
+    const card = mapCard(bonus.id, bonus.name, bonus.date, picture, '#bonus-choice', bonus.stamp);
     if (bonus.note) card.title = bonus.note;
   }
 

@@ -47,7 +47,9 @@ check('the bonus battles are Dunkirk then Stalingrad, outside the campaign, each
   assert(BONUS.find(b => b.id === 'stalingrad').stamp === 'TBC', 'Stalingrad is not stamped TBC');
   for (const b of BONUS) {
     assert(!CAMPAIGN.includes(b.id), `${b.name} is in the campaign`);
-    assert(fs.existsSync(path.join(__dirname, '..', 'assets', 'maps', b.id + '.svg')), `${b.name} has no picture`);
+    // (a table picture once its map is built, Steve; a drawing until then)
+    const picture = MAPS.some(m => m.id === b.id) ? b.id + '.jpg' : b.id + '.svg';
+    assert(fs.existsSync(path.join(__dirname, '..', 'assets', 'maps', picture)), `${b.name} has no picture ${picture}`);
     // One with no map can't be started: it must carry a stamp, which stops it being picked
     if (!MAPS.some(m => m.id === b.id)) assert(b.stamp, `${b.name} has no map but no stamp either`);
   }
@@ -4319,14 +4321,18 @@ check('one more American artillery round in Hedge country, Deep bocage, the Trai
   Sim.newGame(1);
 });
 
-check('no American or British mortars on either beach (Steve), and no rows of the shore kept clear of boats at Dunkirk', () => {
+check('no American or British mortars on either beach (Steve), and Dunkirk boats only off the top five rows, clear of the destroyer and the bomber', () => {
   for (const id of ['beach', 'dunkirk']) {
     const g = Sim.newGame(1, 'us', id);
     assert(g.ammo.us.mortars === 0, `${id}: ${g.ammo.us.mortars} mortar rounds`);
     // (the Germans keep theirs)
     assert(g.ammo.de.mortars > 0, `${id}: the Germans lost their mortars`);
   }
-  assert(!(MAPS.find(m => m.id === 'dunkirk').evacuate.noBoats || []).length, 'Dunkirk still keeps rows clear of boats');
+  assert(MAPS.find(m => m.id === 'dunkirk').evacuate.noBoats.join() === '5,6,7', 'Dunkirk keeps the wrong rows clear of boats');
+  for (let seed = 1; seed <= 30; seed++) {
+    const g = Sim.newGame(seed, 'us', 'dunkirk');
+    assert(g.evac.boats.every(b => b.y <= 4), `seed ${seed}: a boat behind the destroyer`);
+  }
   Sim.newGame(1);
 });
 
@@ -4348,6 +4354,15 @@ check('less than one die is always one die (Steve: everyone who shoots rolls); n
     const n = Sim.wholeDice(st, 1.5);
     assert(n === 1 || n === 2, `one and a half dice rolled ${n}`);
   }
+  Sim.newGame(1);
+});
+
+check('Dunkirk boats are named by their type, a tug or a cabin cruiser, as the table draws them (Steve)', () => {
+  const st = Sim.newGame(3, 'us', 'dunkirk');
+  const kinds = [0, 1, 2, 3, 4].map(y => Sim.boatKind(st, y));
+  assert(kinds.every(k => k === 'tug' || k === 'cabin cruiser') && new Set(kinds).size === 2, kinds.join());
+  // (the same rule as Models.littleShip: odd is a tug)
+  assert(Sim.boatKind(st, 0) === (Math.abs(st.seed) % 2 ? 'tug' : 'cabin cruiser'), 'not the boat on the table');
   Sim.newGame(1);
 });
 
@@ -4483,17 +4498,18 @@ check('Dunkirk: a lorry drives to the field off which a boat lies; the men go ab
   Sim.newGame(1);
 });
 
-check('Dunkirk: the boats sail at the end of the round with whoever is aboard; enough away wins, too few left loses', () => {
+check('Dunkirk: the boats sail at the end of the round with whoever is aboard; its sections count (Steve); enough away wins, too few left loses', () => {
   const st = dunkirkWith(FRONT, [3]);
   const l = lorryAt(st, 0, 3);
   l.aboard = true;
   Sim.finishRound(st);
-  assert(st.evac.saved === 1 && l.saved && l.x === null, `saved ${st.evac.saved}`);
+  // (a lorry with two sections: two away)
+  assert(st.evac.saved === 2 && l.saved && l.x === null, `saved ${st.evac.saved}`);
   assert(!st.won && !st.lost, 'over too soon');
   assert(st.evac.boats.length >= 2, 'no new boats for the next round');
   // Enough away: the British win
   const win = dunkirkWith(FRONT, [3]);
-  lorryAt(win, 0, 3).aboard = true;
+  lorryAt(win, 0, 3, 1).aboard = true;
   win.evac.saved = DUNKIRK.need - 1;
   Sim.finishRound(win);
   assert(win.won && !win.lost, 'getting enough away did not win');

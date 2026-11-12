@@ -225,7 +225,7 @@ const MAPS = [
     // take their men off the beach. The 'us' side is the British here (names), the Germans attack from the east. The
     // village is only where the Germans make for: the beach; nobody has to take or hold it
     id: 'dunkirk', bonus: true, date: '31 May 1940', name: 'Dunkirk',
-    note: 'The British hold the Germans back while little ships take them off the beach. Lorries come down the coast road from the top and drive to the little ships lying off the beach, and the men run out of the back into the boats: one a round from round 2; get 8 lorry-loads away within 12 rounds. If a German reaches the coast road, the way to the boats is cut and you lose. Your men do not go: they hold the strongpoints along the front and keep the Germans off the road and the beach. 2 or 3 boats come in each round and sail at its end. A Matilda II, Universal Carriers, a Vickers and a Boys rifle against Panzer Is, IIs, a III and an armoured car. Destroyers offshore fire for the British.',
+    note: 'The British hold the Germans back while little ships take them off the beach. Lorries come down the coast road from the top and drive to the little ships lying off the beach, and the men run out of the back into the boats: one a round from round 2, each with 1 or 2 sections; get 12 sections away within 12 rounds. If a German reaches the coast road, the way to the boats is cut and you lose. Your men do not go: they hold the strongpoints along the front and keep the Germans off the road and the beach. 2 or 3 boats come in each round and sail at its end. A Matilda II, Universal Carriers, a Vickers and a Boys rifle against Panzer Is, IIs, a III and an armoured car. Destroyers offshore fire for the British.',
     noGoal: true,
     names: { us: 'British', de: 'Germans' },
     // (the sea is off the board, out to the table's edge, Steve: the boats lie off the beach)
@@ -253,11 +253,13 @@ const MAPS = [
     gap: 0.7, wire: 0.15,
     // The British start along the front, from this column; both sides take this share of the width
     from: { us: 4 }, deploy: 0.25,
-    // need: lorry-loads to get away; rounds: to do it in; boats: how many come each round, from to; trucks: the lorries,
+    // need: sections of men to get away (Steve 2026-11-12: sections, not lorry-loads; 12, as 8 lorry-loads of 1 or 2
+    // came to about 12, and two robots win about 6 games in 10); rounds: to do it in; boats: how many come each round, from to; trucks: the lorries,
     // in at the top of the coast road (this column), from round first to last, how many a round, sections of men in each,
     // and how many fields each drives a round
-    // (noBoats: rows of the water's edge where no boat comes; none since the headland went, Steve 2026-11-12)
-    evacuate: { need: 8, rounds: 12, boats: [2, 3], trucks: { road: 3, first: 2, last: 12, each: [1, 1], sections: [1, 2], moves: 4 } },
+    // noBoats: rows of the water's edge where no boat comes: the bottom three, behind the destroyer and the bomber (Steve
+    // 2026-11-12: the little ships use the top of the beach)
+    evacuate: { need: 12, rounds: 12, boats: [2, 3], noBoats: [5, 6, 7], trucks: { road: 3, first: 2, last: 12, each: [1, 1], sections: [1, 2], moves: 4 } },
     // The destroyers stand in for the British artillery (Steve); the RAF's bomber in 1940 a Bristol Blenheim (Steve asked
     // for a Lancaster: it only came in 1942), one run; no German bomber
     guns: { us: { artillery: 'Royal Navy destroyers', bomber: 'Blenheim' } },

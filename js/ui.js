@@ -302,7 +302,7 @@ const UI = (() => {
 
   // Why a piece takes no orders (Dunkirk, Steve): aboard a boat, or a lorry driving itself to one. '' otherwise
   function ownWay(u) {
-    if (Sim.isAboard(st, u)) return 'Aboard a little ship: it sails at the end of the round';
+    if (Sim.isAboard(st, u)) return `Aboard a ${Sim.boatKind(st, u.y)}: it sails at the end of the round`;
     if (u.auto) return 'A lorry-load of men for the boats: it drives itself to a boat at the start of each round';
     return '';
   }
@@ -657,9 +657,9 @@ const UI = (() => {
   function goalEvacuate() {
     const E = st.map.evacuate;
     const count = `${st.evac.saved} of ${E.need} away so far.`;
-    if (st.mode === 'none') return `🎯 Two robots: the British must get ${E.need} lorry-loads away on the little ships within ${E.rounds} rounds, the Germans stop them. ${count}`;
-    if (st.human === 'de') return `🎯 Stop the British getting ${E.need} lorry-loads away within ${E.rounds} rounds: shoot the lorries, or reach the coast road. ${count}`;
-    return `🎯 Hold the Germans off the coast road while the lorries take the men to the boats: ${E.need} lorry-loads away within ${E.rounds} rounds wins; a German on the road loses. ${count}`;
+    if (st.mode === 'none') return `🎯 Two robots: the British must get ${E.need} sections away on the little ships within ${E.rounds} rounds, the Germans stop them. ${count}`;
+    if (st.human === 'de') return `🎯 Stop the British getting ${E.need} sections away within ${E.rounds} rounds: shoot the lorries, or reach the coast road. ${count}`;
+    return `🎯 Hold the Germans off the coast road while the lorries take the men to the boats: ${E.need} sections away within ${E.rounds} rounds wins; a German on the road loses. ${count}`;
   }
 
   function update() {

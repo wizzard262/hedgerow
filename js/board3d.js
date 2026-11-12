@@ -105,9 +105,15 @@ const Board = (() => {
   // Dunkirk and the Normandy beach (Steve): the artillery is a warship lying broadside to the shore (no mortars on
   // these maps, and no headland, Steve 2026-11-12). The ship's name sits on the water off its bow, not on the ship, so it can
   // be read, and its shells stand in one line between the name and the bow, so the shots left can be counted (Steve)
-  // nameX, nameZ: where its name goes; pileRow: the rounds in a single line, not rows of three
+  // nameX, nameZ: where its name goes; pileRow: the rounds in a single line, not rows of three.
+  // The warship and the bomber at the bottom of the sea, so the little ships have the top of the beach (Steve, 2026-11-12;
+  // Dunkirk keeps its boats off the rows behind them, noBoats in data.js)
   const DUNKIRK_GUNS = {
-    us: Object.assign({}, USUAL_GUNS.us, { artillery: { x: -1.35, z: 2.4, pileX: -1.75, pileZ: 1.2, pileRow: true, nameX: -1.35, nameZ: 0.86 } }),
+    us: Object.assign({}, USUAL_GUNS.us, {
+      // (in towards the shore: the bottom of the screen shows less of the sea)
+      artillery: { x: -0.75, z: 6.3, pileX: -1.1, pileZ: 5.1, pileRow: true, nameX: -0.75, nameZ: 4.76 },
+      bomber: { x: -0.3, z: 7.5, nameX: 0.15, nameZ: 8.05 },
+    }),
     de: USUAL_GUNS.de,
   };
   let GUNS = USUAL_GUNS;
@@ -208,9 +214,8 @@ const Board = (() => {
   // Where a side's drawn token lands on the table: just above its artillery, a little further out (the dice sit beside it)
   function coinSpot(side) {
     const gun = GUNS[side].artillery;
-    // (Dunkirk and the Normandy beach: above the warship, clear of its bow, Steve)
-    // (moved up a little to clear the ship's name and shells off its bow)
-    if (side === 'us' && GUNS === DUNKIRK_GUNS) return { x: gun.x, z: gun.z - 2.3 };
+    // (Dunkirk and the Normandy beach: out at sea at the top, clear of the boats, the warship being at the bottom, Steve)
+    if (side === 'us' && GUNS === DUNKIRK_GUNS) return { x: -2.1, z: -0.3 };
     return { x: gun.x + (side === 'us' ? -0.1 : 0.1), z: gun.z - 1.15 };
   }
   // Which face a side's token has: the British their Union Jack (Steve)
@@ -332,7 +337,7 @@ const Board = (() => {
   let evacSign = null;               // { sprite, text }
   function updateEvacSign(st) {
     if (!st.map.evacuate || !st.evac) return;
-    const text = `${st.evac.saved} of ${st.map.evacuate.need} lorry-loads evacuated`;
+    const text = `${st.evac.saved} of ${st.map.evacuate.need} sections evacuated`;
     // (the same words, and still on this table: nothing to do)
     if (evacSign && evacSign.text === text && evacSign.sprite.parent === built) return;
     if (evacSign && evacSign.sprite.parent) evacSign.sprite.parent.remove(evacSign.sprite);
@@ -575,7 +580,8 @@ const Board = (() => {
     if (offBoard) {
       for (let y = 0; y < ROWS; y++) {
         const m = Models.mergeParts(Models.littleShip(st.seed + y * 3));
-        group.add(at(m, BOATS.out, 0.006, y + 0.5));
+        // (sitting a little down in the water: level with the sea's surface, its bottom flickered through, Steve)
+        group.add(at(m, BOATS.out, BOATS.sit, y + 0.5));
         m.visible = false;
         craft.push({ mesh: m, phase: R() * 6.28, x: 0, y, boat: true, icons: [], load: 0 });
       }
@@ -597,7 +603,7 @@ const Board = (() => {
   // Dunkirk's boats (Steve: we see them move in and out): where one lies off the beach, and where it waits out at sea
   // inwards, alongside, outwards: the turn of a boat heading for the shore, lying along it, heading out to sea;
   // pullUp: how far out it starts to turn alongside; turn: how fast it turns (radians a second)
-  const BOATS = { in: -0.45, out: -4.6, speed: 0.9, inwards: -Math.PI / 2, alongside: 0, outwards: Math.PI / 2, pullUp: 0.6, turn: 1.8 };
+  const BOATS = { in: -0.45, out: -4.6, speed: 0.9, inwards: -Math.PI / 2, alongside: 0, outwards: Math.PI / 2, pullUp: 0.6, turn: 1.8, sit: -0.004 };
   // The icon over a boat for each section of men aboard (Steve): a khaki disc with a man in a tin hat, made once
   let manIconTex = null;
   function manIcon() {

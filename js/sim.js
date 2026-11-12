@@ -279,7 +279,7 @@ const Sim = (() => {
     st.evac = map.evacuate ? { saved: 0, boats: [], lorries: 0 } : null;
     if (st.evac) {
       newBoats(st);
-      st.report = [`${map.date}. The ${sideName(st, 'us')} hold the line while the little ships come in. Get ${map.evacuate.need} pieces away within ${map.evacuate.rounds} rounds.`];
+      st.report = [`${map.date}. The ${sideName(st, 'us')} hold the line while the little ships come in. Get ${map.evacuate.need} sections away on the tugs and cabin cruisers within ${map.evacuate.rounds} rounds.`];
       return st;
     }
     st.report = [st.noGoal
@@ -434,7 +434,7 @@ const Sim = (() => {
   // go: they fight (Steve). Lorries bring the men instead: from round trucks.first they come in at the top of the coast
   // road, drive on their own to the field off which a boat lies, and the men run out of the back into the boat (Steve).
   // A lorry is a piece of the British side with no weapons and no orders: the Germans can shoot it, and each hit loses
-  // a section of the men in it. Getting enough lorry-loads away wins for the British
+  // a section of the men in it. Getting enough sections away wins for the British
 
   // What each side is called on this map (the 'us' side is the British at Dunkirk)
   function sideName(st, side) {
@@ -462,15 +462,23 @@ const Sim = (() => {
     }
   }
 
+  // What kind of boat lies off a row of the beach (Steve: call them by their type): a tug or a cabin cruiser, the same
+  // one the table draws there (Models.littleShip with st.seed + y * 3)
+  function boatKind(st, y) {
+    return Math.abs(st.seed + y * 3) % 2 ? 'tug' : 'cabin cruiser';
+  }
+
   // The end of the round: every boat sails with whoever is aboard, and they are safe
   function sailBoats(st, rep) {
     for (const u of st.units) {
       if (!isAboard(st, u)) continue;
       st.fx.push({ kind: 'sail', x: u.x, y: u.y, to: { id: u.id } });
+      const boat = boatKind(st, u.y);
       u.x = null; u.y = null;
       u.saved = true;
-      st.evac.saved++;
-      rep.push(`⛵ ${u.name} gets away on a little ship.`);
+      // (sections are what count, Steve 2026-11-12: a lorry shot up on the way brings fewer)
+      st.evac.saved += u.platoons;
+      rep.push(`⛵ ${u.name}'s ${u.platoons} section${u.platoons > 1 ? 's get' : ' gets'} away on a ${boat}.`);
     }
     st.evac.boats = [];
   }
@@ -479,10 +487,11 @@ const Sim = (() => {
   // could bring
   function stillToSave(st) {
     const E = st.map.evacuate, T = E.trucks;
-    const onTable = st.units.filter(u => u.side === 'us' && u.x !== null && isLorry(u)).length;
+    // The sections in the lorries still on the table, and the most the lorries still to come could bring
+    const onTable = st.units.filter(u => u.side === 'us' && u.x !== null && isLorry(u)).reduce((n, u) => n + u.platoons, 0);
     // (lorries come at the start of each round from first to last; the next round is turn + 1)
     const roundsLeft = Math.max(0, Math.min(T.last, E.rounds) - Math.max(T.first, st.turn + 1) + 1);
-    return onTable + roundsLeft * T.each[1];
+    return onTable + roundsLeft * T.each[1] * T.sections[1];
   }
 
   // Won, lost, or on to the next round. germansLeft: any German still on the table
@@ -490,20 +499,20 @@ const Sim = (() => {
     const E = st.map.evacuate, saved = st.evac.saved, us = sideName(st, 'us');
     if (saved >= E.need) {
       st.won = true;
-      rep.unshift(`🏆 ${saved} lorry-loads have got away on the little ships in ${roundText(st.turn)}! The ${us} are home.`);
+      rep.unshift(`🏆 ${saved} sections have got away on the tugs and cabin cruisers in ${roundText(st.turn)}! The ${us} are home.`);
     } else if (!germansLeft) {
       st.won = true;
       rep.unshift(`🏆 Every German on the field is destroyed in ${roundText(st.turn)}!`);
     } else if (germansOnTheRoad(st)) {
       // (Steve: the British must keep them back: a German on the coast road or the beach cuts the way to the boats)
       st.lost = true;
-      rep.unshift(`💀 The Germans have reached the coast road in ${roundText(st.turn)}. The way to the boats is cut, with ${saved} of the ${E.need} lorry-loads away.`);
+      rep.unshift(`💀 The Germans have reached the coast road in ${roundText(st.turn)}. The way to the boats is cut, with ${saved} of the ${E.need} sections away.`);
     } else if (saved + stillToSave(st) < E.need) {
       st.lost = true;
-      rep.unshift(`💀 Only ${saved} lorry-loads got away, and too few are left to make ${E.need}. The ${us} are trapped.`);
+      rep.unshift(`💀 Only ${saved} sections got away, and too few are left to make ${E.need}. The ${us} are trapped.`);
     } else if (st.turn >= E.rounds) {
       st.lost = true;
-      rep.unshift(`⌛ After ${E.rounds} rounds only ${saved} of the ${E.need} lorry-loads needed got away. The Germans have the beach.`);
+      rep.unshift(`⌛ After ${E.rounds} rounds only ${saved} of the ${E.need} sections needed got away. The Germans have the beach.`);
     }
   }
 
@@ -3396,7 +3405,7 @@ const Sim = (() => {
 
   return {
     firesOnTheMove, canAmbush, actAmbush, bestMoveShoot, bomberHeading, bomberAims, bomberLine, bombNeed, bombWhy, bestBomberRun,
-    isBunker, isCar, hurtsCars, trainCars, lineSideOf, moveTrains, inFrontOf, bunkerFace, shotOnTheMove, wrecksBeside, isRoad, featuresAt, walkDistance, fireSound, wreckAt, remove, computerSide, isRobot, piecesToAsk, takeCover, enemyOf, gunStats, bomberName, edgeKey, atCloseRange, closeCells, hailMaryCells,
+    isBunker, isCar, hurtsCars, trainCars, lineSideOf, moveTrains, inFrontOf, bunkerFace, shotOnTheMove, wrecksBeside, isRoad, featuresAt, walkDistance, fireSound, wreckAt, remove, computerSide, isRobot, piecesToAsk, takeCover, enemyOf, gunStats, bomberName, boatKind, edgeKey, atCloseRange, closeCells, hailMaryCells,
     newGame, roll, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, chargeSpots,
     rallyTargets, canAct, canReact, firepower, canCallFire, takesGoal, cannotWin, artilleryTarget, mortarTarget, holdsObjective, roundText, roomFor,
     computerStep, answer, finishRound, startRound, drawToken, endComputerToken, activationOver, passToken, humanCanMove, endRound, canFire, actSkip, actSkipShot, skipSupport,

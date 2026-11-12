@@ -1752,6 +1752,15 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - **Dice**: less than one die (half a die, say) is now always one die, so every shot rolls. This means a Sherman 75mm's gun at men (half a die) always rolls one die that kills on a hit
 - **Lorries**: a lorry left on the beach is not drawn while another piece stands in its field, and only the last one left in each field is drawn (they were overlapping the next lorry in)
 
+## 303. Dunkirk counts sections; the boats by type, the top of the beach; the warship at the bottom; the table picture (v172)
+
+- Steve: it's sections we need to count, does this change the maths? adjust how many we need to get away; boats coming in near the top sail through the destroyer, fix it; the little boats can be called by some boat type; they have a glitch from the sea below, fix it; bring the plane and destroyer down to the bottom so the little boats can use the top half of the beach; change the Dunkirk picture so it is a screenshot like all the other levels
+- **Sections count**: each section that sails counts (a lorry brings 1 or 2, fewer if shot up on the way). The maths: 11 lorries at 1.5 sections each is about 16.5; 8 lorry-loads came to about 12 sections, so **12 sections** are now needed in 12 rounds. Robots against robots (40 games): need 11 wins 25, 12 wins 24 (before the boats moved), 27 of 40 after it, about the same as before; the score on the beach reads "0 of 12 sections evacuated"
+- **Boats**: named by type in the messages, "gets away on a tug" or "on a cabin cruiser", and "Aboard a tug" on the piece; they sit a little lower in the water, so the sea no longer flickers through their bottoms
+- **The warship and bomber at the bottom** (both beaches): the destroyer (USS Texas on the Normandy beach) lies off the bottom three rows, its name and shells off its bow, with the bomber below it, both moved in towards the shore so they stay on the screen. At Dunkirk the boats now only come in off the top five rows (noBoats 5, 6, 7), so none sails through them. The British token lands out at sea at the top left, clear of the boats
+- **Picture**: Dunkirk's card on New game is now a picture of its table, as the others are (tools/map-pictures.js can now make just the ones named); the Normandy beach's picture made again without its mortars and headland
+- Not done (no balance runs asked beyond the quick robot check above)
+
 ## Sessions
 
 | # | Date | Length | What we did |
