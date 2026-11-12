@@ -1779,6 +1779,14 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - **Fixes**: the newest roll's dice are moved down until their top is on the screen (a tall artillery column went off the top); Dunkirk's score is moved down the beach until its top line shows, and placed again when the window changes shape
 - Robots (20 games): Soviets 9, Germans 9, draws 2, about 16 rounds. Assumed: the objective is the Univermag (where Paulus surrendered, January 1943); the Soviet bomber is left out until it has its own plane
 
+## 306. Stalingrad: the tokens' sides, the Soviets by default, the 88 on a crossroads, "ruin" for "hedge" (v175)
+
+- Steve: swap the grey and red tokens' sides in the pile at the bottom of the screen; the player defaults to the Russians; put the 88 on a crossroads; for Stalingrad change "cover: hedge" to "cover: ruin". (Passed on from another session: the 88 needs to point down an open street)
+- **Tokens**: with the table seen from the far side, the German tokens sit on the left of the bar and the Soviet ones on the right, as on the table
+- **The player**: picking Stalingrad on New game sets the sides to you as the Soviets against the German robot (they can still be changed before Start)
+- **The 88**: on the crossroads behind the store, looking west down the open street at the Soviets, nothing in the way; no sandbags round it, and no "dug in" in its name
+- **Words**: at Stalingrad the hedge is a ruin everywhere it is named: "+1 ruin", "Cover: ruin", "climbs through the ruin", "smashes through the ruin", "lining its ruin", and no "hedge cutters"
+
 ## Sessions
 
 | # | Date | Length | What we did |

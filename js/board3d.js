@@ -2095,7 +2095,7 @@ const Board = (() => {
     const ring = new T.Mesh(new T.RingGeometry(0.1, 0.14, 32), new T.MeshBasicMaterial({ color: 0xfff6dc, transparent: true, opacity: 0.9, depthWrite: false, depthTest: false }));
     at(ring, h.x + 0.5 + p.x * 0.3, 0.02, h.y + 0.5 + p.y * 0.3, -Math.PI / 2, 0, 0); marks.add(ring);
     if (inCover) mark(h.x, h.y, 'cover', 0.08);
-    const text = byHedge ? 'Cover: hedge' : inCover ? `Cover: ${type === 'orchard' ? 'trees' : 'houses'}` : byWreck ? 'Cover: wreck' : 'In the open';
+    const text = byHedge ? `Cover: ${Sim.hedgeWord()}` : inCover ? `Cover: ${type === 'orchard' ? 'trees' : 'houses'}` : byWreck ? 'Cover: wreck' : 'In the open';
     const w = word(text, byHedge || inCover || byWreck ? '#9dff7a' : '#f0e8d6', false);
     w.position.set(h.x + 0.5 + p.x * 0.2, 0.32, h.y + 0.5 + p.y * 0.2);
     marks.add(w);

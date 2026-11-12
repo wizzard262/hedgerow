@@ -489,12 +489,12 @@ const UI = (() => {
     }
     if (u.kind === 'company' || Sim.isTank(u)) {
       const fight = Sim.chargeSpots(st, u).some(p => Sim.at(st, p.x, p.y, enemy()).length);
-      add('charge', fight ? '⚔️ Charge (hand to hand)' : '⚔️ Charge', Sim.chargeSpots(st, u).length > 0, 'Up to three fields without shooting (men climbing a hedge or cutting wire use one more); hand to hand if the enemy holds the field it ends in');
+      add('charge', fight ? '⚔️ Charge (hand to hand)' : '⚔️ Charge', Sim.chargeSpots(st, u).length > 0, `Up to three fields without shooting (men climbing a ${Sim.hedgeWord()} or cutting wire use one more); hand to hand if the enemy holds the field it ends in`);
       add('moveShoot', '➡️ Move & shoot', Sim.moveShootSpots(st, u).length > 0, 'Up to two fields to where it can fire (the red-hatched fields), then fire needing one more on the dice');
       add('shoot', '🎯 Shoot', Sim.targets(st, u).length > 0, 'Fire with every die');
     } else if (u.kind === 'captain') {
       // The four actions (Steve): Charge, Move & shoot, Shoot, Rally. The captain does all four
-      add('charge', '⚔️ Charge', Sim.chargeSpots(st, u).length > 0, 'Up to three fields, no shooting (climbing a hedge uses one more)');
+      add('charge', '⚔️ Charge', Sim.chargeSpots(st, u).length > 0, `Up to three fields, no shooting (climbing a ${Sim.hedgeWord()} uses one more)`);
       // (after two rallies only a charge is left, Steve)
       add('moveShoot', '➡️ Move & shoot', Sim.mayFire(u) && Sim.moveShootSpots(st, u).length > 0, 'Up to two fields to where he can fire (the red-hatched fields), then fire needing one more on the dice');
       add('shoot', '🎯 Shoot', Sim.mayFire(u) && Sim.targets(st, u).length > 0, `His submachine gun: ${PIECES[u.kind].soft} dice, at close range only`);
@@ -506,7 +506,7 @@ const UI = (() => {
       const further = PIECES[u.kind].extraMove > 0;
       const chargeFields = further ? 'four' : 'three';
       const moveFields = further ? 'three' : 'two';
-      add('charge', '⚔️ Charge', Sim.chargeSpots(st, u).length > 0, `Up to ${chargeFields} fields, no shooting (climbing a hedge uses one more)`);
+      add('charge', '⚔️ Charge', Sim.chargeSpots(st, u).length > 0, `Up to ${chargeFields} fields, no shooting (climbing a ${Sim.hedgeWord()} uses one more)`);
       // Machine guns can't move and fire: they Charge to a new spot, then Shoot next round
       if (u.kind !== 'mg' && u.kind !== 'mg42') add('moveShoot', '➡️ Move & shoot', Sim.moveShootSpots(st, u).length > 0, `Up to ${moveFields} fields to where it can fire (the red-hatched fields), then fire needing one more on the dice`);
       add('shoot', '🎯 Shoot', Sim.targets(st, u).length > 0, 'Fire with every die');
@@ -607,7 +607,7 @@ const UI = (() => {
     const eliteName = u.side === 'de' ? 'Fallschirmjäger' : Sim.armyOf(st) === 'us' ? 'Rangers' : 'Guards';
     const elite = u.quality === 'elite' ? ` · <b class="elite">Elite</b> (${eliteName}: −1 to hit)` : '';
     const nation = u.side === st.human && st.mode !== 'none' ? '' : `${adjective(u.side)} · `;
-    box.append(el('div', 'sub', `${nation}${kindName(u)}${elite}${Sim.hasCutters(u) ? ' · hedge cutters' : ''}`));
+    box.append(el('div', 'sub', `${nation}${kindName(u)}${elite}${Sim.hasCutters(u) && Sim.hedgeWord() === 'hedge' ? ' · hedge cutters' : ''}`));
     const where = `📍 At ${Sim.placeName(u.at)}`;
     box.append(el('div', 'stats', [strength, dice, armour, where, status].filter(Boolean).map(s => `<span>${s}</span>`).join('')));
     // Aboard a boat, or a lorry driving itself: no orders to give
@@ -640,9 +640,9 @@ const UI = (() => {
       : view.mode === 'halfShot' ? `Moved. Click a red target to fire on it (${selected() && !Sim.shotOnTheMove(selected()) ? 'moved within its field: nothing more needed' : 'one more needed on the move'}), or Esc to hold fire.`
       : view.mode === 'shoot' ? 'Click a red target to fire on it. Esc cancels.'
       : view.mode === 'rally' ? `Bright green: pieces he can rally; click one. Pale green: how far he reaches (${RALLY_RANGE} fields). Esc cancels.`
-      : view.mode === 'go' ? `${targets().length ? 'Red targets: shoot from here. ' : ''}Red hatching: Move & shoot (crossed: close range; pale: only a Hail Mary from there). Other marked fields: Charge. ${st.human === 'us' ? 'Blue: the village. ' : ''}Click where in the field to stand: a corner, an edge (lining its hedge) or the middle. Or use the menu.`
-      : view.mode === 'charge' ? `${st.human === 'us' ? 'Blue hatching: the village to take. ' : ''}Click where in a field to go: by a hedge to line it (green: cover), or the middle for the open. Bright red fields are held by the ${foes()}: a hand-to-hand fight. Its own field (green): line another hedge. Esc cancels.`
-      : view.mode === 'moveShoot' ? `Click where in a red-hatched field to go (by a hedge to line it, green: cover; crossed red: close range): ${u ? u.name : 'the piece'} moves there and can fire. Esc cancels.`
+      : view.mode === 'go' ? `${targets().length ? 'Red targets: shoot from here. ' : ''}Red hatching: Move & shoot (crossed: close range; pale: only a Hail Mary from there). Other marked fields: Charge. ${st.human === 'us' ? 'Blue: the village. ' : ''}Click where in the field to stand: a corner, an edge (lining its ${Sim.hedgeWord()}) or the middle. Or use the menu.`
+      : view.mode === 'charge' ? `${st.human === 'us' ? 'Blue hatching: the village to take. ' : ''}Click where in a field to go: by a ${Sim.hedgeWord()} to line it (green: cover), or the middle for the open. Bright red fields are held by the ${foes()}: a hand-to-hand fight. Its own field (green): line another ${Sim.hedgeWord()}. Esc cancels.`
+      : view.mode === 'moveShoot' ? `Click where in a red-hatched field to go (by a ${Sim.hedgeWord()} to line it, green: cover; crossed red: close range): ${u ? u.name : 'the piece'} moves there and can fire. Esc cancels.`
       : `Click a highlighted field for ${u ? u.name : 'the piece'}. Esc cancels.`;
     $('#hint').textContent = text;
   }
@@ -696,6 +696,8 @@ const UI = (() => {
     const left = st.leftInBag ? Object.assign({ timer: 0 }, st.leftInBag) : null;
     const b = view.bagShown || left || st.bag || { us: 0, de: 0 };
     $('#bag-us').innerHTML = TOKEN[Sim.armyOf(st)].repeat(b.us);
+    // (each side's tokens on its own side of the screen, Steve: the Germans on the left at Stalingrad)
+    $('#bagbox').classList.toggle('flipped', !!st.map.flip);
     $('#bag-de').innerHTML = TOKEN.de.repeat(b.de);
     // The timer token, between the two sides' tokens (Steve)
     $('#bag-timer').innerHTML = b.timer ? TOKEN.timer + '<span class="timer-label">TIMER</span>' : '';

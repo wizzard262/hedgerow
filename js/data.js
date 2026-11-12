@@ -307,11 +307,13 @@ const MAPS = [
     // Piles of rubble and minefields made new each game (generated: 'ruins'). The 'us' side is the Soviets (army 'su');
     // the table is seen from the other side (flip), so they come in from the right and the Germans hold the left (Steve)
     id: 'stalingrad', bonus: true, date: 'November 1942', name: 'Stalingrad',
-    note: 'A bombed-out city. The Soviets attack the Germans holding the ruins of the Univermag store. The walls of ruined buildings stand between the fields and work as hedges do: you see over one only from right beside it, men climb through the windows, and lining one is cover. Lines of rubble do the same; piles of rubble give cover, and minefields may blow up whoever goes in. Each side has a section of submachine gunners: two bases of three men, 3 dice a base (6 in all), at close range only. The Germans have an 8.8 cm Flak in a fixed position, looking down an open street; the Soviets a T-34.',
+    note: 'A bombed-out city. The Soviets attack the Germans holding the ruins of the Univermag store. The walls of ruined buildings stand between the fields and work as hedges do: you see over one only from right beside it, men climb through the windows, and lining one is cover. Lines of rubble do the same; piles of rubble give cover, and minefields may blow up whoever goes in. Each side has a section of submachine gunners: two bases of three men, 3 dice a base (6 in all), at close range only. The Germans have an 8.8 cm Flak in a fixed position on a crossroads, looking down an open street; the Soviets a T-34.',
     generated: 'ruins',
     ruins: true,
     army: 'su',
     flip: true,
+    // (Steve: the player is the Soviets when this battle is picked)
+    player: 'us',
     names: { us: 'Soviets', de: 'Germans' },
     rows: [
       '..|...|...|.',
@@ -348,9 +350,9 @@ const MAPS = [
         { id: 'd1', kind: 'company', name: '1. Zug', quality: 'standard', post: [0, 0], garrison: true },
         { id: 'dmg1', kind: 'mg42', name: 'MG 34 Team', post: [0, 0], garrison: true },
         { id: 'dcap', kind: 'captain', name: 'Hauptmann (company HQ)', post: [0, 0], garrison: true },
-        // The 88 (Steve: a fixed position, pointing down an open street): in the street beside the store, looking west
-        // along it, where no wall stands in the way; it never moves
-        { id: 'd88', kind: 'flak88', name: '8.8 cm Flak 36', post: [1, 1], garrison: true, aim: Math.PI },
+        // The 88 (Steve: a fixed position, pointing down an open street, on a crossroads): on the crossroads behind the
+        // store, looking west down the street, where no wall stands in the way; it never moves
+        { id: 'd88', kind: 'flak88', name: '8.8 cm Flak 36', post: [2, 1], garrison: true, aim: Math.PI },
         { id: 'd2', kind: 'company', name: '2. Zug', quality: 'standard', post: [0, 1] },
         { id: 'dsmg', kind: 'company', arms: 'smg', name: 'MP 40 Section', quality: 'standard', post: [0, -1] },
         { id: 'dmg2', kind: 'mg42', name: 'MG 34 Team', post: [-1, -1] },

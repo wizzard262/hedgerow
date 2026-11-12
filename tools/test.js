@@ -4372,6 +4372,10 @@ check('Dunkirk boats are named by their type, a tug or a cabin cruiser, as the t
 check('Stalingrad: the Soviets against the Germans, the table seen from the far side, walls between the fields, rubble and minefields', () => {
   const st = Sim.newGame(3, 'us', 'stalingrad');
   assert(Sim.armyOf(st) === 'su' && Sim.sideName(st, 'us') === 'Soviets' && st.map.flip, 'not the Soviets, or not flipped');
+  // (Steve: the cover is a ruin there, not a hedge)
+  assert(Sim.hedgeWord() === 'ruin', `the walls are called ${Sim.hedgeWord()}`);
+  // (Steve: the player is the Soviets when it is picked)
+  assert(st.map.player === 'us', 'the player is not the Soviets');
   // The walls stand on the edges as hedges do
   assert(Object.keys(st.hedges).length > 40, `only ${Object.keys(st.hedges).length} walls`);
   // Rubble and minefields, never in the store or on a street, nor where the sides start
@@ -4389,6 +4393,7 @@ check('Stalingrad: the Soviets against the Germans, the table seen from the far 
   assert(kinds('us').includes('t34') && kinds('us').includes('company:smg'), kinds('us').join());
   assert(kinds('de').includes('flak88') && kinds('de').includes('company:smg'), kinds('de').join());
   Sim.newGame(1);
+  assert(Sim.hedgeWord() === 'hedge', 'hedges are still called ruins elsewhere');
 });
 
 check('Stalingrad: a section of submachine gunners is two bases of three men, 3 dice a base, at close range only (Steve)', () => {
@@ -4414,8 +4419,8 @@ check('Stalingrad: the 88 is dug in for good: it never moves, not even within it
   assert(gun.x !== null && Sim.isEmplaced(gun) && Sim.isAtGun(gun), 'no 88 dug in');
   assert(!Sim.chargeSpots(st, gun).length && !Sim.moveShootSpots(st, gun).length, 'the 88 could move');
   assert(PIECES.flak88.hard > PIECES.pak.hard, 'the 88 is no stronger than the PaK');
-  // (Steve: pointing down an open street) In an east-west street, facing west along it towards the Soviets
-  assert(Sim.tileType(gun.x, gun.y) === 'laneEW' && Math.abs(gun.aim - Math.PI) < 1e-6, `the 88 in ${Sim.tileType(gun.x, gun.y)}, facing ${gun.aim}`);
+  // (Steve: pointing down an open street, on a crossroads) On a crossroads, facing west along the street to the Soviets
+  assert(Sim.tileType(gun.x, gun.y) === 'crossroads' && Math.abs(gun.aim - Math.PI) < 1e-6, `the 88 in ${Sim.tileType(gun.x, gun.y)}, facing ${gun.aim}`);
   // Nothing in the way along the street: no wall between it and the far end of the board
   for (let x = gun.x; x > 0; x--) assert(!Sim.hedge(st, x, gun.y, x - 1, gun.y), `a wall across the street at ${x}`);
   Sim.newGame(1);

@@ -162,6 +162,9 @@ const Sim = (() => {
     return true;
   }
 
+  // What a hedge is called on this map (Steve: at Stalingrad the hedges are ruins)
+  function hedgeWord() { return currentMap.ruins ? 'ruin' : 'hedge'; }
+
   function hedge(st, ax, ay, bx, by) { return !!st.hedges[edgeKey(ax, ay, bx, by)]; }
   function wire(st, ax, ay, bx, by) { return !!st.wire[edgeKey(ax, ay, bx, by)]; }
 
@@ -1384,7 +1387,7 @@ const Sim = (() => {
     // The covers one by one: the hedge it lines, a tank in a field in between, the field it stands in, its own tank beside it
     // (none for a bunker, Steve: see cover)
     const covered = !isBunker(target);
-    if (covered && s && s.hedge) why.push(`+${COVER.hedge} hedge`);
+    if (covered && s && s.hedge) why.push(`+${COVER.hedge} ${hedgeWord()}`);
     if (covered && s && s.tankCorner) why.push(`+${COVER.tankCorner} tank's corner`);
     if (covered && s && s.placeCorner) why.push(`+${COVER.placeCorner} cover`);
     if (covered) why.push(...placeWhy(st, target, shooter));
@@ -1736,8 +1739,8 @@ const Sim = (() => {
     if (!defenders.length) {
       const how = step(st, u, x, y, true);
       const mined = takeMineLines(st);
-      if (mined.length) return [how === 'cut' ? `${u.name} charges through the hedge, leaving a gap` : `${u.name} charges forward`, ...mined.map(l => l.replace(/\.$/, ''))];
-      return [how === 'cut' ? `${u.name} charges through the hedge, leaving a gap` : how === 'flattened' ? `${u.name} charges over the wire, flattening it` : `${u.name} charges forward`];
+      if (mined.length) return [how === 'cut' ? `${u.name} charges through the ${hedgeWord()}, leaving a gap` : `${u.name} charges forward`, ...mined.map(l => l.replace(/\.$/, ''))];
+      return [how === 'cut' ? `${u.name} charges through the ${hedgeWord()}, leaving a gap` : how === 'flattened' ? `${u.name} charges over the wire, flattening it` : `${u.name} charges forward`];
     }
     st.fx.push({ x, y, kind: 'assault' });
     // A tank can't fight hand to hand (Steve): it drives in and the men there fall back
@@ -2021,8 +2024,8 @@ const Sim = (() => {
   }
 
   function moveLine(u, how) {
-    if (how === 'cut') return `🚜 ${u.name} smashes through the hedge, leaving a gap.`;
-    if (how === 'climbed') return `🧗 ${u.name} struggles over the hedge bank.`;
+    if (how === 'cut') return `🚜 ${u.name} smashes through the ${hedgeWord()}, leaving a gap.`;
+    if (how === 'climbed') return currentMap.ruins ? `🧗 ${u.name} climbs through the ruin.` : `🧗 ${u.name} struggles over the hedge bank.`;
     if (how === 'flattened') return `🚜 ${u.name} flattens the barbed wire.`;
     if (how === 'snagged') return `🚜 ${u.name} flattens the barbed wire but gets snagged in it and stops.`;
     if (how === 'wirecut') return `✂️ ${u.name} cuts through the wire.`;
@@ -2895,10 +2898,10 @@ const Sim = (() => {
   function computerMovesToFire(st, u) {
     const across = st.units.find(o => o.side !== u.side && o.x !== null && acrossHedge(st, u, o) && !atHedge(u, o));
     if (across && !PIECES[u.kind].fixed) {
-      computerSays(st, `Lines the hedge facing ${across.name}`);
+      computerSays(st, `Lines the ${hedgeWord()} facing ${across.name}`);
       u.at = freePlace(st, u, u.x, u.y, dirTo(u, across));
       springAmbushes(st, u, []);
-      return { shot: shotAfterMove(st, u, `Lines the hedge facing ${across.name}`) };
+      return { shot: shotAfterMove(st, u, `Lines the ${hedgeWord()} facing ${across.name}`) };
     }
     const plan = bestMoveShoot(st, u);
     if (!plan) return null;
@@ -3486,7 +3489,7 @@ const Sim = (() => {
 
   return {
     firesOnTheMove, canAmbush, actAmbush, bestMoveShoot, bomberHeading, bomberAims, bomberLine, bombNeed, bombWhy, bestBomberRun,
-    isBunker, isCar, hurtsCars, trainCars, lineSideOf, moveTrains, inFrontOf, bunkerFace, shotOnTheMove, wrecksBeside, isRoad, featuresAt, walkDistance, fireSound, wreckAt, remove, computerSide, isRobot, piecesToAsk, takeCover, enemyOf, gunStats, bomberName, boatKind, armyOf, closeRangeOnly, isAtGun, isEmplaced, edgeKey, atCloseRange, closeCells, hailMaryCells,
+    isBunker, isCar, hurtsCars, trainCars, lineSideOf, moveTrains, inFrontOf, bunkerFace, shotOnTheMove, wrecksBeside, isRoad, featuresAt, walkDistance, fireSound, wreckAt, remove, computerSide, isRobot, piecesToAsk, takeCover, enemyOf, gunStats, bomberName, boatKind, armyOf, hedgeWord, closeRangeOnly, isAtGun, isEmplaced, edgeKey, atCloseRange, closeCells, hailMaryCells,
     newGame, roll, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, chargeSpots,
     rallyTargets, canAct, canReact, firepower, canCallFire, takesGoal, cannotWin, artilleryTarget, mortarTarget, holdsObjective, roundText, roomFor,
     computerStep, answer, finishRound, startRound, drawToken, endComputerToken, activationOver, passToken, humanCanMove, endRound, canFire, actSkip, actSkipShot, skipSupport,

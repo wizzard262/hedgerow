@@ -629,6 +629,15 @@ window.Game = (() => {
     // Who the 'us' side is in this battle (Steve: the British at Dunkirk)
     $('#us-side-name').textContent = (map.names && map.names.us) || 'Americans';
   }
+  // A battle that says which side the player is (Steve: the Soviets at Stalingrad): picked, the sides are set to that
+  // (one human, the other side the robot); they can still be changed before Start
+  function playerFor(id) {
+    const map = MAPS.find(m => m.id === id);
+    if (!map || !map.player) return;
+    picked.us = map.player === 'us' ? 'human' : 'robot';
+    picked.de = map.player === 'de' ? 'human' : 'robot';
+    lightSides();
+  }
   // One card, for the campaign or the bonus battles. stamp: a word across the picture of one that can't be played yet
   function mapCard(id, title, date, picture, into = '#map-choice', stamp = '') {
     const b = document.createElement('button');
@@ -640,7 +649,7 @@ window.Game = (() => {
     b.innerHTML = `<span class="map-pic"><img src="${picture}" alt="">${stampHtml}</span><b>${title}</b><span class="map-date">${date}</span>`;
     // Not ready: it can't be picked
     if (stamp) b.disabled = true;
-    else b.onclick = () => { chosenMap = id; lightMap(); };
+    else b.onclick = () => { chosenMap = id; playerFor(id); lightMap(); };
     $(into).append(b);
     return b;
   }
