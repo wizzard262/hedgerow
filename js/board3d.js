@@ -106,13 +106,14 @@ const Board = (() => {
   // these maps, and no headland, Steve 2026-11-12). The ship's name sits on the water off its bow, not on the ship, so it can
   // be read, and its shells stand in one line between the name and the bow, so the shots left can be counted (Steve)
   // nameX, nameZ: where its name goes; pileRow: the rounds in a single line, not rows of three.
-  // The warship and the bomber at the bottom of the sea, so the little ships have the top of the beach (Steve, 2026-11-12;
-  // Dunkirk keeps its boats off the rows behind them, noBoats in data.js)
+  // The warship at the bottom of the sea and the bomber above it, so the little ships have the top half of the beach
+  // (Steve, 2026-11-12; Dunkirk keeps its boats off the rows behind them, noBoats in data.js)
   const DUNKIRK_GUNS = {
     us: Object.assign({}, USUAL_GUNS.us, {
       // (in towards the shore: the bottom of the screen shows less of the sea)
       artillery: { x: -0.75, z: 6.3, pileX: -1.1, pileZ: 5.1, pileRow: true, nameX: -0.75, nameZ: 4.76 },
-      bomber: { x: -0.3, z: 7.5, nameX: 0.15, nameZ: 8.05 },
+      // (the bomber above the warship's name, its own name beside it towards the shore, Steve)
+      bomber: { x: -1.25, z: 4.25, nameX: 0.0, nameZ: 4.3 },
     }),
     de: USUAL_GUNS.de,
   };
@@ -332,22 +333,29 @@ const Board = (() => {
     return p < 1;
   }
 
-  // Dunkirk's score in big letters on the beach just above the board (Steve: the panel's was too small)
-  const EVAC_SIGN = { x: 1.55, z: -0.5, scale: 1.9, colour: '#f4ead0' };
-  let evacSign = null;               // { sprite, text }
+  // Dunkirk's score in big letters on the beach above the board (Steve: the panel's was too small), on two lines, half
+  // as far from the top of the screen as it was (Steve). gap: how far the second line is below the first
+  const EVAC_SIGN = { x: 1.55, z: -1.2, scale: 1.9, gap: 0.5, colour: '#f4ead0' };
+  let evacSign = null;               // { sign, text }
   function updateEvacSign(st) {
     if (!st.map.evacuate || !st.evac) return;
-    const text = `${st.evac.saved} of ${st.map.evacuate.need} sections evacuated`;
+    const lines = [`${st.evac.saved} of ${st.map.evacuate.need} sections`, 'evacuated'];
+    const text = lines.join(' ');
     // (the same words, and still on this table: nothing to do)
-    if (evacSign && evacSign.text === text && evacSign.sprite.parent === built) return;
-    if (evacSign && evacSign.sprite.parent) evacSign.sprite.parent.remove(evacSign.sprite);
-    const sprite = word(text, EVAC_SIGN.colour, true);
-    sprite.scale.multiplyScalar(EVAC_SIGN.scale);
-    sprite.position.set(EVAC_SIGN.x, 0.08, EVAC_SIGN.z);
-    // (drawn after the surf, so the water's edge never shows through the words)
-    sprite.renderOrder = 3;
-    built.add(sprite);
-    evacSign = { sprite, text };
+    if (evacSign && evacSign.text === text && evacSign.sign.parent === built) return;
+    if (evacSign && evacSign.sign.parent) evacSign.sign.parent.remove(evacSign.sign);
+    // One sprite a line, the second below the first
+    const sign = new T.Group();
+    lines.forEach((line, i) => {
+      const sprite = word(line, EVAC_SIGN.colour, true);
+      sprite.scale.multiplyScalar(EVAC_SIGN.scale);
+      sprite.position.set(EVAC_SIGN.x, 0.08 + (lines.length - 1 - i) * EVAC_SIGN.gap, EVAC_SIGN.z);
+      // (drawn after the surf, so the water's edge never shows through the words)
+      sprite.renderOrder = 3;
+      sign.add(sprite);
+    });
+    built.add(sign);
+    evacSign = { sign, text };
   }
 
   // Show as many rounds beside each gun as it has shots left

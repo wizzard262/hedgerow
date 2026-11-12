@@ -4321,17 +4321,17 @@ check('one more American artillery round in Hedge country, Deep bocage, the Trai
   Sim.newGame(1);
 });
 
-check('no American or British mortars on either beach (Steve), and Dunkirk boats only off the top five rows, clear of the destroyer and the bomber', () => {
+check('no American or British mortars on either beach (Steve), and Dunkirk boats only off the top four rows, clear of the destroyer and the bomber', () => {
   for (const id of ['beach', 'dunkirk']) {
     const g = Sim.newGame(1, 'us', id);
     assert(g.ammo.us.mortars === 0, `${id}: ${g.ammo.us.mortars} mortar rounds`);
     // (the Germans keep theirs)
     assert(g.ammo.de.mortars > 0, `${id}: the Germans lost their mortars`);
   }
-  assert(MAPS.find(m => m.id === 'dunkirk').evacuate.noBoats.join() === '5,6,7', 'Dunkirk keeps the wrong rows clear of boats');
+  assert(MAPS.find(m => m.id === 'dunkirk').evacuate.noBoats.join() === '4,5,6,7', 'Dunkirk keeps the wrong rows clear of boats');
   for (let seed = 1; seed <= 30; seed++) {
     const g = Sim.newGame(seed, 'us', 'dunkirk');
-    assert(g.evac.boats.every(b => b.y <= 4), `seed ${seed}: a boat behind the destroyer`);
+    assert(g.evac.boats.every(b => b.y <= 3), `seed ${seed}: a boat behind the destroyer or the bomber`);
   }
   Sim.newGame(1);
 });
@@ -4359,7 +4359,7 @@ check('less than one die is always one die (Steve: everyone who shoots rolls); n
 
 check('Dunkirk boats are named by their type, a tug or a cabin cruiser, as the table draws them (Steve)', () => {
   const st = Sim.newGame(3, 'us', 'dunkirk');
-  const kinds = [0, 1, 2, 3, 4].map(y => Sim.boatKind(st, y));
+  const kinds = [0, 1, 2, 3].map(y => Sim.boatKind(st, y));
   assert(kinds.every(k => k === 'tug' || k === 'cabin cruiser') && new Set(kinds).size === 2, kinds.join());
   // (the same rule as Models.littleShip: odd is a tug)
   assert(Sim.boatKind(st, 0) === (Math.abs(st.seed) % 2 ? 'tug' : 'cabin cruiser'), 'not the boat on the table');

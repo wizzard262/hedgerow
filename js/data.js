@@ -257,9 +257,9 @@ const MAPS = [
     // came to about 12, and two robots win about 6 games in 10); rounds: to do it in; boats: how many come each round, from to; trucks: the lorries,
     // in at the top of the coast road (this column), from round first to last, how many a round, sections of men in each,
     // and how many fields each drives a round
-    // noBoats: rows of the water's edge where no boat comes: the bottom three, behind the destroyer and the bomber (Steve
-    // 2026-11-12: the little ships use the top of the beach)
-    evacuate: { need: 12, rounds: 12, boats: [2, 3], noBoats: [5, 6, 7], trucks: { road: 3, first: 2, last: 12, each: [1, 1], sections: [1, 2], moves: 4 } },
+    // noBoats: rows of the water's edge where no boat comes: the bottom half, behind the destroyer and the bomber (Steve
+    // 2026-11-12: the little ships use the top half of the beach)
+    evacuate: { need: 12, rounds: 12, boats: [2, 3], noBoats: [4, 5, 6, 7], trucks: { road: 3, first: 2, last: 12, each: [1, 1], sections: [1, 2], moves: 4 } },
     // The destroyers stand in for the British artillery (Steve); the RAF's bomber in 1940 a Bristol Blenheim (Steve asked
     // for a Lancaster: it only came in 1942), one run; no German bomber
     guns: { us: { artillery: 'Royal Navy destroyers', bomber: 'Blenheim' } },

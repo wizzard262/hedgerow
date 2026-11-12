@@ -1761,6 +1761,12 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - **Picture**: Dunkirk's card on New game is now a picture of its table, as the others are (tools/map-pictures.js can now make just the ones named); the Normandy beach's picture made again without its mortars and headland
 - Not done (no balance runs asked beyond the quick robot check above)
 
+## 304. The score on two lines, higher up; the bomber above the destroyer (v173)
+
+- Steve: half the distance of the "0 of 12" text from the top, and wrap it over 2 lines; keep the destroyer's position, put the bomber above it and label it
+- **The score**: "0 of 12 sections" over "evacuated", moved up the beach so it sits half as far from the top of the screen. Assumed: "from the top" means the top of the screen
+- **The bomber**: now above the destroyer's name (its name beside it, towards the shore); the destroyer stays at the bottom. Dunkirk's boats now only come in off the top four rows (the top half), clear of both. Robots (40 games): the British win 27, as before
+
 ## Sessions
 
 | # | Date | Length | What we did |
