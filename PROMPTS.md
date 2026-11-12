@@ -1795,6 +1795,13 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - **On the table**: drawn in the very middle of its crossroads, and 25% bigger
 - Robots (20 games) after the shield: Soviets 6, Germans 13, a draw. Not tuned (no balance runs asked)
 
+## 308. The piece's menu and the hover box kept off the lit fields (v177)
+
+- Steve: sometimes the brown word bubble when a piece is selected covers important areas (spaces to shoot from, to move to, pieces to rally, an enemy to target)
+- **The menu by a piece**: it already tried spots round the piece out to 300 pixels; now it goes on out to 900, then the table's corners, until it covers nothing. Targets, pieces to rally, score bubbles and the piece itself count four times a field to move to, so when it has to cover something it is a field to move to (Labels.menuSpot, tested)
+- **The box shown on hover** (what is in a field): with a piece chosen, it is placed the same way, clear of the lit fields, targets and pieces to rally, instead of always just below and right of the pointer
+- Assumed: "the brown word bubble" is the piece's pop-up menu; the hover box got the same fix in case it was that one
+
 ## Sessions
 
 | # | Date | Length | What we did |

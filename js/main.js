@@ -580,7 +580,18 @@ window.Game = (() => {
     const village = t === 'village' ? st.map.villages.slice().sort((a, b) => (Math.abs(a.x - f.x) + Math.abs(a.y - f.y)) - (Math.abs(b.x - f.x) + Math.abs(b.y - f.y)))[0].name : null;
     tip.innerHTML = `<b>${village || NAMES[t]}</b>${cover ? `<br><span style="color:var(--muted)">${cover}</span>` : ''}${lines.length ? '<br>' + lines.join('<br>') : ''}`;
     const r = board.getBoundingClientRect();
-    Object.assign(tip.style, { display: 'block', left: Math.min(r.width - 290, e.clientX - r.left + 14) + 'px', top: e.clientY - r.top + 14 + 'px' });
+    tip.style.display = 'block';
+    // Beside the pointer, but clear of the fields lit for the chosen piece, its targets and the pieces to rally (Steve:
+    // it covered them): the same search as the piece's menu (Labels.menuSpot)
+    const pointer = { x: e.clientX - r.left, y: e.clientY - r.top };
+    const lit = UI.litFieldRects(r);
+    if (!lit.length) {
+      Object.assign(tip.style, { left: Math.min(r.width - 290, pointer.x + 14) + 'px', top: pointer.y + 14 + 'px' });
+      return;
+    }
+    const blocked = lit.concat([{ x: pointer.x - 20, y: pointer.y - 20, w: 40, h: 40, weight: 4 }]);
+    const spot = Labels.menuSpot({ w: tip.offsetWidth, h: tip.offsetHeight }, pointer, blocked, r);
+    Object.assign(tip.style, { left: spot.x + 'px', top: spot.y + 'px' });
   }
 
   document.addEventListener('keydown', e => {

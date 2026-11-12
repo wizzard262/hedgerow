@@ -838,6 +838,19 @@ check('past the corner of a village, hamlet or orchard: only from a corner area 
   assert(s && s.placeCorner && s.cover === 1, 'from the corner it did not see past them, with +1');
 });
 
+check('a piece\'s menu covers no lit field, target or piece to rally when there is room anywhere on the table (Steve)', () => {
+  const Labels = require('../js/labels.js');
+  const box = { width: 1600, height: 800 };
+  // Lit fields all round the piece out to 400 pixels: the menu goes further out, clear of them
+  const blocked = [{ x: 400, y: 0, w: 800, h: 800 }];
+  const spot = Labels.menuSpot({ w: 160, h: 90 }, { x: 800, y: 400 }, blocked, box);
+  assert(spot.covered === 0 && (spot.x + spot.w <= 400 || spot.x >= 1200), `the menu covers ${spot.covered} at ${spot.x},${spot.y}`);
+  // No room at all: it covers a field to move to rather than a target
+  const crowded = [{ x: 0, y: 0, w: 1600, h: 400, weight: 1 }, { x: 0, y: 400, w: 1600, h: 400, weight: 4 }];
+  const pick = Labels.menuSpot({ w: 160, h: 90 }, { x: 800, y: 400 }, crowded, box);
+  assert(pick.y + pick.h <= 400, `it covered the target, at ${pick.y}`);
+});
+
 check('red bubbles: neither a box nor an arrow covers another target, and arrows do not cross', () => {
   const Labels = require('../js/labels.js');
   const bounds = { x: 0, y: 0, w: 1600, h: 820 };

@@ -157,7 +157,38 @@ const Labels = (() => {
     return moved;
   }
 
-  return { place, problems, spread };
+  // Where a piece's pop-up menu goes (Steve: it covered fields to move or shoot from, pieces to rally and targets).
+  // size: the menu's { w, h }; at: the piece on the page; blocked: the boxes to keep clear, each with a weight (a
+  // target, a piece to rally or a score bubble matters more than a field to move to); box: the table's { width, height }.
+  // For each distance out from the piece, nearest first, we try the spots round it (right, left, below, above, then the
+  // corners), and last the table's own corners; the first that covers nothing wins, else the one that covers least
+  const MENU_GAPS = [24, 90, 180, 300, 450, 650, 900];
+  function menuSpot(size, at, blocked, box) {
+    const { w, h } = size;
+    const tries = [];
+    for (const gap of MENU_GAPS) {
+      tries.push([at.x + gap, at.y - h / 2], [at.x - gap - w, at.y - h / 2], [at.x - w / 2, at.y + gap], [at.x - w / 2, at.y - gap - h],
+        [at.x + gap, at.y + gap], [at.x - gap - w, at.y + gap], [at.x + gap, at.y - gap - h], [at.x - gap - w, at.y - gap - h]);
+    }
+    tries.push([6, 6], [box.width - w - 6, 6], [6, box.height - h - 6], [box.width - w - 6, box.height - h - 6]);
+    let best = null;
+    for (const [x, y] of tries) {
+      // Kept inside the table's box
+      const spot = { x: Math.max(6, Math.min(box.width - w - 6, x)), y: Math.max(6, Math.min(box.height - h - 6, y)), w, h };
+      const covered = blocked.reduce((sum, b) => sum + boxOverlap(spot, b) * (b.weight || 1), 0);
+      if (!best || covered < best.covered) best = { ...spot, covered };
+      if (!covered) break;
+    }
+    return best;
+  }
+  // How much of two boxes overlap (an area in pixels)
+  function boxOverlap(a, b) {
+    const across = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
+    const down = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
+    return across > 0 && down > 0 ? across * down : 0;
+  }
+
+  return { place, problems, spread, menuSpot };
 })();
 
 if (typeof module !== 'undefined') module.exports = Labels;

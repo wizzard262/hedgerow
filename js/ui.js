@@ -400,23 +400,12 @@ const UI = (() => {
   // piece nearest first, and point a word-bubble tail from it back to the piece. extra: more boxes to keep clear of
   function placeMenu(menu, left, top, box, extra = []) {
     const w = menu.offsetWidth, h = menu.offsetHeight;
-    // What it must not cover: each lit field, and the piece itself
-    const blocked = litFieldRects(box).concat(extra);
-    blocked.push({ x: left - 20, y: top - 20, w: 40, h: 40 });
-    // Spots round the piece: right, left, below, above, then the corners, each a little further out if they're all taken
-    let best = null;
-    for (const gap of [24, 90, 180, 300]) {
-      const tries = [[left + gap, top - h / 2], [left - gap - w, top - h / 2], [left - w / 2, top + gap], [left - w / 2, top - gap - h],
-        [left + gap, top + gap], [left - gap - w, top + gap], [left + gap, top - gap - h], [left - gap - w, top - gap - h]];
-      for (const [x, y] of tries) {
-        // Kept inside the table's box
-        const spot = { x: Math.max(6, Math.min(box.width - w - 6, x)), y: Math.max(6, Math.min(box.height - h - 6, y)), w, h };
-        const covered = blocked.reduce((sum, b) => sum + overlap(spot, b), 0);
-        if (!best || covered < best.covered) best = { ...spot, covered };
-        if (!covered) break;
-      }
-      if (!best.covered) break;
-    }
+    // What it must not cover: each lit field, the targets, pieces to rally and score bubbles (these matter most), and
+    // the piece itself
+    const blocked = litFieldRects(box).concat(extra.map(b => ({ ...b, weight: MENU_WEIGHT.important })));
+    blocked.push({ x: left - 20, y: top - 20, w: 40, h: 40, weight: MENU_WEIGHT.important });
+    // Further out round the piece, and the table's corners last, until a spot covers nothing (see Labels.menuSpot)
+    const best = Labels.menuSpot({ w, h }, { x: left, y: top }, blocked, box);
     menu.style.left = best.x + 'px';
     menu.style.top = best.y + 'px';
     drawTail(best, left, top);
@@ -424,24 +413,22 @@ const UI = (() => {
 
   // The fields lit up for the chosen piece (moves, charges, targets, the pieces the captain can rally) and the targets'
   // score bubbles, as boxes on the screen inside the table's box
+  // How much it matters to keep each kind clear (Steve: the menu covered pieces to rally and targets)
+  const MENU_WEIGHT = { field: 1, important: 4 };
   function litFieldRects(box) {
     const aims = targets();
-    const fields = spots().concat(aims, rallies()).map(f => {
-      // The field's four corners on the table, seen through the camera
+    // A field as a box on the screen: its four corners on the table, seen through the camera
+    const rect = (f, weight) => {
       const corners = [[0, 0], [1, 0], [1, 1], [0, 1]].map(([dx, dy]) => Board.screenPoint(f.x + dx, f.y + dy));
       const xs = corners.map(p => p.x - box.left), ys = corners.map(p => p.y - box.top);
-      return { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) };
-    });
+      return { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys), weight };
+    };
+    const fields = spots().map(f => rect(f, MENU_WEIGHT.field));
+    // The targets and the pieces to rally, counted more
+    const pieces = aims.concat(rallies()).map(f => rect(f, MENU_WEIGHT.important));
     // Each target's score bubble, moved into the table's box
-    const bubbles = aims.filter(t => t.needNow).map(t => Board.labelBox(t)).map(b => ({ ...b, x: b.x - box.left, y: b.y - box.top }));
-    return fields.concat(bubbles);
-  }
-
-  // How much of two boxes overlap (an area in pixels)
-  function overlap(a, b) {
-    const across = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
-    const down = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
-    return across > 0 && down > 0 ? across * down : 0;
+    const bubbles = aims.filter(t => t.needNow).map(t => Board.labelBox(t)).map(b => ({ ...b, x: b.x - box.left, y: b.y - box.top, weight: MENU_WEIGHT.important }));
+    return fields.concat(pieces, bubbles);
   }
 
   // The bubble's tail: a triangle from the menu's nearest edge to the piece, drawn under the menu so they join up
@@ -736,7 +723,7 @@ const UI = (() => {
   }
 
   return {
-    init, setState, update, asksForShot, asksForField, clickField, openMenu, openGunMenu, openAsk, closeMenu,
+    init, setState, update, asksForShot, asksForField, clickField, openMenu, openGunMenu, openAsk, closeMenu, litFieldRects,
     inspect, actsOn, spots, moveSpotsFor, targets, shootTarget, rallies, rallyTarget, view, selected,
     selectSupport, supportState, flyToken, returnTokens, KIND,
   };
