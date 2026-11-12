@@ -1821,6 +1821,11 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - **Answered**: the Panzer II did carry a 2 cm cannon (and a machine gun). Armour is how hard a tank is for the guns it faced: the Matilda II's 78 mm front shrugged off the German 2 cm and 3.7 cm guns of 1940 (armour 2), while by 1944 the Germans' 7.5 cm and 8.8 cm guns went through a Sherman (armour 0). Not rebalanced by period
 - **Steve's choice: leave it as it is**: the Panzer II keeps 1 anti-tank die, needing 5 or more against the Matilda
 
+## 312. Whole dice in the numbers (v180)
+
+- Steve: which pieces roll under one die, shown or in the data; can't we just change the underlying data rather than store 0.5 and round it up?
+- **The numbers**: no piece has less than one die in PIECES now: the Panzer II, M8 Greyhound and Sd.Kfz. 231 have 1 anti-tank die (was 0.5); each tank has its own `he`, its gun's dice at men (was half its anti-tank dice: 0.25 to 0.75 for most), 1 for most, 1.5 for the Panther, 0 for those with no gun; the Boys/PTRD rifle has `vsMen` 1 (was half a die); the PaK 40 and its bunker 1 rifle die and `vsMen` 2 (was 0.5 and 2). What every piece rolls is the same as before (it was already rounded up); a test checks every number is 0 or at least 1
+
 ## Sessions
 
 | # | Date | Length | What we did |

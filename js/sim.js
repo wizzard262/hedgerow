@@ -1164,15 +1164,19 @@ const Sim = (() => {
   function firepower(st, u) {
     const P = PIECES[u.kind];
     // A section of submachine gunners (Steve): SMG.dice a base, nothing against tanks
-    if (u.arms === 'smg') return { soft: SMG.dice * u.platoons, hard: 0 };
-    let soft = P.soft * u.platoons, hard = P.hard * u.platoons;
-    return { soft, hard };
+    if (u.arms === 'smg') return { soft: SMG.dice * u.platoons, hard: 0, men: SMG.dice * u.platoons, he: 0 };
+    const soft = P.soft * u.platoons, hard = P.hard * u.platoons;
+    // Against men: its own number if it has one, else its soft and half its anti-tank dice (whole dice in the data)
+    const men = (P.vsMen !== undefined ? P.vsMen : P.soft + P.hard * 0.5) * u.platoons;
+    // A tank's gun at men: its high explosive
+    const he = (P.he || 0) * u.platoons;
+    return { soft, hard, men, he };
   }
 
   // The dice a piece rolls against men: its own, and half its anti-tank weapons' (Steve asked why a bazooka showed 0:
   // it rolls one die at men, half its two anti-tank dice)
   function menDice(f) {
-    return f.soft + f.hard * 0.5;
+    return f.men !== undefined ? f.men : f.soft + f.hard * 0.5;
   }
 
   // The dice a firepower rolls, as the panel shows it (Steve: the Panzer II still showed 0.5): less than one is one,
@@ -1185,7 +1189,7 @@ const Sim = (() => {
   // The dice a piece rolls against men, as shown: a tank rolls its machine guns and its gun's high explosive apart
   // (see fireAt), each at least one die; anyone else its own dice and half its anti-tank ones together
   function menDiceShown(u, f) {
-    if (isTank(u)) return Math.round((diceShown(f.soft) + diceShown(f.hard * 0.5)) * 10) / 10;
+    if (isTank(u)) return Math.round((diceShown(f.soft) + diceShown(f.he)) * 10) / 10;
     return diceShown(menDice(f));
   }
 
@@ -1581,7 +1585,7 @@ const Sim = (() => {
       // A tank at men (Steve): its machine guns' dice are a coin toss like anyone's; its gun's high explosive (half its
       // anti-tank dice, as below) kills on every hit. One row of dice on the table, the machine guns' first
       const mgHits = roll(st, dice(st, f.soft), need, faces);
-      gunHits = roll(st, dice(st, f.hard * 0.5), need, faces);
+      gunHits = roll(st, dice(st, f.he), need, faces);
       softHits = mgHits + gunHits;
       hardHits = 0;
     } else {

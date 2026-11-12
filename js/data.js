@@ -463,20 +463,23 @@ const RALLY_RANGE = 3;           // the captain rallies a shaken friendly piece 
 // A rally always works, and it is the only thing that clears shaken (Steve): not resting, not a round ending, not a fight
 
 // What each kind of piece fights with. soft: against infantry and guns; hard: against tanks (anti-tank)
+// he: a tank's gun against men, its high explosive (its machine guns roll soft as well); vsMen: what a piece rolls
+// against men when it isn't its soft and half its anti-tank dice together. Never less than one die (Steve: a whole die
+// in the numbers, not half a die rounded up), so each is 0 or at least 1
 const PIECES = {
   company:  { name: 'Rifle platoon', soft: 1, hard: 0 },          // per section (3 sections, a base each). Its kind is 'company' in the code
   // Tanks: one tank a unit (Steve). armour: added to the score anti-tank dice and shells need (the Panther's front is hard
   // to beat), shown in the panel and on the label.
   // cutter: drives straight through a hedge, leaving a gap (Steve: every tank does; no separate Break through for tanks)
-  sherman:  { name: 'Sherman 75mm', soft: 1.5, hard: 1, tank: true, armour: 0, cutter: true },
-  firefly:  { name: 'Sherman 76mm', soft: 1, hard: 2, tank: true, armour: 0, cutter: true },
-  pz4:      { name: 'Panzer IV', soft: 1.5, hard: 1.5, tank: true, armour: 0, cutter: true },
+  sherman:  { name: 'Sherman 75mm', soft: 1.5, hard: 1, he: 1, tank: true, armour: 0, cutter: true },
+  firefly:  { name: 'Sherman 76mm', soft: 1, hard: 2, he: 1, tank: true, armour: 0, cutter: true },
+  pz4:      { name: 'Panzer IV', soft: 1.5, hard: 1.5, he: 1, tank: true, armour: 0, cutter: true },
   // Armoured cars (Steve), on the open maps in place of a tank: on wheels, so no hedge cutters: no driving through
   // hedges, quick on the road (CAR_ROAD_BONUS), snagged in barbed wire half the time (CAR_WIRE_SNAG), thin armour that
   // machine guns can get through (car)
-  m8:       { name: 'M8 Greyhound', soft: 1.5, hard: 0.5, tank: true, armour: 0, car: true },
-  puma:     { name: 'Puma', soft: 1, hard: 1, tank: true, armour: 0, car: true },
-  panther:  { name: 'Panther', soft: 1.5, hard: 3, tank: true, armour: 1, cutter: true },
+  m8:       { name: 'M8 Greyhound', soft: 1.5, hard: 1, he: 1, tank: true, armour: 0, car: true },
+  puma:     { name: 'Puma', soft: 1, hard: 1, he: 1, tank: true, armour: 0, car: true },
+  panther:  { name: 'Panther', soft: 1.5, hard: 3, he: 1.5, tank: true, armour: 1, cutter: true },
   mg:       { name: '.50 cal team', soft: 5, hard: 0, team: true, men: 3 },        // machine guns fire 5 dice (Steve)
   // extraMove: fields more than other pieces on a Move & shoot or a Charge (Steve: he's got to get to the tank)
   bazooka:  { name: 'Bazooka team', soft: 0, hard: 2, team: true, men: 2, extraMove: 1 },
@@ -485,26 +488,26 @@ const PIECES = {
   schreck:  { name: 'Panzerschreck team', soft: 0, hard: 2.5, team: true, men: 2, extraMove: 1 },   // both sides the same (Steve)
   // atGun: an anti-tank gun (swings round to fire, its hits on men kill); emplaced: in a fixed position, it never moves
   // at all, not even within its field (Steve: Stalingrad's 88)
-  pak:      { name: 'PaK 40 gun', soft: 0.5, hard: 3, team: true, fixed: true, atGun: true },
+  pak:      { name: 'PaK 40 gun', soft: 1, hard: 3, vsMen: 2, team: true, fixed: true, atGun: true },
   // shield: what its gun shield adds to a shot from in front of it, within SHIELD_ARC of the way it faces (Steve: the 88)
   flak88:   { name: '8.8 cm Flak 36', soft: 1, hard: 4, team: true, fixed: true, atGun: true, emplaced: true, shield: 2 },
   // Stalingrad, 1942 (Steve)
-  t34:      { name: 'T-34/76', soft: 1.5, hard: 1.5, tank: true, armour: 1, cutter: true },
+  t34:      { name: 'T-34/76', soft: 1.5, hard: 1.5, he: 1, tank: true, armour: 1, cutter: true },
   // His submachine gun (Steve): three dice, and closeOnly: he can't shoot beyond close range at all
   // Bunkers (Steve): they can't move, take two areas, and fire only out of the front. BUNKER says how they are hurt
   bunker_mg:  { name: 'MG bunker', soft: 5, hard: 0, team: true, fixed: true, bunker: true },
-  bunker_gun: { name: 'PaK 40 bunker', soft: 0.5, hard: 3, team: true, fixed: true, bunker: true },
+  bunker_gun: { name: 'PaK 40 bunker', soft: 1, hard: 3, vsMen: 2, team: true, fixed: true, bunker: true },
   captain:  { name: 'Captain', soft: 3, hard: 0, men: 1, closeOnly: true },
   // Dunkirk, 1940 (Steve). extraMove -1: the Matilda is slow
-  matilda:  { name: 'Matilda II', soft: 1, hard: 1, tank: true, armour: 2, cutter: true, extraMove: -1 },
-  carrier:  { name: 'Universal Carrier', soft: 2, hard: 0, tank: true, armour: 0, car: true },   // a Bren on a small open tracked carrier
+  matilda:  { name: 'Matilda II', soft: 1, hard: 1, he: 1, tank: true, armour: 2, cutter: true, extraMove: -1 },
+  carrier:  { name: 'Universal Carrier', soft: 2, hard: 0, he: 0, tank: true, armour: 0, car: true },   // a Bren on a small open tracked carrier
   // A lorry-load of men for the boats (Steve): no weapons, no orders; it drives itself. big: a corner block, as a tank
   lorry:    { name: 'Lorry', soft: 0, hard: 0, big: true, lorry: true },
-  boys:     { name: 'Boys anti-tank rifle team', soft: 0, hard: 1, team: true, men: 2 },
-  pz1:      { name: 'Panzer I', soft: 1.5, hard: 0, tank: true, armour: 0, cutter: true },   // two machine guns, no gun
-  pz2:      { name: 'Panzer II', soft: 1, hard: 0.5, tank: true, armour: 0, cutter: true },  // a 2 cm cannon
-  pz3:      { name: 'Panzer III', soft: 1.5, hard: 1, tank: true, armour: 0, cutter: true },
-  sdkfz231: { name: 'Sd.Kfz. 231', soft: 1, hard: 0.5, tank: true, armour: 0, car: true },   // eight-wheeled armoured car
+  boys:     { name: 'Boys anti-tank rifle team', soft: 0, hard: 1, vsMen: 1, team: true, men: 2 },
+  pz1:      { name: 'Panzer I', soft: 1.5, hard: 0, he: 0, tank: true, armour: 0, cutter: true },   // two machine guns, no gun
+  pz2:      { name: 'Panzer II', soft: 1, hard: 1, he: 1, tank: true, armour: 0, cutter: true },  // a 2 cm cannon
+  pz3:      { name: 'Panzer III', soft: 1.5, hard: 1, he: 1, tank: true, armour: 0, cutter: true },
+  sdkfz231: { name: 'Sd.Kfz. 231', soft: 1, hard: 1, he: 1, tank: true, armour: 0, car: true },   // eight-wheeled armoured car
 };
 
 // Hand to hand (a charge into the enemy, Steve): the two sides strike in turn, the attacker first, a die for each base

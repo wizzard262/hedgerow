@@ -4511,11 +4511,25 @@ check('Stalingrad: a piece going into a minefield rolls a die; 5 or 6 sets off a
   Sim.newGame(1);
 });
 
+check('no piece has less than one die in the numbers (Steve: whole dice in the data, not half a die rounded up)', () => {
+  for (const [kind, P] of Object.entries(PIECES)) {
+    for (const key of ['soft', 'hard', 'he', 'vsMen']) {
+      const n = P[key];
+      if (n === undefined) continue;
+      assert(n === 0 || n >= 1, `${kind}: ${key} ${n}`);
+    }
+    // Every tank says what its gun rolls at men
+    if (P.tank) assert(P.he !== undefined, `${kind} has no high explosive number`);
+    // At men, as worked out: never between none and one
+    if (!P.tank) { const men = P.vsMen !== undefined ? P.vsMen : P.soft + P.hard * 0.5; assert(men === 0 || men >= 1, `${kind}: ${men} at men`); }
+  }
+});
+
 check('the panel shows dice as they are rolled: less than one is one (Steve: the Panzer II showed 0.5)', () => {
   const st = Sim.newGame(1, 'us', 'dunkirk');
   const pz2 = st.units.find(u => u.kind === 'pz2');
   const f = Sim.firepower(st, pz2);
-  assert(f.hard === 0.5 && Sim.diceShown(f.hard) === 1, `the Panzer II shows ${Sim.diceShown(f.hard)} vs tanks`);
+  assert(f.hard === 1 && Sim.diceShown(f.hard) === 1, `the Panzer II shows ${Sim.diceShown(f.hard)} vs tanks`);
   // At men: one machine-gun die and its gun's quarter die, rolled as one each
   assert(Sim.menDiceShown(pz2, f) === 2, `the Panzer II shows ${Sim.menDiceShown(pz2, f)} vs men`);
   assert(Sim.diceShown(0) === 0 && Sim.diceShown(1.5) === 1.5 && Sim.diceShown(3) === 3, 'whole and half dice changed');

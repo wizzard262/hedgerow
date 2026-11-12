@@ -593,7 +593,7 @@ const UI = (() => {
     picture(box, u.side, u.kind, u.quality === 'elite', u.arms);
     const strength = strengthWords(u);
     const f = Sim.firepower(st, u);
-    // Against men: its own dice and half its anti-tank ones (see Sim.menDice)
+    // Against men: see Sim.menDice (a tank: its machine guns and its gun's high explosive)
     // A captain's submachine gun reaches close range only (Steve)
     const closeOnly = Sim.closeRangeOnly(u) ? ' (SMG: close range only)' : '';
     // (as rolled: less than one die is one, Steve)
