@@ -421,7 +421,8 @@ window.Game = (() => {
     if (st.draw) return { title: '🤝 A draw', text: st.report[0] };
     if (st.lost) return { title: '🏆 The Germans win', text: st.report[0] };
     const germansLeft = st.units.some(u => u.side === 'de' && u.x !== null);
-    return { title: germansLeft ? `🏆 The Americans take ${st.objective.name}` : '🏆 The Americans win', text: st.report[0] };
+    const us = Sim.sideName(st, 'us');
+    return { title: germansLeft ? `🏆 The ${us} take ${st.objective.name}` : `🏆 The ${us} win`, text: st.report[0] };
   }
 
   // How it ended for a player commanding the Americans: a side wiped out, the village taken, or time run out
@@ -438,9 +439,10 @@ window.Game = (() => {
   function germanEnding() {
     if (st.draw) return { title: '🤝 A draw', text: st.report[0] };
     const round = Sim.roundText(st.turn);
-    if (st.lost) return { title: '🏆 The American company is destroyed', text: `🏆 Nothing is left of the Americans on the table, in ${round}. The attack has failed.` };
+    const us = Sim.sideName(st, 'us');
+    if (st.lost) return { title: `🏆 The ${us} are destroyed`, text: `🏆 Nothing is left of the ${us} on the table, in ${round}. The attack has failed.` };
     const germansLeft = st.units.some(u => u.side === 'de' && u.x !== null);
-    if (germansLeft) return { title: `💀 ${st.objective.name} has fallen`, text: `💀 The Americans took ${st.objective.name} and held it for the whole of ${round}.` };
+    if (germansLeft) return { title: `💀 ${st.objective.name} has fallen`, text: `💀 The ${us} took ${st.objective.name} and held it for the whole of ${round}.` };
     return { title: '💀 Your company is wiped out', text: `💀 Every German on the field is destroyed, in ${round}.` };
   }
 
@@ -561,7 +563,8 @@ window.Game = (() => {
     const NAMES = { field: 'Field', orchard: 'Orchard', village: 'Village', hamlet: 'Hamlet', river: 'River', sea: 'Sea', beach: 'Beach', street: 'Street', square: 'Square', yard: 'Railway tracks', bridge: 'Bridge', laneEW: 'Lane', laneNS: 'Lane', crossroads: 'Crossroads' };
     const here = Sim.at(st, f.x, f.y);
     // (Dunkirk's 'us' side is British, Steve)
-    const lines = here.map(u => `${u.side === 'us' ? (st.evac ? 'British' : 'US') : 'German'} · ${u.name}${u.kind === 'company' ? ` · ${u.platoons} sections` : ''}${u.ambush ? ' · in ambush' : ''}${u.shocked ? ' · shaken' : ''}`);
+    const usWord = { us: 'US', uk: 'British', su: 'Soviet' }[Sim.armyOf(st)];
+    const lines = here.map(u => `${u.side === 'us' ? usWord : 'German'} · ${u.name}${u.kind === 'company' ? ` · ${u.platoons} sections` : ''}${u.ambush ? ' · in ambush' : ''}${u.shocked ? ' · shaken' : ''}`);
     // A wreck in the field: it is there to be hidden behind
     if (Sim.wreckAt(st, f.x, f.y)) lines.push('Burnt-out tank: blocks the view, +1 cover past its corner');
     // A café, a barn, a fountain or a pond: what it takes, and whether it blocks the view

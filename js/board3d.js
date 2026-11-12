@@ -70,7 +70,8 @@ const Board = (() => {
     const centre = new T.Vector3(COLS / 2, 0, ROWS / 2);
     const fits = () => corners.every(c => { const p = c.clone().project(camera); return Math.abs(p.x) < 0.99 && Math.abs(p.y) < 0.99; });
     const place = d => { camera.position.copy(centre).addScaledVector(dir, d); camera.lookAt(centre); camera.updateMatrixWorld(); };
-    const dir = new T.Vector3(0, Math.sin(0.92), Math.cos(0.92));   // about 53° above the table, from the near side
+    // (from the far side when the table is flipped, Steve: Stalingrad)
+    const dir = new T.Vector3(0, Math.sin(0.92), (flipped ? -1 : 1) * Math.cos(0.92));   // about 53° above the table, from the near side
     // The board's corners with the thinnest edge of table, and the guns and their names off each side
     const board = [[-0.06, -0.06], [COLS + 0.06, -0.06], [-0.06, ROWS + 0.06], [COLS + 0.06, ROWS + 0.06]];
     // (and where the drawn token lands, above each side's artillery)
@@ -86,7 +87,8 @@ const Board = (() => {
       const ys = board.map(([x, z]) => new T.Vector3(x, 0, z).project(camera).y);
       const above = 1 - Math.max(...ys), below = 1 + Math.min(...ys);
       if (Math.abs(above - below) < 0.01) break;
-      centre.z = Math.max(0, Math.min(ROWS, centre.z + (above - below) * ROWS * 0.35));
+      // (seen from the far side, up the screen is the other way along the table)
+      centre.z = Math.max(0, Math.min(ROWS, centre.z - screenUp() * (above - below) * ROWS * 0.35));
     }
     // Then the whole picture moved down a little (Steve: the top of the board was just out of sight; losing a little
     // of the table at the bottom doesn't matter). Picking and labels use the same camera, so they move with it
@@ -120,11 +122,18 @@ const Board = (() => {
   let GUNS = USUAL_GUNS;
   // The British at Dunkirk (Steve): their own flag, their destroyer
   let british = false;
+  // Whose army the 'us' side is ('us', 'uk', 'su': Sim.armyOf), and the Soviets at Stalingrad (Steve)
+  let army = 'us', soviet = false;
+  // The table seen from the other side (Steve: Stalingrad, the Germans on the left): the camera turned right round.
+  // screenUp: the way along the table (z) that is up the screen; screenRight: the way across (x) that is right
+  let flipped = false;
+  const screenUp = () => (flipped ? 1 : -1);
+  const screenRight = () => (flipped ? -1 : 1);
   // The warship for the 'us' artillery on this map, if it has one (Steve): 'destroyer' or 'battleship'
   let navy = null;
   // (each gun by its name for the time, Steve; see MORTARS and the rest in data.js)
   // A side's gun or bomber by name; the map can rename them (Steve: Dunkirk's destroyers and Blenheim)
-  const gunNameOf = (side, which) => (which === 'bomber' ? `${side === 'us' ? (british ? 'RAF' : 'US') : 'German'} ${Sim.bomberName(side)}` : Sim.gunStats(which, side).name);
+  const gunNameOf = (side, which) => (which === 'bomber' ? `${side === 'us' ? (british ? 'RAF' : soviet ? 'Soviet' : 'US') : 'German'} ${Sim.bomberName(side)}` : Sim.gunStats(which, side).name);
   const SUPPORT = ['artillery', 'mortars', 'bomber'];
   const PILE_MAX = 12;
   let support = null;           // side → which → { model, rounds: [] }
@@ -133,9 +142,28 @@ const Board = (() => {
   const gunFacing = side => (side === 'us' ? 0 : Math.PI);
   const gunDir = side => ({ x: side === 'us' ? 1 : -1, z: 0 });
 
+  // Every gun's spot turned end to end along the table (z), for the table seen from the far side
+  function mirroredGuns(guns) {
+    const out = {};
+    for (const side of ['us', 'de']) {
+      out[side] = {};
+      for (const which of Object.keys(guns[side])) {
+        const spot = Object.assign({}, guns[side][which]);
+        spot.z = ROWS - spot.z;
+        if (spot.pileZ !== undefined) spot.pileZ = ROWS - spot.pileZ;
+        if (spot.nameZ !== undefined) spot.nameZ = ROWS - spot.nameZ;
+        out[side][which] = spot;
+      }
+    }
+    return out;
+  }
+
   function buildSupport(st) {
     // (the guns' places for this map)
     GUNS = st && st.map.navy ? DUNKIRK_GUNS : USUAL_GUNS;
+    // Seen from the far side (Steve: Stalingrad): the guns mirrored up and down the table, so they stand on the screen
+    // as they always do, the artillery at the top
+    if (flipped) GUNS = mirroredGuns(GUNS);
     support = {};
     for (const side of ['us', 'de']) {
       support[side] = {};
@@ -157,7 +185,7 @@ const Board = (() => {
           // (one long line when the gun asks for it: the warship's shells, Steve)
           const perRow = spot.pileRow ? PILE_MAX : which === 'artillery' ? 3 : 4;
           const gap = spot.pileRow ? 0.11 : which === 'artillery' ? 0.07 : 0.075;
-          built.add(at(r, spot.pileX + (k % perRow) * gap, (spot.pileY || 0) + (which === 'artillery' ? 0 : 0.02), spot.pileZ + Math.floor(k / perRow) * gap));
+          built.add(at(r, spot.pileX + (k % perRow) * gap, (spot.pileY || 0) + (which === 'artillery' ? 0 : 0.02), spot.pileZ - screenUp() * Math.floor(k / perRow) * gap));
           rounds.push(r);
         }
         // Its name, small, on the table in front
@@ -170,7 +198,7 @@ const Board = (() => {
         const nameOut = which === 'bomber' ? 0 : 0.2;
         // (unless the gun has its own place for it: the warship's, off its bow)
         const nameX = spot.nameX !== undefined ? spot.nameX : spot.x + (side === 'us' ? -nameOut : nameOut);
-        const nameZ = spot.nameZ !== undefined ? spot.nameZ : spot.z + 0.55;
+        const nameZ = spot.nameZ !== undefined ? spot.nameZ : spot.z - screenUp() * 0.55;
         name.position.set(nameX, 0.05, nameZ);
         built.add(name);
         support[side][which] = { model, rounds, name };
@@ -217,10 +245,11 @@ const Board = (() => {
     const gun = GUNS[side].artillery;
     // (Dunkirk and the Normandy beach: out at sea at the top, clear of the boats, the warship being at the bottom, Steve)
     if (side === 'us' && GUNS === DUNKIRK_GUNS) return { x: -2.1, z: -0.3 };
-    return { x: gun.x + (side === 'us' ? -0.1 : 0.1), z: gun.z - 1.15 };
+    // (above it on the screen, whichever way round the table is seen)
+    return { x: gun.x + (side === 'us' ? -0.1 : 0.1), z: gun.z + screenUp() * 1.15 };
   }
   // Which face a side's token has: the British their Union Jack (Steve)
-  const coinFace = side => (side === 'us' && british ? 'uk' : side);
+  const coinFace = side => (side === 'us' && army !== 'us' ? army : side);
   function flyToken(side, clientX, clientY, done) {
     clearTokenNow();
     const mesh = Models.coin(coinFace(side));
@@ -341,21 +370,26 @@ const Board = (() => {
     if (!st.map.evacuate || !st.evac) return;
     const lines = [`${st.evac.saved} of ${st.map.evacuate.need} sections`, 'evacuated'];
     const text = lines.join(' ');
-    // (the same words, and still on this table: nothing to do)
-    if (evacSign && evacSign.text === text && evacSign.sign.parent === built) return;
+    // (the same words, still on this table, and the screen the same shape: nothing to do)
+    if (evacSign && evacSign.text === text && evacSign.sign.parent === built && evacSign.aspect === camera.aspect) return;
     if (evacSign && evacSign.sign.parent) evacSign.sign.parent.remove(evacSign.sign);
     // One sprite a line, the second below the first
     const sign = new T.Group();
+    // Where it goes: half way up from the board to the top of the screen, but always on the screen (Steve: on a smaller
+    // window its top line went out of sight); moved down the beach until the top line shows
+    let z = EVAC_SIGN.z;
+    const topLine = (lines.length - 1) * EVAC_SIGN.gap;
+    for (let k = 0; k < 20 && offTop(new T.Vector3(EVAC_SIGN.x, 0.08 + topLine, z), 0.3); k++) z += 0.1;
     lines.forEach((line, i) => {
       const sprite = word(line, EVAC_SIGN.colour, true);
       sprite.scale.multiplyScalar(EVAC_SIGN.scale);
-      sprite.position.set(EVAC_SIGN.x, 0.08 + (lines.length - 1 - i) * EVAC_SIGN.gap, EVAC_SIGN.z);
+      sprite.position.set(EVAC_SIGN.x, 0.08 + (lines.length - 1 - i) * EVAC_SIGN.gap, z);
       // (drawn after the surf, so the water's edge never shows through the words)
       sprite.renderOrder = 3;
       sign.add(sprite);
     });
     built.add(sign);
-    evacSign = { sign, text };
+    evacSign = { sign, text, aspect: camera.aspect };
   }
 
   // Show as many rounds beside each gun as it has shots left
@@ -381,8 +415,13 @@ const Board = (() => {
 
   function build(st) {
     if (built) { scene.remove(built); freeObject(built); }
-    british = !!(st.map.names && st.map.names.us === 'British');
-    Models.setBritish(british);
+    army = Sim.armyOf(st);
+    british = army === 'uk';
+    soviet = army === 'su';
+    Models.setArmy(army);
+    // Seen from the other side (Steve: Stalingrad): the camera fits the table again
+    const flip = !!st.map.flip;
+    if (flip !== flipped) { flipped = flip; if (shownW) resize(shownW, shownH); }
     navy = st.map.navy || null;
     built = new T.Group();
     built.add(Models.table(COLS, ROWS));
@@ -390,8 +429,10 @@ const Board = (() => {
     if (st.map.evacuate || st.map.landing) addBeachBeyond(st);
     for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
       const t = Sim.tileType(x, y), seed = x * 7 + y * 13;
-      built.add(at(Models.field(t, t === 'field' && seed % 5 === 0, seed), x + 0.5, 0, y + 0.5, -Math.PI / 2, 0, 0));
-      const cobbled = nearHouses(x, y);
+      // (Stalingrad, Steve: every field the dust and broken brick of the ruins, every street cobbled)
+      const ground = st.map.ruins && t !== 'village' ? 'ruin' : t;
+      built.add(at(Models.field(ground, t === 'field' && seed % 5 === 0 && !st.map.ruins, seed), x + 0.5, 0, y + 0.5, -Math.PI / 2, 0, 0));
+      const cobbled = nearHouses(x, y) || !!st.map.ruins;
       if (t === 'laneEW' || t === 'crossroads') built.add(at(Models.lane(1, 0.3, cobbled), x + 0.5, 0.001, y + 0.5, -Math.PI / 2, 0, 0));
       if (t === 'laneNS' || t === 'crossroads') built.add(at(Models.lane(0.3, 1, cobbled), x + 0.5, 0.0012, y + 0.5, -Math.PI / 2, 0, 0));
       // The river: water down the field, joined to the river or bridge above and below; a bridge carries the lane over
@@ -404,7 +445,8 @@ const Board = (() => {
         if (t === 'river') addReeds(x, y, seed);
       }
       if (t === 'orchard') for (const [ox, oz] of orchardTrees(seed)) built.add(at(Models.tree(seed + ox * 10 + oz * 3, 0.68 + ((ox * 31 + oz * 17) % 1) * 0.15), x + ox, 0, y + oz));
-      if (t === 'village' || t === 'hamlet') addHouses(x, y, seed);
+      if ((t === 'village' || t === 'hamlet') && st.map.ruins) addRuinedBlock(x, y, seed);
+      else if (t === 'village' || t === 'hamlet') addHouses(x, y, seed);
     }
     if (st.map.joins) addTracks(st);
     addSea(st);
@@ -793,6 +835,9 @@ const Board = (() => {
     if (f.kind === 'eiffel') { built.add(at(MAKERS.eiffel(), f.x + 0.5, 0, f.y + 0.5)); return; }
     // A strongpoint's sandbags round its field (Steve: Dunkirk)
     if (f.kind === 'strongpoint') { built.add(at(Models.mergeParts(Models.strongpoint(f.seed || 1)), f.x + 0.5, 0, f.y + 0.5)); return; }
+    // Stalingrad (Steve): a pile of rubble in its area; a minefield over its whole field
+    if (f.kind === 'rubble') { const p = Sim.placeXY(f.areas[0]); built.add(at(Models.rubblePile(f.seed || 1), f.x + 0.5 + p.x / 3, 0, f.y + 0.5 + p.y / 3)); return; }
+    if (f.kind === 'minefield') { built.add(at(Models.minefield(f.seed || 1), f.x + 0.5, 0, f.y + 0.5)); return; }
     // A railway line: a length of track along its row of areas (the trains run on it, see drawTrains)
     if (f.kind === 'rail') { if (Sim.tileType(f.x, f.y) !== 'yard') built.add(at(Models.track(1), f.x + 0.5, 0.002, f.y + 0.5 + Sim.placeXY(f.side).y / 3, -Math.PI / 2, 0, 0)); return; }
     const spots = f.areas.map(k => Sim.placeXY(k === 'c' ? null : k));
@@ -801,6 +846,37 @@ const Board = (() => {
     const facing = alongX ? (midY > 0 ? Math.PI : 0) : (midX > 0 ? -Math.PI / 2 : Math.PI / 2);
     const length = f.areas.length / 3 - 0.1;
     built.add(at(MAKERS[f.kind](length, f.seed, f.load), f.x + 0.5 + midX / 3, 0, f.y + 0.5 + midY / 3, 0, facing, 0));
+  }
+
+  // A field of the ruined store (Steve: Stalingrad's tall buildings): its outside walls stand along each side of the
+  // field that faces out of the block, tallest at the back as the table is seen, lowest at the front, so the pieces
+  // inside still show; where two outside walls meet, a corner taller still
+  function addRuinedBlock(x, y, seed) {
+    const inBlock = (xx, yy) => Sim.inside(xx, yy) && Sim.tileType(xx, yy) === Sim.tileType(x, y);
+    const ruins = new T.Group();
+    // For each side of the field: which way it runs, where, and whether it is at the back (up the screen)
+    const sides = [
+      { open: !inBlock(x, y - 1), along: 'x', cx: x + 0.5, cz: y + 0.04, back: screenUp() < 0 },
+      { open: !inBlock(x, y + 1), along: 'x', cx: x + 0.5, cz: y + 0.96, back: screenUp() > 0 },
+      { open: !inBlock(x - 1, y), along: 'z', cx: x + 0.04, cz: y + 0.5, back: false },
+      { open: !inBlock(x + 1, y), along: 'z', cx: x + 0.96, cz: y + 0.5, back: false },
+    ];
+    sides.forEach((sd, i) => {
+      if (!sd.open) return;
+      // (the front walls, between the camera and the pieces, a storey or two; the back ones five)
+      const storeys = sd.along === 'z' ? 4 : sd.back ? 5 : 2;
+      const wall = Models.ruinWall(0.92, storeys, seed * 7 + i);
+      ruins.add(at(wall, sd.cx, 0, sd.cz, 0, sd.along === 'z' ? Math.PI / 2 : 0, 0));
+    });
+    // The corners where two outside walls meet
+    const corners = [[0, 0, 'n', 'w'], [1, 0, 'n', 'e'], [0, 1, 's', 'w'], [1, 1, 's', 'e']];
+    for (const [cx, cz, ns, ew] of corners) {
+      const nsOpen = ns === 'n' ? sides[0].open : sides[1].open, ewOpen = ew === 'w' ? sides[2].open : sides[3].open;
+      if (!nsOpen || !ewOpen) continue;
+      const arms = [ns === 'n' ? 's' : 'n', ew === 'w' ? 'e' : 'w'];
+      ruins.add(at(Models.ruinCorner(6, arms, seed + cx * 3 + cz * 5), x + cx + (cx ? -0.04 : 0.04), 0, y + cz + (cz ? -0.04 : 0.04)));
+    }
+    built.add(ruins);
   }
 
   function addHouses(x, y, seed) {
@@ -869,6 +945,12 @@ const Board = (() => {
       }
       if (y + 1 < ROWS && trampled[Sim.edgeKey(x, y, x, y + 1)]) runs.push({ cx: x + 0.5, cz: y + 1, along: 'x', seed: x * 17 + y * 5 + 3, trampled: true });
     }
+    // Stalingrad (Steve): the "hedges" are the walls of ruined buildings, or lines of rubble, with tall corners where
+    // walls meet; one a tank has driven through is a heap of rubble with its two ends still standing
+    if (st.map.ruins) {
+      ruinWalls(runs);
+      runs.length = 0;
+    }
     const lumps = [[], []], bases = [];
     const m = new T.Matrix4(), q = new T.Quaternion(), sc = new T.Vector3(), pos = new T.Vector3();
     // A point `a` along a run and `side` across it, `h` up
@@ -924,6 +1006,51 @@ const Board = (() => {
     hedgeKey = key;
   }
 
+  // The ruins standing on the edges between fields (Steve: Stalingrad). For each run we must:
+  //   choose a building front or a line of rubble (by its seed), and how tall a front stands: the walls running up the
+  //   screen two to four storeys, those running across it one to three (they would hide what is behind them);
+  //   draw it broken, ends only, if a tank has gone through
+  // then put a tall corner wherever two walls meet at right angles
+  const RUIN_LOOK = { rubble: 0.25, across: [2, 3], upward: [3, 5], corner: [5, 7] };
+  function ruinWalls(runs) {
+    const ruins = new T.Group();
+    const ends = new Map();
+    for (const r of runs) {
+      const R = seeded(r.seed * 3 + 7);
+      const turn = r.along === 'z' ? Math.PI / 2 : 0;
+      const rubble = R() < RUIN_LOOK.rubble;
+      const [lo, hi] = r.along === 'z' ? RUIN_LOOK.upward : RUIN_LOOK.across;
+      const storeys = lo + Math.floor(R() * (hi - lo + 1));
+      if (r.trampled) {
+        // Driven through: rubble across the middle, the two ends still standing
+        ruins.add(at(Models.rubbleLine(0.5, r.seed), r.cx, 0, r.cz, 0, turn, 0));
+        for (const end of [-1, 1]) {
+          const piece = rubble ? Models.rubbleLine(0.25, r.seed + end) : Models.ruinWall(0.25, storeys, r.seed + end);
+          ruins.add(at(piece, r.along === 'x' ? r.cx + end * 0.375 : r.cx, 0, r.along === 'z' ? r.cz + end * 0.375 : r.cz, 0, turn, 0));
+        }
+        continue;
+      }
+      ruins.add(at(rubble ? Models.rubbleLine(1, r.seed) : Models.ruinWall(1, storeys, r.seed), r.cx, 0, r.cz, 0, turn, 0));
+      if (rubble) continue;
+      // Its two ends, where it may meet another wall
+      for (const end of [-0.5, 0.5]) {
+        const px = r.along === 'x' ? r.cx + end : r.cx, pz = r.along === 'z' ? r.cz + end : r.cz;
+        const key = px + ',' + pz;
+        if (!ends.has(key)) ends.set(key, { x: px, z: pz, arms: [] });
+        ends.get(key).arms.push(r.along === 'x' ? (end < 0 ? 'e' : 'w') : (end < 0 ? 's' : 'n'));
+      }
+    }
+    // A tall corner where walls running both ways meet
+    for (const p of ends.values()) {
+      const across = p.arms.some(a => a === 'e' || a === 'w'), upward = p.arms.some(a => a === 'n' || a === 's');
+      if (!across || !upward) continue;
+      const R = seeded(Math.round(p.x * 31 + p.z * 17));
+      const [lo, hi] = RUIN_LOOK.corner;
+      ruins.add(at(Models.ruinCorner(lo + Math.floor(R() * (hi - lo + 1)), p.arms, Math.round(p.x * 7 + p.z * 13)), p.x, 0, p.z));
+    }
+    hedgeGroup.add(Models.mergeParts(ruins));
+  }
+
   // One barbed-wire fence on the edge from field x, y to the next one dx, dy along: its posts (as placings) and the lines of
   // its strands and coil, added to the lists given. Used for the fences standing, and for wire a tank is just reaching
   function fence(x, y, dx, dy, posts, strands) {
@@ -976,36 +1103,40 @@ const Board = (() => {
   // The model for a piece, made the first time it is needed
   // The models that make up a piece, each a base on the table, scaled: a rifle platoon's three section bases, a tank
   // (one to a unit, Steve), or a team's (or the captain's) one base. Used for the table and for the panel's picture
-  function buildBases(side, kind, elite = false) {
+  function buildBases(side, kind, elite = false, arms = '') {
     // (a new piece borrows another's model until it has its own, Steve: Dunkirk's 1940 pieces)
     if (PIECES[kind] && PIECES[kind].look) kind = PIECES[kind].look;
     if (kind === 'company') {
       // One base a section; the bases are shown or hidden as sections are lost. Elite: in camouflage (Steve)
-      return [0, 1, 2].map(() => { const s = Models.mergeParts(Models.squad(side, elite)); markerSpots(s); s.scale.setScalar(MEN); return s; });
+      // (submachine gunners carry their PPSh or MP 40, Steve)
+      return [0, 1, 2].map(() => { const s = Models.mergeParts(Models.squad(side, elite, arms)); markerSpots(s); s.scale.setScalar(MEN); return s; });
     }
     if (PIECES[kind].tank) {
       const make = { sherman: () => Models.sherman(Models.M.olive), firefly: () => Models.sherman(Models.M.olive, true), pz4: Models.panzer4, panther: Models.panther, m8: Models.greyhound, puma: Models.puma,
         // Dunkirk, 1940 (Steve)
-        matilda: Models.matilda, carrier: Models.carrier, pz1: Models.panzer1, pz2: Models.panzer2, pz3: Models.panzer3, sdkfz231: Models.sdkfz231 }[kind];
+        matilda: Models.matilda, carrier: Models.carrier, pz1: Models.panzer1, pz2: Models.panzer2, pz3: Models.panzer3, sdkfz231: Models.sdkfz231,
+        // Stalingrad, 1942 (Steve)
+        t34: Models.t34 }[kind];
       return [0].map(() => { const m = Models.mergeParts(make()); markerSpots(m); m.scale.setScalar(TANKS); m.userData.slowTurn = true; return m; });
     }
     if (PIECES[kind].bunker) return [bunkerBase(kind === 'bunker_gun')];
     // A lorry-load of men (Steve: Dunkirk): the lorry, at the tanks' scale
     if (PIECES[kind].lorry) { const m = Models.mergeParts(Models.lorry()); markerSpots(m); m.scale.setScalar(TANKS); m.userData.slowTurn = true; return [m]; }
-    // (the British captain carries the Union Jack, Steve)
-    const flag = side === 'us' && british ? 'uk' : '';
-    const m = Models.mergeParts(kind === 'captain' ? Models.captain(side, flag) : kind === 'pak' ? Models.pak() : Models.team(side, kind));
+    // (the British captain carries the Union Jack, the Soviet one the red banner, Steve)
+    const flag = side === 'us' && army !== 'us' ? army : '';
+    const gunModel = { pak: Models.pak, flak88: Models.flak88 }[kind];
+    const m = Models.mergeParts(kind === 'captain' ? Models.captain(side, flag) : gunModel ? gunModel() : Models.team(side, kind));
     markerSpots(m);
-    m.scale.setScalar(kind === 'pak' ? TANKS * 1.3 : MEN);
-    // The PaK swings round onto its target before it fires, as a tank does (Steve)
-    if (kind === 'pak') m.userData.slowTurn = true;
+    m.scale.setScalar(kind === 'pak' ? TANKS * 1.3 : kind === 'flak88' ? TANKS * 1.15 : MEN);
+    // The PaK (and the 88) swings round onto its target before it fires, as a tank does (Steve)
+    if (PIECES[kind].atGun) m.userData.slowTurn = true;
     return [m];
   }
 
   function model(u) {
     if (pieces[u.id]) return pieces[u.id];
     const g = new T.Group();
-    g.userData.bases = buildBases(u.side, u.kind, u.quality === 'elite');
+    g.userData.bases = buildBases(u.side, u.kind, u.quality === 'elite', u.arms);
     for (const b of g.userData.bases) g.add(b);
     // Elite, yours or theirs (Steve): a gold band round the edge of every base
     if (u.quality === 'elite') for (const b of g.userData.bases) Models.eliteBand(b);
@@ -1084,7 +1215,7 @@ const Board = (() => {
         });
       } else {
         // The PaK faces the way it last fired (Steve: it turns to shoot); everyone else the enemy's side
-        const facing = u.kind === 'pak' && u.aim !== undefined ? u.aim : g.userData.face;
+        const facing = Sim.isAtGun(u) && u.aim !== undefined ? u.aim : g.userData.face;
         aim(g.userData.bases[0], 0.5 + p.x * reach.small, 0.5 + p.y * reach.small, facing);
       }
       aim(g, x, y, 0);
@@ -2501,6 +2632,8 @@ const Board = (() => {
       }
       // The bomber itself
       if (f.kind === 'flyover') { startFlight(f); shots.push({ f, t0: performance.now(), objs: [] }); continue; }
+      // A mine (Steve: Stalingrad): it goes off under the piece, or it doesn't (see playShots)
+      if (f.kind === 'mine') { shots.push({ f, t0: performance.now(), objs: [] }); continue; }
       // A bomb falls as the plane passes over its field
       if (f.kind === 'bomb' && flight) f.fall = (f.along - flight.start) / FLIGHT.speed + FLIGHT.fall;
       // Hand to hand: its own show, blow by blow
@@ -2512,9 +2645,9 @@ const Board = (() => {
       }
       // A tank or gun turns to face what it fires at, and stays facing it
       const shooter = f.from && st.units.find(u => u.id === f.from.id);
-      if (shooter && (Sim.isTank(shooter) || shooter.kind === 'pak')) shooter.aim = Math.atan2(-(f.y - f.from.y), f.x - f.from.x);
-      // A tank (or the PaK) waits while it turns onto the target (Steve)
-      const turning = shooter && (Sim.isTank(shooter) || shooter.kind === 'pak') ? TANK_TURN * 1000 : 0;
+      if (shooter && (Sim.isTank(shooter) || Sim.isAtGun(shooter))) shooter.aim = Math.atan2(-(f.y - f.from.y), f.x - f.from.x);
+      // A tank (or the PaK, or the 88) waits while it turns onto the target (Steve)
+      const turning = shooter && (Sim.isTank(shooter) || Sim.isAtGun(shooter)) ? TANK_TURN * 1000 : 0;
       // How many bases fire it: one round each (Steve)
       f.bases = shooter && pieces[shooter.id] ? pieces[shooter.id].userData.bases.filter(b => b.visible).length : 1;
       // (bombs keep to the plane's own time)
@@ -2643,6 +2776,16 @@ const Board = (() => {
         const w = add(word(`+${AIRDROP.crateRounds} artillery round`, '#ffe08a', true));
         w.material.opacity = Math.min(1, 2 * (2.2 - t));
         w.position.set(f.x + 0.5, 0.5 + t * 0.2, f.y + 0.5);
+        continue;
+      }
+      // A mine (Steve): a burst under the piece and "Mine!" rising off it, or "No mine" if it got through
+      if (f.kind === 'mine') {
+        if (t > 2) continue;
+        const spot = new T.Vector3(f.x + 0.5, 0, f.y + 0.5);
+        if (f.hit) explosion(add, { kind: 'shell' }, spot, t);
+        const w = add(word(f.hit ? 'Mine!' : 'Picks its way through', f.hit ? '#ff6a50' : '#e6d29a', true));
+        w.material.opacity = Math.min(1, 2 * (2 - t));
+        w.position.set(spot.x, 0.5 + t * 0.2, spot.z);
         continue;
       }
       // A rally (Steve): "Rallied!" in green (or the captain's "Up and moving"), rising off the piece
@@ -2891,7 +3034,11 @@ const Board = (() => {
         const tall = mission ? Math.max(...group.map(g => g.faces.length)) : Math.ceil(r.faces.length / 6);
         // Room for it and its label in this column? If not, the next column (the newest always goes beside the token)
         const lift = 0.15;
-        const reachesTop = () => offTop(new T.Vector3(columns[column].x, 0.05, z - (tall - 1) * up - lift));
+        const U = screenUp();
+        const reachesTop = () => offTop(new T.Vector3(columns[column].x, 0.05, z + U * ((tall - 1) * up + lift)));
+        // The newest roll always shows (Steve: a tall artillery column went off the top of the screen): moved down the
+        // table until its top is on the screen
+        if (column === 0 && inColumn === 0) for (let k = 0; k < 40 && reachesTop(); k++) z -= U * 0.1;
         if (inColumn > 0 && reachesTop()) {
           // No more columns: the older rolls are left off
           if (column >= columns.length - 1) break;
@@ -2905,13 +3052,13 @@ const Board = (() => {
         const left = colX - (across - 1) * gap / 2;
         if (mission) {
           // Each piece's dice in an upright column, from the bottom up
-          group.forEach((g, k) => g.faces.forEach((d, i) => placeDie(d, left + k * gap, z - i * up, i, size)));
+          group.forEach((g, k) => g.faces.forEach((d, i) => placeDie(d, left + k * gap, z + U * i * up, i, size)));
         } else {
           // A shot: its dice six to a row
-          r.faces.forEach((d, i) => placeDie(d, left + (i % 6) * gap, z - Math.floor(i / 6) * gap, i, size));
+          r.faces.forEach((d, i) => placeDie(d, left + (i % 6) * gap, z + U * Math.floor(i / 6) * gap, i, size));
         }
         // The tag just above the dice: for a mission, the guns or plane, how many pieces it caught and the hits in all
-        const top = z - (tall - 1) * up - lift;
+        const top = z + U * ((tall - 1) * up + lift);
         const hits = group.reduce((t, g) => t + g.faces.filter(d => d.hit).length, 0);
         const lines = mission ? [r.who, `${group.length} piece${group.length === 1 ? '' : 's'} · ${hits} hit${hits === 1 ? '' : 's'}`] : r.text;
         // Its tail at one edge of the dice, the tag running across them and on from there
@@ -2920,7 +3067,7 @@ const Board = (() => {
         const anchor = new T.Vector3(colX - out * edge, 0.05, top);
         placeDiceTag(lines, side, anchor, mission ? 1.05 : 1.15, out);
         // The next (older) roll goes above this one
-        z = top - 0.48;
+        z = top + U * 0.48;
         inColumn++;
       }
     }
@@ -2940,9 +3087,9 @@ const Board = (() => {
       besideX -= away * 0.1;
     }
     // (its tag runs from the dice's edge nearest the token out away from it, so it doesn't cover the token)
-    const beside = { x: besideX, z: coin.z + DICE_LEVEL, tagOut: away };
+    const beside = { x: besideX, z: coin.z - screenUp() * DICE_LEVEL, tagOut: away };
     // Above the token: its bottom row just past the token's far edge; the tag runs in towards the board
-    const above = { x: coin.x, z: coin.z - COIN_EDGE, tagOut: -away };
+    const above = { x: coin.x, z: coin.z + screenUp() * COIN_EDGE, tagOut: -away };
     return [beside, above];
   }
 
@@ -2969,7 +3116,8 @@ const Board = (() => {
   function placeDiceTag(lines, side, anchor, size, out) {
     const tag = diceTag(lines, side, false);
     tag.scale.multiplyScalar(size);
-    tag.center.x = out > 0 ? 0 : 1;
+    // (out is along the table: on the screen it is the other way when the table is seen from the far side)
+    tag.center.x = out * screenRight() > 0 ? 0 : 1;
     tag.position.copy(anchor);
     tag.renderOrder = 6;
     keepInSide(tag);
@@ -3045,7 +3193,13 @@ const Board = (() => {
     const gunName = f.support === 'bomber' ? Sim.bomberName(f.side) : gunNameOf(f.side, f.support);
     // ("Our" only with one human playing: two humans, or two robots, have no "our")
     const onePlayer = st.mode === 'us' || st.mode === 'de';
-    const whose = onePlayer && f.side === st.human ? 'Our' : f.side === 'de' ? 'German' : british ? 'British' : 'American';
+    const whose = onePlayer && f.side === st.human ? 'Our' : f.side === 'de' ? 'German' : british ? 'British' : soviet ? 'Soviet' : 'American';
+    // (a mine has nobody firing it)
+    if (f.kind === 'mine') {
+      const hit = f.faces.filter(r => r.hit).length;
+      const victim = f.to && st.units.find(u => u.id === f.to.id);
+      return [`Mine → ${victim ? victim.name : 'a piece'}`, `needs ${f.need}+ · ${hit ? 'it goes off' : 'no mine'}`];
+    }
     const who = shooter ? shooter.name : `${whose} ${gunName}`;
     const need = f.need > MAX_NEED ? 'HAIL MARY: 6, then 6' : `needs ${f.need}+`;
     const hits = f.faces.filter(r => r.hit).length;
@@ -3345,8 +3499,8 @@ const Board = (() => {
   const portraits = {};
   let studio = null;
   // elite: as the piece looks on the table (Steve: Rangers, Fallschirmjäger, the gold band)
-  function portrait(side, kind, elite = false) {
-    const key = side + ':' + kind + (elite ? ':elite' : '') + (british && side === 'us' ? ':uk' : '') + (navy && side === 'us' ? ':' + navy : '');
+  function portrait(side, kind, elite = false, arms = '') {
+    const key = side + ':' + kind + (elite ? ':elite' : '') + (arms ? ':' + arms : '') + (side === 'us' ? ':' + army : '') + (navy && side === 'us' ? ':' + navy : '');
     if (portraits[key]) return portraits[key];
     // One small renderer, scene and camera for every picture
     if (!studio) {
@@ -3368,7 +3522,7 @@ const Board = (() => {
       const m = kind === 'artillery' ? Models.howitzer(side) : Models.mortar(side);
       m.scale.setScalar(kind === 'artillery' ? TANKS * 1.7 : MEN * 1.3);
       bases = [m];
-    } else bases = buildBases(side, kind, elite);
+    } else bases = buildBases(side, kind, elite, arms);
     if (elite) for (const b of bases) Models.eliteBand(b);
     const spots = kind === 'company' ? [[-0.11, -0.09], [0.11, -0.07], [0, 0.11]] : [[0, 0]];
     bases.forEach((b, i) => { b.position.set(spots[i][0], 0, spots[i][1]); g.add(b); });

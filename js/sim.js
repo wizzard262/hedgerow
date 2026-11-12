@@ -49,7 +49,7 @@ const Sim = (() => {
   function sizeOf(u) {
     // (a bare field or point, with no piece: one area)
     if (!PIECES[u.kind]) return 1;
-    if (u.kind === 'pak' || PIECES[u.kind].bunker) return 2;
+    if (PIECES[u.kind].atGun || PIECES[u.kind].bunker) return 2;
     if (isTank(u) || PIECES[u.kind].big || (u.kind === 'company' && u.platoons >= 2)) return 4;
     return 1;
   }
@@ -171,7 +171,7 @@ const Sim = (() => {
     const kind = def.kind;
     // at: the hedge the piece lines (n, e, s or w), or null out in the open. Both sides start lining the hedge towards the enemy
     const u = Object.assign({ side, shocked: false, acted: false, at: side === 'us' ? 'e' : 'w' }, def);
-    if (kind === 'company') u.platoons = 3;
+    if (kind === 'company') u.platoons = def.arms === 'smg' ? SMG.bases : 3;
     // A team, the captain, a gun, or a tank (Steve: one tank to a unit, not a pair)
     else u.platoons = 1;
     if (!u.quality) u.quality = 'standard';
@@ -222,6 +222,7 @@ const Sim = (() => {
     if (map.generated === 'city') map = Object.assign({}, map, cityMap(R));
     if (map.generated === 'yard') map = Object.assign({}, map, yardMap(map, R));
     if (map.generated === 'beach') map = Object.assign({}, map, beachMap(map, R));
+    if (map.generated === 'ruins') map = Object.assign({}, map, ruinsMap(map, R));
     currentMap = map;
     walkTables.clear();
     const st = {
@@ -284,7 +285,7 @@ const Sim = (() => {
     }
     st.report = [st.noGoal
       ? `${START_DATE}. The company attacks. Destroy every German on the table${TURNS ? ` within ${TURNS} rounds` : ''}.`
-      : `${START_DATE}. The company attacks into the bocage. Take ${st.objective.name} and hold it for the whole of the next round${TURNS ? ` within ${TURNS} rounds` : ''}.`];
+      : `${map.id === 'stalingrad' ? map.date : START_DATE}. The company attacks ${map.ruins ? 'through the ruins' : 'into the bocage'}. Take ${st.objective.name} and hold it for the whole of the next round${TURNS ? ` within ${TURNS} rounds` : ''}.`];
     return st;
   }
 
@@ -441,6 +442,12 @@ const Sim = (() => {
     const names = st.map && st.map.names;
     if (names && names[side]) return names[side];
     return side === 'us' ? 'Americans' : 'Germans';
+  }
+  // Whose army the 'us' side is on this map: 'us' the Americans, 'uk' the British (Dunkirk), 'su' the Soviets (Stalingrad)
+  function armyOf(st) {
+    if (st.map && st.map.army) return st.map.army;
+    if (st.map && st.map.evacuate) return 'uk';
+    return 'us';
   }
   // A lorry-load of men: the only ones who go aboard
   const isLorry = u => !!PIECES[u.kind].lorry;
@@ -727,6 +734,38 @@ const Sim = (() => {
     return { rows: tiles.map(row => row.join('')), villages: [CITY_TOWER], features };
   }
 
+  // Stalingrad's ruins (Steve): piles of rubble here and there, each in one area of its field, and a few minefields in
+  // the middle of the board, new each game; never in the objective, nor where either side starts
+  const RUINS = { rubble: 10, mines: 3, minesFrom: 4, minesTo: 7, starts: 3 };
+  function ruinsMap(map, R) {
+    const features = [];
+    const open = [];
+    for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
+      const t = map.rows[y][x];
+      // (not in the store, nor on the streets: the rubble has been pushed off them)
+      if (t === 'v' || t === '=' || t === '|' || t === '+') continue;
+      open.push({ x, y });
+    }
+    // One at a time from what is left, so no field gets two
+    const pick = list => list.splice(Math.floor(R() * list.length), 1)[0];
+    const middle = open.filter(f => f.x >= RUINS.minesFrom && f.x <= RUINS.minesTo);
+    for (let i = 0; i < RUINS.mines && middle.length; i++) {
+      const f = pick(middle);
+      features.push({ x: f.x, y: f.y, kind: 'minefield', areas: [], seed: Math.floor(R() * 1000) });
+    }
+    const mined = f => features.some(m => m.x === f.x && m.y === f.y);
+    // (away from where the sides start, so nobody begins on a pile)
+    const piles = open.filter(f => !mined(f) && f.x >= RUINS.starts && f.x < COLS - RUINS.starts);
+    for (let i = 0; i < RUINS.rubble && piles.length; i++) {
+      const f = pick(piles);
+      const area = RUBBLE_AREAS[Math.floor(R() * RUBBLE_AREAS.length)];
+      features.push({ x: f.x, y: f.y, kind: 'rubble', area, seed: Math.floor(R() * 1000) });
+    }
+    return { features };
+  }
+  // (a pile goes in a corner or by an edge, never in the middle: a platoon still fits beside it)
+  const RUBBLE_AREAS = ['ne', 'nw', 'se', 'sw', 'n', 'e', 's', 'w'];
+
   // The beach landing (Steve): tank traps across the top of the sand, burnt-out wrecks nearer the water, new each game. Traps
   // never close the lanes off the beach, and always leave more ways through
   const BEACH = { trapColumn: 3, landColumn: 5, wreckColumns: [1, 2, 3], traps: 0.55, wrecks: 4 };
@@ -852,7 +891,7 @@ const Sim = (() => {
     // (the Universal Carrier's Bren reaches as far as a machine gun, Steve)
     if (u.kind === 'carrier') return RANGES.heavy;
     if (isTank(u)) return RANGES.tank;
-    if (['mg', 'mg42', 'pak'].includes(u.kind) || isBunker(u)) return RANGES.heavy;
+    if (['mg', 'mg42'].includes(u.kind) || isAtGun(u) || isBunker(u)) return RANGES.heavy;
     if (u.kind === 'company' || u.kind === 'captain') return RANGES.rifle;
     return RANGES.short;
   }
@@ -1111,6 +1150,8 @@ const Sim = (() => {
   // Firepower of a piece. hard: against tanks. Attached teams shoot on their own
   function firepower(st, u) {
     const P = PIECES[u.kind];
+    // A section of submachine gunners (Steve): SMG.dice a base, nothing against tanks
+    if (u.arms === 'smg') return { soft: SMG.dice * u.platoons, hard: 0 };
     let soft = P.soft * u.platoons, hard = P.hard * u.platoons;
     return { soft, hard };
   }
@@ -1462,7 +1503,7 @@ const Sim = (() => {
   }
 
   // `blast` is set for the other pieces caught in a tank's high-explosive burst (they don't spread it again)
-  const weaponOf = u => (isTank(u) || u.kind === 'pak' || u.kind === 'bunker_gun' ? 'gun' : u.kind === 'mg' || u.kind === 'mg42' || u.kind === 'bunker_mg' ? 'mg' : u.kind === 'bazooka' || u.kind === 'schreck' ? 'rocket' : 'rifle');
+  const weaponOf = u => (isTank(u) || isAtGun(u) || u.kind === 'bunker_gun' ? 'gun' : u.kind === 'mg' || u.kind === 'mg42' || u.kind === 'bunker_mg' ? 'mg' : u.kind === 'bazooka' || u.kind === 'schreck' ? 'rocket' : 'rifle');
 
   // The sound a shot makes as it is fired (Steve: a tank's is the bazooka's; the PaK keeps its cannon)
   function fireSound(shooter, weapon, side) {
@@ -1510,7 +1551,7 @@ const Sim = (() => {
     const before = { strength: target.platoons, shocked: target.shocked };
     // Which hits kill outright: every one from a bazooka, Panzerschreck, PaK or gun bunker; only a tank's gun hits, not
     // its machine guns' (Steve: those are 50/50)
-    const deadly = isTank(shooter) ? gunHits : ['bazooka', 'schreck', 'pak', 'bunker_gun'].includes(shooter.kind);
+    const deadly = isTank(shooter) ? gunHits : ['bazooka', 'schreck', 'bunker_gun'].includes(shooter.kind) || isAtGun(shooter);
     const out = (pre ? [pre.line] : []).concat(damage(st, target, softHits, hardHits, deadly));
     // In a word, what the shot did, for the words that float up off the target
     const lost = before.strength - (target.x === null ? 0 : target.platoons);
@@ -1588,14 +1629,21 @@ const Sim = (() => {
     if (f.soft + f.hard <= 0) return [];
     // Tanks only to those with anti-tank weapons: rifles and machine guns can't hurt them
     // Captains too (Steve: he dies like all the others)
-    // A captain's submachine gun reaches close range only (Steve)
-    const closeOnly = !!PIECES[shooter.kind].closeOnly;
+    // A captain's submachine gun reaches close range only (Steve), and so do the submachine gunners'
+    const closeOnly = closeRangeOnly(shooter);
     // A bunker only fires out of its front (Steve)
     const frontOnly = isBunker(shooter);
     // (a machine gun can fire on an armoured car, Steve: its armour is thin)
     return st.units.filter(t => t.side !== shooter.side && t.x !== null && !t.aboard && (!isTank(t) || f.hard > 0 || (isCar(t) && hurtsCars(shooter)))
       && (!closeOnly || atCloseRange(shooter, t)) && (!frontOnly || inFrontOf(shooter, t)) && !!sight(st, shooter, t));
   }
+
+  // Can only shoot at close range: the captain, and a section of submachine gunners (Steve)
+  function closeRangeOnly(u) { return !!PIECES[u.kind].closeOnly || u.arms === 'smg'; }
+  // An anti-tank gun (the PaK, the 88): it swings round to fire, and its hits on men kill
+  function isAtGun(u) { return !!PIECES[u.kind].atGun; }
+  // In a fixed position (Steve: Stalingrad's 88): it never moves, not even within its field
+  function isEmplaced(u) { return !!PIECES[u.kind].emplaced; }
 
   // ---------- Moving ----------
 
@@ -1639,7 +1687,28 @@ const Sim = (() => {
     u.aim = { e: 0, n: Math.PI / 2, w: Math.PI, s: -Math.PI / 2 }[heading];
     // A tank stops facing the nearest enemy it can see (Steve)
     if (isTank(u)) faceEnemy(st, u);
+    // Into a minefield (Steve: Stalingrad): it may set off a mine
+    mineCheck(st, u);
     return how;
+  }
+
+  // A piece going into a minefield rolls a die: MINES.need or more sets one off, a hit on it (anti-tank under a tank).
+  // What happened waits in st.mineLines for whoever reports the move (takeMineLines)
+  function mineCheck(st, u) {
+    if (u.x === null || !featuresAt(st, u.x, u.y).some(f => FEATURES[f.kind].mines)) return;
+    const faces = [];
+    const hits = roll(st, 1, MINES.need, faces);
+    st.fx.push({ kind: 'mine', x: u.x, y: u.y, faces, need: MINES.need, side: enemyOf(u.side), to: { id: u.id }, hit: hits > 0 });
+    st.mineLines = st.mineLines || [];
+    if (!hits) { st.mineLines.push(`💥 ${u.name} picks its way through the minefield.`); return; }
+    const what = isTank(u) ? damage(st, u, 0, 1) : damage(st, u, 1, 0);
+    st.mineLines.push(`💥 ${u.name} sets off a mine: ${what.join(', ')}.`);
+  }
+  // The mine lines waiting to be reported, emptied
+  function takeMineLines(st) {
+    const lines = st.mineLines || [];
+    st.mineLines = [];
+    return lines;
   }
 
   // Which way a tank faces after it moves (Steve): towards the nearest enemy it can see; with none, towards the enemy's
@@ -1666,6 +1735,8 @@ const Sim = (() => {
     const defenders = at(st, x, y, enemyOf(u.side));
     if (!defenders.length) {
       const how = step(st, u, x, y, true);
+      const mined = takeMineLines(st);
+      if (mined.length) return [how === 'cut' ? `${u.name} charges through the hedge, leaving a gap` : `${u.name} charges forward`, ...mined.map(l => l.replace(/\.$/, ''))];
       return [how === 'cut' ? `${u.name} charges through the hedge, leaving a gap` : how === 'flattened' ? `${u.name} charges over the wire, flattening it` : `${u.name} charges forward`];
     }
     st.fx.push({ x, y, kind: 'assault' });
@@ -1922,6 +1993,9 @@ const Sim = (() => {
     // Snagged on wire on the way, or stopped by an ambush: it stays there, and fires from there if it can (Steve)
     if (u.snagged) return lines;
     const how = step(st, u, goal.x, goal.y);
+    lines.push(...takeMineLines(st));
+    // (blown up by a mine as it got there)
+    if (u.x === null) { u.snagged = true; return lines; }
     // Where it stands: where it was sent, or (none given) the first place in the field with a shot
     const place = side !== undefined ? side : [u.at, ...anchorsFor(u)].find(p => { if (!fitsAt(st, u, goal.x, goal.y, p)) return false; u.at = p; return targets(st, u, true).length; });
     standAt(st, u, place === undefined ? u.at : place);
@@ -2048,8 +2122,8 @@ const Sim = (() => {
   // Every piece but a dug-in gun can charge; captains and teams only into empty fields. A shaken piece charges half as
   // far (Steve)
   function chargeRoutes(st, u) {
-    // A bunker never moves
-    if (isBunker(u)) return [];
+    // A bunker never moves, nor a gun dug in for good
+    if (isBunker(u) || isEmplaced(u)) return [];
     // The PaK: only to another field of the large village it stands in (Steve), straight there
     if (PIECES[u.kind].fixed) return villageFieldsFor(st, u).map(f => [{ x: f.x, y: f.y }]);
     // (routesFor decides who can go into an enemy's field: a rifle platoon to fight, a tank to drive the men out)
@@ -2171,6 +2245,9 @@ const Sim = (() => {
         u.aim = { e: 0, n: Math.PI / 2, w: Math.PI, s: -Math.PI / 2 }[dirTo(from, p)];
       }
       if (how) lines.push(moveLine(u, how).replace(/\.$/, ''));
+      lines.push(...takeMineLines(st));
+      // Blown up by a mine on the way: nothing more
+      if (u.x === null) { u.snagged = true; break; }
       // Seen from here: any ambush fires
       if (springAmbushes(st, u, lines, true)) halted = true;
       // Dead: nothing more
@@ -2196,7 +2273,7 @@ const Sim = (() => {
   // Where in its field a piece stands after a move (Steve: where the click was, if no other piece is there); its teams
   // take the free places nearest it
   function standAt(st, u, side) {
-    if (side === undefined) return;
+    if (side === undefined || u.x === null) return;
     u.at = freePlace(st, u, u.x, u.y, side);
     // Where it stands decides what it can see past the hedges: a tank faces the nearest enemy from there (Steve)
     if (isTank(u)) faceEnemy(st, u);
@@ -2242,7 +2319,7 @@ const Sim = (() => {
   // The other places in its own field a piece could move to (not where it is; where it fits among the others). The PaK
   // too (Steve): it never leaves its field, but it can be moved about in it
   function lineSides(st, u) {
-    if (isBunker(u)) return [];
+    if (isBunker(u) || isEmplaced(u)) return [];
     return anchorsFor(u).filter(p => p !== u.at && fitsAt(st, u, u.x, u.y, p));
   }
 
@@ -2777,7 +2854,7 @@ const Sim = (() => {
     if (t) { computerSays(st, `Fires on ${t.name}`); return { shooter: u.id, target: t.id }; }
     // The PaK with no shot from here (Steve: it can move within its field): to a place in the field that has one. It
     // can't fire after moving, but it lies in ambush there on the same go
-    if (u.kind === 'pak') {
+    if (isAtGun(u) && !isEmplaced(u)) {
       const spot = placeWithAShot(st, u);
       if (spot) {
         // (to another field of its village, if that is where the shot is)
@@ -2927,6 +3004,10 @@ const Sim = (() => {
     if (u.snagged) return;
     const goal = route[route.length - 1];
     step(st, u, goal.x, goal.y);
+    // (what a mine did goes in the computer's report)
+    const mined = takeMineLines(st);
+    if (st.computer && st.computer.rep) st.computer.rep.push(...mined);
+    if (u.x === null) return;
     setTrail(st, u, route);
     // Arriving in sight of an ambush
     springAmbushes(st, u, []);
@@ -3405,7 +3486,7 @@ const Sim = (() => {
 
   return {
     firesOnTheMove, canAmbush, actAmbush, bestMoveShoot, bomberHeading, bomberAims, bomberLine, bombNeed, bombWhy, bestBomberRun,
-    isBunker, isCar, hurtsCars, trainCars, lineSideOf, moveTrains, inFrontOf, bunkerFace, shotOnTheMove, wrecksBeside, isRoad, featuresAt, walkDistance, fireSound, wreckAt, remove, computerSide, isRobot, piecesToAsk, takeCover, enemyOf, gunStats, bomberName, boatKind, edgeKey, atCloseRange, closeCells, hailMaryCells,
+    isBunker, isCar, hurtsCars, trainCars, lineSideOf, moveTrains, inFrontOf, bunkerFace, shotOnTheMove, wrecksBeside, isRoad, featuresAt, walkDistance, fireSound, wreckAt, remove, computerSide, isRobot, piecesToAsk, takeCover, enemyOf, gunStats, bomberName, boatKind, armyOf, closeRangeOnly, isAtGun, isEmplaced, edgeKey, atCloseRange, closeCells, hailMaryCells,
     newGame, roll, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, chargeSpots,
     rallyTargets, canAct, canReact, firepower, canCallFire, takesGoal, cannotWin, artilleryTarget, mortarTarget, holdsObjective, roundText, roomFor,
     computerStep, answer, finishRound, startRound, drawToken, endComputerToken, activationOver, passToken, humanCanMove, endRound, canFire, actSkip, actSkipShot, skipSupport,

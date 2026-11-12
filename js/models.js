@@ -180,7 +180,19 @@ const Models = (() => {
   // Fallschirmjäger in a camouflage jump smock and the black rimless helmet
   // The British (Steve: Dunkirk): the 'us' side's men in light brown battledress and a green Brodie helmet. Set for each
   // game's table (see Board's build)
-  let britishLook = false;
+  let britishLook = false, sovietLook = false;
+  // Which army the 'us' side is for this table: 'us', 'uk' (Dunkirk) or 'su' (Stalingrad, Steve)
+  function setArmy(army) {
+    setBritish(army === 'uk');
+    sovietLook = army === 'su';
+    // The Soviets (Steve): khaki-brown tunics, the green SSh-40 helmet
+    if (!M.suUniform) {
+      M.suUniform = mat('#857a52', 0.9);
+      M.suTrousers = mat('#6d6646', 0.9);
+      M.suWebbing = mat('#6a5a3c', 0.9);
+      M.suHelmet = mat('#4a5634', 0.6);
+    }
+  }
   function setBritish(on) {
     britishLook = on;
     if (!M.ukUniform) {
@@ -190,12 +202,14 @@ const Models = (() => {
       M.ukHelmet = mat('#4f5434', 0.6);        // the Brodie helmet, green
     }
   }
-  function soldier(side, pose = 0, base = true, elite = false) {
+  function soldier(side, pose = 0, base = true, elite = false, arms = '') {
     const us = side === 'us', g = new T.Group();
-    const uk = us && britishLook;
-    const fj = !us && elite, ranger = us && elite && !uk;
-    const uni = fj ? camoCloth('de') : uk ? M.ukUniform : ranger ? M.rangerJacket : us ? M.usUniform : M.deUniform;
-    const legs = uk ? M.ukTrousers : ranger ? M.rangerTrousers : us ? M.usTrousers : M.deTrousers, web = uk ? M.ukWebbing : us ? M.usWebbing : M.deWebbing;
+    const uk = us && britishLook, su = us && sovietLook;
+    // (Soviet guards look as the others do: no camouflage, Steve)
+    const fj = !us && elite, ranger = us && elite && !uk && !su;
+    const uni = fj ? camoCloth('de') : su ? M.suUniform : uk ? M.ukUniform : ranger ? M.rangerJacket : us ? M.usUniform : M.deUniform;
+    const legs = su ? M.suTrousers : uk ? M.ukTrousers : ranger ? M.rangerTrousers : us ? M.usTrousers : M.deTrousers;
+    const web = su ? M.suWebbing : uk ? M.ukWebbing : us ? M.usWebbing : M.deWebbing;
     // Base: a black disc with a bevel
     if (base) g.add(at(cyl(0.032, 0.034, 0.008, M.base, 24), 0, 0.004, 0));
     // Legs apart, boots (US leggings are paler)
@@ -213,15 +227,23 @@ const Models = (() => {
     // Arms holding the rifle across the chest, the rifle pointing up and forward
     g.add(at(box(0.008, 0.026, 0.008, uni), 0.012, 0.074, 0.011, 0.6, 0, -0.5));
     g.add(at(box(0.008, 0.026, 0.008, uni), -0.006, 0.072, -0.011, -0.4, 0, 0.6));
-    const rifle = new T.Group();
-    rifle.add(at(box(0.07, 0.006, 0.006, M.wood), 0, 0, 0));
-    rifle.add(at(cyl(0.0018, 0.0018, 0.03, M.steel, 6), 0.045, 0.002, 0, 0, 0, Math.PI / 2));
-    at(rifle, 0.008, 0.078, 0.002, 0, 0, 0.75);
-    g.add(rifle);
+    // (a submachine gunner carries his PPSh or MP 40, Steve, held lower and flatter)
+    if (arms === 'smg') g.add(at(smgGun(side), 0.016, 0.07, 0.004, 0, 0, 0.35));
+    else {
+      const rifle = new T.Group();
+      rifle.add(at(box(0.07, 0.006, 0.006, M.wood), 0, 0, 0));
+      rifle.add(at(cyl(0.0018, 0.0018, 0.03, M.steel, 6), 0.045, 0.002, 0, 0, 0, Math.PI / 2));
+      at(rifle, 0.008, 0.078, 0.002, 0, 0, 0.75);
+      g.add(rifle);
+    }
     g.add(at(sphere(0.0045, M.flesh, 8, 6), 0.02, 0.083, 0.004));
     // Head and helmet: the round American M1, the flared German Stahlhelm
     g.add(at(sphere(0.0085, M.flesh, 12, 10), 0, 0.104, 0));
-    if (uk) {
+    if (su) {
+      // The SSh-40: a deep round dome with a short flared rim all round
+      const lathe = new T.LatheGeometry([[0, 0.0128], [0.0085, 0.0118], [0.0122, 0.006], [0.013, 0.0], [0.0142, -0.0028], [0.0144, -0.0034]].map(([x, y]) => new T.Vector2(x, y)), 16);
+      g.add(at(new T.Mesh(lathe, M.suHelmet), 0, 0.108, 0));
+    } else if (uk) {
       // The Brodie: a shallow dome on a wide flat brim
       const h = sphere(0.0105, M.ukHelmet, 16, 10); h.scale.set(1, 0.55, 1); g.add(at(h, 0, 0.11, 0));
       g.add(at(cyl(0.0175, 0.0175, 0.0018, M.ukHelmet, 18), 0, 0.109, 0));
@@ -265,7 +287,7 @@ const Models = (() => {
 
   // A platoon: three figures together on one small round flocked base (Steve: round, three a base), as wargamers base
   // a section. Elite: Rangers or Fallschirmjäger. Built facing +x (east)
-  function squad(side, elite = false) {
+  function squad(side, elite = false, arms = '') {
     const g = new T.Group();
     // A small oval base, its top flocked like the table, its edge painted dark
     const b = new T.Mesh(new T.CylinderGeometry(0.062, 0.064, 0.008, 32), [mat('#3b3326', 0.8), baseTop(side), M.base]);
@@ -275,7 +297,7 @@ const Models = (() => {
     for (const [x, z] of [[-0.04, 0.03], [0.035, -0.04], [0.03, 0.04]]) g.add(at(sphere(0.007, tuft, 6, 4), x, 0.009, z));
     // Three men in a triangle on the round base
     [[0.024, 0.0, 1], [-0.018, -0.028, 0], [-0.018, 0.028, -1]].forEach(([x, z, p], i) => {
-      const s = soldier(side, p, false, elite); at(s, x, 0.008, z, 0, (i - 1) * 0.2, 0); g.add(s);
+      const s = soldier(side, p, false, elite, arms); at(s, x, 0.008, z, 0, (i - 1) * 0.2, 0); g.add(s);
     });
     return castAll(g);
   }
@@ -356,7 +378,11 @@ const Models = (() => {
     const flag = new T.Group();
     // Blue with crossed rifles in white for the Americans; plain red for the Germans (Steve)
     if (flagOf === 'uk') unionJack(flag);
-    else {
+    else if (flagOf === 'su') {
+      // The Soviets' red banner with a gold star (Steve)
+      flag.add(at(box(0.07, 0.045, 0.002, mat('#b3261e', 0.8)), 0.035, 0, 0));
+      flag.add(at(box(0.012, 0.012, 0.003, mat('#f2c94c', 0.6)), 0.014, 0.012, 0, 0, 0, Math.PI / 4));
+    } else {
       flag.add(at(box(0.07, 0.045, 0.002, mat(side === 'us' ? '#2f4f86' : '#c0261c', 0.8)), 0.035, 0, 0));
       if (side === 'us') for (const r of [0.6, -0.6]) flag.add(at(box(0.05, 0.004, 0.0025, mat('#f2efe6', 0.8)), 0.035, 0, 0, 0, 0, r));
     }
@@ -546,6 +572,219 @@ const Models = (() => {
     return castAll(g);
   }
 
+  // ---------- Stalingrad, 1942 (Steve) ----------
+
+  // The Soviet paint: the dark green of their tanks and guns
+  function sovietPaint() {
+    if (!M.suGreen) M.suGreen = mat('#4b5534', 0.7, 0.15);
+    return M.suGreen;
+  }
+
+  // The T-34/76 (Steve: the Soviet tank): a low hull with steeply sloped sides and front, five big road wheels a side with
+  // no return rollers, wide tracks, the cast turret well forward with its long 76 mm gun. Front +x
+  function t34() {
+    const paint = sovietPaint();
+    const g = new T.Group(), W = 0.2, L = 0.37;
+    // The hull: the sloped glacis and back, the sloped upper sides
+    g.add(at(box(L * 0.92, 0.05, W * 0.62, paint), 0, 0.06, 0));
+    g.add(at(profile([[-0.185, 0.085], [0.13, 0.085], [0.19, 0.06], [0.19, 0.075], [0.11, 0.128], [-0.16, 0.128], [-0.185, 0.105]], W, paint, 0.004), 0, 0, 0));
+    for (const s of [-1, 1]) {
+      const z = s * W * 0.43;
+      g.add(trackRun(L * 0.94, 0.055, 0.04, 0.03, z));
+      // Five big road wheels, no return rollers (the Christie suspension)
+      for (let k = 0; k < 5; k++) g.add(at(wheel(0.03, 0.03, M.steel), -0.13 + k * 0.065, 0.032, z));
+      g.add(at(sprocket(0.024, 0.034, paint), -0.172, 0.04, z));
+      g.add(at(wheel(0.024, 0.034, M.steel), 0.172, 0.04, z));
+    }
+    // The cast turret, well forward: rounded, wider at the back, with its two hatches
+    const turret = profile([[-0.06, 0], [0.05, 0], [0.058, 0.03], [0.03, 0.046], [-0.055, 0.046]], 0.12, paint, 0.008);
+    g.add(at(turret, 0.04, 0.128, 0));
+    for (const z of [-0.022, 0.022]) g.add(at(cyl(0.012, 0.012, 0.006, paint, 12), 0.0, 0.178, z));
+    // The long 76 mm gun in its mantlet
+    g.add(at(box(0.02, 0.026, 0.04, paint), 0.1, 0.15, 0));
+    g.add(at(cyl(0.005, 0.0065, 0.15, M.steel, 12), 0.18, 0.152, 0, 0, 0, Math.PI / 2));
+    // The fuel tanks on the back, the driver's hatch on the glacis, the bow machine gun
+    for (const s of [-1, 1]) g.add(at(cyl(0.012, 0.012, 0.05, paint, 10), -0.17, 0.11, s * 0.06, Math.PI / 2, 0, 0));
+    g.add(at(box(0.03, 0.004, 0.035, paint), 0.14, 0.108, 0.02, 0, 0, -0.6));
+    g.add(at(cyl(0.003, 0.003, 0.03, M.steel, 6), 0.165, 0.09, -0.04, 0, 0, Math.PI / 2));
+    // A white tactical number on each side of the turret
+    for (const s of [-1, 1]) g.add(at(box(0.03, 0.012, 0.002, mat('#e8e4d8', 0.8)), 0.04, 0.152, s * 0.061));
+    return castAll(g);
+  }
+
+  // The 8.8 cm Flak 36 (Steve: a fixed position): the cross-shaped platform on its four outriggers, the pedestal, the
+  // long barrel with its shield, and its crew of three (no sandbags round it, Steve). Front +x
+  function flak88() {
+    const g = new T.Group(), paint = camoPaint();
+    // The cross: the long beam front to back, the outriggers either side, each with its levelling jack
+    g.add(at(box(0.26, 0.012, 0.03, paint), 0, 0.012, 0));
+    for (const s of [-1, 1]) {
+      g.add(at(box(0.03, 0.01, 0.2, paint), 0, 0.011, s * 0.08));
+      g.add(at(cyl(0.006, 0.008, 0.012, M.steel, 8), 0, 0.006, s * 0.17));
+    }
+    for (const x of [-0.12, 0.12]) g.add(at(cyl(0.006, 0.008, 0.012, M.steel, 8), x, 0.006, 0));
+    // The pedestal and the cradle, the barrel raised a little
+    g.add(at(cyl(0.022, 0.03, 0.04, paint, 14), 0, 0.038, 0));
+    const gun = new T.Group();
+    gun.add(at(box(0.11, 0.03, 0.04, paint), -0.01, 0, 0));
+    gun.add(at(cyl(0.006, 0.008, 0.28, M.steel, 12), 0.18, 0.004, 0, 0, 0, Math.PI / 2));
+    gun.add(at(cyl(0.0085, 0.0085, 0.02, M.steel, 12), 0.32, 0.004, 0, 0, 0, Math.PI / 2));
+    // The recuperators above the barrel, the shield in front of the crew
+    gun.add(at(cyl(0.006, 0.006, 0.1, paint, 10), 0.05, 0.022, 0, 0, 0, Math.PI / 2));
+    gun.add(at(box(0.004, 0.07, 0.12, paint), 0.05, 0.01, 0, 0, 0, -0.08));
+    at(gun, 0, 0.075, 0, 0, 0, 0.08);
+    g.add(gun);
+    // Its crew: the layer at the hand wheels, the loader with a round, one at the back with another
+    const layer = soldier('de', 0, false); layer.scale.y = 0.8; g.add(at(layer, -0.03, 0.008, -0.05, 0, 0, 0));
+    const loader = soldier('de', 1, false); g.add(at(loader, -0.06, 0.008, 0.045, 0, -0.4, 0));
+    g.add(at(soldier('de', -1, false), -0.12, 0.008, -0.01, 0, 0.3, 0));
+    return castAll(g);
+  }
+
+  // A submachine gun in a man's hands (Steve): the Soviet PPSh with its wooden stock and drum magazine, or the German
+  // MP 40, all black steel with its long straight magazine. Built along +x, as the rifle is
+  function smgGun(side) {
+    const gun = new T.Group();
+    if (side === 'us') {
+      gun.add(at(box(0.034, 0.008, 0.006, M.wood), -0.01, 0, 0));
+      gun.add(at(cyl(0.003, 0.003, 0.022, M.steel, 8), 0.018, 0.001, 0, 0, 0, Math.PI / 2));
+      gun.add(at(cyl(0.0075, 0.0075, 0.005, M.steel, 12), 0.004, -0.008, 0, Math.PI / 2, 0, 0));
+    } else {
+      gun.add(at(box(0.03, 0.006, 0.005, M.black), 0, 0, 0));
+      gun.add(at(cyl(0.0017, 0.0017, 0.016, M.steel, 6), 0.022, 0.001, 0, 0, 0, Math.PI / 2));
+      gun.add(at(box(0.004, 0.018, 0.004, M.black), 0.004, -0.011, 0));
+    }
+    return gun;
+  }
+
+  // The ruins (Steve: bombed-out city streets, tall building fronts and corners several storeys high). A wall stands
+  // on the edge between two fields, as a hedge does: `length` long along x, its middle at the origin. It is a row of
+  // bays, each a pier and a window, every bay broken off at its own height (storeys: the most it keeps), the windows
+  // gaping, plaster on brick with soot, rubble heaped at its foot
+  const STOREY = 0.075;
+  function ruinMats() {
+    if (!M.plaster) {
+      M.plaster = mat('#a59b88', 0.95);
+      M.plasterDark = mat('#7d7566', 0.95);
+      M.brick = mat('#8a5a44', 0.95);
+      M.soot = mat('#4e4a44', 0.95);
+      M.rubble = mat('#7a6a58', 1);
+      M.rubbleDark = mat('#5d5246', 1);
+    }
+  }
+  function ruinWall(length, storeys, seed) {
+    ruinMats();
+    const R = seeded(seed * 7 + 3);
+    const g = new T.Group(), thick = 0.03, bays = 5, bay = length / bays, pier = bay * 0.34, sill = 0.022;
+    for (let b = 0; b < bays; b++) {
+      const x0 = -length / 2 + b * bay;
+      // How high this bay still stands: the full height, or broken off lower
+      const keep = Math.max(1, storeys - Math.floor(R() * 1.7));
+      const face = R() < 0.35 ? M.brick : R() < 0.5 ? M.plasterDark : M.plaster;
+      const tall = keep * STOREY + (R() - 0.5) * 0.02;
+      // The pier, the full height of the bay
+      g.add(at(box(pier, tall, thick, face), x0 + pier / 2, tall / 2, 0));
+      // The bands between the windows, one a storey (the window above it gaping)
+      for (let s = 0; s < keep; s++) {
+        const y = s * STOREY;
+        // (the top band of a broken bay sometimes gone, leaving a ragged gap)
+        if (s === keep - 1 && R() < 0.4) continue;
+        g.add(at(box(bay - pier, sill, thick, face), x0 + pier + (bay - pier) / 2, y + sill / 2, 0));
+        g.add(at(box(bay - pier, 0.012, thick, face), x0 + pier + (bay - pier) / 2, y + STOREY - 0.006, 0));
+      }
+      // Soot over the top of the broken bay
+      g.add(at(box(pier * 1.02, 0.02, thick * 1.05, M.soot), x0 + pier / 2, tall - 0.01, 0));
+    }
+    // The last pier, closing the row
+    const end = Math.max(1, storeys - Math.floor(R() * 2)) * STOREY;
+    g.add(at(box(pier, end, thick, M.plaster), length / 2 - pier / 2, end / 2, 0));
+    // Rubble heaped along its foot, both sides
+    for (let k = 0; k < 7; k++) {
+      const lump = box(0.03 + R() * 0.04, 0.012 + R() * 0.02, 0.025 + R() * 0.03, R() < 0.5 ? M.rubble : M.brick);
+      g.add(at(lump, (R() - 0.5) * length * 0.95, 0.008, (R() < 0.5 ? -1 : 1) * (0.03 + R() * 0.03), R() * 0.4, R() * 3, R() * 0.4));
+    }
+    return castAll(g);
+  }
+  // Where walls meet (Steve: the corners several storeys tall): a corner of a building, standing higher than the walls,
+  // its two short arms running along the walls that meet there. arms: the ways they run, any of 'e', 'w', 'n', 's'
+  function ruinCorner(storeys, arms, seed) {
+    ruinMats();
+    const R = seeded(seed * 13 + 5);
+    const g = new T.Group(), thick = 0.034, arm = 0.17;
+    const tall = storeys * STOREY;
+    const face = R() < 0.4 ? M.brick : M.plaster;
+    g.add(at(box(0.06, tall, 0.06, face), 0, tall / 2, 0));
+    for (const way of arms) {
+      // Each arm a little lower than the corner, broken off at the end
+      const h = Math.max(STOREY, tall - STOREY * Math.floor(R() * 2));
+      const dir = { e: [1, 0], w: [-1, 0], s: [0, 1], n: [0, -1] }[way];
+      const piece = box(dir[0] ? arm : thick, h, dir[1] ? arm : thick, face);
+      g.add(at(piece, dir[0] * arm / 2, h / 2, dir[1] * arm / 2));
+      // Its windows, dark holes up the arm, a storey apart
+      for (let s = 0; s < Math.floor(h / STOREY); s++) {
+        const hole = box(dir[0] ? 0.05 : thick * 1.1, 0.035, dir[1] ? 0.05 : thick * 1.1, M.soot);
+        g.add(at(hole, dir[0] * arm * 0.6, s * STOREY + 0.04, dir[1] * arm * 0.6));
+      }
+    }
+    // A cornice still on the top
+    g.add(at(box(0.075, 0.012, 0.075, M.plasterDark), 0, tall, 0));
+    return castAll(g);
+  }
+  // A line of rubble on an edge, where a building has come right down (Steve): it works as a wall does. Along x
+  function rubbleLine(length, seed) {
+    ruinMats();
+    const R = seeded(seed * 5 + 1);
+    const g = new T.Group();
+    for (let k = 0; k < 22; k++) {
+      const a = (R() - 0.5) * length;
+      const lump = box(0.04 + R() * 0.05, 0.02 + R() * 0.05, 0.03 + R() * 0.05, [M.rubble, M.rubbleDark, M.brick][k % 3]);
+      g.add(at(lump, a, 0.015, (R() - 0.5) * 0.08, R() * 0.6, R() * 3, R() * 0.6));
+    }
+    // A broken beam or two sticking out
+    for (let k = 0; k < 2; k++) g.add(at(box(0.16, 0.01, 0.012, M.wood), (R() - 0.5) * length * 0.7, 0.04, (R() - 0.5) * 0.05, 0, R() * 3, 0.4));
+    return castAll(g);
+  }
+  // A pile of rubble in one area of a field (Steve): bricks, broken masonry and a beam, heaped up
+  function rubblePile(seed) {
+    ruinMats();
+    const R = seeded(seed * 3 + 11);
+    const g = new T.Group();
+    for (let k = 0; k < 18; k++) {
+      const r = R() * 0.1, a = R() * Math.PI * 2;
+      const lump = box(0.03 + R() * 0.04, 0.02 + R() * 0.04, 0.03 + R() * 0.04, [M.rubble, M.rubbleDark, M.brick, M.plaster][k % 4]);
+      g.add(at(lump, Math.cos(a) * r, 0.05 - r * 0.35 + R() * 0.01, Math.sin(a) * r, R(), R() * 3, R()));
+    }
+    g.add(at(box(0.18, 0.012, 0.014, M.wood), 0, 0.05, 0, 0, R() * 3, 0.35));
+    return castAll(g);
+  }
+  // A minefield (Steve): warning boards on stakes at its corners, a cord strung between them, the mines' little mounds
+  function minefield(seed) {
+    ruinMats();
+    const R = seeded(seed * 17 + 9);
+    const g = new T.Group();
+    if (!M.mineSign) {
+      M.mineSign = new T.MeshLambertMaterial({ map: canvasTexture(64, 64, (c, w, h) => {
+        c.fillStyle = '#e9e4d2'; c.fillRect(0, 0, w, h);
+        c.fillStyle = '#b3261e'; c.beginPath(); c.moveTo(32, 6); c.lineTo(60, 58); c.lineTo(4, 58); c.closePath(); c.fill();
+        c.fillStyle = '#111'; c.font = 'bold 16px sans-serif'; c.textAlign = 'center'; c.fillText('!', 32, 52);
+      }) });
+      M.mineCord = mat('#d8d2c0', 0.9);
+    }
+    const corners = [[-0.42, -0.42], [0.42, -0.42], [0.42, 0.42], [-0.42, 0.42]];
+    for (const [x, z] of corners) {
+      g.add(at(cyl(0.004, 0.004, 0.1, M.wood, 6), x, 0.05, z));
+      g.add(at(box(0.04, 0.04, 0.003, M.mineSign), x, 0.085, z, 0, Math.atan2(x, z), 0));
+    }
+    // The cord round it, sagging a little between the stakes
+    for (let k = 0; k < 4; k++) {
+      const [x0, z0] = corners[k], [x1, z1] = corners[(k + 1) % 4];
+      g.add(at(box(Math.hypot(x1 - x0, z1 - z0), 0.003, 0.003, M.mineCord), (x0 + x1) / 2, 0.065, (z0 + z1) / 2, 0, -Math.atan2(z1 - z0, x1 - x0), 0));
+    }
+    // The mounds where the mines are buried
+    for (let k = 0; k < 14; k++) g.add(at(cyl(0.012, 0.02, 0.008, M.rubbleDark, 10), (R() - 0.5) * 0.75, 0.004, (R() - 0.5) * 0.75));
+    return castAll(g);
+  }
+
   function bomberOnStand(side) {
     const g = new T.Group();
     g.add(at(cyl(0.11, 0.115, 0.012, M.base, 24), 0, 0.006, 0));
@@ -660,9 +899,9 @@ const Models = (() => {
     if (!coinTex[side]) {
       const c = document.createElement('canvas'); c.width = c.height = 256;
       const g = c.getContext('2d');
-      g.fillStyle = side === 'us' ? '#3f8a36' : side === 'timer' ? '#141414' : '#8c8c86';
+      g.fillStyle = side === 'us' ? '#3f8a36' : side === 'su' ? '#b3261e' : side === 'timer' ? '#141414' : '#8c8c86';
       g.beginPath(); g.arc(128, 128, 128, 0, Math.PI * 2); g.fill();
-      g.lineWidth = 14; g.strokeStyle = side === 'us' ? '#2a5e24' : side === 'timer' ? '#3a3a3a' : '#5d5d57';
+      g.lineWidth = 14; g.strokeStyle = side === 'us' ? '#2a5e24' : side === 'su' ? '#7a1712' : side === 'timer' ? '#3a3a3a' : '#5d5d57';
       g.beginPath(); g.arc(128, 128, 112, 0, Math.PI * 2); g.stroke();
       if (side === 'timer') {
         // A white sand-glass (Steve): the top and bottom bars, and the glass bulging out between them, pinched in the
@@ -675,11 +914,12 @@ const Models = (() => {
         g.beginPath(); g.moveTo(93, 52); g.bezierCurveTo(78, 100, 122, 112, 122, 128); g.bezierCurveTo(122, 144, 78, 156, 93, 204); g.stroke();
         g.beginPath(); g.moveTo(163, 52); g.bezierCurveTo(178, 100, 134, 112, 134, 128); g.bezierCurveTo(134, 144, 178, 156, 163, 204); g.stroke();
         g.restore();
-      } else if (side === 'us') {
-        // A five-pointed gold star
-        g.fillStyle = '#f2c94c';
+      } else if (side === 'us' || side === 'su') {
+        // A five-pointed gold star (the Soviets', Steve: yellow on red, upright for the table seen from the far side)
+        g.fillStyle = side === 'su' ? '#ffd23a' : '#f2c94c';
+        const up = side === 'su' ? Math.PI / 2 : -Math.PI / 2;
         g.beginPath();
-        for (let k = 0; k < 10; k++) { const r = k % 2 ? 36 : 88, a = -Math.PI / 2 + k * Math.PI / 5; g.lineTo(128 + r * Math.cos(a), 128 + r * Math.sin(a)); }
+        for (let k = 0; k < 10; k++) { const r = k % 2 ? 36 : 88, a = up + k * Math.PI / 5; g.lineTo(128 + r * Math.cos(a), 128 + r * Math.sin(a)); }
         g.closePath(); g.fill();
       } else {
         // The black cross with a white edge
@@ -695,7 +935,7 @@ const Models = (() => {
     }
     // Matt, with no shine (Steve: the lamp washed the green out): it takes light and shadow but never glares
     const face = new T.MeshLambertMaterial({ map: coinTex[side] });
-    const rim = new T.MeshLambertMaterial({ color: side === 'us' ? '#2f6a29' : side === 'timer' ? '#222' : '#6c6c66' });
+    const rim = new T.MeshLambertMaterial({ color: side === 'us' ? '#2f6a29' : side === 'su' ? '#7a1712' : side === 'timer' ? '#222' : '#6c6c66' });
     const m = new T.Mesh(new T.CylinderGeometry(1, 1, 0.3, 40), [rim, face, face]);
     m.castShadow = true;
     return m;
@@ -1068,13 +1308,15 @@ const Models = (() => {
   const texCache = {};
   const fieldMats = {};
   function field(type, wheat, seed) {
-    const key = type === 'village' ? 'v' : type === 'orchard' ? 'o' : type === 'street' ? 'st' : type === 'square' ? 'sq' : type === 'yard' ? 'yd' : type === 'beach' ? 'bc' : type === 'sea' ? 'se' : wheat ? 'w' : 'g' + (seed % 3);
+    const key = type === 'ruin' ? 'ru' : type === 'village' ? 'v' : type === 'orchard' ? 'o' : type === 'street' ? 'st' : type === 'square' ? 'sq' : type === 'yard' ? 'yd' : type === 'beach' ? 'bc' : type === 'sea' ? 'se' : wheat ? 'w' : 'g' + (seed % 3);
     // The city's paving (Steve: cobbled): grey cobbles for the streets, big pale flagstones for the squares
     if (key === 'st' && !texCache.st) texCache.st = cobbleTex(['#6b675f', '#5d5a53', '#77736a', '#524f49', '#827d73'], 26, 26, [4, 4], 41);
     if (key === 'sq' && !texCache.sq) texCache.sq = cobbleTex(['#a39c8b', '#928c7d', '#b0a998', '#88826f', '#9b9585'], 64, 44, [3, 3], 43);
     // Wet sand for the beach; under the water, just dark
     if (key === 'bc' && !texCache.bc) texCache.bc = flockTex('#c9b589', ['#bda97e', '#d6c398', '#b09c72', '#ddcca4'], 67);
     if (key === 'se' && !texCache.se) texCache.se = flockTex('#2f4f55', ['#28454b', '#35575d'], 71);
+    // Stalingrad's ruins (Steve): grey dust and broken brick
+    if (key === 'ru' && !texCache.ru) texCache.ru = flockTex('#6f685d', ['#5f594f', '#7e766a', '#8a5a44', '#4f4a43', '#948b7c'], 59);
     // The railway yard: dark, oily ballast
     if (key === 'yd' && !texCache.yd) texCache.yd = flockTex('#57504a', ['#4a443f', '#625b53', '#3f3a36', '#6d665d'], 53);
     if (!texCache[key]) texCache[key] = key === 'o' ? orchardGrass() : key === 'v' ? flockTex('#7c7465', ['#6e675a', '#8a8272', '#5f584c', '#99907e'], 11) : key === 'w' ? flockTex('#9c8b55', WHEAT, 12) : flockTex(['#5f6d3c', '#647140', '#5a6838'][seed % 3], GRASS, 13 + seed % 3);
@@ -2249,5 +2491,5 @@ const Models = (() => {
     return castAll(g);
   }
 
-  return { greyhound, puma, c47, supplyCrate, EIFFEL_HEIGHT, eiffel, landingCraft, littleShip, matilda, carrier, panzer1, panzer2, panzer3, sdkfz231, lorry, destroyer, battleship, strongpoint, setBritish, tankTrap, hulk, crater, seaWall, seaWallRubble, bunker, bunkerCrew, BUNKER, track, bufferStop, engine, carriage, wagon, signalbox, signal, watertower, coal, cow, sheep, lampPost, posterColumn, marketStall, cafe, barn, fountain, pond, reeds, BRIDGE_DECK, materials, M, mergeParts, eliteBand, water, bridge, soldier, squad, team, captain, pak, mortar, bomber, blenheim, bomberOnStand, howitzer, round, coin, token, sherman, panther, panzer4, hedge, tree, house, die, table, field, lane, at };
+  return { greyhound, puma, c47, supplyCrate, EIFFEL_HEIGHT, eiffel, landingCraft, littleShip, matilda, carrier, panzer1, panzer2, panzer3, sdkfz231, lorry, destroyer, battleship, strongpoint, setBritish, tankTrap, hulk, crater, seaWall, seaWallRubble, bunker, bunkerCrew, BUNKER, track, bufferStop, engine, carriage, wagon, signalbox, signal, watertower, coal, cow, sheep, lampPost, posterColumn, marketStall, cafe, barn, fountain, pond, reeds, BRIDGE_DECK, materials, M, mergeParts, eliteBand, water, bridge, soldier, squad, team, captain, pak, mortar, bomber, blenheim, bomberOnStand, setArmy, t34, flak88, ruinWall, ruinCorner, rubbleLine, rubblePile, minefield, STOREY, howitzer, round, coin, token, sherman, panther, panzer4, hedge, tree, house, die, table, field, lane, at };
 })();

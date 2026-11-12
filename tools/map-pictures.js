@@ -2,7 +2,7 @@
 // Needs the game served at http://localhost:8768/ (python -m http.server 8768). A visible browser, one seed for each map
 const path = require('path');
 const { chromium } = require(path.join(__dirname, '..', '..', 'harrier-carrier-playwright-tests', 'node_modules', 'playwright'));
-const SEEDS = { beach: 4, deep: 3, hedges: 5, farmland: 5, river: 3, town: 7, station: 6, paris: 8, dunkirk: 7 };
+const SEEDS = { beach: 4, deep: 3, hedges: 5, farmland: 5, river: 3, town: 7, station: 6, paris: 8, dunkirk: 7, stalingrad: 3 };
 const ONLY = process.argv.slice(2);
 (async () => {
   const browser = await chromium.launch({ headless: false, slowMo: 25 });

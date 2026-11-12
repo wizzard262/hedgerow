@@ -43,6 +43,10 @@ const FEATURES = {
   // A strongpoint (Steve: Dunkirk): sandbag walls round the field; men in it have two more to hit (one against shells).
   // It takes no areas and blocks no view
   strongpoint: { name: 'Strongpoint', blocksView: false, cover: 2 },
+  // Stalingrad (Steve, 2026-11-12): a pile of rubble takes an area, and men among it have one more to hit; a minefield
+  // takes no areas, but every piece that goes into it may set off a mine (see MINES)
+  rubble: { name: 'Rubble', blocksView: false, cover: 1 },
+  minefield: { name: 'Minefield', blocksView: false, mines: true },
 };
 const MAPS = [
   {
@@ -296,6 +300,66 @@ const MAPS = [
       ],
     },
   },
+  {
+    // Stalingrad (Steve, 2026-11-12): a bonus battle, not in the campaign. A bombed-out city: the walls of ruined buildings
+    // stand on the edges between fields and act as hedges do (seen over only from beside them; men climb through the
+    // windows; lining one is cover), with tall corners where they meet, and lines of rubble here and there doing the same.
+    // Piles of rubble and minefields made new each game (generated: 'ruins'). The 'us' side is the Soviets (army 'su');
+    // the table is seen from the other side (flip), so they come in from the right and the Germans hold the left (Steve)
+    id: 'stalingrad', bonus: true, date: 'November 1942', name: 'Stalingrad',
+    note: 'A bombed-out city. The Soviets attack the Germans holding the ruins of the Univermag store. The walls of ruined buildings stand between the fields and work as hedges do: you see over one only from right beside it, men climb through the windows, and lining one is cover. Lines of rubble do the same; piles of rubble give cover, and minefields may blow up whoever goes in. Each side has a section of submachine gunners: two bases of three men, 3 dice a base (6 in all), at close range only. The Germans have an 8.8 cm Flak in a fixed position, looking down an open street; the Soviets a T-34.',
+    generated: 'ruins',
+    ruins: true,
+    army: 'su',
+    flip: true,
+    names: { us: 'Soviets', de: 'Germans' },
+    rows: [
+      '..|...|...|.',
+      '..|...|...|.',
+      '==+===+===+=',
+      '..|...|vv.|.',
+      '..|...|vv.|.',
+      '==+===+===+=',
+      '..|...|...|.',
+      '..|...|...|.',
+    ],
+    villages: [{ x: 8, y: 4, name: 'the Univermag' }],
+    // The walls: more of them than hedges in the bocage; a little wire across the gaps
+    gap: 0.35, wire: 0.1,
+    // The Soviet guns by name; no Soviet bomber for now
+    guns: { us: { artillery: '122 mm howitzers', mortars: '82 mm mortars' } },
+    ammo: { us: { bomber: 0 } },
+    us: {
+      only: [
+        { id: 'A', kind: 'company', name: '1st Guards Platoon', quality: 'elite' },
+        { id: 'B', kind: 'company', name: '2nd Platoon', quality: 'standard' },
+        { id: 'C', kind: 'company', name: '3rd Platoon', quality: 'standard' },
+        // (Steve: a section of submachine gunners each side, two bases of three men with PPSh or MP 40, six shots)
+        { id: 'smg1', kind: 'company', arms: 'smg', name: 'PPSh Section', quality: 'standard' },
+        { id: 'cap', kind: 'captain', name: 'Kapitan (company HQ)' },
+        { id: 'T1', kind: 't34', name: 'T-34/76' },
+        { id: 'mg1', kind: 'mg', name: 'Maxim MG' },
+        { id: 'at1', kind: 'boys', name: 'PTRD Anti-tank Rifle' },
+        { id: 'sn1', kind: 'sniper', name: 'Sniper Team' },
+      ],
+    },
+    de: {
+      only: [
+        { id: 'd1', kind: 'company', name: '1. Zug', quality: 'standard', post: [0, 0], garrison: true },
+        { id: 'dmg1', kind: 'mg42', name: 'MG 34 Team', post: [0, 0], garrison: true },
+        { id: 'dcap', kind: 'captain', name: 'Hauptmann (company HQ)', post: [0, 0], garrison: true },
+        // The 88 (Steve: a fixed position, pointing down an open street): in the street beside the store, looking west
+        // along it, where no wall stands in the way; it never moves
+        { id: 'd88', kind: 'flak88', name: '8.8 cm Flak 36', post: [1, 1], garrison: true, aim: Math.PI },
+        { id: 'd2', kind: 'company', name: '2. Zug', quality: 'standard', post: [0, 1] },
+        { id: 'dsmg', kind: 'company', arms: 'smg', name: 'MP 40 Section', quality: 'standard', post: [0, -1] },
+        { id: 'dmg2', kind: 'mg42', name: 'MG 34 Team', post: [-1, -1] },
+        { id: 'd3', kind: 'company', name: '3. Zug', quality: 'standard', reserve: true },
+        { id: 'dt1', kind: 'pz4', name: 'Panzer IV', reserve: true },
+        { id: 'dt2', kind: 'pz3', name: 'Panzer III', reserve: true },
+      ],
+    },
+  },
 ];
 // The maps as a campaign (Steve): in order across France, from the beaches through the bocage and the farms to Paris
 const CAMPAIGN = ['beach', 'deep', 'hedges', 'farmland', 'river', 'town', 'station', 'paris'];
@@ -303,7 +367,7 @@ const CAMPAIGN = ['beach', 'deep', 'hedges', 'farmland', 'river', 'town', 'stati
 // left and Stalingrad on the right. stamp: the word across its picture while it can't be played yet (no map in MAPS). One with a map takes its note from there
 const BONUS = [
   { id: 'dunkirk', name: 'Dunkirk', date: '31 May 1940' },
-  { id: 'stalingrad', name: 'Stalingrad', date: 'Winter 1942', stamp: 'TBC', note: 'To be decided.' },
+  { id: 'stalingrad', name: 'Stalingrad', date: 'November 1942' },
 ];
 const COLS = MAPS[0].rows[0].length, ROWS = MAPS[0].rows.length;
 // Sharing a field (Steve): each field is nine areas; pieces share it while their areas don't overlap (see footprint in
@@ -414,7 +478,12 @@ const PIECES = {
   sniper:  { name: 'Sniper team', soft: 1, hard: 0, team: true, sniper: true, men: 2 },   // the sniper and his spotter (Steve: a two-man team); sees the whole board, ignores cover and range (Steve)
   mg42:     { name: 'MG 42 team', soft: 5, hard: 0, team: true, men: 3 },
   schreck:  { name: 'Panzerschreck team', soft: 0, hard: 2.5, team: true, men: 2, extraMove: 1 },   // both sides the same (Steve)
-  pak:      { name: 'PaK 40 gun', soft: 0.5, hard: 3, team: true, fixed: true },
+  // atGun: an anti-tank gun (swings round to fire, its hits on men kill); emplaced: in a fixed position, it never moves
+  // at all, not even within its field (Steve: Stalingrad's 88)
+  pak:      { name: 'PaK 40 gun', soft: 0.5, hard: 3, team: true, fixed: true, atGun: true },
+  flak88:   { name: '8.8 cm Flak 36', soft: 1, hard: 4, team: true, fixed: true, atGun: true, emplaced: true },
+  // Stalingrad, 1942 (Steve)
+  t34:      { name: 'T-34/76', soft: 1.5, hard: 1.5, tank: true, armour: 1, cutter: true },
   // His submachine gun (Steve): three dice, and closeOnly: he can't shoot beyond close range at all
   // Bunkers (Steve): they can't move, take two areas, and fire only out of the front. BUNKER says how they are hurt
   bunker_mg:  { name: 'MG bunker', soft: 5, hard: 0, team: true, fixed: true, bunker: true },
@@ -453,6 +522,13 @@ const SHELL_HARDER = 1;           // mortar and artillery dice need one more tha
 // need: the score a bomb needs before cover. worth: how many more enemy pieces than a side's own (each of those counts
 // one and a half) a line must catch before the computer flies it
 const BOMBER = { need: 5, dice: 1, ammo: 1, directions: 16, worth: 2 };
+// A section of submachine gunners (Steve: Stalingrad, PPSh or MP 40): a rifle platoon (arms: 'smg' on the piece) of
+// `bases` bases of three men, each rolling `dice` dice, at close range only, as the captain's submachine gun
+// (Steve: two bases of three men, still six shots)
+const SMG = { bases: 2, dice: 3 };
+// Minefields (Steve: Stalingrad): each piece going into one rolls a die; this or more sets off a mine, a hit on it
+// (an anti-tank hit on a tank)
+const MINES = { need: 5 };
 const BOMBER_NAMES = { us: 'B-17', de: 'Ju 88' };
 const COMPASS_POINTS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
 

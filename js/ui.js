@@ -11,7 +11,11 @@ const UI = (() => {
   const KIND = { company: 'Rifle platoon', captain: 'Captain', sherman: 'Sherman 75mm', firefly: 'Sherman 76mm', mg: '.50 cal team', bazooka: 'Bazooka team', sniper: 'Sniper team',
                  pz4: 'Panzer IV', panther: 'Panther', m8: 'M8 Greyhound armoured car', puma: 'Puma armoured car', mg42: 'MG 42 team', schreck: 'Panzerschreck team', pak: 'PaK 40 anti-tank gun', bunker_mg: 'MG bunker', bunker_gun: 'PaK 40 bunker',
                  // Dunkirk, 1940 (Steve)
-                 matilda: 'Matilda II', carrier: 'Universal Carrier (Bren)', lorry: 'Lorry of men for the boats', boys: 'Boys anti-tank rifle team', pz1: 'Panzer I', pz2: 'Panzer II', pz3: 'Panzer III', sdkfz231: 'Sd.Kfz. 231 armoured car' };
+                 matilda: 'Matilda II', carrier: 'Universal Carrier (Bren)', lorry: 'Lorry of men for the boats', boys: 'Boys anti-tank rifle team', pz1: 'Panzer I', pz2: 'Panzer II', pz3: 'Panzer III', sdkfz231: 'Sd.Kfz. 231 armoured car',
+                 // Stalingrad, 1942 (Steve)
+                 t34: 'T-34/76', flak88: '8.8 cm Flak 36' };
+  // What a piece is, in words: a rifle platoon with submachine guns is a section of submachine gunners (Steve)
+  const kindName = u => (u.arms === 'smg' ? 'Submachine-gun section' : KIND[u.kind]);
 
   function setState(s) { st = s; view.sel = null; view.mode = null; view.support = null; }
 
@@ -19,7 +23,7 @@ const UI = (() => {
   const enemy = () => Sim.enemyOf(st.human);
   const foes = () => Sim.sideName(st, enemy());
   // One of a side, as a word before a noun: 'American', 'British', 'German'
-  const adjective = side => ({ Americans: 'American', British: 'British', Germans: 'German' })[Sim.sideName(st, side)];
+  const adjective = side => ({ Americans: 'American', British: 'British', Soviets: 'Soviet', Germans: 'German' })[Sim.sideName(st, side)];
 
   // ---------- Your mortars and artillery, off the board ----------
   // Clicking one chooses it like a piece (Steve): its targets show at once if it can fire this round
@@ -520,10 +524,10 @@ const UI = (() => {
   }
 
   // The piece's picture at the left of the panel (Steve)
-  function picture(box, side, kind, elite = false) {
+  function picture(box, side, kind, elite = false, arms = '') {
     box.className = 'with-pic';
     const img = el('img', 'pic');
-    img.src = Board.portrait(side, kind, elite);
+    img.src = Board.portrait(side, kind, elite, arms);
     img.alt = '';
     box.append(img);
   }
@@ -581,18 +585,18 @@ const UI = (() => {
     }
     if (!u || u.x === null) {
       box.className = '';
-      const theirs = st.human === 'us' ? 'a German' : st.evac ? 'a British' : 'an American';
+      const theirs = st.human === 'us' ? 'a German' : `a${/^[AEIOU]/.test(adjective('us')) ? 'n' : ''} ${adjective('us')}`;
       const words = st.mode === 'none' ? 'Click any piece on the table to see what it is.' : `Click one of your pieces on the table (or ${theirs} one to see what it is).`;
       box.innerHTML = `<div class="sub">${words}</div>`;
       return;
     }
     // Its picture on the left (Steve), for your pieces and the Germans'
-    picture(box, u.side, u.kind, u.quality === 'elite');
+    picture(box, u.side, u.kind, u.quality === 'elite', u.arms);
     const strength = strengthWords(u);
     const f = Sim.firepower(st, u);
     // Against men: its own dice and half its anti-tank ones (see Sim.menDice)
     // A captain's submachine gun reaches close range only (Steve)
-    const closeOnly = PIECES[u.kind].closeOnly ? ' (SMG: close range only)' : '';
+    const closeOnly = Sim.closeRangeOnly(u) ? ' (SMG: close range only)' : '';
     const dice = `🎲 ${Math.round(Sim.menDice(f) * 10) / 10} dice vs men${closeOnly}${f.hard ? `, ${Math.round(f.hard * 10) / 10} vs tanks` : ''}`;
     // A tank's armour (Steve): what it adds to the score anti-tank dice need
     const armour = Sim.isTank(u) ? `🛡️ Armour +${Sim.armourOf(u)}` : '';
@@ -600,10 +604,10 @@ const UI = (() => {
     const status = statePill(u, inCover, 'Shaken: +1 to hit, half moves');
     box.append(el('div', 'name', `${u.name}${u.quality === 'elite' ? ' ★' : ''}`));
     // Elite troops say so (Steve): Rangers or Fallschirmjäger, one less needed to hit
-    const eliteName = u.side === 'de' ? 'Fallschirmjäger' : st.evac ? 'Guards' : 'Rangers';
+    const eliteName = u.side === 'de' ? 'Fallschirmjäger' : Sim.armyOf(st) === 'us' ? 'Rangers' : 'Guards';
     const elite = u.quality === 'elite' ? ` · <b class="elite">Elite</b> (${eliteName}: −1 to hit)` : '';
     const nation = u.side === st.human && st.mode !== 'none' ? '' : `${adjective(u.side)} · `;
-    box.append(el('div', 'sub', `${nation}${KIND[u.kind]}${elite}${Sim.hasCutters(u) ? ' · hedge cutters' : ''}`));
+    box.append(el('div', 'sub', `${nation}${kindName(u)}${elite}${Sim.hasCutters(u) ? ' · hedge cutters' : ''}`));
     const where = `📍 At ${Sim.placeName(u.at)}`;
     box.append(el('div', 'stats', [strength, dice, armour, where, status].filter(Boolean).map(s => `<span>${s}</span>`).join('')));
     // Aboard a boat, or a lorry driving itself: no orders to give
@@ -667,9 +671,9 @@ const UI = (() => {
     $('#clock').innerHTML = `<b>Round ${st.turn}</b>${rounds ? ` of ${rounds}` : ''} · ${st.map.name}`;
     $('#goal').textContent = st.evac ? goalEvacuate() : st.noGoal ? goalWithout()
       : st.mode === 'none'
-      ? `🎯 Two robots: the Americans attack ${st.objective.name}, the Germans hold it. Click any piece to see what it is.`
+      ? `🎯 Two robots: the ${Sim.sideName(st, 'us')} attack ${st.objective.name}, the Germans hold it. Click any piece to see what it is.`
       : st.human === 'de'
-      ? `🎯 Destroy every American piece on the table (guns and bomber off it don't count). Don't let them hold ${st.objective.name} for a whole round.`
+      ? `🎯 Destroy every ${adjective('us')} piece on the table (guns and bomber off it don't count). Don't let them hold ${st.objective.name} for a whole round.`
       : `🎯 Take ${st.objective.name} and hold it for the whole of the next round, or destroy every German${TURNS ? `, within ${TURNS} rounds` : ' (no time limit for now)'}.`;
     card(); hint(); bag();
   }
@@ -679,6 +683,8 @@ const UI = (() => {
   // (right); the round beside them in big letters
   const TOKEN = {
     us: '<span class="tok us">★</span>',
+    // The Soviets (Steve): red with a yellow star
+    su: '<span class="tok su">★</span>',
     // The British (Steve: a proper Union Jack on the token)
     uk: '<span class="tok uk"><svg viewBox="15 0 30 30" preserveAspectRatio="xMidYMid slice"><path d="M0,0v30h60v-30z" fill="#012169"/><path d="M0,0 L60,30 M60,0 L0,30" stroke="#fff" stroke-width="6"/><path d="M0,0 L60,30 M60,0 L0,30" stroke="#C8102E" stroke-width="2.5"/><path d="M30,0 v30 M0,15 h60" stroke="#fff" stroke-width="10"/><path d="M30,0 v30 M0,15 h60" stroke="#C8102E" stroke-width="6"/></svg></span>',
     timer: '<span class="tok timer" title="Timer: drawn, it ends the round"><svg viewBox="0 0 20 20"><path d="M5 2h10M5 18h10M6.5 2C5 7 9.6 8 9.6 10S5 13 6.5 18M13.5 2C15 7 10.4 8 10.4 10S15 13 13.5 18" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>',
@@ -689,7 +695,7 @@ const UI = (() => {
     // never drawn are still in the bag (Steve)
     const left = st.leftInBag ? Object.assign({ timer: 0 }, st.leftInBag) : null;
     const b = view.bagShown || left || st.bag || { us: 0, de: 0 };
-    $('#bag-us').innerHTML = (st.evac ? TOKEN.uk : TOKEN.us).repeat(b.us);
+    $('#bag-us').innerHTML = TOKEN[Sim.armyOf(st)].repeat(b.us);
     $('#bag-de').innerHTML = TOKEN.de.repeat(b.de);
     // The timer token, between the two sides' tokens (Steve)
     $('#bag-timer').innerHTML = b.timer ? TOKEN.timer + '<span class="timer-label">TIMER</span>' : '';

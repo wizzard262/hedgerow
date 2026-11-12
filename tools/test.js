@@ -44,7 +44,8 @@ check('every script on the page parses (a slip in one stops the whole game loadi
 
 check('the bonus battles are Dunkirk then Stalingrad, outside the campaign, each with a picture, and stamped while they have no map', () => {
   assert(BONUS.map(b => b.id).join() === 'dunkirk,stalingrad', `the bonus battles are ${BONUS.map(b => b.id).join()}`);
-  assert(BONUS.find(b => b.id === 'stalingrad').stamp === 'TBC', 'Stalingrad is not stamped TBC');
+  // (Stalingrad is built now, Steve 2026-11-12: no stamp, it can be played)
+  assert(!BONUS.find(b => b.id === 'stalingrad').stamp && MAPS.some(m => m.id === 'stalingrad'), 'Stalingrad is still stamped, or has no map');
   for (const b of BONUS) {
     assert(!CAMPAIGN.includes(b.id), `${b.name} is in the campaign`);
     // (a table picture once its map is built, Steve; a drawing until then)
@@ -4363,6 +4364,86 @@ check('Dunkirk boats are named by their type, a tug or a cabin cruiser, as the t
   assert(kinds.every(k => k === 'tug' || k === 'cabin cruiser') && new Set(kinds).size === 2, kinds.join());
   // (the same rule as Models.littleShip: odd is a tug)
   assert(Sim.boatKind(st, 0) === (Math.abs(st.seed) % 2 ? 'tug' : 'cabin cruiser'), 'not the boat on the table');
+  Sim.newGame(1);
+});
+
+// ---------- Stalingrad (Steve, 2026-11-12): a bonus battle in a bombed-out city ----------
+
+check('Stalingrad: the Soviets against the Germans, the table seen from the far side, walls between the fields, rubble and minefields', () => {
+  const st = Sim.newGame(3, 'us', 'stalingrad');
+  assert(Sim.armyOf(st) === 'su' && Sim.sideName(st, 'us') === 'Soviets' && st.map.flip, 'not the Soviets, or not flipped');
+  // The walls stand on the edges as hedges do
+  assert(Object.keys(st.hedges).length > 40, `only ${Object.keys(st.hedges).length} walls`);
+  // Rubble and minefields, never in the store or on a street, nor where the sides start
+  const rubble = st.features.filter(f => f.kind === 'rubble'), mines = st.features.filter(f => f.kind === 'minefield');
+  assert(rubble.length >= 5 && mines.length >= 2, `${rubble.length} rubble, ${mines.length} minefields`);
+  for (const f of rubble.concat(mines)) {
+    const t = Sim.tileType(f.x, f.y);
+    assert(t === 'field', `${f.kind} on ${t} at ${f.x},${f.y}`);
+    assert(f.x >= 3 && f.x <= 8, `${f.kind} where a side starts, at ${f.x},${f.y}`);
+  }
+  // (rubble takes one area, never the middle; a minefield none)
+  assert(rubble.every(f => f.areas.length === 1 && f.areas[0] !== 'c') && mines.every(f => !f.areas.length), 'wrong areas');
+  // Their armies: the Soviets' T-34 and PPSh section, the Germans' 88 and MP 40 section
+  const kinds = side => st.units.filter(u => u.side === side).map(u => u.kind + (u.arms ? ':' + u.arms : ''));
+  assert(kinds('us').includes('t34') && kinds('us').includes('company:smg'), kinds('us').join());
+  assert(kinds('de').includes('flak88') && kinds('de').includes('company:smg'), kinds('de').join());
+  Sim.newGame(1);
+});
+
+check('Stalingrad: a section of submachine gunners is two bases of three men, 3 dice a base, at close range only (Steve)', () => {
+  const st = Sim.newGame(3, 'us', 'stalingrad');
+  st.hedges = {}; st.wire = {}; st.features = [];
+  const smg = Sim.unitById(st, 'smg1'), d1 = Sim.unitById(st, 'd1');
+  for (const u of st.units) if (u !== smg && u !== d1) u.x = u.y = null;
+  assert(smg.platoons === 2, `${smg.platoons} bases`);
+  const f = Sim.firepower(st, smg);
+  assert(f.soft === 6 && f.hard === 0, `fires ${f.soft} and ${f.hard}`);
+  assert(Sim.closeRangeOnly(smg) && !Sim.closeRangeOnly(d1), 'close range only for the wrong pieces');
+  // In the next field, middle to middle: close; three fields off: no shot
+  smg.x = 4; smg.y = 6; smg.at = null; d1.x = 5; d1.y = 6; d1.at = null;
+  assert(Sim.targets(st, smg).includes(d1), 'no shot at close range');
+  d1.x = 7;
+  assert(!Sim.targets(st, smg).includes(d1), 'a shot beyond close range');
+  Sim.newGame(1);
+});
+
+check('Stalingrad: the 88 is dug in for good: it never moves, not even within its field, but it fires (Steve)', () => {
+  const st = Sim.newGame(3, 'de', 'stalingrad');
+  const gun = Sim.unitById(st, 'd88');
+  assert(gun.x !== null && Sim.isEmplaced(gun) && Sim.isAtGun(gun), 'no 88 dug in');
+  assert(!Sim.chargeSpots(st, gun).length && !Sim.moveShootSpots(st, gun).length, 'the 88 could move');
+  assert(PIECES.flak88.hard > PIECES.pak.hard, 'the 88 is no stronger than the PaK');
+  // (Steve: pointing down an open street) In an east-west street, facing west along it towards the Soviets
+  assert(Sim.tileType(gun.x, gun.y) === 'laneEW' && Math.abs(gun.aim - Math.PI) < 1e-6, `the 88 in ${Sim.tileType(gun.x, gun.y)}, facing ${gun.aim}`);
+  // Nothing in the way along the street: no wall between it and the far end of the board
+  for (let x = gun.x; x > 0; x--) assert(!Sim.hedge(st, x, gun.y, x - 1, gun.y), `a wall across the street at ${x}`);
+  Sim.newGame(1);
+});
+
+check('Stalingrad: a piece going into a minefield rolls a die; 5 or 6 sets off a mine (Steve)', () => {
+  const st = Sim.newGame(3, 'us', 'stalingrad');
+  st.hedges = {}; st.wire = {};
+  st.features = [{ x: 5, y: 6, kind: 'minefield', areas: [], seed: 1, name: 'Minefield', blocksView: false }];
+  const a = Sim.unitById(st, 'B');
+  for (const u of st.units) if (u !== a && u.side === 'de') u.x = u.y = null;
+  a.x = 4; a.y = 6; a.at = null; a.acted = false; a.shocked = false;
+  // Every die a 6: the mine goes off, and the platoon is shaken (a coin toss of 0.99: no section lost)
+  st.rand = () => 0.99;
+  st.drawn = 'us'; st.activeId = null;
+  const r = Sim.actCharge(st, a, 5, 6);
+  assert(r.ok && a.x === 5 && a.shocked, 'no mine went off');
+  assert(r.lines.join(' ').includes('mine'), 'the mine is not reported: ' + r.lines.join(' '));
+  assert(st.fx.some(f => f.kind === 'mine' && f.hit), 'no mine on the table');
+  // Every die a 1: another platoon picks its way through a minefield next to it
+  const b = Sim.unitById(st, 'C');
+  b.x = 4; b.y = 5; b.at = null; b.acted = false; b.shocked = false;
+  st.features[0].y = 5;
+  st.fx = [];
+  st.rand = () => 0.01;
+  st.activeId = null;
+  Sim.actCharge(st, b, 5, 5);
+  assert(b.x === 5 && !b.shocked && st.fx.some(f => f.kind === 'mine' && !f.hit), 'a 1 set off a mine');
   Sim.newGame(1);
 });
 
