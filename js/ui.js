@@ -596,7 +596,8 @@ const UI = (() => {
     // Against men: its own dice and half its anti-tank ones (see Sim.menDice)
     // A captain's submachine gun reaches close range only (Steve)
     const closeOnly = Sim.closeRangeOnly(u) ? ' (SMG: close range only)' : '';
-    const dice = `🎲 ${Math.round(Sim.menDice(f) * 10) / 10} dice vs men${closeOnly}${f.hard ? `, ${Math.round(f.hard * 10) / 10} vs tanks` : ''}`;
+    // (as rolled: less than one die is one, Steve)
+    const dice = `🎲 ${Sim.menDiceShown(u, f)} dice vs men${closeOnly}${f.hard ? `, ${Sim.diceShown(f.hard)} vs tanks` : ''}`;
     // A tank's armour (Steve): what it adds to the score anti-tank dice need
     const armour = Sim.isTank(u) ? `🛡️ Armour +${Sim.armourOf(u)}` : '';
     const inCover = `Taking cover: +2 cover; ${u.kind === 'captain' ? 'no rallies until next round' : 'the captain can get it up'}`;

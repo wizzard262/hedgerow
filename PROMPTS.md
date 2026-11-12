@@ -1810,6 +1810,11 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - **Dunkirk's boats**: raised a little above the sea and the surf (they had been lowered into the water last time, which made it worse)
 - **The menu**: placed again once the table has drawn the targets' red score bubbles, so it keeps clear of those too
 
+## 310. No half dice in the panel (v179)
+
+- Steve: the Panzer II still has a 0.5 dice
+- **The panel**: shows the dice as they are rolled: less than one die is one (the Panzer II: 1 vs tanks, and 2 vs men, its machine guns' die and its gun's high explosive, each at least one). Other fractions still show as they are (1.5: one die and a half chance of a second)
+
 ## Sessions
 
 | # | Date | Length | What we did |

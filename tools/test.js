@@ -4511,6 +4511,17 @@ check('Stalingrad: a piece going into a minefield rolls a die; 5 or 6 sets off a
   Sim.newGame(1);
 });
 
+check('the panel shows dice as they are rolled: less than one is one (Steve: the Panzer II showed 0.5)', () => {
+  const st = Sim.newGame(1, 'us', 'dunkirk');
+  const pz2 = st.units.find(u => u.kind === 'pz2');
+  const f = Sim.firepower(st, pz2);
+  assert(f.hard === 0.5 && Sim.diceShown(f.hard) === 1, `the Panzer II shows ${Sim.diceShown(f.hard)} vs tanks`);
+  // At men: one machine-gun die and its gun's quarter die, rolled as one each
+  assert(Sim.menDiceShown(pz2, f) === 2, `the Panzer II shows ${Sim.menDiceShown(pz2, f)} vs men`);
+  assert(Sim.diceShown(0) === 0 && Sim.diceShown(1.5) === 1.5 && Sim.diceShown(3) === 3, 'whole and half dice changed');
+  Sim.newGame(1);
+});
+
 check('parachutes (Steve picked C): big, uneven, olive drab, swinging less near the table and still once down, gone at the end', () => {
   const Chute = require('../js/chute.js');
   const seeded = n => () => { n = (n * 16807) % 2147483647; return n / 2147483647; };

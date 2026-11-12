@@ -1175,6 +1175,20 @@ const Sim = (() => {
     return f.soft + f.hard * 0.5;
   }
 
+  // The dice a firepower rolls, as the panel shows it (Steve: the Panzer II still showed 0.5): less than one is one,
+  // anything else to a tenth (a fraction there is a chance of one more)
+  function diceShown(f) {
+    if (f <= 0) return 0;
+    if (f < 1) return 1;
+    return Math.round(f * 10) / 10;
+  }
+  // The dice a piece rolls against men, as shown: a tank rolls its machine guns and its gun's high explosive apart
+  // (see fireAt), each at least one die; anyone else its own dice and half its anti-tank ones together
+  function menDiceShown(u, f) {
+    if (isTank(u)) return Math.round((diceShown(f.soft) + diceShown(f.hard * 0.5)) * 10) / 10;
+    return diceShown(menDice(f));
+  }
+
   // Whole dice from a firepower: the fraction is a chance of one more. Less than one die (half a die, say) is always one
   // (Steve, 2026-11-12: everyone who shoots should roll)
   function dice(st, f) {
@@ -3543,7 +3557,7 @@ const Sim = (() => {
 
   return {
     firesOnTheMove, canAmbush, actAmbush, bestMoveShoot, bomberHeading, bomberAims, bomberLine, bombNeed, bombWhy, bestBomberRun,
-    isBunker, isCar, hurtsCars, trainCars, lineSideOf, moveTrains, inFrontOf, bunkerFace, shotOnTheMove, wrecksBeside, isRoad, featuresAt, walkDistance, fireSound, wreckAt, remove, computerSide, isRobot, piecesToAsk, takeCover, enemyOf, gunStats, bomberName, boatKind, armyOf, hedgeWord, inCourtyard, closeRangeOnly, isAtGun, isEmplaced, edgeKey, atCloseRange, closeCells, hailMaryCells,
+    isBunker, isCar, hurtsCars, trainCars, lineSideOf, moveTrains, inFrontOf, bunkerFace, shotOnTheMove, wrecksBeside, isRoad, featuresAt, walkDistance, fireSound, wreckAt, remove, computerSide, isRobot, piecesToAsk, takeCover, enemyOf, gunStats, diceShown, menDiceShown, bomberName, boatKind, armyOf, hedgeWord, inCourtyard, closeRangeOnly, isAtGun, isEmplaced, edgeKey, atCloseRange, closeCells, hailMaryCells,
     newGame, roll, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, chargeSpots,
     rallyTargets, canAct, canReact, firepower, canCallFire, takesGoal, cannotWin, artilleryTarget, mortarTarget, holdsObjective, roundText, roomFor,
     computerStep, answer, finishRound, startRound, drawToken, endComputerToken, activationOver, passToken, humanCanMove, endRound, canFire, actSkip, actSkipShot, skipSupport,
