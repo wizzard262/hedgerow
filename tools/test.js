@@ -4802,6 +4802,8 @@ check('Paris (Steve, 2026-11-13): tanks never go through the buildings, nobody s
   assert(!Sim.moveShootSpots(st, tank).some(p => p.x === bx && p.y === by), 'a tank could drive through a row of buildings');
   foe.x = bx; foe.y = by; foe.at = null;
   assert(!Sim.sight(st, tank, foe) && !Sim.sight(st, foe, tank), 'seen through a row of buildings');
+  // Called a building, not a hedge, everywhere the game names it (Steve: it said hedge in Paris)
+  assert(Sim.hedgeWord() === 'building', `Paris calls them ${Sim.hedgeWord()}`);
   Sim.newGame(1);
 });
 

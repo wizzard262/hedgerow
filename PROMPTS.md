@@ -1863,6 +1863,12 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - **Cafés**: only in a dead end (one way out) or on a corner (two ways out at right angles), away from where the sides start and off the board's edge rows, along a side closed by buildings, never in the middle of the field. Three of them as before
 - The map's note says so; hovering a courtyard now says "Courtyard"; the Paris picture in the opening dialog (`assets/maps/paris.jpg`) made again from the new Paris
 
+## 318. Paris says building, not hedge (v187)
+
+- Steve: it said hedge in Paris, has this gone? Then: ok push
+- Everywhere the game names a hedge it now says **building** in Paris (the menus, the hints, the score bubble, the computer's moves); a platoon going over one "climbs in through the windows of the building"; no green "cover" bars along a building when choosing where to stand, as a building gives no cover (nobody sees across it)
+- Pushed v183 to v187
+
 ## Sessions
 
 | # | Date | Length | What we did |

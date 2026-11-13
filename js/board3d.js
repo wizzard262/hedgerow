@@ -2147,6 +2147,8 @@ const Board = (() => {
     for (const d of (h.side || '').split('')) {
       const v = Sim.DIRS[d];
       if (!Sim.inside(h.x + v[0], h.y + v[1]) || !Sim.hedge(st, h.x, h.y, h.x + v[0], h.y + v[1])) continue;
+      // (Paris's buildings give no cover: nobody sees across them at all, Steve)
+      if (st.map.blocks) continue;
       byHedge = true;
       const along = d === 'n' || d === 's';
       const bar = new T.Mesh(new T.PlaneGeometry(along ? 0.9 : 0.11, along ? 0.11 : 0.9), green);

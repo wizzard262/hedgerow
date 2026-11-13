@@ -165,7 +165,8 @@ const Sim = (() => {
   }
 
   // What a hedge is called on this map (Steve: at Stalingrad the hedges are ruins)
-  function hedgeWord() { return currentMap.ruins ? 'ruin' : 'hedge'; }
+  // What a hedge is called on this map: Stalingrad's ruins, Paris's rows of buildings (Steve, 2026-11-13), else a hedge
+  function hedgeWord() { return currentMap.ruins ? 'ruin' : currentMap.blocks ? 'building' : 'hedge'; }
 
   function hedge(st, ax, ay, bx, by) { return !!st.hedges[edgeKey(ax, ay, bx, by)]; }
   function wire(st, ax, ay, bx, by) { return !!st.wire[edgeKey(ax, ay, bx, by)]; }
@@ -2111,7 +2112,7 @@ const Sim = (() => {
 
   function moveLine(u, how) {
     if (how === 'cut') return `🚜 ${u.name} smashes through the ${hedgeWord()}, leaving a gap.`;
-    if (how === 'climbed') return currentMap.ruins ? `🧗 ${u.name} climbs through the ruin.` : `🧗 ${u.name} struggles over the hedge bank.`;
+    if (how === 'climbed') return currentMap.ruins ? `🧗 ${u.name} climbs through the ruin.` : currentMap.blocks ? `🧗 ${u.name} climbs in through the windows of the building.` : `🧗 ${u.name} struggles over the hedge bank.`;
     if (how === 'flattened') return `🚜 ${u.name} flattens the barbed wire.`;
     if (how === 'snagged') return `🚜 ${u.name} flattens the barbed wire but gets snagged in it and stops.`;
     if (how === 'wirecut') return `✂️ ${u.name} cuts through the wire.`;
