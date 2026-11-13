@@ -9,7 +9,7 @@ const UI = (() => {
   const view = { sel: null, mode: null };
 
   const KIND = { company: 'Rifle platoon', captain: 'Captain', sherman: 'Sherman 75mm', firefly: 'Sherman 76mm', mg: '.50 cal team', bazooka: 'Bazooka team', sniper: 'Sniper team',
-                 pz4: 'Panzer IV', panther: 'Panther', m8: 'M8 Greyhound armoured car', puma: 'Puma armoured car', mg42: 'MG 42 team', schreck: 'Panzerschreck team', pak: 'PaK 40 anti-tank gun', bunker_mg: 'MG bunker', bunker_gun: 'PaK 40 bunker',
+                 pz4: 'Panzer IV', panther: 'Panther', m8: 'M8 Greyhound armoured car', stuart: 'M5 Stuart light tank', puma: 'Puma armoured car', mg42: 'MG 42 team', schreck: 'Panzerschreck team', pak: 'PaK 40 anti-tank gun', bunker_mg: 'MG bunker', bunker_gun: 'PaK 40 bunker',
                  // Dunkirk, 1940 (Steve)
                  matilda: 'Matilda II', carrier: 'Universal Carrier (Bren)', lorry: 'Lorry of men for the boats', boys: 'Boys anti-tank rifle team', pz1: 'Panzer I', pz2: 'Panzer II', pz3: 'Panzer III', sdkfz231: 'Sd.Kfz. 231 armoured car',
                  // Stalingrad, 1942 (Steve)

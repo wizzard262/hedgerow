@@ -1841,6 +1841,12 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - **The Germans**: two PaK 40s by the store (each side of it) and the Panzer IV now a long-gunned Panzer IV F2 (2.5 anti-tank dice, the Panzer IV's model)
 - **The numbers tried** (robots, 40 games each): the KV-2 at armour 2 with 2 anti-tank dice and 3 at men, Germans unchanged: Soviets 36, Germans 2; with one PaK 40 more: 34 to 6; the KV-2 at 1.5 and 2, and the F2: 32 to 7; armour 1: 29 to 11; without the KV-2 at all (with the German additions): 18 to 21. **Chosen**: armour 2 kept (realistic), its guns cut to 1 and 1.5, and a second PaK 40: Soviets 23, Germans 15, 2 draws (before the KV-2, 12 to 8 in 20). The KV-2 still survives most games (24 of 40): the German computer does not go after it hard
 
+## 315. The M5 Stuart; Paris buildings to pick from (v183)
+
+- Steve: in hedgerow add on some levels for USA stuart tank: small tank with round turret. Then: come up with some different design for the village / hamlet piece for Paris, classic traditional Paris buildings, show me choices
+- **The M5A1 Stuart** (new model: about three quarters of a Sherman, a low hull with one big sloped front plate, two bogies a side, the big idler at the back, a round turret with a radio bustle, the slim 37 mm, a .30 cal on the turret side, white stars): on **River crossing, Open farmland and Paris** (in Paris in place of the Sherman 76mm). Claude's picks: those three maps (not Hedge country, the usual map the tests compare against); its numbers as the M8's 37 mm (small gun, 1 die at tanks, 1.5 at men) but tracked, so it cuts hedges, and a light tank's speed: a field further on a Move & shoot or a Charge, as the bazooka. No robot balance runs (Steve's standing wish)
+- **Paris buildings**: `tools/paris-variants.html` (open it straight from the folder): the cottages in the game now beside four takes on Paris, each a city block with cobbled streets round it, a rifle platoon or the Stuart in the middle, a table view and close ups (◀ ▶). A: Haussmann (pale stone, iron balconies, zinc mansard with dormers, chimney pots), two to a side as now; B: one unbroken Haussmann block with a domed corner; C: old Paris (narrow houses in soft plaster, shutters, slate roofs, little shops); D: boulevard shops (Haussmann a floor taller, painted shopfronts, striped awnings, round dormers). Waiting for Steve to pick
+
 ## Sessions
 
 | # | Date | Length | What we did |

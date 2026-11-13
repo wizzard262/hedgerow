@@ -1194,6 +1194,57 @@ const Models = (() => {
     return castAll(g);
   }
 
+  // The M5A1 Stuart (Steve: a small American tank with a round turret): about three quarters of a Sherman. A low box hull
+  // with one big sloped front plate and sloped upper sides, two bogies of two road wheels a side, the drive sprocket at
+  // the front and the big idler at the back, a round turret with a radio bustle, the slim 37 mm, a .30 cal on the side
+  function stuart() {
+    const paint = M.olive;
+    const g = new T.Group(), W = 0.17, L = 0.3;
+    // Lower hull between the tracks
+    g.add(at(box(0.27, 0.045, W * 0.56, paint), 0, 0.055, 0));
+    // Upper hull: the long sloped glacis, a flat roof, the engine deck sloping down at the back; a little wider than the hull
+    g.add(at(profile([[-0.15, 0.075], [0.15, 0.075], [0.085, 0.135], [-0.12, 0.135], [-0.15, 0.115]], W * 0.86, paint, 0.006), 0, 0, 0));
+    // The upper sides sloping in: a thin plate along each side, leant inwards
+    for (const s of [-1, 1]) g.add(at(box(0.22, 0.05, 0.004, paint), -0.02, 0.108, s * W * 0.43, s * 0.22, 0, 0));
+    // Driver's and co-driver's hatches in the glacis, their periscopes, the bow .30 cal, headlights
+    for (const z of [-0.035, 0.035]) { g.add(at(hatch(0.015, paint), 0.075, 0.137, z)); g.add(at(box(0.007, 0.007, 0.013, M.steel), 0.088, 0.135, z)); }
+    g.add(at(sphere(0.009, paint, 10, 8), 0.12, 0.1, 0.038));
+    g.add(at(cyl(0.0025, 0.0025, 0.025, M.steel, 6), 0.135, 0.1, 0.038, 0, 0, Math.PI / 2));
+    for (const z of [-0.06, 0.06]) g.add(at(cyl(0.006, 0.006, 0.009, M.steel, 10), 0.15, 0.09, z, 0, 0, Math.PI / 2));
+    // Engine deck grilles
+    for (let k = 0; k < 5; k++) g.add(at(box(0.003, 0.003, 0.1, M.steel), -0.115 + k * 0.011, 0.137, 0));
+    // Running gear each side: the track, two bogies of two wheels, three return rollers, the sprocket, the idler
+    for (const s of [-1, 1]) {
+      const z = s * W * 0.41;
+      g.add(trackRun(L * 0.9, 0.056, 0.034, 0.034, z));
+      for (const bx of [-0.06, 0.05]) {
+        g.add(at(box(0.042, 0.026, 0.012, paint), bx, 0.04, z + s * 0.019));
+        for (const wx of [-0.02, 0.02]) { g.add(at(wheel(0.017, 0.024, M.steel), bx + wx, 0.022, z)); g.add(at(wheel(0.01, 0.026, M.black), bx + wx, 0.022, z)); }
+      }
+      for (const rx of [-0.07, 0, 0.07]) g.add(at(wheel(0.007, 0.018, M.steel), rx, 0.058, z));
+      g.add(at(sprocket(0.021, 0.03, paint), 0.13, 0.05, z));
+      g.add(at(wheel(0.022, 0.026, M.steel), -0.13, 0.03, z));
+      // A mudguard over the track
+      g.add(at(box(L * 0.92, 0.004, 0.038, paint), 0, 0.077, z));
+    }
+    // The turret: round, its sides gently curved, a little forward of the middle; the radio bustle at the back
+    g.add(at(cyl(0.05, 0.058, 0.05, paint, 28), 0, 0.161, 0));
+    const top = sphere(0.05, paint, 28, 10); top.scale.set(1, 0.18, 1); g.add(at(top, 0, 0.186, 0));
+    g.add(at(profile([[-0.03, 0], [0.02, 0], [0.02, 0.036], [-0.025, 0.032]], 0.07, paint, 0.006), -0.06, 0.14, 0));
+    // The mantlet and the long slim 37 mm
+    g.add(at(box(0.016, 0.03, 0.044, paint), 0.055, 0.162, 0));
+    g.add(at(cyl(0.005, 0.0058, 0.15, M.steel, 12), 0.135, 0.163, 0, 0, 0, Math.PI / 2));
+    // Commander's and gunner's hatches, the .30 cal on a pintle at the turret's right
+    g.add(at(hatch(0.017, paint), -0.01, 0.192, 0.018));
+    g.add(at(hatch(0.014, paint), -0.01, 0.192, -0.022));
+    g.add(at(cyl(0.002, 0.002, 0.03, M.steel, 6), -0.02, 0.2, 0.05));
+    g.add(at(cyl(0.0028, 0.0025, 0.05, M.steel, 8), 0.0, 0.215, 0.05, 0, 0, Math.PI / 2 - 0.1));
+    // White stars on the sides and the turret
+    for (const s of [-1, 1]) g.add(at(starMesh(0.018), -0.03, 0.1, s * (W * 0.45 + 0.004), 0, s > 0 ? 0 : Math.PI, 0));
+    for (const s of [-1, 1]) g.add(at(starMesh(0.013), 0, 0.162, s * 0.0585, 0, s > 0 ? 0 : Math.PI, 0));
+    return castAll(g);
+  }
+
   // The Sd.Kfz. 234/2 Puma (Steve: a German armoured car): eight wheels, a long hull pointed at both ends with stowage bins
   // along the sides, an angled closed turret with the long 50 mm and its muzzle brake, crosses on the sides
   function puma() {
@@ -2519,5 +2570,5 @@ const Models = (() => {
     return castAll(g);
   }
 
-  return { greyhound, puma, c47, supplyCrate, EIFFEL_HEIGHT, eiffel, landingCraft, littleShip, matilda, carrier, panzer1, panzer2, panzer3, sdkfz231, lorry, destroyer, battleship, strongpoint, setBritish, tankTrap, hulk, crater, seaWall, seaWallRubble, bunker, bunkerCrew, BUNKER, track, bufferStop, engine, carriage, wagon, signalbox, signal, watertower, coal, cow, sheep, lampPost, posterColumn, marketStall, cafe, barn, fountain, pond, reeds, BRIDGE_DECK, materials, M, mergeParts, eliteBand, water, bridge, soldier, squad, team, captain, pak, mortar, bomber, blenheim, bomberOnStand, setArmy, t34, kv2, flak88, ruinWall, ruinCorner, rubbleLine, rubblePile, minefield, STOREY, howitzer, round, coin, token, sherman, panther, panzer4, hedge, tree, house, die, table, field, lane, at };
+  return { greyhound, stuart, puma, c47, supplyCrate, EIFFEL_HEIGHT, eiffel, landingCraft, littleShip, matilda, carrier, panzer1, panzer2, panzer3, sdkfz231, lorry, destroyer, battleship, strongpoint, setBritish, tankTrap, hulk, crater, seaWall, seaWallRubble, bunker, bunkerCrew, BUNKER, track, bufferStop, engine, carriage, wagon, signalbox, signal, watertower, coal, cow, sheep, lampPost, posterColumn, marketStall, cafe, barn, fountain, pond, reeds, BRIDGE_DECK, materials, M, mergeParts, eliteBand, water, bridge, soldier, squad, team, captain, pak, mortar, bomber, blenheim, bomberOnStand, setArmy, t34, kv2, flak88, ruinWall, ruinCorner, rubbleLine, rubblePile, minefield, STOREY, howitzer, round, coin, token, sherman, panther, panzer4, hedge, tree, house, die, table, field, lane, at };
 })();

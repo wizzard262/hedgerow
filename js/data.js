@@ -66,7 +66,7 @@ const MAPS = [
     ammo: { us: { artillery: 3 } },   // (Steve: one more artillery round here, in the bocage and at the station)
   },
   {
-    id: 'river', date: '7 August 1944', name: 'River crossing', note: 'Two bridges are the only way over. The Americans have no bomber, and an M8 Greyhound armoured car in place of the Sherman 75mm; the Germans an extra MG 42, a Puma armoured car in place of their tanks, and their Ju 88.',
+    id: 'river', date: '7 August 1944', name: 'River crossing', note: 'Two bridges are the only way over. The Americans have no bomber, and an M8 Greyhound armoured car in place of the Sherman 75mm, and an M5 Stuart light tank; the Germans an extra MG 42, a Puma armoured car in place of their tanks, and their Ju 88.',
     airdrop: 'crate',
     rows: [
       '..|.or.o..h.',
@@ -80,7 +80,7 @@ const MAPS = [
     ],
     villages: [{ x: 7, y: 4, name: 'Pont-Sainte-Marie' }, { x: 7, y: 1, name: 'Le Moulin' }],
     ammo: { us: { bomber: 0, artillery: 2 } },
-    us: { remove: ['T1'], add: [{ id: 'AC1', kind: 'm8', name: 'M8 Greyhound' }] },
+    us: { remove: ['T1'], add: [{ id: 'AC1', kind: 'm8', name: 'M8 Greyhound' }, { id: 'LT1', kind: 'stuart', name: 'M5 Stuart' }] },
     de: { remove: ['dt2', 'dt1'], add: [{ id: 'dmg5', kind: 'mg42', name: 'MG 42 Team', reserve: true }, { id: 'dac1', kind: 'puma', name: 'Puma', reserve: true }] },
   },
   {
@@ -104,7 +104,7 @@ const MAPS = [
     de: { remove: ['dt1', 'dt2'], add: [{ id: 'pak2', kind: 'pak', name: 'PaK 40 (2)', post: [0, -1], garrison: true }, { id: 'dac1', kind: 'puma', name: 'Puma', reserve: true }] },
   },
   {
-    id: 'farmland', date: '25 July 1944', name: 'Open farmland', note: 'Few hedges and long shots, a few barns that block the view, a duck pond, and a railway: trains run along it left to right, three fields a round, blocking the view. An armoured car each, an M8 Greyhound and a Puma, and a fourth American platoon; the B-17 flies, the Ju 88 does not.',
+    id: 'farmland', date: '25 July 1944', name: 'Open farmland', note: 'Few hedges and long shots, a few barns that block the view, a duck pond, and a railway: trains run along it left to right, three fields a round, blocking the view. An armoured car each, an M8 Greyhound and a Puma, a fourth American platoon and an M5 Stuart light tank; the B-17 flies, the Ju 88 does not.',
     rows: [
       '.....|.....h',
       '..o..|.vv...',
@@ -133,15 +133,15 @@ const MAPS = [
     trains: [{ row: 6, side: 'n', dir: 1, cars: [3, 4], spacing: [9, 9] }],
     airdrop: 'crate',
     // (Steve: a 4th platoon, to even it up: two robots 22% → 47% for the Americans)
-    us: { add: [{ id: 'AC1', kind: 'm8', name: 'M8 Greyhound' }, { id: 'D', kind: 'company', name: '4th Platoon', quality: 'standard' }] },
+    us: { add: [{ id: 'AC1', kind: 'm8', name: 'M8 Greyhound' }, { id: 'D', kind: 'company', name: '4th Platoon', quality: 'standard' }, { id: 'LT1', kind: 'stuart', name: 'M5 Stuart' }] },
     de: { add: [{ id: 'dac1', kind: 'puma', name: 'Puma', reserve: true }] },
   },
   {
-    id: 'paris', date: '25 August 1944', name: 'Paris', note: 'A tight city, a new maze of cobbled streets each game: houses, streets and little squares, each with a café and a fountain. The Americans must capture the Eiffel Tower, in the centre of the city. Few tanks: no Sherman 76mm and no Panther; a second bazooka for the Americans, an extra MG 42 for the Germans.',
+    id: 'paris', date: '25 August 1944', name: 'Paris', note: 'A tight city, a new maze of cobbled streets each game: houses, streets and little squares, each with a café and a fountain. The Americans must capture the Eiffel Tower, in the centre of the city. Few tanks: an M5 Stuart light tank in place of the Sherman 76mm, and no Panther; a second bazooka for the Americans, an extra MG 42 for the Germans.',
     generated: 'city',
     gap: 1, wire: 0,
     ammo: { us: { bomber: 0 } },
-    us: { remove: ['T2'], add: [{ id: 'bz2', kind: 'bazooka', name: 'Bazooka Team 2' }] },
+    us: { remove: ['T2'], add: [{ id: 'bz2', kind: 'bazooka', name: 'Bazooka Team 2' }, { id: 'LT1', kind: 'stuart', name: 'M5 Stuart' }] },   // (Steve: a Stuart on some maps; here in place of the Sherman 76mm)
     de: { remove: ['dt2'], add: [{ id: 'dmg5', kind: 'mg42', name: 'MG 42 Team', reserve: true }] },
   },
   {
@@ -477,6 +477,9 @@ const PIECES = {
   // cutter: drives straight through a hedge, leaving a gap (Steve: every tank does; no separate Break through for tanks)
   sherman:  { name: 'Sherman 75mm', soft: 1.5, hard: 1, he: 1, tank: true, armour: 0, cutter: true },
   firefly:  { name: 'Sherman 76mm', soft: 1, hard: 2, he: 1, tank: true, armour: 0, cutter: true },
+  // The M5A1 Stuart (Steve): a light tank, tracked so it cuts hedges, the same 37 mm as the M8 (smallGun); quick, so a
+  // field further on a Move & shoot or a Charge, as the bazooka
+  stuart:   { name: 'M5 Stuart', soft: 1.5, hard: 1, he: 1, tank: true, armour: 0, cutter: true, smallGun: true, extraMove: 1 },
   pz4:      { name: 'Panzer IV', soft: 1.5, hard: 1.5, he: 1, tank: true, armour: 0, cutter: true },
   // Armoured cars (Steve), on the open maps in place of a tank: on wheels, so no hedge cutters: no driving through
   // hedges, quick on the road (CAR_ROAD_BONUS), snagged in barbed wire half the time (CAR_WIRE_SNAG), thin armour that

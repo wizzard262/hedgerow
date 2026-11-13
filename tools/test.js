@@ -4744,5 +4744,17 @@ check('tanks and armoured cars always roll at least one die at a tank (Steve: ha
   Sim.newGame(1);
 });
 
+check('the M5 Stuart (Steve: a small American tank with a round turret) is on River crossing, Open farmland and Paris', () => {
+  const has = id => Sim.newGame(1, 'us', id).units.some(u => u.side === 'us' && u.kind === 'stuart');
+  for (const id of ['river', 'farmland', 'paris']) assert(has(id), `${id}: no Stuart`);
+  for (const id of ['hedges', 'deep', 'beach', 'town', 'station']) assert(!has(id), `${id}: a Stuart where there should be none`);
+  // A light tank: tracked (cuts hedges), the 37 mm (one more against tanks), a field quicker
+  const p = PIECES.stuart;
+  assert(p.tank && p.cutter && !p.car && p.smallGun && p.extraMove === 1 && p.hard >= 1, 'the Stuart\'s numbers are wrong');
+  // Paris: in place of the Sherman 76mm
+  assert(!Sim.newGame(1, 'us', 'paris').units.some(u => u.id === 'T2'), 'Paris still has the Sherman 76mm');
+  Sim.newGame(1);
+});
+
 console.log(failed ? `\n${failed} failed` : '\nall passed');
 process.exit(failed ? 1 : 0);

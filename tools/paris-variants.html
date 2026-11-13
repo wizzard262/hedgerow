@@ -1,0 +1,397 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Paris buildings</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #1b1a17; color: #eee; font: 14px/1.35 system-ui, sans-serif; overflow: hidden; }
+  canvas { display: block; }
+  .tag { position: absolute; transform: translate(-50%, 0); text-align: center; width: 200px; pointer-events: none; text-shadow: 0 1px 3px #000; }
+  .tag b { display: block; font-size: 22px; color: #ffd36b; }
+  #bar { position: absolute; left: 0; right: 0; bottom: 10px; text-align: center; }
+  #bar button { font: inherit; padding: 6px 14px; margin: 0 4px; border-radius: 6px; border: 1px solid #777; background: #2d2b27; color: #eee; cursor: pointer; }
+  #bar button.on { background: #ffd36b; color: #222; }
+</style>
+</head>
+<body>
+<div id="bar">
+  <button data-who="men" class="on">Rifle platoon</button>
+  <button data-who="tank">Stuart tank</button>
+  <button data-who="none">Empty</button>
+  &nbsp;
+  <button data-view="table" class="on">Table view</button>
+  <button data-view="close">Close up</button>
+  <button id="prev">◀</button>
+  <button id="next">▶</button>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="../js/models.js"></script>
+<script>
+// Paris buildings for Steve to pick from (2026-11-13): the houses in the game now, then four takes on classic Paris.
+// Each column is one city block (a 'v' field), with cobbled streets between, and a rifle platoon or the Stuart in the
+// middle at the game's own sizes (MEN and TANKS in board3d.js). Open it straight from the folder
+const T = THREE;
+const MEN = 2.45;          // the men's scale on the table (board3d.js)
+const TANKS = 1.6;         // the tanks' scale on the table (board3d.js)
+const { at } = Models;
+Models.materials();
+
+// ---------- Small helpers, as in models.js ----------
+const box = (w, h, d, m) => new T.Mesh(new T.BoxGeometry(w, h, d), m);
+const cyl = (rt, rb, h, m, seg = 16) => new T.Mesh(new T.CylinderGeometry(rt, rb, h, seg), m);
+function seeded(n) { let a = (n * 2654435761) >>> 0; return () => { a = (a * 1664525 + 1013904223) >>> 0; return a / 4294967296; }; }
+const matCache = {};
+function mat(color, rough = 0.85, metal = 0) {
+  const key = [color, rough, metal].join();
+  if (matCache[key]) return matCache[key];
+  const m = new T.MeshStandardMaterial({ roughness: rough, metalness: metal });
+  m.color.set(color).convertSRGBToLinear();
+  matCache[key] = m;
+  return m;
+}
+function castAll(o) { o.traverse(c => { if (c.isMesh) { c.castShadow = true; c.receiveShadow = true; } }); return o; }
+// A cross-section (across the building, z and y) pushed out along its length (x): how the roofs get their slopes
+function section(points, length, m) {
+  const s = new T.Shape(points.map(([z, y]) => new T.Vector2(z, y)));
+  const g = new T.ExtrudeGeometry(s, { depth: length, bevelEnabled: false });
+  g.translate(0, 0, -length / 2);
+  g.rotateY(Math.PI / 2);
+  return new T.Mesh(g, m);
+}
+
+// ---------- The colours of Paris ----------
+const P = {
+  stone: mat('#dcd0b3', 0.95),        // pale Lutetian limestone
+  stoneLight: mat('#e9e0c9', 0.95),   // carved trims, cornices
+  stoneDark: mat('#b9ad90', 0.95),    // the grooves of the rusticated ground floor
+  zinc: mat('#7d878c', 0.55, 0.35),   // the blue-grey zinc of the mansard roofs
+  slate: mat('#545b61', 0.75),        // old slate roofs
+  iron: mat('#1d2023', 0.5, 0.5),     // wrought-iron balconies
+  glass: mat('#283036', 0.25, 0.2),
+  door: mat('#2f2a24', 0.7),
+  pot: mat('#b0603e', 0.9),           // terracotta chimney pots
+  brick: mat('#97583f', 0.9),
+  awningWhite: mat('#ece5d3', 0.9),
+};
+const SHOPS = ['#1f4a3a', '#7a1f24', '#1f2d4a', '#2f2f2b', '#5a2b3d'].map(c => mat(c, 0.6));     // shopfront paint: green, bordeaux, navy, black, plum
+const RENDERS = ['#e6d3a6', '#dcbfa8', '#cdd2c7', '#e8dfcb', '#d6c39a'].map(c => mat(c, 0.95));  // old Paris plaster: ochre, pink, pale green, cream, sand
+const SHUTTERS = ['#6f8490', '#4f6b4c', '#8c3b2e', '#7d7a6c'].map(c => mat(c, 0.8));              // Paris grey-blue, green, red, putty
+const RAIL = Object.assign(P.iron.clone(), { side: T.DoubleSide });   // a balcony rail round the dome, seen from inside too
+const AWNINGS =['#a8322a', '#1f5a46', '#23355e'].map(c => mat(c, 0.9));
+
+// ---------- Parts every Paris building shares ----------
+// A row of windows across the street face (z = front), n bays of a window each
+function windows(g, L, y, z, h, n, w = 0.014) {
+  for (let i = 0; i < n; i++) g.add(at(box(w, h, 0.003, P.glass), -L / 2 + (i + 0.5) * L / n, y, z));
+}
+// A wrought-iron balcony: the slab, the rail and a few uprights, the whole length or one bay
+function balcony(g, L, y, z) {
+  g.add(at(box(L, 0.003, 0.008, P.stoneLight), 0, y, z + 0.004));
+  g.add(at(box(L, 0.002, 0.002, P.iron), 0, y + 0.011, z + 0.008));
+  g.add(at(box(L, 0.002, 0.002, P.iron), 0, y + 0.004, z + 0.008));
+  const posts = Math.max(2, Math.round(L / 0.012));
+  for (let i = 0; i <= posts; i++) g.add(at(box(0.0012, 0.009, 0.0012, P.iron), -L / 2 + i * L / posts, y + 0.0075, z + 0.008));
+}
+// A chimney stack on a party wall, with its row of pots
+function chimney(g, x, y, D, m, pots = 3) {
+  g.add(at(box(0.014, 0.03, D * 0.5, m), x, y + 0.015, 0));
+  for (let i = 0; i < pots; i++) g.add(at(cyl(0.0028, 0.0032, 0.01, P.pot, 8), x, y + 0.035, -D * 0.2 + i * (D * 0.4) / Math.max(1, pots - 1)));
+}
+// The mansard: a steep lower slope, a short top; dormer windows in the steep slope on both faces
+function mansard(g, L, y, D, m, dormers, round = false) {
+  const h = 0.05, top = 0.03;
+  g.add(at(section([[-D / 2, 0], [D / 2, 0], [D / 2 - 0.016, h * 0.8], [D / 2 - top, h], [-D / 2 + top, h], [-D / 2 + 0.016, h * 0.8]], L, m), 0, y, 0));
+  for (const s of [-1, 1]) for (let i = 0; i < dormers; i++) {
+    const x = -L / 2 + (i + 0.5) * L / dormers, z = s * (D / 2 - 0.008);
+    if (round) {
+      // An œil-de-bœuf: a round window in a stone frame
+      const ring = cyl(0.0085, 0.0085, 0.006, P.stoneLight, 14); ring.rotation.x = Math.PI / 2; g.add(at(ring, x, y + 0.022, z));
+      const pane = cyl(0.0058, 0.0058, 0.007, P.glass, 14); pane.rotation.x = Math.PI / 2; g.add(at(pane, x, y + 0.022, z + s * 0.0005));
+    } else {
+      g.add(at(box(0.016, 0.02, 0.012, P.stoneLight), x, y + 0.02, z));
+      g.add(at(box(0.01, 0.013, 0.003, P.glass), x, y + 0.018, z + s * 0.006));
+      g.add(at(section([[-0.007, 0], [0.007, 0], [0, 0.007]], 0.018, m), x, y + 0.03, z));
+    }
+  }
+}
+
+// ---------- A: the Haussmann building ----------
+// Pale stone, five floors over a rusticated ground floor of tall shop openings, the long balconies on the second and
+// fifth floors, a cornice, and the zinc mansard with its dormers and chimney pots
+function haussmann(L, seed, o = {}) {
+  const g = new T.Group(), D = 0.12, R = seeded(seed);
+  const ground = 0.04, floor = 0.03, floors = o.floors || 4, H = ground + floors * floor;
+  g.add(at(box(L, H, D, P.stone), 0, H / 2, 0));
+  // Ground floor: rusticated, its grooves on the street face
+  for (let k = 1; k <= 3; k++) g.add(at(box(L + 0.001, 0.0015, D + 0.002, P.stoneDark), 0, k * ground / 4, 0));
+  const bays = Math.max(3, Math.round(L / 0.05));
+  for (const s of [-1, 1]) {
+    const z = s * (D / 2 + 0.0015);
+    // Tall shop openings at the front, a porte-cochère in the middle; plain windows at the back on the courtyard
+    for (let i = 0; i < bays; i++) {
+      const x = -L / 2 + (i + 0.5) * L / bays;
+      const gate = s > 0 && i === Math.floor(bays / 2);
+      if (s > 0 && o.shops) {
+        // Painted shopfronts (D): a coloured frame and sign over each window
+        const paint = SHOPS[Math.floor(R() * SHOPS.length)];
+        if (!gate) { g.add(at(box(L / bays * 0.92, ground * 0.82, 0.004, paint), x, ground * 0.43, z)); g.add(at(box(L / bays * 0.7, ground * 0.5, 0.005, P.glass), x, ground * 0.38, z)); }
+      }
+      g.add(at(box(gate ? 0.026 : 0.016, gate ? 0.034 : 0.028, 0.003, gate ? P.door : P.glass), x, gate ? 0.017 : 0.019, z));
+    }
+    // The floors above: windows in every bay, a stone band at each floor
+    for (let f = 0; f < floors; f++) {
+      const y = ground + f * floor + floor * 0.5;
+      windows(g, L, y, z, f === 0 ? 0.022 : 0.019, bays);
+      if (s > 0 && f === 0) for (let i = 0; i < bays; i++) g.add(at(box(0.02, 0.003, 0.004, P.stoneLight), -L / 2 + (i + 0.5) * L / bays, y + 0.015, z + 0.001));
+    }
+    for (let f = 0; f <= floors; f++) g.add(at(box(L, 0.002, 0.003, P.stoneLight), 0, ground + f * floor - 0.001, z));
+  }
+  // The long balconies, second and top floors, on the street face
+  balcony(g, L, ground + 0.002, D / 2);
+  balcony(g, L, ground + (floors - 1) * floor + 0.002, D / 2);
+  // The cornice, the mansard, the chimneys on the party walls
+  g.add(at(box(L + 0.004, 0.005, D + 0.012, P.stoneLight), 0, H + 0.0025, 0));
+  mansard(g, L, H + 0.005, D, P.zinc, Math.max(2, bays - 1), !!o.round);
+  for (const s of [-1, 1]) chimney(g, s * (L / 2 - 0.008), H + 0.045, D, P.stone, 3 + Math.floor(R() * 3));
+  // Striped awnings over the shops (D)
+  if (o.awnings) {
+    const paint = AWNINGS[Math.floor(R() * AWNINGS.length)], stripes = Math.round(L / 0.02);
+    for (let i = 0; i < stripes; i++) g.add(at(box(L / stripes, 0.003, 0.03, i % 2 ? P.awningWhite : paint), -L / 2 + (i + 0.5) * L / stripes, ground - 0.004, D / 2 + 0.013, 0.5, 0, 0));
+  }
+  return castAll(g);
+}
+
+// ---------- B: the Haussmann block's corner, with its dome ----------
+// The rounded corner of a block, a drum of stone with balconies round it, a zinc dome and a little lantern on top
+function cornerDome(H) {
+  const g = new T.Group(), r = 0.075;
+  g.add(at(cyl(r, r, H, P.stone, 28), 0, H / 2, 0));
+  for (const y of [0.042, H - 0.028]) { const ring = cyl(r + 0.006, r + 0.006, 0.003, P.stoneLight, 28); g.add(at(ring, 0, y, 0)); const rail = new T.Mesh(new T.CylinderGeometry(r + 0.008, r + 0.008, 0.009, 28, 1, true), RAIL); g.add(at(rail, 0, y + 0.006, 0)); }
+  for (let k = 0; k < 10; k++) {
+    const a = k / 10 * Math.PI * 2;
+    for (let f = 0; f < 4; f++) g.add(at(box(0.003, 0.019, 0.014, P.glass), Math.cos(a) * (r + 0.001), 0.055 + f * 0.03, Math.sin(a) * (r + 0.001), 0, -a, 0));
+  }
+  g.add(at(cyl(r + 0.006, r + 0.006, 0.006, P.stoneLight, 28), 0, H + 0.003, 0));
+  const dome = new T.Mesh(new T.SphereGeometry(r, 28, 12, 0, Math.PI * 2, 0, Math.PI / 2), P.zinc);
+  dome.scale.y = 1.25; g.add(at(dome, 0, H + 0.006, 0));
+  g.add(at(cyl(0.012, 0.014, 0.022, P.stoneLight, 12), 0, H + 0.1, 0));
+  g.add(at(cyl(0.001, 0.009, 0.014, P.zinc, 12), 0, H + 0.118, 0));
+  return castAll(g);
+}
+
+// ---------- C: old Paris ----------
+// Narrow houses of mixed heights, plastered in soft colours, painted shutters, steep slate roofs with brick stacks,
+// a shopfront under each with its name board
+function oldParis(L, seed) {
+  const g = new T.Group(), D = 0.11, R = seeded(seed);
+  const floors = 3 + Math.floor(R() * 2), floor = 0.032, ground = 0.038, H = ground + floors * floor;
+  const render = RENDERS[Math.floor(R() * RENDERS.length)], shutter = SHUTTERS[Math.floor(R() * SHUTTERS.length)], shop = SHOPS[Math.floor(R() * SHOPS.length)];
+  g.add(at(box(L, H, D, render), 0, H / 2, 0));
+  const bays = Math.max(2, Math.round(L / 0.055));
+  for (const s of [-1, 1]) {
+    const z = s * (D / 2 + 0.0015);
+    for (let f = 0; f < floors; f++) {
+      const y = ground + f * floor + floor * 0.5;
+      for (let i = 0; i < bays; i++) {
+        const x = -L / 2 + (i + 0.5) * L / bays;
+        g.add(at(box(0.013, 0.02, 0.003, P.glass), x, y, z));
+        // A pair of shutters, folded back each side
+        for (const q of [-1, 1]) g.add(at(box(0.006, 0.02, 0.003, shutter), x + q * 0.0105, y, z + s * 0.0005));
+      }
+    }
+    if (s > 0) {
+      // The shop: its painted front, two windows and a door, the name board over it
+      g.add(at(box(L * 0.9, ground * 0.85, 0.004, shop), 0, ground * 0.44, z));
+      for (const x of [-L * 0.25, L * 0.25]) g.add(at(box(L * 0.3, ground * 0.48, 0.005, P.glass), x, ground * 0.36, z));
+      g.add(at(box(0.016, ground * 0.7, 0.005, P.door), 0, ground * 0.35, z));
+      g.add(at(box(L * 0.86, 0.008, 0.006, P.stoneLight), 0, ground * 0.8, z + 0.001));
+    }
+  }
+  // The roof: steep slate, its ridge along the street, with a dormer front and back and a brick stack at one end
+  const rh = 0.045 + R() * 0.015;
+  g.add(at(section([[-D / 2 - 0.004, 0], [D / 2 + 0.004, 0], [0, rh]], L + 0.004, P.slate), 0, H, 0));
+  for (const s of [-1, 1]) {
+    g.add(at(box(0.016, 0.018, 0.02, render), 0, H + 0.012, s * (D / 4)));
+    g.add(at(box(0.009, 0.011, 0.003, P.glass), 0, H + 0.012, s * (D / 4 + 0.01)));
+    g.add(at(section([[-0.01, 0], [0.01, 0], [0, 0.008]], 0.02, P.slate), 0, H + 0.021, s * (D / 4)));
+  }
+  chimney(g, (R() < 0.5 ? -1 : 1) * (L / 2 - 0.01), H + rh * 0.45, D, P.brick, 2 + Math.floor(R() * 2));
+  return castAll(g);
+}
+
+// ---------- The houses in the game now (Models.house), placed as addHouses does ----------
+function nowBlock(group, ox, oz, seed) {
+  const sides = [{ along: 'x', edge: 0, ry: 0 }, { along: 'x', edge: 1, ry: Math.PI }, { along: 'z', edge: 0, ry: Math.PI / 2 }, { along: 'z', edge: 1, ry: -Math.PI / 2 }];
+  const scaleAcross = 0.75, inset = 0.015 + 0.16 * scaleAcross / 2;
+  sides.forEach((sd, i) => {
+    for (const a of [0.3, 0.7]) {
+      const k = seed + i * 3 + (a > 0.5 ? 1 : 0), h = Models.house(k);
+      h.scale.set(scaleAcross, 1 + (k % 3) * 0.06, scaleAcross);
+      const across = sd.edge === 0 ? inset : 1 - inset;
+      group.add(at(h, sd.along === 'x' ? ox + a : ox + across, 0, sd.along === 'x' ? oz + across : oz + a, 0, sd.ry, 0));
+    }
+  });
+}
+
+// ---------- Placing buildings round a block, their street faces outwards ----------
+// Each side: which way it runs, which edge, and the turn that points a building's street face (+z) away from the middle
+const SIDES = [
+  { along: 'x', edge: 0, ry: Math.PI },          // north side, street face north
+  { along: 'x', edge: 1, ry: 0 },                // south side, street face south (towards the camera)
+  { along: 'z', edge: 0, ry: -Math.PI / 2 },     // west side
+  { along: 'z', edge: 1, ry: Math.PI / 2 },      // east side
+];
+// spans: for each side, the buildings as [from, to] along it; make(L, seed) builds one; D its depth
+function aroundBlock(group, ox, oz, seed, spans, make, D) {
+  const inset = 0.02 + D / 2;
+  SIDES.forEach((sd, i) => {
+    spans(sd).forEach(([from, to], j) => {
+      const L = to - from, a = (from + to) / 2;
+      const b = make(L, seed * 17 + i * 5 + j, sd, j);
+      const across = sd.edge === 0 ? inset : 1 - inset;
+      group.add(at(b, sd.along === 'x' ? ox + a : ox + across, 0, sd.along === 'x' ? oz + across : oz + a, 0, sd.ry, 0));
+    });
+  });
+}
+
+// ---------- The five to compare ----------
+const VARIANTS = [
+  { key: 'Now', note: 'stone cottages, in the game today', build: (grp, x, z, s) => nowBlock(grp, x, z, s) },
+  { key: 'A', name: 'Haussmann', note: 'pale stone, iron balconies, zinc mansard, two to a side as now',
+    build: (grp, x, z, s) => aroundBlock(grp, x, z, s, () => [[0.12, 0.46], [0.54, 0.88]], (L, k) => haussmann(L, k), 0.12) },
+  { key: 'B', name: 'Haussmann block', note: 'one unbroken block, a domed corner, a carriage gate each side',
+    build: (grp, x, z, s) => {
+      const D = 0.12, inner = 0.02 + D;
+      // North and south run the whole way; west and east fit between them, leaving the south-east corner for the dome
+      aroundBlock(grp, x, z, s, sd => sd.along === 'x' ? (sd.edge === 1 ? [[0.02, 0.86]] : [[0.02, 0.98]]) : (sd.edge === 1 ? [[inner, 0.86]] : [[inner, 1 - inner]]), (L, k) => haussmann(L, k), D);
+      grp.add(at(cornerDome(0.16), x + 0.9, 0, z + 0.9));
+    } },
+  { key: 'C', name: 'Old Paris', note: 'narrow houses, soft plaster, shutters, slate roofs, little shops',
+    build: (grp, x, z, s) => aroundBlock(grp, x, z, s, () => [[0.1, 0.31], [0.33, 0.52], [0.54, 0.73], [0.75, 0.9]].filter((_, j) => j !== 1 || s % 2), (L, k) => oldParis(L, k), 0.11) },
+  { key: 'D', name: 'Boulevard shops', note: 'Haussmann, a floor taller, painted shopfronts, striped awnings, round dormers',
+    build: (grp, x, z, s) => aroundBlock(grp, x, z, s, () => [[0.12, 0.46], [0.54, 0.88]], (L, k) => haussmann(L, k, { floors: 5, shops: true, awnings: true, round: true }), 0.12) },
+];
+
+// ---------- The scene: a row of city blocks with streets between, lit like the game's table ----------
+const renderer = new T.WebGLRenderer({ antialias: true });
+renderer.outputEncoding = T.sRGBEncoding;
+renderer.toneMapping = T.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.95;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = T.PCFSoftShadowMap;
+document.body.prepend(renderer.domElement);
+const scene = new T.Scene();
+scene.background = new T.Color('#1b1a17');
+scene.add(new T.HemisphereLight(0xfff4e0, 0x3a2a18, 0.5));
+const lamp = new T.DirectionalLight(0xffe8c8, 1.6);
+lamp.position.set(-3, 9, -4);
+lamp.target.position.set(4, 0, 0.5);
+lamp.castShadow = true;
+lamp.shadow.mapSize.set(4096, 4096);
+lamp.shadow.bias = -0.0004;
+Object.assign(lamp.shadow.camera, { left: -8, right: 8, top: 8, bottom: -8, near: 1, far: 30 });
+scene.add(lamp, lamp.target);
+const fill = new T.DirectionalLight(0xcfe0ff, 0.2);
+fill.position.set(12, 5, 8);
+scene.add(fill);
+const camera = new T.PerspectiveCamera(34, 1, 0.1, 80);
+
+// A block every two fields: the block's field, then a street field
+const GAP = 2;
+const columnX = k => k * GAP;
+const city = new T.Group();
+scene.add(city);
+for (let k = -1; k <= VARIANTS.length * 2; k++) {
+  for (const z of [-1, 0, 1]) {
+    const block = k >= 0 && k % 2 === 0 && k / 2 < VARIANTS.length && z === 0;
+    city.add(at(Models.field(block ? 'village' : 'street', false, k), k + 0.5, 0, z + 0.5, -Math.PI / 2, 0, 0));
+  }
+}
+VARIANTS.forEach((v, k) => v.build(city, columnX(k), 0, 3 + k));
+// A lamp post at each block's near corner, as on the city map
+VARIANTS.forEach((v, k) => city.add(at(Models.lampPost(), columnX(k) - 0.06, 0, 1.06)));
+
+// ---------- Who stands in the middle of each block ----------
+let crowd = null;
+function people(who) {
+  if (crowd) scene.remove(crowd);
+  crowd = new T.Group();
+  VARIANTS.forEach((v, k) => {
+    const cx = columnX(k) + 0.5;
+    if (who === 'men') {
+      [[-0.14, -0.08], [0.14, -0.08], [0, 0.14]].forEach(([dx, dz]) => { const s = Models.squad('us'); s.scale.setScalar(MEN); crowd.add(at(s, cx + dx, 0, 0.5 + dz)); });
+    }
+    if (who === 'tank') { const t = Models.stuart(); t.scale.setScalar(TANKS); crowd.add(at(t, cx, 0, 0.5, 0, 0.55, 0)); }
+  });
+  scene.add(crowd);
+}
+people('men');
+
+// ---------- Labels under each block ----------
+const tags = VARIANTS.map(v => {
+  const el = document.createElement('div');
+  el.className = 'tag';
+  el.innerHTML = `<b>${v.key}</b>${v.name ? v.name + '<br>' : ''}<small>${v.note}</small>`;
+  document.body.appendChild(el);
+  return el;
+});
+
+// ---------- The camera: the game's slant over all five, or close up on one ----------
+let view = 'table', focus = 1;
+function placeCamera() {
+  const w = innerWidth, h = innerHeight;
+  renderer.setSize(w, h);
+  renderer.setPixelRatio(Math.min(2, devicePixelRatio || 1));
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  if (view === 'close') {
+    const centre = new T.Vector3(columnX(focus) + 0.5, 0.08, 0.5);
+    camera.position.set(centre.x + 0.9, 0.75, centre.z + 1.25);
+    camera.lookAt(centre);
+    return;
+  }
+  const centre = new T.Vector3(columnX(2) + 0.5, 0.1, 0.5);
+  const dir = new T.Vector3(0, Math.sin(0.92), Math.cos(0.92));
+  for (let dist = 2; dist < 40; dist += 0.1) {
+    camera.position.copy(centre).addScaledVector(dir, dist);
+    camera.lookAt(centre);
+    camera.updateMatrixWorld();
+    const fits = [[columnX(0) - 0.1, 0, 1.1], [columnX(4) + 1.1, 0, 1.1], [columnX(0) - 0.1, 0.3, -0.1], [columnX(4) + 1.1, 0.3, -0.1]]
+      .every(([x, y, z]) => { const q = new T.Vector3(x, y, z).project(camera); return Math.abs(q.x) < 0.97 && Math.abs(q.y) < 0.72; });
+    if (fits) break;
+  }
+}
+addEventListener('resize', placeCamera);
+placeCamera();
+
+// ---------- Buttons ----------
+document.querySelectorAll('[data-who]').forEach(b => b.onclick = () => {
+  document.querySelectorAll('[data-who]').forEach(o => o.classList.toggle('on', o === b));
+  people(b.dataset.who);
+});
+document.querySelectorAll('[data-view]').forEach(b => b.onclick = () => {
+  document.querySelectorAll('[data-view]').forEach(o => o.classList.toggle('on', o === b));
+  view = b.dataset.view;
+  placeCamera();
+});
+const step = d => { focus = (focus + d + VARIANTS.length) % VARIANTS.length; view = 'close'; document.querySelectorAll('[data-view]').forEach(o => o.classList.toggle('on', o.dataset.view === 'close')); placeCamera(); };
+document.getElementById('prev').onclick = () => step(-1);
+document.getElementById('next').onclick = () => step(1);
+
+// ---------- Every frame ----------
+function frame() {
+  VARIANTS.forEach((v, k) => {
+    const q = new T.Vector3(columnX(k) + 0.5, 0, 1.15).project(camera);
+    const shown = view === 'table' || k === focus;
+    tags[k].style.display = shown && q.z < 1 ? '' : 'none';
+    tags[k].style.left = ((q.x + 1) / 2 * innerWidth) + 'px';
+    tags[k].style.top = Math.min(innerHeight - 110, (1 - q.y) / 2 * innerHeight) + 'px';
+  });
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
