@@ -138,7 +138,7 @@ const MAPS = [
     de: { add: [{ id: 'dac1', kind: 'puma', name: 'Puma', reserve: true }] },
   },
   {
-    id: 'paris', date: '25 August 1944', name: 'Paris', note: 'A tight city, new streets each game: rows of Paris buildings line cobbled streets, with courtyards behind them and little squares, each with a café and a fountain. The rows of buildings work as hedges do: you see over one only from right beside it, men climb through the windows, lining one is cover, and a tank can smash through. The Americans must capture the Eiffel Tower, in the centre of the city. Few tanks: an M5 Stuart light tank in place of the Sherman 76mm, and no Panther; a second bazooka for the Americans, an extra MG 42 for the Germans.',
+    id: 'paris', date: '25 August 1944', name: 'Paris', note: 'A tight city, new streets each game: rows of Paris buildings line cobbled streets, with courtyards behind them, and little squares in dead ends and on corners, each with a café and a fountain. Nobody sees through or over a row of buildings, men climb through the windows, and tanks cannot get through at all: they start on the streets and keep to them. The Americans must capture the Eiffel Tower, in the centre of the city. Few tanks: an M5 Stuart light tank in place of the Sherman 76mm, and no Panther; a second bazooka for the Americans, an extra MG 42 for the Germans.',
     // (Steve, 2026-11-13: not houses in fields any more, but rows of buildings on the edges, as Stalingrad's ruins)
     generated: 'paris', design: 'old', blocks: true,   // (Steve picked the old quarter of the four plans)
     gap: 0, wire: 0,

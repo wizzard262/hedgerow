@@ -357,7 +357,9 @@ const Sim = (() => {
     for (const u of leaders) {
       if (u.garrison || isBunker(u)) continue;
       const options = fields.filter(f => !southers.includes(u) || southOfLine(f)).map(f => ({ f, w: worth(f) })).sort((a, b) => b.w - a.w);
-      const spot = options.find(o => roomFor(st, u, o.f.x, o.f.y));
+      // Tanks start on a street (Steve: Paris), never in a courtyard behind the buildings they can't get through
+      const street = o => !(st.map.blocks && isTank(u)) || tileType(o.f.x, o.f.y) !== 'court';
+      const spot = options.find(o => street(o) && roomFor(st, u, o.f.x, o.f.y)) || options.find(o => roomFor(st, u, o.f.x, o.f.y));
       u.x = spot.f.x; u.y = spot.f.y;
       // (its place in the field straight away, so the next piece's room is judged by where this one really stands: by the
       // hedge towards the enemy as it starts, so a big piece takes a corner block and leaves room, never the whole middle)
@@ -697,9 +699,10 @@ const Sim = (() => {
   // maze that reaches them all, then more streets as the map's design says (PARIS_DESIGNS): further ones between crossing
   // points, some running on off the board, whole boulevards. Every field not a street is a courtyard, and a row of
   // buildings stands on every edge between a courtyard and a street (map.blocks: see hedgeWanted), working as a hedge
-  // (Steve, 2026-11-13: as Stalingrad's ruins). Some crossing points become little squares, each with a café (along one
-  // side, the full length or shorter, or in the middle) and a fountain. The target is always the Eiffel Tower (Steve), in
-  // the centre of the board, on a crossing point so streets reach it
+  // (Steve, 2026-11-13: as Stalingrad's ruins). Some dead ends and corners become little squares, each with a café (in a dead
+  // end or on a corner, along a closed side) and a fountain. The target is always the Eiffel Tower (Steve), in
+  // the centre of the board, on a crossing point so streets reach it. Tanks can't go through the rows of buildings and
+  // nobody sees through them (Steve, 2026-11-13): see cutter and lineOfSight
   const CITY_TOWER = { x: 6, y: 4, name: 'Eiffel Tower' };
   const CITY_SQUARES = 3;
   function parisMap(map, R) {
@@ -738,16 +741,15 @@ const Sim = (() => {
     // Boulevards: whole rows and columns of street, straight across the board
     for (const y of design.rows || []) for (let x = 0; x < COLS; x++) tiles[y][x] = 's';
     for (const x of design.cols || []) for (let y = 0; y < ROWS; y++) tiles[y][x] = 's';
-    // Little squares, away from where the sides start
-    const inner = [];
-    for (const y of ys) for (const x of xs) if (x >= 2 && x <= 8 && !(x === CITY_TOWER.x && y === CITY_TOWER.y)) inner.push({ x, y });
     const features = [];
     // The tower stands on open paving, its legs round the field
     tiles[CITY_TOWER.y][CITY_TOWER.x] = 'q';
     features.push({ x: CITY_TOWER.x, y: CITY_TOWER.y, kind: 'eiffel', areas: [] });
-    for (const p of shuffled(inner).slice(0, CITY_SQUARES)) {
+    // Little squares (Steve, 2026-11-13: cafés never across a road, only in dead ends and on corners), away from where
+    // the sides start and off the board's edge rows, each café against a side with a row of buildings behind it
+    for (const p of shuffled(cafeSpots(tiles)).slice(0, CITY_SQUARES)) {
       tiles[p.y][p.x] = 'q';
-      const areas = cafeAreas(R);
+      const areas = cafeAreas(p.closed, R);
       features.push({ x: p.x, y: p.y, kind: 'cafe', areas });
       features.push({ x: p.x, y: p.y, kind: 'fountain', area: fountainCorner(areas, R) });
     }
@@ -857,14 +859,27 @@ const Sim = (() => {
   }
 
   // Where a café stands in its square (Steve): one way in three each, along a whole side, along part of a side, or in the middle
-  function cafeAreas(R) {
-    const way = R(), side = ['n', 'e', 's', 'w'][Math.floor(R() * 4)], end = Math.floor(R() * 2);
+  // The street fields a café may go in: a dead end (one way out) or a corner (two ways out, at right angles), with the
+  // sides that are closed by buildings. Never in the two columns where each side starts, nor on the board's edge rows
+  const WAYS = { n: [0, -1], e: [1, 0], s: [0, 1], w: [-1, 0] };
+  function cafeSpots(tiles) {
+    const spots = [];
+    for (let y = 1; y < ROWS - 1; y++) for (let x = 2; x < COLS - 2; x++) {
+      if (tiles[y][x] !== 's') continue;
+      const open = Object.keys(WAYS).filter(d => tiles[y + WAYS[d][1]][x + WAYS[d][0]] !== 'k');
+      const straight = (open.includes('n') && open.includes('s')) || (open.includes('e') && open.includes('w'));
+      const deadEnd = open.length === 1, corner = open.length === 2 && !straight;
+      if (deadEnd || corner) spots.push({ x, y, closed: Object.keys(WAYS).filter(d => !open.includes(d)) });
+    }
+    return spots;
+  }
+  // Where the café stands: along one of the closed sides, the full length or its middle and one corner (never the middle
+  // of the field, so the way through stays open)
+  function cafeAreas(closed, R) {
+    const side = closed[Math.floor(R() * closed.length)], full = R() < 0.5, end = Math.floor(R() * 2);
     const row = SIDE_AREAS[side];
-    if (way < 1 / 3) return row;
-    // Part of a side: its middle and one corner
-    if (way < 2 / 3) return end ? [row[0], row[1]] : [row[1], row[2]];
-    // The middle, and the area on one side of it
-    return ['c', side];
+    if (full) return row;
+    return end ? [row[0], row[1]] : [row[1], row[2]];
   }
 
   // A corner for the fountain, clear of the café; and, if the café leaves the middle free, clear of a block for a big piece
@@ -1036,6 +1051,8 @@ const Sim = (() => {
         : { ax: Math.floor(h.x), ay: Math.round(h.y) - 1, bx: Math.floor(h.x), by: Math.round(h.y), t: h.x - Math.floor(h.x), da: 's', db: 'n' };
       if (!inside(across.ax, across.ay) || !inside(across.bx, across.by) || !hedge(st, across.ax, across.ay, across.bx, across.by)) continue;
       // A hedge: blocked, unless one of them stands against this third of it
+      // (Paris's rows of buildings, Steve: nobody sees through or over them, from beside them or not)
+      if (currentMap.blocks) return null;
       const thirds = thirdsAt(across.t);
       const touching = u => touches(u, across.ax, across.ay, across.da, thirds) || touches(u, across.bx, across.by, across.db, thirds);
       const shooterTouches = touching(from), targetTouches = touching(target);
@@ -1154,7 +1171,8 @@ const Sim = (() => {
     let cover = false;
     for (const [ax, ay, bx, by, da, db, third] of ends) {
       if (!inside(ax, ay) || !inside(bx, by) || !hedge(st, ax, ay, bx, by)) continue;
-      // Only from that very corner can it see past a hedge ending there
+      // Only from that very corner can it see past a hedge ending there (never past a Paris building, Steve)
+      if (currentMap.blocks) return 'blocked';
       if (!atPoint(from, vx, vy) && !atPoint(target, vx, vy)) return 'blocked';
       const near = u => touches(u, ax, ay, da, [third]) || touches(u, bx, by, db, [third]);
       if (!near(from) && !near(target)) cover = true;
@@ -1719,7 +1737,8 @@ const Sim = (() => {
 
   // Can a piece step to a field next to it? Tanks can't climb the hedge banks: they need a gap or a lane,
   // unless they carry hedge cutters and drive straight through
-  const cutter = u => isTank(u) && !!PIECES[u.kind].cutter;
+  // (not through Paris's rows of buildings, Steve: map.blocks)
+  const cutter = u => isTank(u) && !!PIECES[u.kind].cutter && !currentMap.blocks;
   // Move a piece. A tank with hedge cutters going through a hedge leaves a gap.
   // Returns what happened to the hedge: 'cut' (driven through), 'climbed' (men clambered over) or ''
   function step(st, u, x, y, assault = false) {

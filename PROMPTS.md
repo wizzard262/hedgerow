@@ -1855,6 +1855,14 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - **Four street plans** (PARIS_DESIGNS): Maze (as Paris was), Old quarter (twisting, many dead ends), Grid (mostly straight streets, the odd corner and dead end), Boulevards (two straight boulevards across the board meeting at the tower). `tools/paris-maps.html` shows each in the game with the same seed, and "Play it" opens the game on it (`index.html?paris=grid` and so on). Steve picked **Old quarter**, now Paris's plan (v185)
 - No robot balance runs (Steve's standing wish); the rules tests cover every plan: streets all joined, a row of buildings exactly where a courtyard meets a street, the boulevards straight across
 
+## 317. Paris: buildings stop tanks and block sight; tanks on the streets; cafés in dead ends and corners; a new picture (v186)
+
+- Steve: Paris: tanks cannot move through walls; all block sight completely; tanks all start on the street; do not block roads with cafés, put them in dead ends and corners only. Then: change the Paris thumbnail
+- **Tanks**: no driving through a row of buildings at all (no hedge cutters in Paris), so they keep to the streets; every tank starts on a street or square
+- **Sight**: a row of buildings blocks every line across it, even for pieces right beside it, and past its end at a corner too
+- **Cafés**: only in a dead end (one way out) or on a corner (two ways out at right angles), away from where the sides start and off the board's edge rows, along a side closed by buildings, never in the middle of the field. Three of them as before
+- The map's note says so; hovering a courtyard now says "Courtyard"; the Paris picture in the opening dialog (`assets/maps/paris.jpg`) made again from the new Paris
+
 ## Sessions
 
 | # | Date | Length | What we did |

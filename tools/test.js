@@ -3723,7 +3723,7 @@ check('a tank goes one field further if it starts, stays and ends on road or lan
 });
 
 check('cafés and barns come in different lengths and places, and a big piece gets past one in the middle', () => {
-  // Over many games of Paris: the full length, shorter, and in the middle
+  // Over many games of Paris: the full length and shorter, never in the middle (Steve: never across the road)
   const seen = { long: 0, short: 0, middle: 0 };
   for (let seed = 1; seed <= 40; seed++) {
     for (const f of Sim.newGame(seed, 'us', 'paris').features) {
@@ -3733,7 +3733,7 @@ check('cafés and barns come in different lengths and places, and a big piece ge
       else seen.short++;
     }
   }
-  assert(seen.long && seen.short && seen.middle, `cafés: ${JSON.stringify(seen)}`);
+  assert(seen.long && seen.short && !seen.middle, `cafés: ${JSON.stringify(seen)}`);
   const farm = Sim.newGame(1, 'us', 'farmland').features.filter(f => f.kind === 'barn');
   assert(farm.some(f => f.areas.includes('c')) && farm.some(f => f.areas.length === 2 && !f.areas.includes('c')) && farm.some(f => f.areas.length === 3), 'the barns are not varied');
   // A big piece can't stop beside a building in the middle, but goes past it; a team can stop there
@@ -4769,6 +4769,39 @@ check('the M5 Stuart (Steve: a small American tank with a round turret) is on Ri
   assert(p.tank && p.cutter && !p.car && p.smallGun && p.extraMove === 1 && p.hard >= 1, 'the Stuart\'s numbers are wrong');
   // Paris: in place of the Sherman 76mm
   assert(!Sim.newGame(1, 'us', 'paris').units.some(u => u.id === 'T2'), 'Paris still has the Sherman 76mm');
+  Sim.newGame(1);
+});
+
+check('Paris (Steve, 2026-11-13): tanks never go through the buildings, nobody sees through them, tanks start on the streets, cafés only in dead ends and on corners', () => {
+  const paris = MAPS.find(m => m.id === 'paris'), usual = paris.design;
+  for (const design of Object.keys(PARIS_DESIGNS)) {
+    paris.design = design;
+    for (let seed = 1; seed <= 15; seed++) {
+      const st = Sim.newGame(seed, 'us', 'paris');
+      // Every tank on a street or square
+      for (const u of st.units.filter(o => Sim.isTank(o) && o.x !== null)) assert(Sim.tileType(u.x, u.y) !== 'court', `${design} seed ${seed}: ${u.name} starts in a courtyard`);
+      // Each café in a dead end or on a corner, along a side closed by buildings, never in the middle
+      for (const f of st.features.filter(o => o.kind === 'cafe')) {
+        const ways = [[0, -1, 'n'], [1, 0, 'e'], [0, 1, 's'], [-1, 0, 'w']].filter(([dx, dy]) => Sim.tileType(f.x + dx, f.y + dy) !== 'court');
+        const straight = ways.length === 2 && ways[0][0] === -ways[1][0] && ways[0][1] === -ways[1][1];
+        assert(ways.length === 1 || (ways.length === 2 && !straight), `${design} seed ${seed}: a café at ${f.x},${f.y} on a through road`);
+        assert(!f.areas.includes('c'), `${design} seed ${seed}: a café in the middle of the road`);
+        const side = ['n', 'e', 's', 'w'].find(d => f.areas.every(a => a.includes(d)));
+        assert(side && !ways.some(w => w[2] === side), `${design} seed ${seed}: a café at ${f.x},${f.y} against an open side`);
+      }
+    }
+  }
+  paris.design = usual;
+  // A tank beside a row of buildings can't go through it; across it, right beside it both sides, nobody sees
+  const st = Sim.newGame(3, 'us', 'paris');
+  const [ax, ay, bx, by] = Object.keys(st.hedges)[0].split(/[^0-9]+/).filter(Boolean).map(Number);
+  const tank = st.units.find(u => u.side === 'us' && Sim.isTank(u)), foe = st.units.find(u => u.side === 'de' && u.kind === 'company');
+  for (const u of st.units) if (u !== tank && u !== foe) u.x = u.y = null;
+  tank.x = ax; tank.y = ay; tank.at = null;
+  assert(!Sim.hasCutters(tank), 'a tank has hedge cutters in Paris');
+  assert(!Sim.moveShootSpots(st, tank).some(p => p.x === bx && p.y === by), 'a tank could drive through a row of buildings');
+  foe.x = bx; foe.y = by; foe.at = null;
+  assert(!Sim.sight(st, tank, foe) && !Sim.sight(st, foe, tank), 'seen through a row of buildings');
   Sim.newGame(1);
 });
 

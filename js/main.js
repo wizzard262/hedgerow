@@ -572,7 +572,7 @@ window.Game = (() => {
   function tooltip(e, f) {
     const tip = $('#tip');
     if (!f) { tip.style.display = 'none'; return; }
-    const NAMES = { field: 'Field', orchard: 'Orchard', village: 'Village', hamlet: 'Hamlet', river: 'River', sea: 'Sea', beach: 'Beach', street: 'Street', square: 'Square', yard: 'Railway tracks', bridge: 'Bridge', laneEW: 'Lane', laneNS: 'Lane', crossroads: 'Crossroads' };
+    const NAMES = { field: 'Field', orchard: 'Orchard', village: 'Village', hamlet: 'Hamlet', river: 'River', sea: 'Sea', beach: 'Beach', street: 'Street', square: 'Square', court: 'Courtyard', yard: 'Railway tracks', bridge: 'Bridge', laneEW: 'Lane', laneNS: 'Lane', crossroads: 'Crossroads' };
     const here = Sim.at(st, f.x, f.y);
     // (Dunkirk's 'us' side is British, Steve)
     const usWord = { us: 'US', uk: 'British', su: 'Soviet' }[Sim.armyOf(st)];
