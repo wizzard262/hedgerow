@@ -140,7 +140,7 @@ const MAPS = [
   {
     id: 'paris', date: '25 August 1944', name: 'Paris', note: 'A tight city, new streets each game: rows of Paris buildings line cobbled streets, with courtyards behind them and little squares, each with a café and a fountain. The rows of buildings work as hedges do: you see over one only from right beside it, men climb through the windows, lining one is cover, and a tank can smash through. The Americans must capture the Eiffel Tower, in the centre of the city. Few tanks: an M5 Stuart light tank in place of the Sherman 76mm, and no Panther; a second bazooka for the Americans, an extra MG 42 for the Germans.',
     // (Steve, 2026-11-13: not houses in fields any more, but rows of buildings on the edges, as Stalingrad's ruins)
-    generated: 'paris', design: 'maze', blocks: true,
+    generated: 'paris', design: 'old', blocks: true,   // (Steve picked the old quarter of the four plans)
     gap: 0, wire: 0,
     ammo: { us: { bomber: 0 } },
     us: { remove: ['T2'], add: [{ id: 'bz2', kind: 'bazooka', name: 'Bazooka Team 2' }, { id: 'LT1', kind: 'stuart', name: 'M5 Stuart' }] },   // (Steve: a Stuart on some maps; here in place of the Sherman 76mm)
@@ -387,7 +387,7 @@ const COLS = MAPS[0].rows[0].length, ROWS = MAPS[0].rows.length;
 // that reaches them all; then: extra, the chance of a further street between two crossing points side by side; out, the
 // chance a street runs on off the east or south edge of the board; rows, cols: whole streets straight across the board
 const PARIS_DESIGNS = {
-  maze: { name: 'Maze', note: 'as Paris is now: winding streets, a few dead ends', extra: 0.3, out: 0.4 },
+  maze: { name: 'Maze', note: 'as Paris was: winding streets, a few dead ends', extra: 0.3, out: 0.4 },
   old: { name: 'Old quarter', note: 'narrow and twisting, many dead ends, few ways through', extra: 0.08, out: 0.25 },
   grid: { name: 'Grid', note: 'mostly straight streets crossing, the odd corner and dead end', extra: 0.75, out: 0.6 },
   boulevards: { name: 'Boulevards', note: 'two long straight boulevards meeting at the tower, side streets between', extra: 0.25, out: 0.4, rows: [4], cols: [6] },
