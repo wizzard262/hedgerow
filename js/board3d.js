@@ -1468,6 +1468,11 @@ const Board = (() => {
   let chuteGroup = null;
   // Where the three paratroopers of a field come down (across, up the board), one after another
   const PARA_SPOTS = [[-0.22, -0.15], [0.2, -0.05], [-0.02, 0.2]];
+  // When the drop now coming down is on the table (0: none coming). Until then its piece or crate is not on the board
+  // (Steve: they showed before the drop had landed)
+  let dropUntil = 0;
+  // How many parachutes a drop has: three men, or the one crate
+  const chutesIn = f => (f.what === 'paras' ? PARA_SPOTS.length : 1);
 
   // One parachute: the canopy (its points worked out every frame), its lines, and a man or the crate under it
   function makeChute(load) {
@@ -1572,10 +1577,14 @@ const Board = (() => {
       made.forEach(c => chuteGroup.add(c.sys));
       chuteDrops.set(f, made);
     }
+    // All down: the piece (or the crate) is on the board now, so the men under the canopies go, leaving the canopies
+    // to fall over and fade
+    const allDown = t >= Chute.landed(spots.length);
     // Each one in its place, the men landing one after another (not shown before their turn)
     chuteDrops.get(f).forEach((c, k) => {
       const own = t - k * Chute.TIME.apart;
       c.sys.visible = own >= 0;
+      c.model.visible = !allDown;
       if (own >= 0) placeChute(c, f.x + 0.5 + spots[k][0], f.y + 0.5 + spots[k][1], own);
     });
     shadowStale = true;
@@ -1597,9 +1606,17 @@ const Board = (() => {
   let crateModel = null, crateAt = '';
   function drawCrate(st) {
     const want = st.crate && !st.crate.taken ? `${st.seed}/${st.crate.x},${st.crate.y}` : '';
-    if (want === crateAt) return;
+    // A different crate (or none): the old one goes and the new one is made
+    if (want !== crateAt) buildCrate(st, want);
+    // Not on the table while it is still coming down on its parachute (Steve)
+    if (crateModel) crateModel.visible = !dropUntil;
+  }
+  // The crate's model, made for its field (want: '' for no crate)
+  function buildCrate(st, want) {
+    // The old one off the table
     if (crateModel) { scene.remove(crateModel); freeObject(crateModel); crateModel = null; }
     crateAt = want;
+    // No crate now: nothing more to do
     if (!want) return;
     crateModel = at(Models.supplyCrate(), st.crate.x + 0.5, 0, st.crate.y + 0.5);
     // (a little larger than life, so it is easy to spot from across the table)
@@ -2569,7 +2586,8 @@ const Board = (() => {
   // How long until every shot on the table has landed and every fight is shown (Steve: the game's end waits for it)
   function settledIn() {
     const untils = Object.values(held).map(h => h.until);
-    const latest = Math.max(meleeUntil, flightUntil, ...untils);
+    // (an airdrop too, until it is down)
+    const latest = Math.max(meleeUntil, flightUntil, dropUntil, ...untils);
     return Math.max(0, latest - performance.now());
   }
 
@@ -2691,6 +2709,16 @@ const Board = (() => {
     stop.g.userData.stops = (stop.g.userData.stops || []).concat([{ n: stop.n, x: stop.seen.x, y: stop.seen.y, until: ends }]);
   }
 
+  // An airdrop starting at t0: its piece (or crate) stays off the board until the last parachute is down (Steve)
+  function holdDrop(st, f, t0) {
+    // When the last one lands
+    const landsAt = t0 + Chute.landed(chutesIn(f)) * 1000;
+    dropUntil = Math.max(dropUntil, landsAt);
+    // The paratroopers' piece: held out of sight until then (the crate is hidden in drawCrate)
+    const unit = f.id && st.units.find(u => u.id === f.id);
+    if (unit) held[unit.id] = { until: landsAt, count: unit.platoons, visible: false };
+  }
+
   function startShots(st) {
     stopsNow = new Map();
     for (const f of st.fx) {
@@ -2705,7 +2733,9 @@ const Board = (() => {
       // Parachutes: they come down as the plane passes over (see playShots)
       if (f.kind === 'paradrop') {
         const over = flight ? Math.max(0, -flight.start / FLIGHT.speed) : 0;
-        shots.push({ f, t0: performance.now() + over * 1000, objs: [] });
+        const t0 = performance.now() + over * 1000;
+        shots.push({ f, t0, objs: [] });
+        holdDrop(st, f, t0);
         continue;
       }
       // The bomber itself
@@ -3400,6 +3430,7 @@ const Board = (() => {
     tidyChutes();
     for (const id in held) delete held[id];
     meleeUntil = 0;
+    dropUntil = 0;
     endFlight(); flightUntil = 0;
     setCompass(null);
     // No wrecks left over: their fires go, and their scorched models, so the next game builds them new
@@ -3433,6 +3464,8 @@ const Board = (() => {
       if (fresh.length) { diceComing = diceComing.concat(fresh); diceDue = now + settledIn(); }
     }
     if (diceDue !== null && now >= diceDue) { diceDue = null; showDice(st, diceComing); diceComing = []; }
+    // An airdrop just down: its piece or crate shows from now, and the marks are made again to take it in
+    if (dropUntil && now >= dropUntil) { dropUntil = 0; marksReady = false; shadowStale = true; }
     updatePieces(st);
     // The marks on the table: built again only when something has changed. Between times just the cross-hairs pulse
     if (view.same && marksReady) {
@@ -3530,7 +3563,8 @@ const Board = (() => {
     if (view.fireFrom) for (const t of view.targets || []) if (pieces[t.id]) marks.add(fireArc({ side: st.human, support: view.fireFrom }, t, view.hotTarget && view.hotTarget.id === t.id));
     for (const u of st.units) if (u.ambush && u.x !== null && pieces[u.id]) markAmbush(u);
     if (view.ready) for (const u of st.units) {
-      if (u.side !== st.human || u.x === null || !pieces[u.id] || u.ambush) continue;
+      // (not round a piece still out of sight: the paratroopers before they are down)
+      if (u.side !== st.human || u.x === null || !pieces[u.id] || !pieces[u.id].visible || u.ambush) continue;
       const can = view.ready(u);
       if (!can && !u.acted) continue;
       const p = pieceCentre(u), big = u.kind === 'company' || Sim.isTank(u);

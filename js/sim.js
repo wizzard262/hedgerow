@@ -421,7 +421,8 @@ const Sim = (() => {
     st.units.push(para);
     // The plane over the aimed field, west to east, and the parachutes coming down where they land
     st.fx.push({ kind: 'flyover', side: 'us', plane: 'c47', x: aim.x, y: aim.y, heading: 4, line: bomberLine(aim.x, aim.y, 4) });
-    st.fx.push({ kind: 'paradrop', what: 'paras', x: land.x, y: land.y });
+    // (the piece's id, so the board keeps it hidden until the parachutes are down)
+    st.fx.push({ kind: 'paradrop', what: 'paras', x: land.x, y: land.y, id: para.id });
     st.news = [`🪂 A C-47 drops paratroopers of the 101st Airborne${off ? ', off target' : ''}. They can move this round.`];
   }
   // The supply crate: down on an empty field in the middle of the board

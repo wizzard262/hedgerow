@@ -92,10 +92,13 @@ const Chute = (() => {
     const settled = t < TIME.fall ? 0 : Math.min(1, (t - TIME.fall) / TIME.settle);
     return settled < 0.6 ? 1 : Math.max(0, 1 - (settled - 0.6) / 0.4);
   }
-  // How long a whole drop of n parachutes lasts, the last one landing TIME.apart after the one before
-  const lasts = n => (n - 1) * TIME.apart + TIME.fall + TIME.settle;
+  // When the last of a drop of n parachutes is on the table, each one landing TIME.apart after the one before
+  // (the piece or the crate shows on the board only then, Steve)
+  const landed = n => (n - 1) * TIME.apart + TIME.fall;
+  // How long a whole drop of n parachutes lasts: the last one down, then its canopy falling over and going
+  const lasts = n => landed(n) + TIME.settle;
 
-  return { LOOK, RINGS, SEGS, TIME, HANG, LOAD_TOP, shape, point, progress, height, swing, over, opacity, lasts };
+  return { LOOK, RINGS, SEGS, TIME, HANG, LOAD_TOP, shape, point, progress, height, swing, over, opacity, landed, lasts };
 })();
 
 if (typeof module !== 'undefined') module.exports = Chute;

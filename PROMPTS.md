@@ -1875,6 +1875,12 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - Each block of courtyards (an island of buildings) gets one or two gaps, at random, in the rows round it: a way in from the street for men and tanks alike, and a way to see in. Never beside a café's square, so a café always has a building behind it. The Paris picture in the opening dialog made again
 - Pushed: not yet
 
+## 320. Airdrops show once they are down (v189)
+
+- Steve: when supply or paratrooper drop the icon appears before the drop has completed
+- The paratroopers' piece and the supply crate now stay off the board until the last parachute is on the table; then they appear, the men under the canopies go, and the canopies fall over and fade as before. No green "can move" ring round the paratroopers before then, and the game waits for the drop to land before going on
+- Pushed: not yet
+
 ## Sessions
 
 | # | Date | Length | What we did |

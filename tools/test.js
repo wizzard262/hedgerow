@@ -553,6 +553,8 @@ check('airdrops (Steve): paratroopers on the bocage maps, a supply crate on the 
     assert(p && p.side === 'us' && p.kind === 'company' && p.platoons === 1 && p.quality === 'elite', `seed ${seed}: no paratroopers`);
     assert(p.x >= 3 && p.x <= COLS - 4 && !Sim.at(st, p.x, p.y, 'de').length, `seed ${seed}: they came down at ${p.x},${p.y}`);
     assert(st.report.some(l => l.includes('101st')), `seed ${seed}: nothing in the report`);
+    // The parachutes on the board name the piece, so it stays hidden until they are down (Steve)
+    assert(st.fx.some(f => f.kind === 'paradrop' && f.id === 'para1' && f.x === p.x && f.y === p.y), `seed ${seed}: the drop doesn't name its piece`);
     paras++;
     if (st.report.some(l => l.includes('off target'))) off++;
     // Only once
@@ -4635,6 +4637,9 @@ check('parachutes (Steve picked C): big, uneven, olive drab, swinging less near 
   // Gone by the end, the last of three landing after the others
   assert(Chute.opacity(Chute.TIME.fall + Chute.TIME.settle) === 0 && Chute.opacity(Chute.TIME.fall) === 1, 'fading wrong');
   assert(Chute.lasts(3) === 2 * Chute.TIME.apart + Chute.TIME.fall + Chute.TIME.settle, 'the drop ends too soon');
+  // The piece (or crate) shows when the last one is on the table (Steve: not before), before the canopies have gone
+  assert(Chute.landed(3) === 2 * Chute.TIME.apart + Chute.TIME.fall, 'the last one lands at the wrong time');
+  assert(Chute.landed(1) === Chute.TIME.fall && Chute.landed(3) < Chute.lasts(3), 'the crate lands at the wrong time');
 });
 
 const DUNKIRK = MAPS.find(m => m.id === 'dunkirk').evacuate;
