@@ -276,6 +276,8 @@ const Sim = (() => {
         else if (!isLane(tileType(x, y)) && !isLane(tileType(bx, by)) && R() < wireChance) st.wire[edgeKey(x, y, bx, by)] = true;
       }
     }
+    // Gaps in Paris's rows of buildings (Steve, 2026-11-13): one or two into each block
+    if (map.blocks) openBlocks(st, R);
     for (const d of startingPieces(US_START, map.us)) st.units.push(makeUnit(d, 'us'));
     for (const d of startingPieces(DE_START, map.de)) st.units.push(makeUnit(d, 'de'));
     // German teams that start with a company
@@ -755,6 +757,44 @@ const Sim = (() => {
       features.push({ x: p.x, y: p.y, kind: 'fountain', area: fountainCorner(areas, R) });
     }
     return { rows: tiles.map(row => row.join('')), villages: [CITY_TOWER], features };
+  }
+
+  // Gaps in the rows of buildings round Paris's blocks (Steve, 2026-11-13: just 1 or 2 per island of walls). For each block
+  // of courtyards (joined side by side) we must:
+  //   list the rows of buildings round it, each between one of its courtyards and a street, never beside a café's square
+  //   (so a café always has a building behind it)
+  //   take one or two of them away, at random: a way in from the street
+  const BLOCK_GAPS = { one: 0.5, most: 2 };
+  function openBlocks(st, R) {
+    const isCourt = (x, y) => inside(x, y) && tileType(x, y) === 'court';
+    const hasCafe = (x, y) => st.features.some(f => f.kind === 'cafe' && f.x === x && f.y === y);
+    const seen = new Set();
+    for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
+      if (!isCourt(x, y) || seen.has(x + ',' + y)) continue;
+      // The block: every courtyard joined to this one, and the rows of buildings round it
+      const rows = [];
+      const open = [[x, y]];
+      seen.add(x + ',' + y);
+      while (open.length) {
+        const [cx, cy] = open.pop();
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const nx = cx + dx, ny = cy + dy;
+          if (!inside(nx, ny)) continue;
+          if (isCourt(nx, ny)) {
+            if (!seen.has(nx + ',' + ny)) { seen.add(nx + ',' + ny); open.push([nx, ny]); }
+            continue;
+          }
+          if (!hasCafe(nx, ny) && hedge(st, cx, cy, nx, ny)) rows.push(edgeKey(cx, cy, nx, ny));
+        }
+      }
+      // One or two of them opened
+      const gaps = Math.min(rows.length, R() < BLOCK_GAPS.one ? 1 : BLOCK_GAPS.most);
+      for (let k = 0; k < gaps; k++) {
+        const i = Math.floor(R() * rows.length);
+        delete st.hedges[rows[i]];
+        rows.splice(i, 1);
+      }
+    }
   }
 
   // Is a field inside the map's courtyard (Steve: Stalingrad's Univermag, open inside, walled round)

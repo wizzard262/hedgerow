@@ -3563,12 +3563,35 @@ check('Paris: new streets each game, the same for the same seed, every street jo
         for (const q of paved) if (Sim.adjacent(p, q) && !reached.has(`${q.x},${q.y}`)) { reached.add(`${q.x},${q.y}`); open.push(q); }
       }
       assert(reached.size === paved.length, `${design} seed ${seed}: streets cut off`);
-      // A row of buildings (a hedge) on every edge between a courtyard and a street, and nowhere else; no wire
+      // A row of buildings (a hedge) only between a courtyard and a street, and on every such edge but one or two gaps a
+      // block (Steve: 1 or 2 per island of walls), never beside a café; no wire
+      const isCourt = (x, y) => Sim.inside(x, y) && Sim.tileType(x, y) === 'court';
+      const block = new Map();
+      for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
+        if (!isCourt(x, y) || block.has(x + ',' + y)) continue;
+        const open = [[x, y]];
+        block.set(x + ',' + y, x + ',' + y);
+        while (open.length) {
+          const [cx, cy] = open.pop();
+          for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (isCourt(cx + dx, cy + dy) && !block.has((cx + dx) + ',' + (cy + dy))) { block.set((cx + dx) + ',' + (cy + dy), x + ',' + y); open.push([cx + dx, cy + dy]); }
+        }
+      }
+      const gaps = {}, rows = {};
       for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) for (const [dx, dy] of [[1, 0], [0, 1]]) {
         if (!Sim.inside(x + dx, y + dy)) continue;
-        const between = (Sim.tileType(x, y) === 'court') !== (Sim.tileType(x + dx, y + dy) === 'court');
-        assert(Sim.hedge(again, x, y, x + dx, y + dy) === between, `${design} seed ${seed}: a row of buildings wrong at ${x},${y} to ${x + dx},${y + dy}`);
+        const between = isCourt(x, y) !== isCourt(x + dx, y + dy);
+        const built = Sim.hedge(again, x, y, x + dx, y + dy);
+        assert(!built || between, `${design} seed ${seed}: a row of buildings between ${x},${y} and ${x + dx},${y + dy}`);
+        if (!between) continue;
+        const id = block.get(isCourt(x, y) ? x + ',' + y : (x + dx) + ',' + (y + dy));
+        rows[id] = (rows[id] || 0) + 1;
+        if (!built) {
+          gaps[id] = (gaps[id] || 0) + 1;
+          const street = isCourt(x, y) ? [x + dx, y + dy] : [x, y];
+          assert(!again.features.some(f => f.kind === 'cafe' && f.x === street[0] && f.y === street[1]), `${design} seed ${seed}: a gap beside a café`);
+        }
       }
+      for (const id in rows) assert((gaps[id] || 0) <= 2 && (gaps[id] || 0) >= Math.min(1, rows[id] - 1), `${design} seed ${seed}: block ${id} has ${gaps[id] || 0} gaps`);
       assert(!Object.keys(again.wire).length, `${design} seed ${seed}: wire in Paris`);
       // Boulevards run straight across the board
       for (const row of PARIS_DESIGNS[design].rows || []) assert(!/k/.test(again.map.rows[row]), `${design} seed ${seed}: row ${row} not a boulevard`);

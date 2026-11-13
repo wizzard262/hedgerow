@@ -1869,6 +1869,12 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - Everywhere the game names a hedge it now says **building** in Paris (the menus, the hints, the score bubble, the computer's moves); a platoon going over one "climbs in through the windows of the building"; no green "cover" bars along a building when choosing where to stand, as a building gives no cover (nobody sees across it)
 - Pushed v183 to v187
 
+## 319. Gaps in the Paris buildings (v188)
+
+- Steve: add some gaps in the Paris walls, just 1 or 2 per island group of walls
+- Each block of courtyards (an island of buildings) gets one or two gaps, at random, in the rows round it: a way in from the street for men and tanks alike, and a way to see in. Never beside a café's square, so a café always has a building behind it. The Paris picture in the opening dialog made again
+- Pushed: not yet
+
 ## Sessions
 
 | # | Date | Length | What we did |
