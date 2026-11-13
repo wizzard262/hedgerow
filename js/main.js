@@ -56,6 +56,12 @@ window.Game = (() => {
     try { localStorage.setItem(MAP_KEY, choice); } catch (e) { /* not remembered: this game still plays it */ }
   }
   let chosenMap = rememberedMap();
+  // A Paris street plan to try (Steve, 2026-11-13: tools/paris-maps.html links here): ?paris=<design> plays Paris with it
+  const tryParis = new URLSearchParams(location.search).get('paris');
+  if (PARIS_DESIGNS[tryParis]) {
+    MAPS.find(m => m.id === 'paris').design = tryParis;
+    chosenMap = 'paris';
+  }
 
   // mode: who plays each side; left out, as now. mapId: one of MAPS; left out, as chosen
   function start(seed, mode, mapId) {

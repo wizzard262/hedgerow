@@ -16,7 +16,7 @@ const Sim = (() => {
 
   // ---------- The board ----------
 
-  const TYPES = { '.': 'field', o: 'orchard', v: 'village', h: 'hamlet', r: 'river', '#': 'bridge', '=': 'laneEW', '|': 'laneNS', '+': 'crossroads', s: 'street', q: 'square', t: 'yard', w: 'sea', b: 'beach' };
+  const TYPES = { '.': 'field', o: 'orchard', v: 'village', h: 'hamlet', r: 'river', '#': 'bridge', '=': 'laneEW', '|': 'laneNS', '+': 'crossroads', s: 'street', q: 'square', k: 'court', t: 'yard', w: 'sea', b: 'beach' };
   const inside = (x, y) => x >= 0 && y >= 0 && x < COLS && y < ROWS;
   // The map being played (one game at a time, so a new game changes it for everyone asking)
   let currentMap = MAPS[0];
@@ -148,6 +148,8 @@ const Sim = (() => {
   // lanes run between hedges but not along themselves
   function hedgeWanted(ax, ay, bx, by) {
     const a = tileType(ax, ay), b = tileType(bx, by);
+    // City blocks (Steve: Paris): a row of buildings wherever a courtyard meets a street or square, and nowhere else
+    if (currentMap.blocks) return (a === 'court') !== (b === 'court');
     if (PLACE_COVER[a] || PLACE_COVER[b]) return false;
     // The river has open banks, and a bridge carries its lane straight on
     if (a === 'river' || b === 'river') return false;
@@ -222,7 +224,7 @@ const Sim = (() => {
     const players = { us: mode === 'us' || mode === 'both' ? 'human' : 'robot', de: mode === 'de' || mode === 'both' ? 'human' : 'robot' };
     const R = rng(seed);
     // A map made new each game: from this game's dice, so the same seed gives the same streets
-    if (map.generated === 'city') map = Object.assign({}, map, cityMap(R));
+    if (map.generated === 'paris') map = Object.assign({}, map, parisMap(map, R));
     if (map.generated === 'yard') map = Object.assign({}, map, yardMap(map, R));
     if (map.generated === 'beach') map = Object.assign({}, map, beachMap(map, R));
     if (map.generated === 'ruins') map = Object.assign({}, map, ruinsMap(map, R));
@@ -691,22 +693,27 @@ const Sim = (() => {
     return Object.assign({}, f, { areas, blocksView: FEATURES[f.kind].blocksView, name: FEATURES[f.kind].name });
   }
 
-  // The city (Steve: Paris): a maze of streets through houses, new each game. Crossing points every two fields, joined by a
-  // maze that reaches them all, then a few more streets so there is more than one way round. Some crossing points become
-  // little squares, each with a café (along one side, the full length or shorter, or in the middle) and a fountain. The target
-  // is always the Eiffel Tower (Steve), in the centre of the board, on a crossing point so streets reach it
+  // The city (Steve: Paris): streets between rows of buildings, new each game. Crossing points every two fields, joined by a
+  // maze that reaches them all, then more streets as the map's design says (PARIS_DESIGNS): further ones between crossing
+  // points, some running on off the board, whole boulevards. Every field not a street is a courtyard, and a row of
+  // buildings stands on every edge between a courtyard and a street (map.blocks: see hedgeWanted), working as a hedge
+  // (Steve, 2026-11-13: as Stalingrad's ruins). Some crossing points become little squares, each with a café (along one
+  // side, the full length or shorter, or in the middle) and a fountain. The target is always the Eiffel Tower (Steve), in
+  // the centre of the board, on a crossing point so streets reach it
   const CITY_TOWER = { x: 6, y: 4, name: 'Eiffel Tower' };
   const CITY_SQUARES = 3;
-  const CITY_EXTRA_STREETS = 0.3;
-  function cityMap(R) {
+  function parisMap(map, R) {
+    const design = PARIS_DESIGNS[map.design] || PARIS_DESIGNS.maze;
+    // Every field a courtyard to begin with; the streets are cut through them
     const tiles = [];
-    for (let y = 0; y < ROWS; y++) tiles.push(Array(COLS).fill('v'));
+    for (let y = 0; y < ROWS; y++) tiles.push(Array(COLS).fill('k'));
     const xs = [], ys = [];
     for (let x = 0; x < COLS; x += 2) xs.push(x);
     for (let y = 0; y < ROWS; y += 2) ys.push(y);
     const shuffled = list => { const out = list.slice(); for (let i = out.length - 1; i > 0; i--) { const j = Math.floor(R() * (i + 1)); [out[i], out[j]] = [out[j], out[i]]; } return out; };
     const STEPS = [[2, 0], [-2, 0], [0, 2], [0, -2]];
-    const isPoint = (x, y) => x >= 0 && y >= 0 && x <= xs[xs.length - 1] && y <= ys[ys.length - 1];
+    const lastX = xs[xs.length - 1], lastY = ys[ys.length - 1];
+    const isPoint = (x, y) => x >= 0 && y >= 0 && x <= lastX && y <= lastY;
     const carve = (x, y, dx, dy) => { tiles[y + dy / 2][x + dx / 2] = 's'; tiles[y + dy][x + dx] = 's'; };
     // The maze: from a corner, going on to any crossing point not yet reached
     const seen = new Set(['0,0']);
@@ -720,11 +727,17 @@ const Sim = (() => {
       seen.add(`${here.x + next[0]},${here.y + next[1]}`);
       trail.push({ x: here.x + next[0], y: here.y + next[1] });
     }
-    // A few more streets, between crossing points next to each other
+    // More streets, between crossing points next to each other
     for (const y of ys) for (const x of xs) {
-      if (isPoint(x + 2, y) && R() < CITY_EXTRA_STREETS) carve(x, y, 2, 0);
-      if (isPoint(x, y + 2) && R() < CITY_EXTRA_STREETS) carve(x, y, 0, 2);
+      if (isPoint(x + 2, y) && R() < design.extra) carve(x, y, 2, 0);
+      if (isPoint(x, y + 2) && R() < design.extra) carve(x, y, 0, 2);
     }
+    // Streets running on off the board, past the last crossing points on the east and south
+    for (const y of ys) if (R() < design.out) for (let x = lastX + 1; x < COLS; x++) tiles[y][x] = 's';
+    for (const x of xs) if (R() < design.out) for (let y = lastY + 1; y < ROWS; y++) tiles[y][x] = 's';
+    // Boulevards: whole rows and columns of street, straight across the board
+    for (const y of design.rows || []) for (let x = 0; x < COLS; x++) tiles[y][x] = 's';
+    for (const x of design.cols || []) for (let y = 0; y < ROWS; y++) tiles[y][x] = 's';
     // Little squares, away from where the sides start
     const inner = [];
     for (const y of ys) for (const x of xs) if (x >= 2 && x <= 8 && !(x === CITY_TOWER.x && y === CITY_TOWER.y)) inner.push({ x, y });

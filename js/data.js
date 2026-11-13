@@ -2,7 +2,7 @@
 
 // A board: one character per field. Each field is a tile; hedges grow on the edges between fields
 //   w  sea (pieces can leave it, never enter it)    b  beach (open sand)
-//   s  street (paved, in the city)    q  square (paved and open, in the city)    t  railway tracks (only to look at: as open ground)
+//   s  street (paved, in the city)    q  square (paved and open, in the city)    k  courtyard (inside a city block, open ground)    t  railway tracks (only to look at: as open ground)
 //   .  field        o  orchard (some cover)        h  hamlet: a few houses round a yard (good cover)
 //   v  village (good cover, no hedges round it)    r  river (nothing can enter it)    #  bridge (a lane across the river)
 // One unit to a field (Steve); only hand-to-hand fighting brings two sides into the same field.
@@ -14,7 +14,8 @@
 // the objective, the field to take and hold, its church in the middle. Left out, a map keeps the usual:
 //   gap, wire: chance of a gap in a hedge, and of a gap being fenced    deploy: share of the board each side starts in
 //   us, de: { add: pieces more, remove: ids of pieces less }            ammo: { us: {...}, de: {...} } rounds and bomber runs
-//   features: things standing in fields, see FEATURES                   generated: made new each game in sim.js: 'city', a whole board; 'yard', what stands in the yard
+//   features: things standing in fields, see FEATURES                   generated: made new each game in sim.js: 'paris', a whole board; 'yard', what stands in the yard
+//   blocks: city blocks (Steve: Paris): a row of buildings on every edge between a street and a courtyard, working as a hedge
 // Things that stand in a field and take some of its nine areas (Steve). A building (blocksView) blocks the view like a tank.
 // side: along that side of the field, three areas. areas: the very areas it takes (Steve: not all the full length, and some in
 // the middle of the field). With the middle free a platoon or a tank can stand beside it; a building in the middle leaves room
@@ -137,9 +138,10 @@ const MAPS = [
     de: { add: [{ id: 'dac1', kind: 'puma', name: 'Puma', reserve: true }] },
   },
   {
-    id: 'paris', date: '25 August 1944', name: 'Paris', note: 'A tight city, a new maze of cobbled streets each game: houses, streets and little squares, each with a café and a fountain. The Americans must capture the Eiffel Tower, in the centre of the city. Few tanks: an M5 Stuart light tank in place of the Sherman 76mm, and no Panther; a second bazooka for the Americans, an extra MG 42 for the Germans.',
-    generated: 'city',
-    gap: 1, wire: 0,
+    id: 'paris', date: '25 August 1944', name: 'Paris', note: 'A tight city, new streets each game: rows of Paris buildings line cobbled streets, with courtyards behind them and little squares, each with a café and a fountain. The rows of buildings work as hedges do: you see over one only from right beside it, men climb through the windows, lining one is cover, and a tank can smash through. The Americans must capture the Eiffel Tower, in the centre of the city. Few tanks: an M5 Stuart light tank in place of the Sherman 76mm, and no Panther; a second bazooka for the Americans, an extra MG 42 for the Germans.',
+    // (Steve, 2026-11-13: not houses in fields any more, but rows of buildings on the edges, as Stalingrad's ruins)
+    generated: 'paris', design: 'maze', blocks: true,
+    gap: 0, wire: 0,
     ammo: { us: { bomber: 0 } },
     us: { remove: ['T2'], add: [{ id: 'bz2', kind: 'bazooka', name: 'Bazooka Team 2' }, { id: 'LT1', kind: 'stuart', name: 'M5 Stuart' }] },   // (Steve: a Stuart on some maps; here in place of the Sherman 76mm)
     de: { remove: ['dt2'], add: [{ id: 'dmg5', kind: 'mg42', name: 'MG 42 Team', reserve: true }] },
@@ -381,6 +383,15 @@ const BONUS = [
 const COLS = MAPS[0].rows[0].length, ROWS = MAPS[0].rows.length;
 // Sharing a field (Steve): each field is nine areas; pieces share it while their areas don't overlap (see footprint in
 // sim.js: most pieces one area, the PaK two, a tank or a platoon of two or three sections four)
+// Paris's street plans (Steve, 2026-11-13: show me a few map designs). Crossing points every two fields, joined by a maze
+// that reaches them all; then: extra, the chance of a further street between two crossing points side by side; out, the
+// chance a street runs on off the east or south edge of the board; rows, cols: whole streets straight across the board
+const PARIS_DESIGNS = {
+  maze: { name: 'Maze', note: 'as Paris is now: winding streets, a few dead ends', extra: 0.3, out: 0.4 },
+  old: { name: 'Old quarter', note: 'narrow and twisting, many dead ends, few ways through', extra: 0.08, out: 0.25 },
+  grid: { name: 'Grid', note: 'mostly straight streets crossing, the odd corner and dead end', extra: 0.75, out: 0.6 },
+  boulevards: { name: 'Boulevards', note: 'two long straight boulevards meeting at the tower, side streets between', extra: 0.25, out: 0.4, rows: [4], cols: [6] },
+};
 const HEDGE_GAP = 0.45;          // chance an edge between two fields has a gap (a gate or a broken bank)
 const WIRE = 0.5;                // chance a gap between two fields is closed by a barbed-wire fence: men must cut it, tanks flatten it
 

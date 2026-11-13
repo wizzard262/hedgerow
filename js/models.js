@@ -772,6 +772,182 @@ const Models = (() => {
     for (let k = 0; k < 2; k++) g.add(at(box(0.16, 0.01, 0.012, M.wood), (R() - 0.5) * length * 0.7, 0.04, (R() - 0.5) * 0.05, 0, R() * 3, 0.4));
     return castAll(g);
   }
+
+  // ---------- Paris (Steve, 2026-11-13) ----------
+  // Rows of buildings standing on the edges between a street and a courtyard, working as hedges, as Stalingrad's ruins.
+  // Four looks (Steve liked all four in tools/paris-variants.html): 'haussmann' (A: pale stone, iron balconies, a zinc
+  // mansard), 'block' (B: one long Haussmann front, a dome on the block's outer corners), 'old' (C: narrow houses in soft
+  // plaster, shutters, slate roofs, little shops), 'boulevard' (D: Haussmann with painted shopfronts, striped awnings,
+  // round dormers). A front runs along x, its street face to +z and its courtyard face to -z
+  const PARIS = { depth: 0.12, ground: 0.06, floor: 0.05, roof: 0.055 };
+  const PARIS_LOOKS = ['haussmann', 'block', 'old', 'boulevard'];
+  function parisMats() {
+    if (M.parisStone) return;
+    M.parisStone = mat('#dcd0b3', 0.95);        // pale Lutetian limestone
+    M.parisTrim = mat('#e9e0c9', 0.95);         // carved trims, cornices
+    M.parisGroove = mat('#b9ad90', 0.95);       // the grooves of the ground floor
+    M.parisZinc = mat('#7d878c', 0.55, 0.35);   // the blue-grey zinc of the mansards
+    M.parisSlate = mat('#545b61', 0.75);
+    M.parisIron = mat('#1d2023', 0.5, 0.5);
+    M.parisGlass = mat('#283036', 0.25, 0.2);
+    M.parisDoor = mat('#2f2a24', 0.7);
+    M.parisPot = mat('#b0603e', 0.9);           // terracotta chimney pots
+    M.parisBrick = mat('#97583f', 0.9);
+    M.parisAwning = mat('#ece5d3', 0.9);
+    M.parisShops = ['#1f4a3a', '#7a1f24', '#1f2d4a', '#2f2f2b', '#5a2b3d'].map(c => mat(c, 0.6));     // green, bordeaux, navy, black, plum
+    M.parisRenders = ['#e6d3a6', '#dcbfa8', '#cdd2c7', '#e8dfcb', '#d6c39a'].map(c => mat(c, 0.95));  // ochre, pink, pale green, cream, sand
+    M.parisShutters = ['#6f8490', '#4f6b4c', '#8c3b2e', '#7d7a6c'].map(c => mat(c, 0.8));              // grey-blue, green, red, putty
+    M.parisAwnings = ['#a8322a', '#1f5a46', '#23355e'].map(c => mat(c, 0.9));
+  }
+  const pick = (list, R) => list[Math.floor(R() * list.length)];
+  // A cross-section across a building (z, y) pushed out along its length (x): how the roofs get their slopes
+  function section(points, length, m) {
+    const s = new T.Shape(points.map(([z, y]) => new T.Vector2(z, y)));
+    const geo = new T.ExtrudeGeometry(s, { depth: length, bevelEnabled: false });
+    geo.translate(0, 0, -length / 2);
+    geo.rotateY(Math.PI / 2);
+    return new T.Mesh(geo, m);
+  }
+  // A chimney stack on a party wall, with its row of pots
+  function chimney(g, x, y, pots, m) {
+    const D = PARIS.depth;
+    g.add(at(box(0.013, 0.028, D * 0.45, m), x, y + 0.014, 0));
+    for (let i = 0; i < pots; i++) g.add(at(cyl(0.0026, 0.003, 0.009, M.parisPot, 6), x, y + 0.032, -D * 0.18 + i * (D * 0.36) / Math.max(1, pots - 1)));
+  }
+  // The mansard: a steep lower slope and a short top, dormers in the steep slope front and back (round ones on a boulevard)
+  function mansard(g, L, y, dormers, round) {
+    const D = PARIS.depth, h = PARIS.roof, top = 0.028;
+    g.add(at(section([[-D / 2, 0], [D / 2, 0], [D / 2 - 0.014, h * 0.8], [D / 2 - top, h], [-D / 2 + top, h], [-D / 2 + 0.014, h * 0.8]], L, M.parisZinc), 0, y, 0));
+    for (const s of [-1, 1]) for (let i = 0; i < dormers; i++) {
+      const x = -L / 2 + (i + 0.5) * L / dormers, z = s * (D / 2 - 0.008);
+      if (round) {
+        g.add(at(cyl(0.008, 0.008, 0.006, M.parisTrim, 12), x, y + 0.02, z, Math.PI / 2));
+        g.add(at(cyl(0.0055, 0.0055, 0.007, M.parisGlass, 12), x, y + 0.02, z + s * 0.0005, Math.PI / 2));
+      } else {
+        g.add(at(box(0.015, 0.019, 0.012, M.parisTrim), x, y + 0.019, z));
+        g.add(at(box(0.009, 0.012, 0.003, M.parisGlass), x, y + 0.017, z + s * 0.006));
+      }
+    }
+  }
+  // One Haussmann building: pale stone over a grooved ground floor, a window in every bay, the long iron balconies on the
+  // first and top floors of the street face, the cornice, the mansard, a chimney. o: gate (a carriage gate in the middle),
+  // shops (painted shopfronts), awnings, round (round dormers)
+  function haussmann(L, floors, R, o) {
+    const g = new T.Group(), D = PARIS.depth, G = PARIS.ground, F = PARIS.floor, H = G + floors * F;
+    g.add(at(box(L, H, D, M.parisStone), 0, H / 2, 0));
+    for (let k = 1; k <= 2; k++) g.add(at(box(L + 0.001, 0.0018, D + 0.002, M.parisGroove), 0, k * G / 3, 0));
+    const bays = Math.max(2, Math.round(L / 0.05)), bay = L / bays;
+    const gate = o.gate ? Math.floor(bays / 2) : -1;
+    for (const s of [-1, 1]) {
+      const z = s * (D / 2 + 0.0015), street = s > 0;
+      // The ground floor: shop windows on the street (painted shopfronts on a boulevard), the gate; small windows on the courtyard
+      for (let i = 0; i < bays; i++) {
+        const x = -L / 2 + (i + 0.5) * bay;
+        if (street && i === gate) { g.add(at(box(bay * 0.6, G * 0.75, 0.003, M.parisDoor), x, G * 0.375, z)); continue; }
+        if (street && o.shops) g.add(at(box(bay * 0.9, G * 0.8, 0.003, pick(M.parisShops, R)), x, G * 0.42, z));
+        g.add(at(box(bay * (street ? 0.55 : 0.35), G * (street ? 0.55 : 0.45), 0.003, M.parisGlass), x, G * 0.4, z + s * 0.0006));
+      }
+      // The floors above: a window in every bay, a stone band along each floor
+      for (let f = 0; f < floors; f++) {
+        const y = G + f * F + F * 0.5;
+        for (let i = 0; i < bays; i++) g.add(at(box(bay * 0.36, F * (f === 0 ? 0.62 : 0.55), 0.003, M.parisGlass), -L / 2 + (i + 0.5) * bay, y, z));
+        g.add(at(box(L, 0.0025, 0.003, M.parisTrim), 0, G + f * F, z));
+      }
+    }
+    // The long iron balconies on the street face: a stone ledge and the rail along it
+    for (const f of [0, floors - 1]) {
+      const y = G + f * F + 0.003;
+      g.add(at(box(L, 0.003, 0.009, M.parisTrim), 0, y, D / 2 + 0.0045));
+      g.add(at(box(L, 0.008, 0.0015, M.parisIron), 0, y + 0.0055, D / 2 + 0.009));
+    }
+    g.add(at(box(L + 0.004, 0.005, D + 0.01, M.parisTrim), 0, H + 0.0025, 0));
+    mansard(g, L, H + 0.005, Math.max(1, bays - 1), o.round);
+    chimney(g, (R() < 0.5 ? -1 : 1) * (L / 2 - 0.008), H + 0.005 + PARIS.roof * 0.8, 3 + Math.floor(R() * 3), M.parisStone);
+    // Striped awnings over the shops, sloping out over the pavement
+    if (o.awnings) {
+      const colour = pick(M.parisAwnings, R), stripes = Math.max(4, Math.round(L / 0.022));
+      for (let i = 0; i < stripes; i++) g.add(at(box(L / stripes, 0.003, 0.03, i % 2 ? M.parisAwning : colour), -L / 2 + (i + 0.5) * L / stripes, G - 0.006, D / 2 + 0.013, 0.5, 0, 0));
+    }
+    return g;
+  }
+  // One narrow house of old Paris: soft plaster, shutters folded back by every window, a shop on the street with its name
+  // board, a steep slate roof with a dormer front and back, a brick chimney stack
+  function oldHouse(L, floors, R) {
+    const g = new T.Group(), D = PARIS.depth * 0.92, G = PARIS.ground * 0.9, F = PARIS.floor, H = G + floors * F;
+    const render = pick(M.parisRenders, R), shutter = pick(M.parisShutters, R), shop = pick(M.parisShops, R);
+    g.add(at(box(L, H, D, render), 0, H / 2, 0));
+    const bays = Math.max(2, Math.round(L / 0.05)), bay = L / bays;
+    for (const s of [-1, 1]) {
+      const z = s * (D / 2 + 0.0015);
+      for (let f = 0; f < floors; f++) for (let i = 0; i < bays; i++) {
+        const x = -L / 2 + (i + 0.5) * bay, y = G + f * F + F * 0.5;
+        // (the shutters one board behind the window, showing each side of the glass)
+        g.add(at(box(bay * 0.62, F * 0.55, 0.003, shutter), x, y, z));
+        g.add(at(box(bay * 0.28, F * 0.55, 0.003, M.parisGlass), x, y, z + s * 0.0006));
+      }
+      if (s > 0) {
+        g.add(at(box(L * 0.92, G * 0.85, 0.003, shop), 0, G * 0.44, z));
+        for (const x of [-L * 0.26, L * 0.26]) g.add(at(box(L * 0.3, G * 0.48, 0.003, M.parisGlass), x, G * 0.36, z + 0.0006));
+        g.add(at(box(Math.min(0.016, L * 0.12), G * 0.68, 0.003, M.parisDoor), 0, G * 0.34, z + 0.0006));
+        g.add(at(box(L * 0.86, 0.008, 0.006, M.parisTrim), 0, G * 0.82, z + 0.001));
+      } else for (let i = 0; i < bays; i++) g.add(at(box(bay * 0.3, G * 0.4, 0.003, M.parisGlass), -L / 2 + (i + 0.5) * bay, G * 0.45, z));
+    }
+    const rh = 0.045 + R() * 0.015;
+    g.add(at(section([[-D / 2 - 0.004, 0], [D / 2 + 0.004, 0], [0, rh]], L + 0.004, M.parisSlate), 0, H, 0));
+    for (const s of [-1, 1]) {
+      g.add(at(box(0.015, 0.017, 0.018, render), 0, H + 0.011, s * D / 4));
+      g.add(at(box(0.009, 0.01, 0.003, M.parisGlass), 0, H + 0.011, s * (D / 4 + 0.009)));
+    }
+    chimney(g, (R() < 0.5 ? -1 : 1) * (L / 2 - 0.01), H + rh * 0.45, 2 + Math.floor(R() * 2), M.parisBrick);
+    return g;
+  }
+  // A row of buildings along x, length long: one long front for a block, narrow houses of mixed heights in old Paris,
+  // otherwise three buildings to a field. floors: above the ground floor
+  function parisFront(look, length, floors, seed) {
+    parisMats();
+    const R = seeded(seed * 11 + 5), g = new T.Group();
+    const count = look === 'block' ? 1 : look === 'old' ? Math.max(1, Math.round(length / 0.2)) : Math.max(1, Math.round(length / 0.34));
+    const each = length / count;
+    for (let i = 0; i < count; i++) {
+      const x = -length / 2 + (i + 0.5) * each;
+      const boulevard = look === 'boulevard';
+      const b = look === 'old'
+        ? oldHouse(each, Math.max(1, floors - Math.floor(R() * 2)), R)
+        : haussmann(each, floors, R, { gate: look === 'block' && length > 0.5, shops: boulevard, awnings: boulevard, round: boulevard });
+      g.add(at(b, x, 0, 0));
+    }
+    return castAll(g);
+  }
+  // The building on a corner where two rows meet. A Haussmann block's outer corner (dome) is a round drum under a zinc dome
+  // and a lantern; any other is a square corner building of the row's look, a storey taller under a hipped roof
+  function parisCorner(look, floors, seed, dome) {
+    parisMats();
+    const R = seeded(seed * 13 + 1), g = new T.Group(), S = PARIS.depth + 0.012, G = PARIS.ground, F = PARIS.floor;
+    if (look === 'block' && dome) {
+      const r = S * 0.72, H = G + (floors + 1) * F;
+      g.add(at(cyl(r, r, H, M.parisStone, 20), 0, H / 2, 0));
+      for (let k = 0; k < 8; k++) {
+        const a = k / 8 * Math.PI * 2;
+        for (let f = 0; f <= floors; f++) g.add(at(box(0.003, F * 0.55, 0.012, M.parisGlass), Math.cos(a) * r, G + f * F + F / 2, Math.sin(a) * r, 0, -a, 0));
+      }
+      g.add(at(cyl(r + 0.005, r + 0.005, 0.005, M.parisTrim, 20), 0, H + 0.0025, 0));
+      const cap = new T.Mesh(new T.SphereGeometry(r, 20, 8, 0, Math.PI * 2, 0, Math.PI / 2), M.parisZinc);
+      cap.scale.y = 1.3;
+      g.add(at(cap, 0, H + 0.005, 0));
+      g.add(at(cyl(0.007, 0.009, 0.016, M.parisTrim, 8), 0, H + 0.011 + r * 1.3, 0));
+      return castAll(g);
+    }
+    const old = look === 'old', storeys = floors + (old ? 0 : 1), base = old ? G * 0.9 : G, H = base + storeys * F;
+    const wall = old ? pick(M.parisRenders, R) : M.parisStone;
+    g.add(at(box(S, H, S, wall), 0, H / 2, 0));
+    for (const [dx, dz, ry] of [[0, 1, 0], [0, -1, Math.PI], [1, 0, Math.PI / 2], [-1, 0, -Math.PI / 2]]) {
+      for (let f = 0; f < storeys; f++) g.add(at(box(S * 0.3, F * 0.55, 0.003, M.parisGlass), dx * (S / 2 + 0.0015), base + f * F + F / 2, dz * (S / 2 + 0.0015), 0, ry, 0));
+    }
+    if (!old) g.add(at(box(S + 0.004, 0.005, S + 0.004, M.parisTrim), 0, H + 0.0025, 0));
+    g.add(at(cyl(0.004, S * 0.72, PARIS.roof * (old ? 1.1 : 0.9), old ? M.parisSlate : M.parisZinc, 4), 0, H + PARIS.roof * 0.45, 0, 0, Math.PI / 4, 0));
+    return castAll(g);
+  }
+
   // A pile of rubble in one area of a field (Steve): bricks, broken masonry and a beam, heaped up
   function rubblePile(seed) {
     ruinMats();
@@ -1387,10 +1563,12 @@ const Models = (() => {
   const texCache = {};
   const fieldMats = {};
   function field(type, wheat, seed) {
-    const key = type === 'ruin' ? 'ru' : type === 'village' ? 'v' : type === 'orchard' ? 'o' : type === 'street' ? 'st' : type === 'square' ? 'sq' : type === 'yard' ? 'yd' : type === 'beach' ? 'bc' : type === 'sea' ? 'se' : wheat ? 'w' : 'g' + (seed % 3);
+    const key = type === 'ruin' ? 'ru' : type === 'village' ? 'v' : type === 'orchard' ? 'o' : type === 'street' ? 'st' : type === 'square' ? 'sq' : type === 'court' ? 'ct' : type === 'yard' ? 'yd' : type === 'beach' ? 'bc' : type === 'sea' ? 'se' : wheat ? 'w' : 'g' + (seed % 3);
     // The city's paving (Steve: cobbled): grey cobbles for the streets, big pale flagstones for the squares
     if (key === 'st' && !texCache.st) texCache.st = cobbleTex(['#6b675f', '#5d5a53', '#77736a', '#524f49', '#827d73'], 26, 26, [4, 4], 41);
     if (key === 'sq' && !texCache.sq) texCache.sq = cobbleTex(['#a39c8b', '#928c7d', '#b0a998', '#88826f', '#9b9585'], 64, 44, [3, 3], 43);
+    // A Paris courtyard (Steve, 2026-11-13): pale gravel, lighter than the cobbled streets
+    if (key === 'ct' && !texCache.ct) texCache.ct = flockTex('#958d7b', ['#8a8271', '#a09887', '#7f786a', '#aba392', '#76806a'], 61);
     // Wet sand for the beach; under the water, just dark
     if (key === 'bc' && !texCache.bc) texCache.bc = flockTex('#c9b589', ['#bda97e', '#d6c398', '#b09c72', '#ddcca4'], 67);
     if (key === 'se' && !texCache.se) texCache.se = flockTex('#2f4f55', ['#28454b', '#35575d'], 71);
@@ -2570,5 +2748,5 @@ const Models = (() => {
     return castAll(g);
   }
 
-  return { greyhound, stuart, puma, c47, supplyCrate, EIFFEL_HEIGHT, eiffel, landingCraft, littleShip, matilda, carrier, panzer1, panzer2, panzer3, sdkfz231, lorry, destroyer, battleship, strongpoint, setBritish, tankTrap, hulk, crater, seaWall, seaWallRubble, bunker, bunkerCrew, BUNKER, track, bufferStop, engine, carriage, wagon, signalbox, signal, watertower, coal, cow, sheep, lampPost, posterColumn, marketStall, cafe, barn, fountain, pond, reeds, BRIDGE_DECK, materials, M, mergeParts, eliteBand, water, bridge, soldier, squad, team, captain, pak, mortar, bomber, blenheim, bomberOnStand, setArmy, t34, kv2, flak88, ruinWall, ruinCorner, rubbleLine, rubblePile, minefield, STOREY, howitzer, round, coin, token, sherman, panther, panzer4, hedge, tree, house, die, table, field, lane, at };
+  return { PARIS, PARIS_LOOKS, parisFront, parisCorner, greyhound, stuart, puma, c47, supplyCrate, EIFFEL_HEIGHT, eiffel, landingCraft, littleShip, matilda, carrier, panzer1, panzer2, panzer3, sdkfz231, lorry, destroyer, battleship, strongpoint, setBritish, tankTrap, hulk, crater, seaWall, seaWallRubble, bunker, bunkerCrew, BUNKER, track, bufferStop, engine, carriage, wagon, signalbox, signal, watertower, coal, cow, sheep, lampPost, posterColumn, marketStall, cafe, barn, fountain, pond, reeds, BRIDGE_DECK, materials, M, mergeParts, eliteBand, water, bridge, soldier, squad, team, captain, pak, mortar, bomber, blenheim, bomberOnStand, setArmy, t34, kv2, flak88, ruinWall, ruinCorner, rubbleLine, rubblePile, minefield, STOREY, howitzer, round, coin, token, sherman, panther, panzer4, hedge, tree, house, die, table, field, lane, at };
 })();

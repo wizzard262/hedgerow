@@ -3441,12 +3441,12 @@ check('every map is the same size, has real tiles, and its villages are villages
     assert(played.rows.length === ROWS, `${map.id}: ${played.rows.length} rows`);
     for (const row of played.rows) {
       assert(row.length === COLS, `${map.id}: row "${row}"`);
-      assert(/^[.ovhr#=|+sqtwb]+$/.test(row), `${map.id}: odd tile in "${row}"`);
+      assert(/^[.ovhr#=|+sqktwb]+$/.test(row), `${map.id}: odd tile in "${row}"`);
     }
     assert(played.villages.length >= 1 && map.name && map.note, `${map.id}: not filled in`);
     // (Dunkirk's is the beach, where the Germans make for, not a village to take)
     // (Stalingrad's is the Univermag's open courtyard, Steve)
-    if (!played.landing && !played.evacuate && played.generated !== 'city') for (const v of played.villages) assert(Sim.tileType(v.x, v.y) === 'village' || Sim.inCourtyard(played, v.x, v.y), `${map.id}: ${v.name} is not in a village`);
+    if (!played.landing && !played.evacuate && played.generated !== 'paris') for (const v of played.villages) assert(Sim.tileType(v.x, v.y) === 'village' || Sim.inCourtyard(played, v.x, v.y), `${map.id}: ${v.name} is not in a village`);
   }
   // Ids are all different
   assert(new Set(MAPS.map(m => m.id)).size === MAPS.length, 'two maps with the same id');
@@ -3543,35 +3543,51 @@ check('every map: robots and the test players finish games, and doing nothing ne
   Sim.newGame(1);
 });
 
-check('Paris: a new maze each game, the same for the same seed: every street joined up, every village reachable', () => {
-  const boards = new Set();
-  for (let seed = 1; seed <= 40; seed++) {
-    const st = Sim.newGame(seed, 'us', 'paris');
-    boards.add(st.map.rows.join());
-    assert(Sim.newGame(seed, 'us', 'paris').map.rows.join() === st.map.rows.join(), `seed ${seed}: not the same board twice`);
-    const again = Sim.newGame(seed, 'us', 'paris');
-    assert(/^[vsq]+$/.test(again.map.rows.join('')), `seed ${seed}: something other than houses, streets and squares`);
-    // Every street and square joined to every other, along the streets
-    const paved = [];
-    for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) if (Sim.tileType(x, y) !== 'village') paved.push({ x, y });
-    const reached = new Set([`${paved[0].x},${paved[0].y}`]), open = [paved[0]];
-    while (open.length) {
-      const p = open.pop();
-      for (const q of paved) if (Sim.adjacent(p, q) && !reached.has(`${q.x},${q.y}`)) { reached.add(`${q.x},${q.y}`); open.push(q); }
-    }
-    assert(reached.size === paved.length, `seed ${seed}: streets cut off`);
-    // No hedges or wire in the city
-    assert(!Object.keys(again.hedges).length && !Object.keys(again.wire).length, `seed ${seed}: hedges in Paris`);
+check('Paris: new streets each game, the same for the same seed, every street joined up, rows of buildings between streets and courtyards (Steve, 2026-11-13)', () => {
+  const paris = MAPS.find(m => m.id === 'paris'), usual = paris.design;
+  for (const design of Object.keys(PARIS_DESIGNS)) {
+    paris.design = design;
+    const boards = new Set();
+    for (let seed = 1; seed <= 25; seed++) {
+      const st = Sim.newGame(seed, 'us', 'paris');
+      boards.add(st.map.rows.join());
+      assert(Sim.newGame(seed, 'us', 'paris').map.rows.join() === st.map.rows.join(), `${design} seed ${seed}: not the same board twice`);
+      const again = Sim.newGame(seed, 'us', 'paris');
+      assert(/^[ksq]+$/.test(again.map.rows.join('')), `${design} seed ${seed}: something other than courtyards, streets and squares`);
+      // Every street and square joined to every other, along the streets
+      const paved = [];
+      for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) if (Sim.tileType(x, y) !== 'court') paved.push({ x, y });
+      const reached = new Set([`${paved[0].x},${paved[0].y}`]), open = [paved[0]];
+      while (open.length) {
+        const p = open.pop();
+        for (const q of paved) if (Sim.adjacent(p, q) && !reached.has(`${q.x},${q.y}`)) { reached.add(`${q.x},${q.y}`); open.push(q); }
+      }
+      assert(reached.size === paved.length, `${design} seed ${seed}: streets cut off`);
+      // A row of buildings (a hedge) on every edge between a courtyard and a street, and nowhere else; no wire
+      for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) for (const [dx, dy] of [[1, 0], [0, 1]]) {
+        if (!Sim.inside(x + dx, y + dy)) continue;
+        const between = (Sim.tileType(x, y) === 'court') !== (Sim.tileType(x + dx, y + dy) === 'court');
+        assert(Sim.hedge(again, x, y, x + dx, y + dy) === between, `${design} seed ${seed}: a row of buildings wrong at ${x},${y} to ${x + dx},${y + dy}`);
+      }
+      assert(!Object.keys(again.wire).length, `${design} seed ${seed}: wire in Paris`);
+      // Boulevards run straight across the board
+      for (const row of PARIS_DESIGNS[design].rows || []) assert(!/k/.test(again.map.rows[row]), `${design} seed ${seed}: row ${row} not a boulevard`);
+      for (const col of PARIS_DESIGNS[design].cols || []) assert(again.map.rows.every(r => r[col] !== 'k'), `${design} seed ${seed}: column ${col} not a boulevard`);
     // The objective is always the Eiffel Tower, in the centre of the board, on open paving with streets to it, and not in a little square
-    const o = again.objective;
-    assert(o.name === 'Eiffel Tower' && o.x === 6 && o.y === 4 && Sim.tileType(o.x, o.y) === 'square', `seed ${seed}: objective ${o.name} at ${o.x},${o.y}`);
-    const here = Sim.featuresAt(again, o.x, o.y);
-    assert(here.length === 1 && here[0].kind === 'eiffel', `seed ${seed}: ${here.map(f => f.kind)} with the tower`);
-    assert(again.map.villages.length === 1, `seed ${seed}: more than one target`);
-    // Every piece has a place
-    for (const u of live(again)) assert(fieldOk(again, u.x, u.y), `seed ${seed}: too many in ${u.x},${u.y}`);
+      const o = again.objective;
+      assert(o.name === 'Eiffel Tower' && o.x === 6 && o.y === 4 && Sim.tileType(o.x, o.y) === 'square', `${design} seed ${seed}: objective ${o.name} at ${o.x},${o.y}`);
+      const here = Sim.featuresAt(again, o.x, o.y);
+      assert(here.length === 1 && here[0].kind === 'eiffel', `${design} seed ${seed}: ${here.map(f => f.kind)} with the tower`);
+      assert(again.map.villages.length === 1, `${design} seed ${seed}: more than one target`);
+      // Every piece has a place
+      for (const u of live(again)) assert(fieldOk(again, u.x, u.y), `${design} seed ${seed}: too many in ${u.x},${u.y}`);
+    }
+    assert(boards.size > 20, `${design}: only ${boards.size} different boards in 25 games`);
   }
-  assert(boards.size > 30, `only ${boards.size} different boards in 40 games`);
+  // The designs differ as they say: the old quarter has more courtyards than the grid
+  const courts = design => { paris.design = design; let n = 0; for (let s = 1; s <= 20; s++) n += (Sim.newGame(s, 'us', 'paris').map.rows.join('').match(/k/g) || []).length; return n; };
+  assert(courts('old') > courts('grid'), 'the old quarter is no tighter than the grid');
+  paris.design = usual;
   Sim.newGame(1);
 });
 

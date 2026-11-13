@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Paris street plans</title>
+<style>
+  html, body { margin: 0; background: #1b1a17; color: #eee; font: 15px/1.4 system-ui, sans-serif; }
+  main { max-width: 1500px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 22px; margin: 4px 0 4px; }
+  p.lead { margin: 0 0 16px; color: #c9c3b4; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 640px), 1fr)); gap: 16px; }
+  figure { margin: 0; background: #26241f; border-radius: 8px; overflow: hidden; }
+  figure img { display: block; width: 100%; height: auto; }
+  figcaption { padding: 10px 14px 14px; }
+  figcaption b { color: #ffd36b; font-size: 20px; margin-right: 6px; }
+  figcaption a { display: inline-block; margin-top: 8px; padding: 5px 12px; border-radius: 6px; background: #ffd36b; color: #222; text-decoration: none; font-weight: 600; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Paris street plans</h1>
+  <p class="lead">Rows of Paris buildings on the edges between the streets and the courtyards, working as hedges, as the ruins do at Stalingrad. Every row is one of the four looks (A Haussmann, B Haussmann block with domed corners, C old Paris, D boulevard shops). The same game (seed 11) in each plan; every game makes new streets. "Play it" opens the game on that plan.</p>
+  <div class="grid" id="plans"></div>
+</main>
+<script>
+// The four street plans (PARIS_DESIGNS in js/data.js), each with its screenshot from the game (Steve, 2026-11-13)
+const PLANS = [
+  { id: 'maze', key: '1', name: 'Maze', note: 'as Paris is now: winding streets, a few dead ends' },
+  { id: 'old', key: '2', name: 'Old quarter', note: 'narrow and twisting, many dead ends, few ways through' },
+  { id: 'grid', key: '3', name: 'Grid', note: 'mostly straight streets crossing, the odd corner and dead end' },
+  { id: 'boulevards', key: '4', name: 'Boulevards', note: 'two long straight boulevards meeting at the tower, side streets between' },
+];
+const box = document.getElementById('plans');
+for (const p of PLANS) {
+  const fig = document.createElement('figure');
+  fig.innerHTML = `<img src="../screenshots/paris-design-${p.id}.png" alt="${p.name}: the Paris board seen from the game's camera">
+    <figcaption><b>${p.key}</b><strong>${p.name}</strong>: ${p.note}<br><a href="../index.html?paris=${p.id}">Play it</a></figcaption>`;
+  box.appendChild(fig);
+}
+</script>
+</body>
+</html>

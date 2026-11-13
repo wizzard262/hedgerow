@@ -919,6 +919,11 @@ const Board = (() => {
       ruinWalls(runs, st.map);
       runs.length = 0;
     }
+    // Paris (Steve, 2026-11-13): the "hedges" are rows of buildings, with corner buildings where rows meet
+    if (st.map.blocks) {
+      parisWalls(runs, st);
+      runs.length = 0;
+    }
     const lumps = [[], []], bases = [];
     const m = new T.Matrix4(), q = new T.Quaternion(), sc = new T.Vector3(), pos = new T.Vector3();
     // A point `a` along a run and `side` across it, `h` up
@@ -1026,6 +1031,96 @@ const Board = (() => {
       ruins.add(at(Models.ruinCorner(lo + Math.floor(R() * (hi - lo + 1)), p.arms, Math.round(p.x * 7 + p.z * 13)), p.x, 0, p.z));
     }
     hedgeGroup.add(Models.mergeParts(ruins));
+  }
+
+  // Paris's rows of buildings on the edges between the streets and the courtyards (Steve, 2026-11-13). For each run we must:
+  //   find its courtyard side and its street side; the street face looks onto the street
+  //   take its look: one of the four for each row of a block (the same along a row, by the game's seed)
+  //   choose its height: rows running across the screen lower than those running up it (they would hide what is behind)
+  //   draw it broken, rubble across the middle and its ends still standing, if a tank has gone through
+  // then put a corner building wherever rows running both ways meet: a dome on a Haussmann block's outer corners
+  const PARIS_FLOORS = { across: { haussmann: 3, block: 3, old: 2, boulevard: 3 }, upward: { haussmann: 4, block: 4, old: 3, boulevard: 4 } };
+  function parisWalls(runs, st) {
+    const city = new T.Group();
+    const isCourt = (x, y) => Sim.inside(x, y) && Sim.tileType(x, y) === 'court';
+    const blockOf = parisBlocks(isCourt);
+    const ends = new Map();
+    // (and round the edge of the board, where a courtyard reaches it, so every block is closed: only to look at, as
+    // nothing crosses the board's edge anyway)
+    const border = [];
+    for (let x = 0; x < COLS; x++) {
+      if (isCourt(x, 0)) border.push({ cx: x + 0.5, cz: 0, along: 'x', seed: 900 + x });
+      if (isCourt(x, ROWS - 1)) border.push({ cx: x + 0.5, cz: ROWS, along: 'x', seed: 950 + x });
+    }
+    for (let y = 0; y < ROWS; y++) {
+      if (isCourt(0, y)) border.push({ cx: 0, cz: y + 0.5, along: 'z', seed: 1000 + y });
+      if (isCourt(COLS - 1, y)) border.push({ cx: COLS, cz: y + 0.5, along: 'z', seed: 1050 + y });
+    }
+    for (const r of runs.concat(border)) {
+      // The two fields either side: west and east of a run along z, north and south of one along x
+      const a = r.along === 'z' ? [r.cx - 1, Math.floor(r.cz)] : [Math.floor(r.cx), r.cz - 1];
+      const b = r.along === 'z' ? [r.cx, Math.floor(r.cz)] : [Math.floor(r.cx), r.cz];
+      const courtFirst = isCourt(a[0], a[1]);
+      const court = courtFirst ? a : b;
+      // Turned so the street face (+z on the model) looks away from the courtyard
+      const turn = r.along === 'x' ? (courtFirst ? 0 : Math.PI) : (courtFirst ? Math.PI / 2 : -Math.PI / 2);
+      const line = r.along === 'x' ? r.cz : r.cx;
+      const look = rowLook(st, blockOf.get(court.join()), r.along, line, courtFirst);
+      const floors = PARIS_FLOORS[r.along === 'x' ? 'across' : 'upward'][look];
+      if (r.trampled) {
+        city.add(at(Models.rubbleLine(0.5, r.seed), r.cx, 0, r.cz, 0, r.along === 'z' ? Math.PI / 2 : 0, 0));
+        for (const end of [-1, 1]) {
+          const piece = Models.parisFront(look, 0.25, floors, r.seed + end);
+          city.add(at(piece, r.along === 'x' ? r.cx + end * 0.375 : r.cx, 0, r.along === 'z' ? r.cz + end * 0.375 : r.cz, 0, turn, 0));
+        }
+        continue;
+      }
+      city.add(at(Models.parisFront(look, 1, floors, r.seed), r.cx, 0, r.cz, 0, turn, 0));
+      // Its two ends, where it may meet another row
+      for (const end of [-0.5, 0.5]) {
+        const px = r.along === 'x' ? r.cx + end : r.cx, pz = r.along === 'z' ? r.cz + end : r.cz;
+        const key = px + ',' + pz;
+        if (!ends.has(key)) ends.set(key, { x: px, z: pz, across: false, upward: false, floors: 0, look });
+        const p = ends.get(key);
+        p[r.along === 'x' ? 'across' : 'upward'] = true;
+        p.floors = Math.max(p.floors, floors);
+      }
+    }
+    for (const p of ends.values()) {
+      if (!p.across || !p.upward) continue;
+      // An outer corner of a block: one of the four fields round the point a courtyard, the other three not
+      const courts = [[p.x - 1, p.z - 1], [p.x, p.z - 1], [p.x - 1, p.z], [p.x, p.z]].filter(([x, y]) => isCourt(x, y));
+      city.add(at(Models.parisCorner(p.look, p.floors, Math.round(p.x * 7 + p.z * 13), courts.length === 1), p.x, 0, p.z));
+    }
+    hedgeGroup.add(Models.mergeParts(city));
+  }
+  // Each block of courtyards (fields joined side by side), numbered: 'x,y' to its number
+  function parisBlocks(isCourt) {
+    const blocks = new Map();
+    let count = 0;
+    for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
+      if (!isCourt(x, y) || blocks.has(x + ',' + y)) continue;
+      count++;
+      // Every courtyard joined to this one is in the same block
+      const open = [[x, y]];
+      blocks.set(x + ',' + y, count);
+      while (open.length) {
+        const [cx, cy] = open.pop();
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const nx = cx + dx, ny = cy + dy;
+          if (!isCourt(nx, ny) || blocks.has(nx + ',' + ny)) continue;
+          blocks.set(nx + ',' + ny, count);
+          open.push([nx, ny]);
+        }
+      }
+    }
+    return blocks;
+  }
+  // The look of one row of a block: its block, which way it runs, the line it stands on and which side its courtyard is,
+  // with the game's seed, pick one of the four
+  function rowLook(st, block, along, line, courtFirst) {
+    const R = seeded(st.seed * 7 + block * 131 + line * 17 + (along === 'x' ? 3 : 5) + (courtFirst ? 7919 : 0));
+    return Models.PARIS_LOOKS[Math.floor(R() * Models.PARIS_LOOKS.length)];
   }
 
   // One barbed-wire fence on the edge from field x, y to the next one dx, dy along: its posts (as placings) and the lines of
