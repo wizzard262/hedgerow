@@ -568,6 +568,19 @@ window.Game = (() => {
   });
   board.addEventListener('mouseleave', () => { hover = null; redraw(); $('#tip').style.display = 'none'; });
 
+  // The hover box's line for a thing in a field: what it does
+  function featureLine(thing) {
+    const kind = FEATURES[thing.kind];
+    // A minefield (Steve, 2026-11-14): going in or out, a roll of MINES.need or more sets off a mine
+    if (kind.mines) return `${thing.name}: movement damage on ${MINES.need}+`;
+    // A tank trap: tanks can't go in, men in it have cover
+    if (kind.stopsTanks) return `${thing.name}: no tank can enter; men here +1 cover`;
+    // Something tall: it hides what is behind it
+    if (thing.blocksView) return `${thing.name}: blocks the view, +1 cover past its corner`;
+    // Anything else takes up the ground
+    return `${thing.name}: nobody can stand there`;
+  }
+
   // What is in a field, on hover
   function tooltip(e, f) {
     const tip = $('#tip');
@@ -580,10 +593,7 @@ window.Game = (() => {
     // A wreck in the field: it is there to be hidden behind
     if (Sim.wreckAt(st, f.x, f.y)) lines.push('Burnt-out tank: blocks the view, +1 cover past its corner');
     // A café, a barn, a fountain or a pond: what it takes, and whether it blocks the view
-    for (const thing of Sim.featuresAt(st, f.x, f.y)) {
-      const trap = FEATURES[thing.kind].stopsTanks;
-      lines.push(trap ? `${thing.name}: no tank can enter; men here +1 cover` : thing.blocksView ? `${thing.name}: blocks the view, +1 cover past its corner` : `${thing.name}: nobody can stand there`);
-    }
+    for (const thing of Sim.featuresAt(st, f.x, f.y)) lines.push(featureLine(thing));
     const t = Sim.tileType(f.x, f.y);
     // Houses and trees: their cover (see PLACE_COVER), and the view
     const place = PLACE_COVER[t];

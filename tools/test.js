@@ -4896,5 +4896,39 @@ check('Paris (Steve, 2026-11-13): tanks never go through the buildings, nobody s
   Sim.newGame(1);
 });
 
+// A piece of a page script, cut out by its first and last lines, to check on its own (it needs no page)
+function pageCode(file, from, to) {
+  const text = fs.readFileSync(path.join(__dirname, '..', 'js', file), 'utf8');
+  const start = text.indexOf(from), end = text.indexOf(to, start);
+  assert(start >= 0 && end > start, `${file} has no ${from}`);
+  return text.slice(start, end + to.length);
+}
+
+check('the minefield says what it does on hover (Steve, 2026-11-14): movement damage on 5+, not that nobody can stand there', () => {
+  // (the hover box's line, from main.js)
+  const featureLine = vm.runInThisContext(`(${pageCode('main.js', 'function featureLine(thing) {', '\n  }')})`);
+  const line = featureLine({ kind: 'minefield', name: FEATURES.minefield.name, blocksView: false });
+  assert(line === 'Minefield: movement damage on 5+', `a minefield says "${line}"`);
+  // (the others as they were)
+  assert(featureLine({ kind: 'rubble', name: 'Rubble', blocksView: false }) === 'Rubble: nobody can stand there', 'rubble changed');
+});
+
+check('the artillery\'s rounds stand in a line in front of the gun, twice as big; the warship\'s bigger still (Steve, 2026-11-14: they were hidden)', () => {
+  // (the pile's places, from board3d.js, with the table seen the usual way round)
+  const code = pageCode('board3d.js', 'const ARTILLERY_PILE', 'return { x, y: (spot.pileY || 0) + 0.02, z, size: p.size };\n  }');
+  const pileSpot = vm.runInThisContext(`(() => { const TANKS = 1.6, MEN = 2.45, PILE_MAX = 12; const screenUp = () => -1, screenRight = () => 1, gunDir = side => ({ x: side === 'us' ? 1 : -1, z: 0 }); ${code}; return pileSpot; })()`);
+  const gun = { x: -0.7, z: 2.55, pileX: -1.45, pileZ: 2.3 };
+  const first = pileSpot(gun, 'artillery', 0, 'us'), third = pileSpot(gun, 'artillery', 2, 'us');
+  // In front of the gun on the screen (down it: more z), past its ring, close beside it across the screen
+  assert(first.z > gun.z + 0.36, `the first round is at z ${first.z}, behind or on the gun's ring`);
+  assert(Math.abs(first.x - gun.x) < 0.3 && Math.abs(third.x - gun.x) < 0.3, 'the rounds are not under the gun');
+  assert(third.z === first.z && third.x > first.x, 'the first rounds are not in one line, going on towards the board');
+  // Twice as big as they were (the gun's own size)
+  assert(Math.abs(first.size - 1.6 * 1.7 * 2) < 1e-9, `the rounds are size ${first.size}`);
+  // The warship's: one line from where the map puts it, bigger still
+  const ship = pileSpot({ x: -0.75, z: 6.3, pileX: -1.1, pileZ: 5.1, pileRow: true }, 'artillery', 3, 'us');
+  assert(ship.z === 5.1 && ship.x > -1.1 && ship.size > first.size, 'the warship\'s shells moved or are smaller');
+});
+
 console.log(failed ? `\n${failed} failed` : '\nall passed');
 process.exit(failed ? 1 : 0);

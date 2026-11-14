@@ -99,7 +99,7 @@ const Board = (() => {
   // ---------- The table: built once a game, hedges again when one is cut ----------
 
   // The mortars and artillery of each side, off the board behind its own back line, near the top (Steve): the Americans
-  // left of the board, the Germans right. Where each stands, and where its pile of rounds goes (behind it)
+  // left of the board, the Germans right. Where each stands, and where its pile of rounds goes (behind it; the artillery's goes in front instead, pileSpot)
   const USUAL_GUNS = {
     us: { artillery: { x: -0.7, z: 2.55, pileX: -1.45, pileZ: 2.3 }, mortars: { x: -0.7, z: 4.05, pileX: -1.45, pileZ: 3.85 }, bomber: { x: -0.6, z: 5.5 } },
     de: { artillery: { x: COLS + 0.7, z: 2.55, pileX: COLS + 1.25, pileZ: 2.3 }, mortars: { x: COLS + 0.7, z: 4.05, pileX: COLS + 1.25, pileZ: 3.85 }, bomber: { x: COLS + 0.5, z: 5.5 } },
@@ -158,6 +158,41 @@ const Board = (() => {
     return out;
   }
 
+  // The artillery's rounds (Steve, 2026-11-14: they couldn't be seen, hidden behind the gun, the Katyusha's above all):
+  // a line of them standing in front of the gun on the screen, between it and its name, twice as big, six to a line
+  const ARTILLERY_PILE = { down: 0.46, perRow: 6, gap: 0.13, size: TANKS * 1.7 * 2 };
+  const ARTILLERY_NAME_DOWN = 0.98;
+  // The warship's line of shells (Steve): bigger again, so they can be counted from across the table
+  const SHIP_PILE = { perRow: PILE_MAX, gap: 0.16, size: TANKS * 1.7 * 2.2 };
+  // The mortar bombs: lying in rows of four behind the mortar
+  const MORTAR_PILE = { perRow: 4, gap: 0.075, size: MEN * 1.3 };
+
+  // Where round number k of a gun's pile stands on the table, and how big it is: { x, y, z, size }
+  function pileSpot(spot, which, k, side) {
+    // The warship: one long line, off its bow, from where the map puts it
+    if (spot.pileRow) {
+      const x = spot.pileX + k * SHIP_PILE.gap;
+      return { x, y: spot.pileY || 0, z: spot.pileZ, size: SHIP_PILE.size };
+    }
+    // The artillery: lines of six under the gun on the screen, the first line just past its ring; the first rounds
+    // either side of the gun's middle, the rest going on towards the board
+    if (which === 'artillery') {
+      const p = ARTILLERY_PILE;
+      // (which line, and where along it: the first round one gap out from the gun's middle)
+      const line = Math.floor(k / p.perRow);
+      const along = (k % p.perRow) - 1;
+      // (along the line is towards the board; each line further down the screen)
+      const x = spot.x + gunDir(side).x * along * p.gap;
+      const z = spot.z - screenUp() * (p.down + line * p.gap * 1.2);
+      return { x, y: 0, z, size: p.size };
+    }
+    // The mortar bombs: rows of four behind the mortar, a little off the table as they lie on their fins
+    const p = MORTAR_PILE;
+    const x = spot.pileX + (k % p.perRow) * p.gap;
+    const z = spot.pileZ - screenUp() * Math.floor(k / p.perRow) * p.gap;
+    return { x, y: (spot.pileY || 0) + 0.02, z, size: p.size };
+  }
+
   function buildSupport(st) {
     // (the guns' places for this map)
     GUNS = st && st.map.navy ? DUNKIRK_GUNS : USUAL_GUNS;
@@ -175,17 +210,16 @@ const Board = (() => {
         const sizes = { artillery: TANKS * 1.7, mortars: MEN * 1.3, bomber: 1 };
         model.scale.setScalar(ship ? 1 : sizes[which]);
         built.add(at(model, spot.x, 0, spot.z, 0, gunFacing(side), 0));
-        // The pile of rounds beside it: shells standing in rows of three, mortar bombs lying in rows of four
-        // (the bomber carries its own)
+        // The pile of rounds beside it, one for each shot left (the bomber carries its own)
         const rounds = [];
         for (let k = 0; k < PILE_MAX && which !== 'bomber'; k++) {
-          const r = Models.round(which === 'artillery' ? (ship ? 'shell' : Models.artilleryRound(side)) : 'bomb');
-          // (the warship's line of shells a little bigger, so they can be counted from across the table, Steve)
-          r.scale.setScalar((which === 'artillery' ? TANKS * 1.7 : MEN * 1.3) * (spot.pileRow ? 1.4 : 1));
-          // (one long line when the gun asks for it: the warship's shells, Steve)
-          const perRow = spot.pileRow ? PILE_MAX : which === 'artillery' ? 3 : 4;
-          const gap = spot.pileRow ? 0.11 : which === 'artillery' ? 0.07 : 0.075;
-          built.add(at(r, spot.pileX + (k % perRow) * gap, (spot.pileY || 0) + (which === 'artillery' ? 0 : 0.02), spot.pileZ - screenUp() * Math.floor(k / perRow) * gap));
+          // (the warship fires shells; each army's artillery its own: shells or rockets)
+          const kind = which === 'artillery' ? (ship ? 'shell' : Models.artilleryRound(side)) : 'bomb';
+          const r = Models.round(kind);
+          // (where this round stands, and how big)
+          const place = pileSpot(spot, which, k, side);
+          r.scale.setScalar(place.size);
+          built.add(at(r, place.x, place.y, place.z));
           rounds.push(r);
         }
         // Its name, small, on the table in front
@@ -198,7 +232,9 @@ const Board = (() => {
         const nameOut = which === 'bomber' ? 0 : 0.2;
         // (unless the gun has its own place for it: the warship's, off its bow)
         const nameX = spot.nameX !== undefined ? spot.nameX : spot.x + (side === 'us' ? -nameOut : nameOut);
-        const nameZ = spot.nameZ !== undefined ? spot.nameZ : spot.z - screenUp() * 0.55;
+        // (the artillery's further down, below its line of rounds)
+        const nameDown = which === 'artillery' ? ARTILLERY_NAME_DOWN : 0.55;
+        const nameZ = spot.nameZ !== undefined ? spot.nameZ : spot.z - screenUp() * nameDown;
         name.position.set(nameX, 0.05, nameZ);
         built.add(name);
         support[side][which] = { model, rounds, name };

@@ -1900,6 +1900,14 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - The table: the mine waits until the piece has got to the minefield along its way, and the piece stays there while it goes off (a little longer if it does), keeping its men until then
 - Assumptions: leaving one minefield straight into another is two rolls; the 1 in 3 chance is unchanged (MINES.need in data.js); no balance run (Stalingrad only)
 
+## 323. Artillery rounds easy to see; the minefield's hover line (v192)
+
+- Steve: at Stalingrad make sure the artillery shells are more easily, obviously visible (the Katyusha's, and maybe the warships'). And for a minefield, remove the text "nobody can stand here"; it should say: movement damage on 5+
+- The artillery's rounds (every map) stood behind the gun on the screen, small and dark, so the gun hid them. They now stand in a line in front of the gun, between it and its name (the name moved down to make room), twice as big; the first either side of the gun's middle, more going on towards the board, six to a line (`pileSpot` in board3d.js)
+- The rounds are lighter: rockets in bare metal with a lighter olive warhead, shells with polished brass cases, each with a yellow high-explosive band (`ROUND_LOOK` in models.js). The warship's line of shells stays where it was, a little bigger again
+- Hovering over a minefield now says "Minefield: movement damage on 5+" (the number from MINES.need; `featureLine` in main.js). Other things keep their lines
+- Assumptions: done for every army's artillery, not just Stalingrad's, so the piles all match; the mortar bombs are unchanged; rubble still says "nobody can stand there"
+
 ## Sessions
 
 | # | Date | Length | What we did |

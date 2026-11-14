@@ -1189,18 +1189,29 @@ const Models = (() => {
 
   // One round of ammunition, for the piles beside the guns: a brass-cased shell standing up, a rocket standing on its
   // fins, or a finned mortar bomb
+  // (Steve, 2026-11-14: the artillery's rounds were too dark to see on the table, the Katyusha's above all: light
+  // bodies, shiny brass, and a bright yellow band round each, as real high-explosive rounds were marked)
+  const ROUND_LOOK = {
+    rocketBody: () => mat('#c9ccc8', 0.4, 0.5),      // light bare metal
+    warhead: () => mat('#6d7440', 0.55, 0.15),       // a lighter olive than the guns, so it shows on the wood
+    band: () => mat('#f2c933', 0.5, 0.1),            // the yellow high-explosive band
+    brass: () => mat('#e3be55', 0.25, 0.85),         // the shell's case, polished
+  };
   function round(kind) {
     const g = new T.Group();
     if (kind === 'rocket') {
-      // The rocket body, the fatter warhead and its point, four fins at the foot
-      g.add(at(cyl(0.0055, 0.0055, 0.03, M.steel, 12), 0, 0.019, 0));
-      g.add(at(cyl(0.0068, 0.0068, 0.016, M.olive, 12), 0, 0.042, 0));
-      g.add(at(new T.Mesh(new T.ConeGeometry(0.0068, 0.012, 12), M.olive), 0, 0.056, 0));
-      for (const r of [0, Math.PI / 2]) g.add(at(box(0.016, 0.01, 0.001, M.steel), 0, 0.005, 0, 0, r, 0));
+      // The rocket body, the fatter warhead and its point, the yellow band between them, four fins at the foot
+      g.add(at(cyl(0.0055, 0.0055, 0.03, ROUND_LOOK.rocketBody(), 12), 0, 0.019, 0));
+      g.add(at(cyl(0.0068, 0.0068, 0.016, ROUND_LOOK.warhead(), 12), 0, 0.042, 0));
+      g.add(at(cyl(0.0071, 0.0071, 0.004, ROUND_LOOK.band(), 12), 0, 0.036, 0));
+      g.add(at(new T.Mesh(new T.ConeGeometry(0.0068, 0.012, 12), ROUND_LOOK.warhead()), 0, 0.056, 0));
+      for (const r of [0, Math.PI / 2]) g.add(at(box(0.016, 0.01, 0.001, ROUND_LOOK.rocketBody()), 0, 0.005, 0, 0, r, 0));
     } else if (kind === 'shell') {
-      g.add(at(cyl(0.0065, 0.0065, 0.024, mat('#b89a4a', 0.35, 0.8), 12), 0, 0.012, 0));
-      g.add(at(cyl(0.0062, 0.0065, 0.014, M.olive, 12), 0, 0.031, 0));
-      g.add(at(new T.Mesh(new T.ConeGeometry(0.0062, 0.016, 12), M.olive), 0, 0.046, 0));
+      // The brass case, the body, the yellow band round it, the nose
+      g.add(at(cyl(0.0065, 0.0065, 0.024, ROUND_LOOK.brass(), 12), 0, 0.012, 0));
+      g.add(at(cyl(0.0062, 0.0065, 0.014, ROUND_LOOK.warhead(), 12), 0, 0.031, 0));
+      g.add(at(cyl(0.0066, 0.0066, 0.004, ROUND_LOOK.band(), 12), 0, 0.034, 0));
+      g.add(at(new T.Mesh(new T.ConeGeometry(0.0062, 0.016, 12), ROUND_LOOK.warhead()), 0, 0.046, 0));
     } else {
       const body = sphere(0.007, M.olive, 12, 10); body.scale.set(1, 1.8, 1);
       g.add(at(body, 0, 0.012, 0));
