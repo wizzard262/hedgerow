@@ -45,7 +45,7 @@ const FEATURES = {
   // It takes no areas and blocks no view
   strongpoint: { name: 'Strongpoint', blocksView: false, cover: 2 },
   // Stalingrad (Steve, 2026-11-12): a pile of rubble takes an area, and men among it have one more to hit; a minefield
-  // takes no areas, but every piece that goes into it may set off a mine (see MINES)
+  // takes no areas, but every piece that goes into it or out of it may set off a mine (see MINES)
   rubble: { name: 'Rubble', blocksView: false, cover: 1 },
   minefield: { name: 'Minefield', blocksView: false, mines: true },
 };
@@ -564,8 +564,8 @@ const SMG = { bases: 2, dice: 3 };
 const SHIELD_ARC = 90;
 // A small gun (Steve: the 2 cm of the Panzer II and the Sd.Kfz. 231, the M8's 37 mm) needs this many more to hit a tank
 const SMALL_GUN = 1;
-// Minefields (Steve: Stalingrad): each piece going into one rolls a die; this or more sets off a mine, a hit on it
-// (an anti-tank hit on a tank)
+// Minefields (Steve: Stalingrad): each piece going into one, or out of one, rolls a die; this or more sets off a mine, a hit on it
+// (an anti-tank hit on a tank), and the piece stops there, in the minefield (Steve, 2026-11-14)
 const MINES = { need: 5 };
 const BOMBER_NAMES = { us: 'B-17', de: 'Ju 88' };
 const COMPASS_POINTS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];

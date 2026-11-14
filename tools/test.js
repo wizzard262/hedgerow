@@ -4582,6 +4582,54 @@ check('Stalingrad: a piece going into a minefield rolls a die; 5 or 6 sets off a
   Sim.newGame(1);
 });
 
+check('Stalingrad: a mine stops the move in the minefield; getting through, a piece goes on and rolls again on the way out (Steve)', () => {
+  // A platoon next to a minefield with open ground beyond, nobody else on the table
+  const setUp = () => {
+    const st = Sim.newGame(3, 'us', 'stalingrad');
+    st.hedges = {}; st.wire = {};
+    st.features = [{ x: 5, y: 6, kind: 'minefield', areas: [], seed: 1, name: 'Minefield', blocksView: false }];
+    const a = Sim.unitById(st, 'B');
+    for (const u of st.units) if (u !== a) u.x = u.y = null;
+    a.x = 4; a.y = 6; a.at = null; a.acted = false; a.shocked = false;
+    st.drawn = 'us'; st.activeId = null;
+    return { st, a };
+  };
+  const mines = st => st.fx.filter(f => f.kind === 'mine');
+  // Every die a 1: it picks its way in and out, and carries on to the field beyond
+  let { st, a } = setUp();
+  st.rand = () => 0.01;
+  let r = Sim.actCharge(st, a, 6, 6);
+  assert(r.ok && a.x === 6 && a.y === 6 && !a.shocked, `it did not get through: ${a.x},${a.y}`);
+  assert(mines(st).length === 2 && mines(st).every(f => !f.hit), `${mines(st).length} mine rolls, not 2 (in and out)`);
+  assert(r.lines.join(' ').includes('into the minefield') && r.lines.join(' ').includes('out of the minefield'), r.lines.join(' '));
+  // The table waits for the piece to get there before each mine goes off
+  assert(mines(st).every(f => f.midMove), 'the table would not wait for the piece');
+  // Every die a 6: the mine goes off on the way in, and it stops there
+  ({ st, a } = setUp());
+  st.rand = () => 0.99;
+  r = Sim.actCharge(st, a, 6, 6);
+  assert(r.ok && a.x === 5 && a.y === 6 && a.shocked, `it did not stop in the minefield: ${a.x},${a.y}`);
+  assert(mines(st).length === 1 && mines(st)[0].hit, 'one mine should go off, on the way in');
+  // Next go, standing in the minefield: the way out rolls again, a 6 stops it there once more
+  ({ st, a } = setUp());
+  a.x = 5;
+  st.rand = () => 0.99;
+  r = Sim.actCharge(st, a, 6, 6);
+  assert(r.ok && a.x === 5 && a.y === 6, `it left the minefield on a 6: ${a.x},${a.y}`);
+  assert(r.lines.join(' ').includes('on its way out'), r.lines.join(' '));
+  // With a 1 it walks out
+  ({ st, a } = setUp());
+  a.x = 5;
+  st.rand = () => 0.01;
+  r = Sim.actCharge(st, a, 6, 6);
+  assert(r.ok && a.x === 6 && mines(st).length === 1 && !mines(st)[0].hit, 'it should walk out on a 1');
+  // Two ways as long: it goes round the minefield, not through it
+  ({ st, a } = setUp());
+  const route = Sim.chargeRoutes(st, a).find(rt => rt[rt.length - 1].x === 5 && rt[rt.length - 1].y === 7);
+  assert(route && route.length === 2 && !(route[0].x === 5 && route[0].y === 6), `the way goes through the minefield: ${JSON.stringify(route)}`);
+  Sim.newGame(1);
+});
+
 check('no piece has less than one die in the numbers (Steve: whole dice in the data, not half a die rounded up)', () => {
   for (const [kind, P] of Object.entries(PIECES)) {
     for (const key of ['soft', 'hard', 'he', 'vsMen']) {

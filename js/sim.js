@@ -1783,11 +1783,17 @@ const Sim = (() => {
   const cutter = u => isTank(u) && !!PIECES[u.kind].cutter && !currentMap.blocks;
   // Move a piece. A tank with hedge cutters going through a hedge leaves a gap.
   // Returns what happened to the hedge: 'cut' (driven through), 'climbed' (men clambered over) or ''
-  function step(st, u, x, y, assault = false) {
+  // fallingBack: driven out by a tank, it runs and treads on nothing on the way out (it still may on the way in)
+  function step(st, u, x, y, assault = false, fallingBack = false) {
     let how = '';
     u.trail = null;
     // (moving on, a tank tears free of wire it was snagged in)
     u.snag = null;
+    // (no mine has stopped it on this step yet)
+    u.mineStop = false;
+    // Out of a minefield (Steve): it may set off a mine on the way out; if it does, it stays where it is
+    const leaving = x !== u.x || y !== u.y;
+    if (leaving && !fallingBack && mineCheck(st, u, true)) return how;
     if (wire(st, u.x, u.y, x, y)) {
       const key = edgeKey(u.x, u.y, x, y);
       delete st.wire[key];
@@ -1823,17 +1829,45 @@ const Sim = (() => {
     return how;
   }
 
-  // A piece going into a minefield rolls a die: MINES.need or more sets one off, a hit on it (anti-tank under a tank).
+  // Is there a minefield in this field
+  const mined = (st, x, y) => featuresAt(st, x, y).some(f => FEATURES[f.kind].mines);
+
+  // A piece going into a minefield, or out of one, rolls a die (Steve): MINES.need or more sets one off, a hit on it
+  // (anti-tank under a tank), and its move stops there, in the minefield (u.mineStop). Getting through, it carries on.
+  // leaving: on its way out (it is still in the minefield). Returns true if a mine went off.
   // What happened waits in st.mineLines for whoever reports the move (takeMineLines)
-  function mineCheck(st, u) {
-    if (u.x === null || !featuresAt(st, u.x, u.y).some(f => FEATURES[f.kind].mines)) return;
+  function mineCheck(st, u, leaving = false) {
+    // Not in a minefield: nothing to roll
+    if (u.x === null || !mined(st, u.x, u.y)) return false;
+    // One die
     const faces = [];
     const hits = roll(st, 1, MINES.need, faces);
-    st.fx.push({ kind: 'mine', x: u.x, y: u.y, faces, need: MINES.need, side: enemyOf(u.side), to: { id: u.id }, hit: hits > 0 });
+    // The burst (or none) on the table, once the piece has got into the minefield (midMove: the table waits for it)
+    st.fx.push({ kind: 'mine', x: u.x, y: u.y, faces, need: MINES.need, side: enemyOf(u.side), to: { id: u.id }, hit: hits > 0, midMove: true });
     st.mineLines = st.mineLines || [];
-    if (!hits) { st.mineLines.push(`💥 ${u.name} picks its way through the minefield.`); return; }
+    // Through safely: it goes on
+    if (!hits) {
+      st.mineLines.push(`💥 ${u.name} picks its way ${leaving ? 'out of' : 'into'} the minefield.`);
+      return false;
+    }
+    // A mine goes off: the hit, and the move ends here
     const what = isTank(u) ? damage(st, u, 0, 1) : damage(st, u, 1, 0);
-    st.mineLines.push(`💥 ${u.name} sets off a mine: ${what.join(', ')}.`);
+    st.mineLines.push(`💥 ${u.name} sets off a mine${leaving ? ' on its way out' : ''}: ${what.join(', ')}.`);
+    if (u.x !== null) u.mineStop = true;
+    return true;
+  }
+  // How many mine rolls going from one field into the next costs: one out of a minefield, one into one
+  const mineRolls = (st, fx, fy, x, y) => (mined(st, fx, fy) ? 1 : 0) + (mined(st, x, y) ? 1 : 0);
+  // How many mine rolls a whole route costs, from where the piece stands
+  function routeMineRolls(st, u, route) {
+    let rolls = 0;
+    let from = u;
+    // For each field on the way: out of the last one, into this one
+    for (const p of route) {
+      rolls += mineRolls(st, from.x, from.y, p.x, p.y);
+      from = p;
+    }
+    return rolls;
   }
   // The mine lines waiting to be reported, emptied
   function takeMineLines(st) {
@@ -1884,11 +1918,13 @@ const Sim = (() => {
     for (const d of defenders) {
       const spot = fallBackSpot(st, d, from);
       if (spot) {
-        step(st, d, spot.x, spot.y);
+        step(st, d, spot.x, spot.y, false, true);
         // (driven out by a tank it is up and running, no longer down in cover)
         d.down = false;
         d.ambush = false;
         out.push(`${d.name} falls back`);
+        // (falling back into a minefield, it may set one off)
+        out.push(...takeMineLines(st).map(l => l.replace(/\.$/, '')));
         st.fx.push({ kind: 'rally', x: d.x, y: d.y, to: { id: d.id }, result: 'Falls back', ok: false });
       } else {
         out.push(`${d.name} is overrun`);
@@ -1897,6 +1933,8 @@ const Sim = (() => {
     }
     // (step tears any wire on the way open, and leaves it on the table)
     step(st, u, x, y);
+    // (a mine on its way out of a minefield, or into one)
+    out.push(...takeMineLines(st).map(l => l.replace(/\.$/, '')));
     return out;
   }
 
@@ -1953,7 +1991,10 @@ const Sim = (() => {
     if (!standing(defenders).length && u.x !== null) {
       // The field is the attacker's
       step(st, u, x, y);
-      out.push(`⚔️ ${u.name} takes the field!`);
+      // (a mine on its way out of a minefield, or into one)
+      out.push(...takeMineLines(st).map(l => l.replace(/\.$/, '')));
+      // (a mine on its way out stops it short of the field)
+      if (u.x === x && u.y === y) out.push(`⚔️ ${u.name} takes the field!`);
     } else if (u.x === null) out.push(`⚔️ The charge is wiped out.`);
     else out.push(`⚔️ ${u.name} can't get at them and stays back.`);
     return out;
@@ -2127,6 +2168,8 @@ const Sim = (() => {
     lines.push(...takeMineLines(st));
     // (blown up by a mine as it got there)
     if (u.x === null) { u.snagged = true; return lines; }
+    // A mine went off on its way out of a minefield (Steve): it stays there, and fires from there if it can
+    if (u.x !== goal.x || u.y !== goal.y) { u.snagged = true; setTrail(st, u, route.slice(0, -1)); return lines; }
     // Where it stands: where it was sent, or (none given) the first place in the field with a shot
     const place = side !== undefined ? side : [u.at, ...anchorsFor(u)].find(p => { if (!fitsAt(st, u, goal.x, goal.y, p)) return false; u.at = p; return targets(st, u, true).length; });
     standAt(st, u, place === undefined ? u.at : place);
@@ -2206,8 +2249,11 @@ const Sim = (() => {
   // The search itself. onRoadOnly: only by fields that are road or lane
   function routesWithin(st, u, budget, charging, onRoadOnly) {
     const cheapest = {}, routeTo = {};
+    // (and at the same cost, the way with the fewest mine rolls, Steve)
+    const fewestRolls = {};
     cheapest[u.x + ',' + u.y] = 0;
-    const open = [{ x: u.x, y: u.y, cost: 0, path: [] }];
+    fewestRolls[u.x + ',' + u.y] = 0;
+    const open = [{ x: u.x, y: u.y, cost: 0, rolls: 0, path: [] }];
     while (open.length) {
       // Take the cheapest place reached so far
       open.sort((a, b) => a.cost - b.cost);
@@ -2220,7 +2266,10 @@ const Sim = (() => {
         if (c === null || here.cost + c > budget) continue;
         if (onRoadOnly && !isRoad(x, y)) continue;
         const cost = here.cost + c;
-        if (cheapest[key] !== undefined && cheapest[key] <= cost) continue;
+        const rolls = here.rolls + mineRolls(st, here.x, here.y, x, y);
+        // Already reached as cheaply, with no more mine rolls: nothing better this way
+        const reached = cheapest[key] !== undefined;
+        if (reached && (cheapest[key] < cost || (cheapest[key] === cost && fewestRolls[key] <= rolls))) continue;
         const enemies = at(st, x, y, enemyOf(u.side));
         if (enemies.length) {
           // The enemy's field: only a charge goes in, to fight hand to hand, and it stops there
@@ -2231,18 +2280,20 @@ const Sim = (() => {
           const platoonFights = !facesBunker && fightsHandToHand(u) && (enemies.some(e => !isTank(e)) || firepower(st, u).hard > 0);
           const tankDrivesIn = isTank(u) && enemies.every(e => !isTank(e) && !PIECES[e.kind].fixed);
           const canFight = charging && (platoonFights || tankDrivesIn);
-          if (canFight) { cheapest[key] = cost; routeTo[key] = here.path.concat([{ x, y, assault: true }]); }
+          if (canFight) { cheapest[key] = cost; fewestRolls[key] = rolls; routeTo[key] = here.path.concat([{ x, y, assault: true }]); }
           continue;
         }
         cheapest[key] = cost;
+        fewestRolls[key] = rolls;
         if (roomFor(st, u, x, y)) {
           // Room to stop: a goal, and maybe on from here
           const path = here.path.concat([{ x, y }]);
           routeTo[key] = path;
-          open.push({ x, y, cost, path });
-        } else if (at(st, x, y).length || featuresAt(st, x, y).length) {
+          open.push({ x, y, cost, rolls, path });
+        } else if ((at(st, x, y).length || featuresAt(st, x, y).length) && !mined(st, x, y)) {
           // Friends there, or a building with no room left beside it: pass through, but not stop
-          open.push({ x, y, cost, path: here.path.concat([{ x, y, pass: true }]) });
+          // (never a minefield: a mine there would stop it where it has no room, Steve)
+          open.push({ x, y, cost, rolls, path: here.path.concat([{ x, y, pass: true }]) });
         }
       }
     }
@@ -2385,8 +2436,12 @@ const Sim = (() => {
       if (u.x === null) { u.snagged = true; break; }
       // Shaken in a field of friends it can only pass through: it stops at the first one it can
       if (halted && !p.pass) u.snagged = true;
+      // A mine went off under it (Steve): it stops in the minefield, the one it was leaving or the one it went into
+      if (u.mineStop) u.snagged = true;
+      // How far it got: into this field, or (a mine on its way out) still in the one before
+      const got = u.x === p.x && u.y === p.y ? i + 1 : i;
       // Snagged or stopped: here it stays, and the table shows the way it came this far
-      if (u.snagged) { setTrail(st, u, route.slice(0, i + 1)); break; }
+      if (u.snagged) { setTrail(st, u, route.slice(0, got)); break; }
     }
     return lines;
   }
@@ -2438,6 +2493,8 @@ const Sim = (() => {
     lines.push(...charge(st, u, x, y));
     // Arrived (not beaten back): it stands where it was sent, and the table shows the way it came
     if (u.x === x && u.y === y) { standAt(st, u, side); setTrail(st, u, route); }
+    // A mine on its way out of a minefield stopped it short (Steve): the table shows the way it came
+    else if (u.mineStop) setTrail(st, u, route.slice(0, -1));
     // Arriving in an empty field in sight of an ambush (a fight is its own business)
     if (empty && u.x === x && u.y === y) springAmbushes(st, u, lines);
     // Beaten back into a field of friends it passed through: it can't stay there, so it ends back where it started
@@ -2925,10 +2982,15 @@ const Sim = (() => {
     // (as men walk it: a river has to be crossed by a bridge)
     const far = p => walkDistance(p, goal);
     let best = null, bestD = far(u);
+    let bestRolls = 0;
     for (const route of routesFor(st, u, reach(u, CHARGE_MOVES), false)) {
       const end = route[route.length - 1];
       if (blocksTheVillage(st, u, end)) continue;
-      if (far(end) < bestD) { bestD = far(end); best = route; }
+      // (as near, with fewer mine rolls on the way, Steve: it keeps out of minefields when it can)
+      const rolls = routeMineRolls(st, u, route);
+      const nearer = far(end) < bestD;
+      const asNearSafer = best && far(end) === bestD && rolls < bestRolls;
+      if (nearer || asNearSafer) { bestD = far(end); best = route; bestRolls = rolls; }
     }
     return best;
   }
@@ -3163,9 +3225,11 @@ const Sim = (() => {
     const goal = route[route.length - 1];
     step(st, u, goal.x, goal.y);
     // (what a mine did goes in the computer's report)
-    const mined = takeMineLines(st);
-    if (st.computer && st.computer.rep) st.computer.rep.push(...mined);
+    const mineLines = takeMineLines(st);
+    if (st.computer && st.computer.rep) st.computer.rep.push(...mineLines);
     if (u.x === null) return;
+    // A mine on its way out of a minefield stopped it short (Steve): there it stays
+    if (u.x !== goal.x || u.y !== goal.y) { setTrail(st, u, route.slice(0, -1)); return; }
     setTrail(st, u, route);
     // Arriving in sight of an ambush
     springAmbushes(st, u, []);

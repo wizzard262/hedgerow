@@ -1891,6 +1891,15 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - The howitzer's wheels now stand on their edge (`standingWheel`): `at()` was undoing the wheel's turn
 - Assumption: Stalingrad's Germans get the Nebelwerfer too (it is the German artillery everywhere)
 
+## 322. Minefields: a mine stops the move; a roll in and a roll out (v191)
+
+- Steve: minefields are not unpassable but a danger to pieces crossing them: a chance of setting off a mine that stops the move, and the next move out is still a risk. Picked: stop and roll going in and going out; standing still is safe. Then: a piece can move through and leave on the same move if it doesn't set one off. And: make sure the piece is in the minefield before the mine goes off
+- Going into a minefield and going out of one each roll a die: 5 or 6 sets off a mine, a hit on it as before (anti-tank under a tank), and the move ends there, in the minefield. Getting through, it carries on, so crossing one on the way is two rolls
+- Standing still in a minefield is safe; the next move out rolls. A piece driven out by a tank runs out without a roll (it still rolls going into one)
+- Routes: of two ways as long, the one with fewer mine rolls; a route never passes through a minefield it couldn't stop in (friends filling it). The robots too: of moves ending as near their goal, the one with fewer mine rolls
+- The table: the mine waits until the piece has got to the minefield along its way, and the piece stays there while it goes off (a little longer if it does), keeping its men until then
+- Assumptions: leaving one minefield straight into another is two rolls; the 1 in 3 chance is unchanged (MINES.need in data.js); no balance run (Stalingrad only)
+
 ## Sessions
 
 | # | Date | Length | What we did |

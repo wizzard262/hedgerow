@@ -2719,6 +2719,32 @@ const Board = (() => {
     if (unit) held[unit.id] = { until: landsAt, count: unit.platoons, visible: false };
   }
 
+  // A piece keeps its bases (and stays on the table) until a shot or a mine has gone off under it
+  function holdBases(id, until) {
+    const g = pieces[id];
+    if (!g) return;
+    const before = held[id];
+    held[id] = {
+      until: Math.max(until, before ? before.until : 0),
+      count: before ? before.count : g.userData.bases.filter(b => b.visible).length,
+      visible: before ? before.visible : g.visible,
+    };
+  }
+
+  // A mine (Steve): it waits until the piece has got into the minefield, then goes off (or not) under it; the piece
+  // stays there while it does, before going on or stopping
+  const MINE_WAIT = { hit: 1.2, safe: 0.7 };   // seconds the piece stays in the minefield while the mine is rolled
+  function startMine(st, f) {
+    // When the piece gets to the minefield on its way (straight away if it is already there)
+    const stop = ambushStop(st, f);
+    const t0 = performance.now() + stop.delay * 1000;
+    shots.push({ f, t0, objs: [] });
+    // It waits there until the mine has gone off, and keeps its men until then
+    const until = t0 + (f.hit ? MINE_WAIT.hit : MINE_WAIT.safe) * 1000;
+    noteStop(stop, until);
+    holdBases(f.to.id, until);
+  }
+
   function startShots(st) {
     stopsNow = new Map();
     for (const f of st.fx) {
@@ -2741,7 +2767,7 @@ const Board = (() => {
       // The bomber itself
       if (f.kind === 'flyover') { startFlight(f); shots.push({ f, t0: performance.now(), objs: [] }); continue; }
       // A mine (Steve: Stalingrad): it goes off under the piece, or it doesn't (see playShots)
-      if (f.kind === 'mine') { shots.push({ f, t0: performance.now(), objs: [] }); continue; }
+      if (f.kind === 'mine') { startMine(st, f); continue; }
       // A bomb falls as the plane passes over its field
       if (f.kind === 'bomb' && flight) f.fall = (f.along - flight.start) / FLIGHT.speed + FLIGHT.fall;
       // Hand to hand: its own show, blow by blow
@@ -2771,12 +2797,7 @@ const Board = (() => {
         const land = f.from ? (f.weapon === 'gun' ? 0.25 : f.weapon === 'rocket' ? 0.45 : 0.35) + lastRound : f.kind === 'shell' || f.kind === 'bomb' ? shellFlight(f) : 0;
         const until = t0 + (land + 0.15) * 1000;
         noteStop(stop, until);
-        const before = held[f.to.id];
-        held[f.to.id] = {
-          until: Math.max(until, before ? before.until : 0),
-          count: before ? before.count : target.userData.bases.filter(b => b.visible).length,
-          visible: before ? before.visible : target.visible,
-        };
+        holdBases(f.to.id, until);
       }
       // The sounds: the weapon firing, then what it does when it lands (same timing as the picture)
       const wait = (t0 - performance.now()) / 1000;
