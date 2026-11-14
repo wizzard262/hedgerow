@@ -1881,6 +1881,16 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - The paratroopers' piece and the supply crate now stay off the board until the last parachute is on the table; then they appear, the men under the canopies go, and the canopies fall over and fade as before. No green "can move" ring round the paratroopers before then, and the game waits for the drop to land before going on
 - Pushed (2026-11-13)
 
+## 321. New artillery: Nebelwerfer, raised howitzer, Katyusha (v190)
+
+- Steve: show me artillery options: the 15 cm Nebelwerfer 41 for the Germans, the US 105 mm howitzer pointed upwards, the Soviet Katyusha rocket lorry. Pictures first (made outside the game), then: put them in the game, replace all artillery, but not the boats on the beaches
+- New models (`nebelwerfer`, `katyusha` in models.js; `howitzer('us', true)` for the raised barrel): the Nebelwerfer's six tubes in a ring on a two-wheeled carriage with split trail and front prop, in camouflage, two crew; the M2A1's barrel at about 57°, slid forward on its pivot so the breech stays off the ground; the BM-13 on a ZiS-6 lorry, eight rails raised over the cab, a rocket on top of and under each, the jacks down at the back. `Models.artillery(side)` picks each army's gun for the table and the piece picture
+- Names: the German artillery is now "15 cm Nebelwerfer 41s", the Soviet "Katyusha rockets"; the American stays "105 mm howitzers". The rules and numbers are unchanged
+- The pile beside the Nebelwerfer and the Katyusha is rockets standing on their fins (`round('rocket')`); the howitzer and the warships keep shells
+- The warships stay: USS Texas on the Normandy beach, the Royal Navy destroyers at Dunkirk
+- The howitzer's wheels now stand on their edge (`standingWheel`): `at()` was undoing the wheel's turn
+- Assumption: Stalingrad's Germans get the Nebelwerfer too (it is the German artillery everywhere)
+
 ## Sessions
 
 | # | Date | Length | What we did |

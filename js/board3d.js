@@ -169,7 +169,7 @@ const Board = (() => {
       support[side] = {};
       for (const which of SUPPORT) {
         const spot = GUNS[side][which];
-        const makers = { artillery: Models.howitzer, mortars: Models.mortar, bomber: Models.bomberOnStand };
+        const makers = { artillery: Models.artillery, mortars: Models.mortar, bomber: Models.bomberOnStand };
         const ship = side === 'us' && which === 'artillery' && st && st.map.navy;
         const model = Models.mergeParts(ship ? Models[st.map.navy]() : makers[which](side));
         const sizes = { artillery: TANKS * 1.7, mortars: MEN * 1.3, bomber: 1 };
@@ -179,7 +179,7 @@ const Board = (() => {
         // (the bomber carries its own)
         const rounds = [];
         for (let k = 0; k < PILE_MAX && which !== 'bomber'; k++) {
-          const r = Models.round(which === 'artillery' ? 'shell' : 'bomb');
+          const r = Models.round(which === 'artillery' ? (ship ? 'shell' : Models.artilleryRound(side)) : 'bomb');
           // (the warship's line of shells a little bigger, so they can be counted from across the table, Steve)
           r.scale.setScalar((which === 'artillery' ? TANKS * 1.7 : MEN * 1.3) * (spot.pileRow ? 1.4 : 1));
           // (one long line when the gun asks for it: the warship's shells, Steve)
@@ -3631,7 +3631,7 @@ const Board = (() => {
     if (kind === 'bomber') bases = [Models.bomberOnStand(side)];
     else if (kind === 'artillery' && side === 'us' && navy) bases = [Models[navy]()];
     else if (kind === 'mortars' || kind === 'artillery') {
-      const m = kind === 'artillery' ? Models.howitzer(side) : Models.mortar(side);
+      const m = kind === 'artillery' ? Models.artillery(side) : Models.mortar(side);
       m.scale.setScalar(kind === 'artillery' ? TANKS * 1.7 : MEN * 1.3);
       bases = [m];
     } else bases = buildBases(side, kind, elite, arms);

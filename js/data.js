@@ -334,7 +334,7 @@ const MAPS = [
     // The walls: more of them than hedges in the bocage; a little wire across the gaps
     gap: 0.35, wire: 0.1,
     // The Soviet guns by name; no Soviet bomber for now
-    guns: { us: { artillery: '122 mm howitzers', mortars: '82 mm mortars' } },
+    guns: { us: { artillery: 'Katyusha rockets', mortars: '82 mm mortars' } },
     ammo: { us: { bomber: 0 } },
     us: {
       only: [
@@ -545,11 +545,11 @@ const HAND_TO_HAND_LIMIT = 40;
 // hard: its dice against a tank. A mortar's (Steve) only shakes a tank, or kills one already shaken: see damage in sim.js
 // (Steve: too many, too accurate: half the rounds, 6 to 3 and 8 to 4, and the guns' 3 to 2 and 2 to 1; see SHELL_HARDER)
 // Their names (Steve: the right ones for the time): the US M1 81 mm mortar and 105 mm howitzer, the German 8 cm
-// Granatwerfer 34 and 10.5 cm leichte Feldhaubitze 18. One home for them: the table, the panel and the dice tags all use these
+// Granatwerfer 34 and 15 cm Nebelwerfer 41 rockets (Steve, 2026-11-14: was the 10.5 cm leFH 18). One home for them: the table, the panel and the dice tags all use these
 const MORTARS = { name: 'M1 81 mm mortars', dice: 4, splash: 0, ammo: 3, hard: 1 };
 const ARTILLERY = { name: '105 mm howitzers', dice: 5, splash: 1, ammo: 2, hard: 1 };
 const DE_MORTAR = { name: '8 cm GrW 34 mortars', dice: 3, splash: 0, ammo: 4, hard: 1 };   // the Germans' own mortar: drops on one piece, one mission a turn while ammo lasts
-const DE_ARTILLERY = { name: '10.5 cm leFH 18 howitzers', dice: 5, splash: 1, ammo: 1, hard: 1 };
+const DE_ARTILLERY = { name: '15 cm Nebelwerfer 41s', dice: 5, splash: 1, ammo: 1, hard: 1 };
 const SHELL_HARDER = 1;           // mortar and artillery dice need one more than a shot does: 4+ before cover (Steve)   // the Germans' guns: like ours, fewer rounds
 // The bomber (Steve): the same for both sides. One run a game; a compass spin says which way it flies; it goes straight
 // through a field chosen on the edge of the board and drops one bomb on every piece in every field under it, friend or foe.

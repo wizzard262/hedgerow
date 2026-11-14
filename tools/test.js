@@ -4800,6 +4800,19 @@ check('the M5 Stuart (Steve: a small American tank with a round turret) is on Ri
   Sim.newGame(1);
 });
 
+check('the artillery (Steve, 2026-11-14): the German Nebelwerfer 41s, the Soviet Katyushas, the American 105 mm howitzers; the warships stay', () => {
+  Sim.newGame(1);
+  assert(Sim.gunStats('artillery', 'us').name === '105 mm howitzers', 'the American artillery is misnamed');
+  assert(Sim.gunStats('artillery', 'de').name === '15 cm Nebelwerfer 41s', 'the German artillery is not the Nebelwerfer');
+  Sim.newGame(1, 'us', 'stalingrad');
+  assert(Sim.gunStats('artillery', 'us').name === 'Katyusha rockets', 'the Soviet artillery is not the Katyusha');
+  Sim.newGame(1, 'us', 'dunkirk');
+  assert(Sim.gunStats('artillery', 'us').name === 'Royal Navy destroyers', 'the destroyers went from Dunkirk');
+  Sim.newGame(1, 'us', 'beach');
+  assert(Sim.gunStats('artillery', 'us').name === 'USS Texas', 'the battleship went from the beach');
+  Sim.newGame(1);
+});
+
 check('Paris (Steve, 2026-11-13): tanks never go through the buildings, nobody sees through them, tanks start on the streets, cafés only in dead ends and on corners', () => {
   const paris = MAPS.find(m => m.id === 'paris'), usual = paris.design;
   for (const design of Object.keys(PARIS_DESIGNS)) {

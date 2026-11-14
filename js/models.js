@@ -1001,7 +1001,9 @@ const Models = (() => {
 
   // A field howitzer: two big wheels, the split trail behind, a small shield, the barrel raised. The American 105 mm
   // M2A1 in olive drab, the German 10.5 cm leFH 18 in dark yellow with green and brown, with a muzzle brake. Front +x
-  function howitzer(side) {
+  // raised (Steve: an option to look at): the barrel pointed high, as for a long shot, the gun's pivot moved back nearer the
+  // breech so the breech stays clear of the ground
+  function howitzer(side, raised = false) {
     // (Steve: more like the real guns) The American 105 mm M2A1: two big rubber tyres, a long split trail with spades,
     // a small flat shield in two parts, the barrel on a long cradle with its two recoil cylinders under it and the
     // equilibrators either side. The German 10.5 cm leFH 18: the same layout, with its taller shield and plate hanging below
@@ -1009,9 +1011,9 @@ const Models = (() => {
     const g = new T.Group(), us = side === 'us', paint = us ? M.olive : camoPaint();
     // The wheels: a tyre, the wheel disc, the hub; the axle between them
     for (const s of [-1, 1]) {
-      g.add(at(wheel(0.034, 0.014, M.track), 0, 0.034, s * 0.052));
-      g.add(at(wheel(0.022, 0.016, paint), 0, 0.034, s * 0.052));
-      g.add(at(wheel(0.007, 0.022, M.steel), 0, 0.034, s * 0.052));
+      g.add(at(standingWheel(0.034, 0.014, M.track), 0, 0.034, s * 0.052));
+      g.add(at(standingWheel(0.022, 0.016, paint), 0, 0.034, s * 0.052));
+      g.add(at(standingWheel(0.007, 0.022, M.steel), 0, 0.034, s * 0.052));
     }
     g.add(at(cyl(0.004, 0.004, 0.1, M.steel, 8), 0, 0.034, 0, Math.PI / 2, 0, 0));
     // The saddle the gun sits on
@@ -1040,20 +1042,162 @@ const Models = (() => {
     const length = us ? 0.18 : 0.16;
     gun.add(at(cyl(0.0062, 0.0078, length, M.steel, 14), -0.055 + length / 2 + 0.01, 0, 0, 0, 0, Math.PI / 2));
     if (!us) gun.add(at(cyl(0.0105, 0.0105, 0.016, M.steel, 12), -0.045 + length, 0, 0, 0, 0, Math.PI / 2));
-    at(gun, 0.01, 0.066, 0, 0, 0, 0.32);
+    // (raised: every part of the gun slid forward on its pivot, so the breech swings down less)
+    if (raised) for (const part of gun.children) part.position.x += 0.04;
+    at(gun, 0.01, 0.066, 0, 0, 0, raised ? 1.0 : 0.32);
     g.add(gun);
-    // The equilibrators either side of the cradle (the American gun)
-    if (us) for (const s of [-1, 1]) g.add(at(cyl(0.004, 0.004, 0.04, M.steel, 8), 0.01, 0.07, s * 0.02, 0, 0, -0.5));
+    // The equilibrators either side of the cradle (the American gun): leaning back, or nearly upright with the barrel raised
+    if (us) for (const s of [-1, 1]) g.add(at(cyl(0.004, 0.004, 0.04, M.steel, 8), 0.01, 0.07, s * 0.02, 0, 0, raised ? -0.15 : -0.5));
     // Two crew: one at the breech, one carrying a round up
     g.add(at(soldier(side, 0, false), -0.09, 0.0, 0.05, 0, 0.4, 0));
     g.add(at(soldier(side, 1, false), -0.12, 0.0, -0.06, 0, -0.5, 0));
     return castAll(g);
   }
 
-  // One round of ammunition, for the piles beside the guns: a brass-cased shell standing up, or a finned mortar bomb
+  // A wheel standing on its edge, its axle across (z): the turned cylinder inside a group, so at() can place it
+  // without undoing the turn
+  function standingWheel(r, w, m) {
+    const holder = new T.Group();
+    holder.add(wheel(r, w, m));
+    return holder;
+  }
+
+  // A box from one point to another, its height kept upright: struts, rails and trail legs
+  function beam(a, b, w, h, m) {
+    const A = new T.Vector3(...a), B = new T.Vector3(...b);
+    const o = box(w, h, A.distanceTo(B), m);
+    o.position.copy(A).add(B).multiplyScalar(0.5);
+    // (lookAt turns the box's long side, z, to point at the far end)
+    o.lookAt(B);
+    return o;
+  }
+
+  // The 15 cm Nebelwerfer 41 (Steve: an option for the German artillery): six rocket tubes in a ring held by two
+  // six-sided frames, on a light two-wheeled carriage with a split trail and a prop let down in front, the tubes raised.
+  // Dark yellow with green and brown, two crew. Front +x
+  function nebelwerfer() {
+    const g = new T.Group(), paint = camoPaint();
+    // The wheels: a tyre, the wheel disc, the hub; the axle between them
+    for (const s of [-1, 1]) {
+      g.add(at(standingWheel(0.026, 0.011, M.track), 0, 0.026, s * 0.046));
+      g.add(at(standingWheel(0.017, 0.013, paint), 0, 0.026, s * 0.046));
+      g.add(at(standingWheel(0.006, 0.018, M.steel), 0, 0.026, s * 0.046));
+    }
+    g.add(at(cyl(0.0035, 0.0035, 0.09, M.steel, 8), 0, 0.026, 0, Math.PI / 2, 0, 0));
+    // The split trail: two legs from the axle out to the ground behind, a spade at each end
+    for (const s of [-1, 1]) {
+      g.add(beam([-0.005, 0.03, s * 0.012], [-0.17, 0.006, s * 0.068], 0.01, 0.009, paint));
+      g.add(at(box(0.005, 0.02, 0.022, M.steel), -0.172, 0.009, s * 0.069, 0, s * 0.32, 0));
+    }
+    // The prop let down in front, so it doesn't rock as the rockets go
+    g.add(beam([0.008, 0.03, 0], [0.06, 0.004, 0], 0.008, 0.006, paint));
+    g.add(at(box(0.016, 0.004, 0.016, M.steel), 0.062, 0.002, 0));
+    // The cradle on the axle: two side plates up to the tubes' pivot
+    for (const s of [-1, 1]) g.add(at(box(0.022, 0.04, 0.004, paint), 0, 0.054, s * 0.026));
+    // The six tubes in a ring, raised, with their dark mouths, held by a six-sided frame at each end
+    const tubes = new T.Group();
+    const length = 0.095, back = -0.04, ring = 0.0145;
+    for (let k = 0; k < 6; k++) {
+      const angle = k * Math.PI / 3;
+      const y = Math.sin(angle) * ring, z = Math.cos(angle) * ring;
+      tubes.add(at(cyl(0.0075, 0.0075, length, M.steel, 14), back + length / 2, y, z, 0, 0, Math.PI / 2));
+      for (const end of [back - 0.0005, back + length + 0.0005]) tubes.add(at(cyl(0.006, 0.006, 0.002, M.black, 12), end, y, z, 0, 0, Math.PI / 2));
+    }
+    for (const x of [back + 0.012, back + length - 0.012]) tubes.add(at(cyl(0.0245, 0.0245, 0.006, paint, 6), x, 0, 0, Math.PI / 6, 0, Math.PI / 2));
+    // The firing box on the frame
+    tubes.add(at(box(0.012, 0.008, 0.01, paint), back + 0.03, 0.026, 0));
+    at(tubes, 0, 0.074, 0, 0, 0, 0.5);
+    g.add(tubes);
+    // Two crew: one at the side, one carrying a rocket up
+    g.add(at(soldier('de', 0, false), -0.08, 0.0, 0.07, 0, 0.5, 0));
+    g.add(at(soldier('de', 1, false), -0.11, 0.0, -0.06, 0, -0.5, 0));
+    return castAll(g);
+  }
+
+  // The BM-13 Katyusha (Steve: an option for the Soviet artillery): eight launch rails on a ZiS-6 lorry, raised over the
+  // cab, a rocket on top of each rail and one hanging under it, the jacks down at the back, the armoured shutter over
+  // the windscreen. Soviet green. Front +x
+  function katyusha() {
+    const paint = sovietPaint(), g = new T.Group();
+    // The chassis frame and the wheels: one axle in front, two at the back with twin tyres
+    g.add(at(box(0.4, 0.016, 0.08, M.black), -0.02, 0.05, 0));
+    for (const s of [-1, 1]) {
+      g.add(at(standingWheel(0.031, 0.022, M.black), 0.13, 0.031, s * 0.064));
+      g.add(at(standingWheel(0.013, 0.024, paint), 0.13, 0.031, s * 0.064));
+      for (const x of [-0.1, -0.168]) {
+        g.add(at(standingWheel(0.031, 0.036, M.black), x, 0.031, s * 0.06));
+        g.add(at(standingWheel(0.013, 0.038, paint), x, 0.031, s * 0.06));
+      }
+      // The front mudguard, the running board back to the bed
+      g.add(at(box(0.075, 0.005, 0.032, paint), 0.13, 0.068, s * 0.064));
+      g.add(at(box(0.07, 0.004, 0.024, paint), 0.06, 0.05, s * 0.066));
+    }
+    // The long bonnet, the radiator, the headlamps
+    g.add(at(box(0.1, 0.048, 0.08, paint), 0.15, 0.086, 0));
+    g.add(at(box(0.004, 0.05, 0.068, M.steel), 0.201, 0.086, 0));
+    for (const s of [-1, 1]) g.add(at(sphere(0.008, M.steel, 10, 8), 0.196, 0.078, s * 0.05));
+    // The cab, its roof, its side windows, and the steel shutter let down over the windscreen
+    g.add(at(box(0.07, 0.08, 0.14, paint), 0.065, 0.11, 0));
+    g.add(at(box(0.076, 0.005, 0.146, paint), 0.065, 0.152, 0));
+    for (const s of [-1, 1]) g.add(at(box(0.036, 0.026, 0.002, M.window), 0.07, 0.125, s * 0.071));
+    g.add(at(box(0.004, 0.03, 0.13, M.steel), 0.102, 0.127, 0, 0, 0, -0.15));
+    // The launcher's base on the bed, and the two jacks let down at the back
+    g.add(at(box(0.25, 0.022, 0.13, paint), -0.1, 0.069, 0));
+    for (const s of [-1, 1]) {
+      g.add(beam([-0.205, 0.07, s * 0.05], [-0.215, 0.004, s * 0.06], 0.007, 0.007, M.steel));
+      g.add(at(box(0.018, 0.004, 0.018, M.steel), -0.215, 0.002, s * 0.06));
+    }
+    // The rails, raised from their hinge at the back: eight steel I-beams side by side, cross-braced underneath
+    const rails = new T.Group(), L = 0.33, lift = 0.5, pivot = [-0.2, 0.104];
+    for (let k = 0; k < 8; k++) {
+      const z = -0.056 + k * 0.016;
+      rails.add(at(box(L, 0.008, 0.0022, M.steel), L / 2, 0, z));
+      for (const y of [-0.004, 0.004]) rails.add(at(box(L, 0.0014, 0.0065, M.steel), L / 2, y, z));
+      // The rockets: one riding on top of the rail, one hanging under it, the warhead a little fatter, fins at the tail
+      for (const s of [-1, 1]) {
+        const y = s * 0.0095;
+        rails.add(at(cyl(0.0042, 0.0042, 0.07, paint, 10), 0.14, y, z, 0, 0, Math.PI / 2));
+        rails.add(at(cyl(0.0047, 0.0047, 0.024, M.steel, 10), 0.187, y, z, 0, 0, Math.PI / 2));
+        rails.add(at(new T.Mesh(new T.ConeGeometry(0.0047, 0.012, 10), M.steel), 0.205, y, z, 0, 0, -Math.PI / 2));
+        for (const r of [0, Math.PI / 2]) rails.add(at(box(0.012, 0.011, 0.0008, M.steel), 0.1, y, z, r, 0, 0));
+      }
+    }
+    for (const x of [0.03, 0.17, 0.27]) rails.add(at(box(0.008, 0.006, 0.124, paint), x, -0.017, 0));
+    at(rails, pivot[0], pivot[1], 0, 0, 0, lift);
+    g.add(rails);
+    // The lifting frame: struts from the base up to the middle brace under the rails
+    const braceX = pivot[0] + 0.17 * Math.cos(lift) + 0.017 * Math.sin(lift);
+    const braceY = pivot[1] + 0.17 * Math.sin(lift) - 0.017 * Math.cos(lift);
+    for (const s of [-1, 1]) g.add(beam([-0.04, 0.08, s * 0.05], [braceX, braceY, s * 0.05], 0.008, 0.008, paint));
+    // The hinge at the back
+    g.add(at(cyl(0.006, 0.006, 0.13, M.steel, 10), pivot[0], pivot[1] - 0.012, 0, Math.PI / 2, 0, 0));
+    return castAll(g);
+  }
+
+  // Each army's artillery (Steve, 2026-11-14: all of it replaced, but not the warships): the Americans' 105 mm howitzer
+  // pointed high, the Germans' Nebelwerfer 41, the Soviets' Katyusha
+  function artillery(side) {
+    if (side === 'de') return nebelwerfer();
+    if (sovietLook) return katyusha();
+    return howitzer(side, true);
+  }
+  // What lies in the pile beside each army's artillery: rockets for the Nebelwerfer and the Katyusha, shells for the howitzer
+  function artilleryRound(side) {
+    const rockets = side === 'de' || sovietLook;
+    return rockets ? 'rocket' : 'shell';
+  }
+
+  // One round of ammunition, for the piles beside the guns: a brass-cased shell standing up, a rocket standing on its
+  // fins, or a finned mortar bomb
   function round(kind) {
     const g = new T.Group();
-    if (kind === 'shell') {
+    if (kind === 'rocket') {
+      // The rocket body, the fatter warhead and its point, four fins at the foot
+      g.add(at(cyl(0.0055, 0.0055, 0.03, M.steel, 12), 0, 0.019, 0));
+      g.add(at(cyl(0.0068, 0.0068, 0.016, M.olive, 12), 0, 0.042, 0));
+      g.add(at(new T.Mesh(new T.ConeGeometry(0.0068, 0.012, 12), M.olive), 0, 0.056, 0));
+      for (const r of [0, Math.PI / 2]) g.add(at(box(0.016, 0.01, 0.001, M.steel), 0, 0.005, 0, 0, r, 0));
+    } else if (kind === 'shell') {
       g.add(at(cyl(0.0065, 0.0065, 0.024, mat('#b89a4a', 0.35, 0.8), 12), 0, 0.012, 0));
       g.add(at(cyl(0.0062, 0.0065, 0.014, M.olive, 12), 0, 0.031, 0));
       g.add(at(new T.Mesh(new T.ConeGeometry(0.0062, 0.016, 12), M.olive), 0, 0.046, 0));
@@ -2748,5 +2892,5 @@ const Models = (() => {
     return castAll(g);
   }
 
-  return { PARIS, PARIS_LOOKS, parisFront, parisCorner, greyhound, stuart, puma, c47, supplyCrate, EIFFEL_HEIGHT, eiffel, landingCraft, littleShip, matilda, carrier, panzer1, panzer2, panzer3, sdkfz231, lorry, destroyer, battleship, strongpoint, setBritish, tankTrap, hulk, crater, seaWall, seaWallRubble, bunker, bunkerCrew, BUNKER, track, bufferStop, engine, carriage, wagon, signalbox, signal, watertower, coal, cow, sheep, lampPost, posterColumn, marketStall, cafe, barn, fountain, pond, reeds, BRIDGE_DECK, materials, M, mergeParts, eliteBand, water, bridge, soldier, squad, team, captain, pak, mortar, bomber, blenheim, bomberOnStand, setArmy, t34, kv2, flak88, ruinWall, ruinCorner, rubbleLine, rubblePile, minefield, STOREY, howitzer, round, coin, token, sherman, panther, panzer4, hedge, tree, house, die, table, field, lane, at };
+  return { PARIS, PARIS_LOOKS, parisFront, parisCorner, greyhound, stuart, puma, c47, supplyCrate, EIFFEL_HEIGHT, eiffel, landingCraft, littleShip, matilda, carrier, panzer1, panzer2, panzer3, sdkfz231, lorry, destroyer, battleship, strongpoint, setBritish, tankTrap, hulk, crater, seaWall, seaWallRubble, bunker, bunkerCrew, BUNKER, track, bufferStop, engine, carriage, wagon, signalbox, signal, watertower, coal, cow, sheep, lampPost, posterColumn, marketStall, cafe, barn, fountain, pond, reeds, BRIDGE_DECK, materials, M, mergeParts, eliteBand, water, bridge, soldier, squad, team, captain, pak, mortar, bomber, blenheim, bomberOnStand, setArmy, t34, kv2, flak88, ruinWall, ruinCorner, rubbleLine, rubblePile, minefield, STOREY, howitzer, nebelwerfer, katyusha, artillery, artilleryRound, round, coin, token, sherman, panther, panzer4, hedge, tree, house, die, table, field, lane, at };
 })();
