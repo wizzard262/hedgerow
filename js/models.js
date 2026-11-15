@@ -2110,10 +2110,28 @@ const Models = (() => {
     return castAll(g);
   }
 
+  // A box with sloping faces: its bottom and top each a rectangle (x0 to x1 along, w across), at heights y0 and y1. For
+  // armour plates that lean in: a casemate's sloped front, back and sides
+  function frustum(bottom, top, y0, y1, m) {
+    const geo = new T.BoxGeometry(1, 1, 1);
+    const pos = geo.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      // Each corner of the unit box moved to its corner of the bottom or the top
+      const up = pos.getY(i) > 0;
+      const d = up ? top : bottom;
+      pos.setXYZ(i, pos.getX(i) < 0 ? d.x0 : d.x1, up ? y1 : y0, pos.getZ(i) * d.w);
+    }
+    geo.computeVertexNormals();
+    return new T.Mesh(geo, m);
+  }
+
   // The StuG III Ausf. F (Steve picked it, 2026-11-15: the Germans' round 3 reinforcement at Stalingrad): the Panzer III's
-  // running gear under a low, flat casemate with no turret, the long 7.5 cm StuK 40 with its muzzle brake out of the front
-  // a little right of the middle, the commander's hatch and the stowage boxes on the track guards. Front +x
-  function stug3() {
+  // running gear under a casemate with no turret, the long 7.5 cm StuK 40 with its muzzle brake out of the front a little
+  // right of the middle. Front +x. look (Steve: it looked as if it had a turret; options to pick from):
+  // 'now' the first one, a narrow, tall casemate; 'A' a sloped wedge, full width over the tracks; 'B' the Ausf. F's boxy
+  // casemate, full width, steep sides, the stepped front with the driver's visor; 'C' as A, with a rounded cast mantlet
+  // and side skirts. Steve picked C (2026-11-15); tools/stug-variants.html shows all four
+  function stug3(look = 'C') {
     const paint = M.panzerGrey;
     const g = new T.Group(), W = 0.18, L = 0.36;
     g.add(at(box(0.34, 0.05, W * 0.6, paint), 0, 0.06, 0));
@@ -2125,20 +2143,52 @@ const Models = (() => {
       for (let k = 0; k < 3; k++) g.add(at(wheel(0.006, 0.015, M.steel), -0.08 + k * 0.07, 0.055, z));
       g.add(at(sprocket(0.02, 0.03, paint), 0.165, 0.045, z));
       g.add(at(wheel(0.017, 0.03, M.steel), -0.165, 0.04, z));
-      // A stowage box on each track guard
-      g.add(at(box(0.07, 0.022, 0.026, paint), -0.06, 0.124, s * 0.072));
     }
-    // The low casemate: sloped front, flat roof, its sides sloping in
-    g.add(at(profile([[-0.07, 0], [0.09, 0], [0.11, 0.022], [0.075, 0.048], [-0.07, 0.048]], 0.12, paint, 0.004), 0, 0.112, 0));
-    // The gun's mantlet and the long 7.5 cm with its muzzle brake, a little right of the middle
-    g.add(at(box(0.026, 0.03, 0.036, paint), 0.1, 0.134, -0.012));
-    g.add(at(cyl(0.0048, 0.006, 0.17, M.steel, 12), 0.2, 0.136, -0.012, 0, 0, Math.PI / 2));
-    g.add(at(cyl(0.0085, 0.0085, 0.016, M.steel, 12), 0.29, 0.136, -0.012, 0, 0, Math.PI / 2));
-    // The commander's hatch and his scissor periscope, the loader's hatch
-    g.add(at(cyl(0.014, 0.014, 0.008, paint, 12), -0.02, 0.164, 0.025));
-    g.add(at(box(0.004, 0.022, 0.004, M.steel), -0.01, 0.176, 0.025));
-    g.add(at(box(0.03, 0.006, 0.026, paint), -0.03, 0.163, -0.025));
-    for (const s of [-1, 1]) g.add(at(crossMesh(0.02), -0.02, 0.1, s * (W / 2 + 0.002), 0, s > 0 ? 0 : Math.PI, 0));
+    // Where the gun comes out (along, up, across) and how far the casemate's roof reaches
+    let gun = { x: 0.1, y: 0.134, z: -0.012 }, roofY = 0.16, hatchX = -0.02;
+    if (look === 'now') {
+      for (const s of [-1, 1]) g.add(at(box(0.07, 0.022, 0.026, paint), -0.06, 0.124, s * 0.072));
+      g.add(at(profile([[-0.07, 0], [0.09, 0], [0.11, 0.022], [0.075, 0.048], [-0.07, 0.048]], 0.12, paint, 0.004), 0, 0.112, 0));
+      g.add(at(box(0.026, 0.03, 0.036, paint), 0.1, 0.134, -0.012));
+    } else if (look === 'B') {
+      // Boxy: full width over the track guards, steep sides, the front plate leaning back a little; the driver's visor
+      // block standing proud on the left of the front, the gun's square mantlet on the right
+      g.add(at(frustum({ x0: -0.1, x1: 0.13, w: W * 1.04 }, { x0: -0.09, x1: 0.105, w: W * 0.9 }, 0.112, 0.158, paint), 0, 0, 0));
+      g.add(at(box(0.024, 0.026, 0.05, paint), 0.12, 0.132, 0.045));
+      g.add(at(box(0.004, 0.006, 0.03, M.black), 0.133, 0.14, 0.045));
+      g.add(at(box(0.03, 0.032, 0.05, paint), 0.12, 0.134, -0.03));
+      gun = { x: 0.13, y: 0.135, z: -0.03 };
+      roofY = 0.158;
+      // A long stowage bin across the back of the casemate
+      g.add(at(box(0.03, 0.02, W * 0.8, paint), -0.11, 0.124, 0));
+    } else {
+      // A wedge: full width over the track guards, the front sloping far back, the sides leaning in, a flat low roof
+      g.add(at(frustum({ x0: -0.09, x1: 0.15, w: W * 1.04 }, { x0: -0.075, x1: 0.06, w: W * 0.72 }, 0.112, 0.155, paint), 0, 0, 0));
+      roofY = 0.155;
+      if (look === 'C') {
+        // The rounded cast mantlet (the 'pig's head') on the sloped front, and side skirts over the running gear
+        const pig = sphere(0.024, paint, 14, 10);
+        pig.scale.set(1.2, 0.85, 1);
+        g.add(at(pig, 0.105, 0.134, -0.012));
+        gun = { x: 0.12, y: 0.134, z: -0.012 };
+        for (const s of [-1, 1]) {
+          for (let k = 0; k < 4; k++) g.add(at(box(0.07, 0.04, 0.003, paint), -0.105 + k * 0.072, 0.07, s * (W / 2 + 0.012), 0, 0, 0));
+          for (const x of [-0.12, 0, 0.12]) g.add(at(box(0.003, 0.004, 0.012, M.steel), x, 0.09, s * (W / 2 + 0.006)));
+        }
+      } else {
+        // A square mantlet box sitting on the slope
+        g.add(at(box(0.03, 0.03, 0.04, paint), 0.1, 0.134, -0.012));
+        gun = { x: 0.115, y: 0.134, z: -0.012 };
+      }
+    }
+    // The long 7.5 cm with its muzzle brake
+    g.add(at(cyl(0.0048, 0.006, 0.17, M.steel, 12), gun.x + 0.085, gun.y + 0.002, gun.z, 0, 0, Math.PI / 2));
+    g.add(at(cyl(0.0085, 0.0085, 0.016, M.steel, 12), gun.x + 0.175, gun.y + 0.002, gun.z, 0, 0, Math.PI / 2));
+    // The commander's hatch and his scissor periscope, the loader's hatch, on the roof
+    g.add(at(cyl(0.014, 0.014, 0.008, paint, 12), hatchX, roofY + 0.003, 0.025));
+    g.add(at(box(0.004, 0.022, 0.004, M.steel), hatchX + 0.01, roofY + 0.015, 0.025));
+    g.add(at(box(0.03, 0.006, 0.026, paint), hatchX - 0.01, roofY + 0.002, -0.025));
+    for (const s of [-1, 1]) g.add(at(crossMesh(0.02), -0.02, 0.1, s * (W / 2 + (look === 'C' ? 0.014 : 0.002)), 0, s > 0 ? 0 : Math.PI, 0));
     return castAll(g);
   }
 

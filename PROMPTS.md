@@ -1951,6 +1951,13 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - Robots (6 games, a quick look, no balance run): the Soviets won 4, the Germans 2
 - Assumptions: the reinforcements are placed by the rules (no choosing where); the hull MGs use the T-35's own reach and need (one more if shaken, none for moving); the T-35's main shot at men rolls its 1 MG die plus its 76 mm, as other tanks do
 
+## 329. The StuG III: a full-width sloped casemate with skirts (v198)
+
+- Steve: the StuG III still looks as if it has a turret: make the gun structure full width and sloped; show me options
+- Options in `tools/stug-variants.html` (all four side by side, turning): Now (the narrow, tall casemate), A a sloped wedge, B the boxy Ausf. F, C the wedge with the rounded "pig's head" mantlet and side skirts. Steve picked **C**
+- The casemate is now one sloped block (`frustum` in models.js: a box whose top is smaller than its bottom) as wide as the hull over the track guards, the front sloping well back, the sides leaning in, a low flat roof; the cast mantlet on the slope, the long 7.5 cm out of it; side skirts in four plates over the running gear. `Models.stug3(look)` keeps the other looks for the variants page
+- Assumption: the "pig's head" mantlet and skirts are a later (1943 to 1944) look than the Ausf. F of 1942; kept as Steve picked it, the name and numbers unchanged
+
 ## Sessions
 
 | # | Date | Length | What we did |

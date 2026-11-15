@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>StuG III variations</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #1b1a17; color: #eee; font: 14px/1.35 system-ui, sans-serif; overflow: hidden; }
+  canvas { display: block; }
+  .tag { position: absolute; transform: translate(-50%, 0); text-align: center; width: 220px; pointer-events: none; text-shadow: 0 1px 3px #000; }
+  .tag b { display: block; font-size: 22px; color: #ffd36b; }
+  #bar { position: absolute; left: 0; right: 0; bottom: 10px; text-align: center; }
+  #bar button { font: inherit; padding: 6px 14px; margin: 0 4px; border-radius: 6px; border: 1px solid #777; background: #2d2b27; color: #eee; cursor: pointer; }
+  #bar button.on { background: #ffd36b; color: #222; }
+</style>
+</head>
+<body>
+<div id="bar"><button id="spin" class="on">Turning</button></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="../js/models.js"></script>
+<script>
+// StuG III variations for Steve to pick from (2026-11-15: it looked as if it had a turret): the one in the game now,
+// then three with a full-width, sloped casemate. Each stands on one field of the table at the game's tank size
+const T = THREE;
+const TANKS = 1.6;         // the tanks' scale on the table (board3d.js)
+const VARIANTS = [
+  { look: 'now', name: 'Now', note: 'narrow, tall casemate (looks like a turret)' },
+  { look: 'A', name: 'A: Sloped wedge', note: 'full width over the tracks, the front sloping far back, sides leaning in' },
+  { look: 'B', name: 'B: Boxy Ausf. F', note: 'full width, steep sides, driver\'s visor block, square mantlet' },
+  { look: 'C', name: 'C: Wedge + skirts', note: 'as A, with the rounded "pig\'s head" mantlet and side skirts' },
+];
+
+const renderer = new T.WebGLRenderer({ antialias: true });
+renderer.outputEncoding = T.sRGBEncoding;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = T.PCFSoftShadowMap;
+document.body.prepend(renderer.domElement);
+const scene = new T.Scene();
+scene.background = new T.Color('#1b1a17');
+scene.add(new T.HemisphereLight(0xdfe8ff, 0x3a3020, 0.55));
+const lamp = new T.DirectionalLight(0xffe8c8, 1.5);
+lamp.position.set(-3, 9, -4);
+lamp.target.position.set(2, 0, 0.5);
+lamp.castShadow = true;
+lamp.shadow.mapSize.set(2048, 2048);
+Object.assign(lamp.shadow.camera, { left: -6, right: 6, top: 6, bottom: -6, near: 1, far: 30 });
+scene.add(lamp, lamp.target);
+const camera = new T.PerspectiveCamera(30, 1, 0.1, 80);
+Models.materials();
+
+// One field and one StuG a variation, side by side
+const GAP = 1.15;
+const columnX = k => 0.5 + k * GAP;
+const tanks = VARIANTS.map((v, k) => {
+  const ground = Models.field('field', false, k);
+  ground.position.set(columnX(k), 0, 0.5);
+  scene.add(ground);
+  const m = Models.stug3(v.look);
+  m.scale.setScalar(TANKS);
+  m.position.set(columnX(k), 0, 0.5);
+  m.rotation.y = 0.5;
+  scene.add(m);
+  // Its name and what it is, under it
+  const tag = document.createElement('div');
+  tag.className = 'tag';
+  tag.innerHTML = `<b>${v.name}</b>${v.note}`;
+  document.body.append(tag);
+  v.tag = tag;
+  return m;
+});
+
+// The camera: looking down at the row from the front, as at the table
+function fit() {
+  renderer.setSize(innerWidth, innerHeight);
+  camera.aspect = innerWidth / innerHeight;
+  const mid = columnX((VARIANTS.length - 1) / 2);
+  // (far enough back for the whole row to fit across the window)
+  const back = Math.max(3, 2.5 / (Math.tan(15 * Math.PI / 180) * camera.aspect));
+  camera.position.set(mid, back * 0.55, back);
+  camera.lookAt(mid, 0.05, 0.5);
+  camera.updateProjectionMatrix();
+  // (the names are placed from the camera before it is first drawn)
+  camera.updateMatrixWorld();
+  // Each name under its field
+  VARIANTS.forEach((v, k) => {
+    const p = new T.Vector3(columnX(k), 0, 1.15).project(camera);
+    v.tag.style.left = ((p.x + 1) / 2 * innerWidth) + 'px';
+    v.tag.style.top = ((1 - p.y) / 2 * innerHeight) + 'px';
+  });
+}
+addEventListener('resize', fit);
+fit();
+
+let spinning = true;
+document.getElementById('spin').onclick = e => { spinning = !spinning; e.target.classList.toggle('on', spinning); };
+let last = performance.now();
+function frame(now) {
+  const dt = (now - last) / 1000; last = now;
+  if (spinning) for (const m of tanks) m.rotation.y += dt * 0.35;
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
