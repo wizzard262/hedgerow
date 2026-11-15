@@ -1980,6 +1980,11 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - At Stalingrad the T-34 (now with the 1942 hexagonal turret and its two round hatches, fuel drums on the back), the KV-2 (spare track links, the turret door) and the T-35 are in rough winter white with the green showing through. At Dunkirk the Matilda II and the Universal Carrier are khaki green with bold dark green bands
 - Every tank model now has the look Steve picked as its default; `tools/tank-variants.html` still shows Now, A and B for each
 
+## 333. The Panzer II without its flat front plate (v202)
+
+- Steve: no, remove the whole front plate (not just the visors)
+- The Panzer II (look B) has no flat front plate now: the superstructure's own sloped front shows, over the lower hull's nose
+
 ## Sessions
 
 | # | Date | Length | What we did |

@@ -2277,8 +2277,7 @@ const Models = (() => {
     // The superstructure over the tracks
     g.add(at(frustum({ x0: -L / 2, x1: 0.12, w: W * 1.02 }, { x0: -L / 2 + 0.01, x1: 0.1, w: W * 0.94 }, 0.076, 0.114, paint), 0, 0, 0));
     if (look === 'B') {
-      // The flat, upright front plate (no visors on it: Steve, 2026-11-15)
-      g.add(at(box(0.03, 0.06, W * 0.94, paint), 0.135, 0.084, 0));
+      // (no flat front plate at all: Steve, 2026-11-15; the superstructure's own sloped front shows)
     } else {
       // The rounded nose plate
       const nose = cyl(0.03, 0.03, W * 0.6, paint, 18); nose.geometry.rotateX(Math.PI / 2);
