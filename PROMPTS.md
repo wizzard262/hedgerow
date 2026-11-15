@@ -1966,6 +1966,14 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - **Wheels**: `wheel()` turned its cylinder with the mesh's rotation, and `at()` (which places every part) set the rotation back, so every wheel in the game lay flat on its side: road wheels, the curved ends of every track, armoured cars, lorries. It is now turned in its geometry, so all of them stand upright. The same fault stood the Sherman's transmission cover, the Panther's mantlet, the Panzer II's nose and the M8's gun ring on end; all fixed. The Sherman's nose is now a low rounded cover right across the front, not a drum in the middle
 - Assumption: the wheel fix changes how every tank, car and lorry looks (for the better), not only the Sherman
 
+## 331. The German tanks picked; Soviet and British variations to pick from (v200)
+
+- Steve picked: Panzer I B (Ausf. B); Panzer II B but without the flat front's visors; Panzer III B (Ausf. E, 1940); Panzer IV A (skirts) but in grey; the Panther B, made bigger so it stands out. Note: almost all the German tanks had their road wheels lying flat (Panzer III's were right). Then: show variants for the Soviets and the British
+- In the game now: Panzer I Ausf. B; Panzer II Ausf. F (flat front plate, no visors); Panzer III Ausf. E; Panzer IV Ausf. H with skirts down the sides and round the turret, panzer grey (Normandy); Stalingrad's Panzer IV F2 its own grey model with no skirts and the round muzzle brake (no longer borrowing the Panzer IV's); the Panther grey, no skirts, 1.18 times its old size (it now hangs a little past its 2 by 2 areas)
+- The wheels lying flat were the `wheel()` fault fixed in v199 (the page needed a refresh to show it)
+- `tools/tank-variants.html` has **Soviet** (T-34: A the 1942 hexagonal turret with its two round hatches, B the same in winter whitewash; KV-2: A with spare track links and the turret door, B whitewash; T-35: A with the parade bands round its turret, B whitewash) and **British** (Matilda II and the Universal Carrier: A the BEF's 1940 khaki green with dark green bands, B plain khaki with kit). New paints: `whitewashPaint`, `befPaint`. Their picks are still to come
+- Assumption: "lose the flat front vi..." read as: no visors on the Panzer II's flat front plate
+
 ## Sessions
 
 | # | Date | Length | What we did |

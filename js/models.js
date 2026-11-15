@@ -579,11 +579,50 @@ const Models = (() => {
     if (!M.suGreen) M.suGreen = mat('#4b5534', 0.7, 0.15);
     return M.suGreen;
   }
+  // Winter whitewash over the Soviet green (Steve, 2026-11-15: a look to pick, Stalingrad in November): rough white,
+  // brushed on by hand, the green showing through in patches and streaks
+  let whitewashTex = null;
+  function whitewashPaint() {
+    if (!whitewashTex) whitewashTex = canvasTexture(512, 512, (g2, w, h) => {
+      const R = seeded(77);
+      g2.fillStyle = '#d9d8cf'; g2.fillRect(0, 0, w, h);
+      g2.filter = 'blur(4px)';
+      for (let k = 0; k < 22; k++) {
+        g2.fillStyle = k % 3 ? '#5a6340' : '#7d8462';
+        g2.beginPath(); const x = R() * w, y = R() * h;
+        g2.ellipse(x, y, 10 + R() * 40, 4 + R() * 14, R() * 3, 0, Math.PI * 2); g2.fill();
+      }
+      g2.filter = 'none';
+      // Brush strokes and grime
+      for (let k = 0; k < 2500; k++) { g2.fillStyle = `rgba(${R() < 0.6 ? '90,95,70' : '255,255,250'},${R() * 0.18})`; g2.fillRect(R() * w, R() * h, 6, 1); }
+    }, [5, 5]);
+    if (!M.whitewash) M.whitewash = new T.MeshStandardMaterial({ map: whitewashTex, roughness: 0.85, metalness: 0.05 });
+    return M.whitewash;
+  }
+  // The BEF's 1940 scheme (Steve, 2026-11-15: a look to pick): khaki green with bold dark green bands
+  let befTex = null;
+  function befPaint() {
+    if (!befTex) befTex = canvasTexture(512, 512, (g2, w, h) => {
+      const R = seeded(53);
+      g2.fillStyle = '#626040'; g2.fillRect(0, 0, w, h);
+      g2.fillStyle = '#353b26';
+      for (let k = 0; k < 9; k++) {
+        g2.beginPath(); const x = R() * w, y = R() * h;
+        g2.moveTo(x, y); for (let q = 0; q < 6; q++) g2.lineTo(x + (R() - 0.4) * 200, y + (R() - 0.5) * 90);
+        g2.closePath(); g2.fill();
+      }
+      for (let k = 0; k < 2000; k++) { g2.fillStyle = `rgba(${R() < 0.5 ? '40,35,25' : '190,180,140'},${R() * 0.12})`; g2.fillRect(R() * w, R() * h, 2, 2); }
+    }, [5, 5]);
+    if (!M.bef) M.bef = new T.MeshStandardMaterial({ map: befTex, roughness: 0.7, metalness: 0.1 });
+    return M.bef;
+  }
 
   // The T-34/76 (Steve: the Soviet tank): a low hull with steeply sloped sides and front, five big road wheels a side with
   // no return rollers, wide tracks, the cast turret well forward with its long 76 mm gun. Front +x
-  function t34() {
-    const paint = sovietPaint();
+  // look (Steve, 2026-11-15, to pick from): 'now' the cast turret; 'A' the 1942 hexagonal turret with its two round
+  // hatches ('Mickey Mouse ears'), fuel drums on the back; 'B' as A in winter whitewash
+  function t34(look = 'now') {
+    const paint = look === 'B' ? whitewashPaint() : sovietPaint();
     const g = new T.Group(), W = 0.2, L = 0.37;
     // The hull: the sloped glacis and back, the sloped upper sides
     g.add(at(box(L * 0.92, 0.05, W * 0.62, paint), 0, 0.06, 0));
@@ -596,10 +635,21 @@ const Models = (() => {
       g.add(at(sprocket(0.024, 0.034, paint), -0.172, 0.04, z));
       g.add(at(wheel(0.024, 0.034, M.steel), 0.172, 0.04, z));
     }
-    // The cast turret, well forward: rounded, wider at the back, with its two hatches
-    const turret = profile([[-0.06, 0], [0.05, 0], [0.058, 0.03], [0.03, 0.046], [-0.055, 0.046]], 0.12, paint, 0.008);
-    g.add(at(turret, 0.04, 0.128, 0));
-    for (const z of [-0.022, 0.022]) g.add(at(cyl(0.012, 0.012, 0.006, paint, 12), 0.0, 0.178, z));
+    if (look === 'now') {
+      // The cast turret, well forward: rounded, wider at the back, with its two hatches
+      const turret = profile([[-0.06, 0], [0.05, 0], [0.058, 0.03], [0.03, 0.046], [-0.055, 0.046]], 0.12, paint, 0.008);
+      g.add(at(turret, 0.04, 0.128, 0));
+      for (const z of [-0.022, 0.022]) g.add(at(cyl(0.012, 0.012, 0.006, paint, 12), 0.0, 0.178, z));
+    } else {
+      // The hexagonal turret, flat-faced, its sides leaning in, and the two big round hatches side by side on top
+      g.add(at(cyl(0.056, 0.066, 0.046, paint, 6), 0.035, 0.151, 0, 0, Math.PI / 6, 0));
+      for (const z of [-0.024, 0.024]) {
+        g.add(at(cyl(0.018, 0.018, 0.008, paint, 16), 0.02, 0.178, z));
+        g.add(at(cyl(0.004, 0.004, 0.004, M.steel, 8), 0.02, 0.184, z));
+      }
+      // Two long fuel drums along the back of the hull sides
+      for (const s of [-1, 1]) g.add(at(cyl(0.014, 0.014, 0.07, paint, 12), -0.12, 0.12, s * 0.085, 0, 0, Math.PI / 2));
+    }
     // The long 76 mm gun in its mantlet
     g.add(at(box(0.02, 0.026, 0.04, paint), 0.1, 0.15, 0));
     g.add(at(cyl(0.005, 0.0065, 0.15, M.steel, 12), 0.18, 0.152, 0, 0, 0, Math.PI / 2));
@@ -616,8 +666,10 @@ const Models = (() => {
   // side behind armoured skirts, and five turrets: the big one in the middle with the short 76 mm and a handrail aerial
   // round it, a 45 mm turret front right and another back left, a machine-gun turret front left and another back right.
   // Front +x. About half as long again as the T-34
-  function t35() {
-    const paint = sovietPaint();
+  // look (Steve, 2026-11-15): 'now' / 'A' green, A with the red-and-white parade bands round its main turret; 'B' winter
+  // whitewash
+  function t35(look = 'now') {
+    const paint = look === 'B' ? whitewashPaint() : sovietPaint();
     const g = new T.Group(), W = 0.21, L = 0.54;
     // The hull: a long low box, the upper hull with its short sloped nose and flat deck
     g.add(at(box(L * 0.94, 0.05, W * 0.6, paint), 0, 0.06, 0));
@@ -656,13 +708,20 @@ const Models = (() => {
     // The engine grilles on the back deck, a white tactical number on the main turret
     for (const z of [-0.03, 0.03]) g.add(at(box(0.06, 0.004, 0.035, M.steel), -0.225, 0.114, z));
     for (const s of [-1, 1]) g.add(at(box(0.03, 0.012, 0.002, mat('#e8e4d8', 0.8)), 0, 0.146, s * 0.056));
+    if (look === 'A') {
+      // A white band and a red one round the main turret, as on the parade tanks
+      g.add(at(cyl(0.0585, 0.0585, 0.006, mat('#e8e4d8', 0.8), 24), 0, 0.152, 0));
+      g.add(at(cyl(0.0587, 0.0587, 0.005, mat('#a8261e', 0.8), 24), 0, 0.142, 0));
+    }
     return castAll(g);
   }
 
   // The KV-2 (Steve): the long, boxy KV hull on six road wheels a side with return rollers, and the huge, tall slab-sided
   // turret with its short, fat 152 mm howitzer in a big mantlet. Front +x
-  function kv2() {
-    const paint = sovietPaint();
+  // look (Steve, 2026-11-15): 'now' / 'A' green, A with spare track links on the hull sides and the turret's rear door;
+  // 'B' as A in winter whitewash
+  function kv2(look = 'now') {
+    const paint = look === 'B' ? whitewashPaint() : sovietPaint();
     const g = new T.Group(), W = 0.21, L = 0.4;
     g.add(at(box(L * 0.92, 0.05, W * 0.64, paint), 0, 0.06, 0));
     g.add(at(profile([[-0.2, 0.085], [0.16, 0.085], [0.205, 0.065], [0.205, 0.085], [0.17, 0.12], [-0.19, 0.12], [-0.2, 0.105]], W, paint, 0.004), 0, 0, 0));
@@ -684,6 +743,12 @@ const Models = (() => {
     g.add(at(cyl(0.014, 0.014, 0.012, M.steel, 14), 0.186, 0.165, 0, 0, 0, Math.PI / 2));
     // Spare track links on the turret side, a white slogan panel
     for (const s of [-1, 1]) g.add(at(box(0.06, 0.02, 0.002, mat('#e8e4d8', 0.8)), -0.01, 0.17, s * 0.076));
+    if (look !== 'now') {
+      // Spare track links along the hull sides, the door in the turret's back, grab rails
+      for (const s of [-1, 1]) for (let k = 0; k < 5; k++) g.add(at(box(0.016, 0.022, 0.004, M.track), 0.06 + k * 0.02, 0.1, s * 0.106));
+      g.add(at(box(0.004, 0.05, 0.04, paint), -0.092, 0.17, 0));
+      for (const s of [-1, 1]) g.add(at(box(0.08, 0.003, 0.003, M.steel), -0.02, 0.2, s * 0.078));
+    }
     return castAll(g);
   }
 
@@ -1482,7 +1547,8 @@ const Models = (() => {
 
   // The Panther: long sloped glacis, upper sides sloping in, eight big interleaved road wheels a side, rear deck fans,
   // a narrow-fronted turret with a rounded mantlet, the commander's cupola, the long 75 mm with a double muzzle brake
-  function panther(look = 'now') {
+  // (Steve picked B, 2026-11-15)
+  function panther(look = 'B') {
     if (look !== 'now') return pantherNew(look);
     const paint = M.panzerGrey;
     const g = new T.Group(), W = 0.22, L = 0.46;
@@ -1522,7 +1588,8 @@ const Models = (() => {
 
   // The Panzer IV (late model): a box hull, eight small road wheels in pairs on four bogies, return rollers,
   // armour skirts hung beside the hull and round the turret, the long 75 mm with its double muzzle brake
-  function panzer4(look = 'now') {
+  // (Steve picked A for Normandy, 2026-11-15; Stalingrad's F2 is B: see board3d)
+  function panzer4(look = 'A') {
     if (look !== 'now') return panzer4New(look);
     const paint = M.panzerGrey;
     const g = new T.Group(), W = 0.19, L = 0.38;
@@ -1996,8 +2063,11 @@ const Models = (() => {
 
   // The Matilda II (Steve: much flatter): a long low hull, full-length armoured skirts over the tracks with their mud
   // chutes, a small cast turret, the thin 2-pounder
-  function matilda() {
-    const paint = britishPaint();
+  // look (Steve, 2026-11-15): 'now' plain khaki; 'A' the BEF's 1940 khaki green with dark green bands; 'B' plain khaki
+  // with kit: a stowage box on the back, a rolled tarpaulin, the turret's name and number panel
+  function matilda(look = 'now') {
+    britishPaint();
+    const paint = look === 'A' ? befPaint() : M.khaki;
     const g = new T.Group(), W = 0.2, L = 0.4;
     for (const s of [-1, 1]) {
       const z = s * W * 0.4;
@@ -2016,13 +2086,21 @@ const Models = (() => {
     g.add(at(box(0.016, 0.022, 0.04, paint), 0.058, 0.104, 0));
     g.add(at(cyl(0.0038, 0.0045, 0.11, M.steel, 10), 0.12, 0.106, -0.006, 0, 0, Math.PI / 2));
     g.add(at(cyl(0.003, 0.003, 0.03, M.steel, 6), 0.078, 0.1, 0.012, 0, 0, Math.PI / 2));
+    if (look === 'B') {
+      g.add(at(box(0.05, 0.026, 0.1, M.khaki), -0.17, 0.1, 0));
+      g.add(at(cyl(0.012, 0.012, 0.11, M.canvas, 10), -0.12, 0.1, 0, Math.PI / 2, 0, 0));
+      for (const s of [-1, 1]) g.add(at(box(0.034, 0.012, 0.002, mat('#e8e4d8', 0.8)), 0.005, 0.106, s * 0.054));
+    }
     return castAll(g);
   }
 
   // The Universal Carrier (Steve: a small open tracked vehicle): a low open steel box on short tracks, the crew's heads
   // showing, a Bren on the front
-  function carrier() {
-    const paint = britishPaint();
+  // look (Steve, 2026-11-15): 'now' plain khaki; 'A' the BEF's 1940 bands; 'B' plain khaki, crammed: a third crewman, kit
+  // boxes, a tarpaulin rolled across the back
+  function carrier(look = 'now') {
+    britishPaint();
+    const paint = look === 'A' ? befPaint() : M.khaki;
     const g = new T.Group(), L = 0.26, W = 0.15;
     for (const s of [-1, 1]) {
       const z = s * W * 0.4;
@@ -2044,12 +2122,18 @@ const Models = (() => {
     g.add(at(cyl(0.003, 0.003, 0.05, M.steel, 6), 0.14, 0.088, -0.028, 0, 0, Math.PI / 2));
     g.add(at(box(0.03, 0.008, 0.007, M.steel), 0.108, 0.088, -0.028));
     g.add(at(box(0.006, 0.014, 0.005, M.steel), 0.108, 0.098, -0.028, 0, 0, 0.3));
+    if (look === 'B') {
+      crewman(g, -0.06, 0.06, 0.03);
+      g.add(at(box(0.04, 0.024, 0.03, M.khaki), -0.07, 0.06, -0.03));
+      g.add(at(cyl(0.01, 0.01, W * 0.6, M.canvas, 10), -0.11, 0.084, 0, Math.PI / 2, 0, 0));
+    }
     return castAll(g);
   }
 
   // The Panzer I (Steve: a short turret, unlike the Panzer II): small, four road wheels a side with the girder outside
   // them, a low turret set off to the right with its two machine guns
-  function panzer1(look = 'now') {
+  // (Steve picked B, 2026-11-15)
+  function panzer1(look = 'B') {
     if (look !== 'now') return panzer1New(look);
     const paint = M.panzerGrey;
     const g = new T.Group(), W = 0.16, L = 0.3;
@@ -2072,7 +2156,8 @@ const Models = (() => {
 
   // The Panzer II (Steve: a short turret): five big road wheels a side and no girder, a low turret in the middle with the
   // 2 cm cannon and a machine gun beside it, a hatch on top
-  function panzer2(look = 'now') {
+  // (Steve picked B, 2026-11-15)
+  function panzer2(look = 'B') {
     if (look !== 'now') return panzer2New(look);
     const paint = M.panzerGrey;
     const g = new T.Group(), W = 0.17, L = 0.33;
@@ -2097,7 +2182,8 @@ const Models = (() => {
 
   // The Panzer III (1940): a box hull, six road wheels a side and three return rollers, a turret with its cupola at the
   // back and the short 37 mm
-  function panzer3(look = 'now') {
+  // (Steve picked B, 2026-11-15)
+  function panzer3(look = 'B') {
     if (look !== 'now') return panzer3New(look);
     const paint = M.panzerGrey;
     const g = new T.Group(), W = 0.18, L = 0.36;
@@ -2186,9 +2272,8 @@ const Models = (() => {
     // The superstructure over the tracks
     g.add(at(frustum({ x0: -L / 2, x1: 0.12, w: W * 1.02 }, { x0: -L / 2 + 0.01, x1: 0.1, w: W * 0.94 }, 0.076, 0.114, paint), 0, 0, 0));
     if (look === 'B') {
-      // The flat, upright front plate, the dummy visor and the real one
+      // The flat, upright front plate (no visors on it: Steve, 2026-11-15)
       g.add(at(box(0.03, 0.06, W * 0.94, paint), 0.135, 0.084, 0));
-      for (const z of [-0.035, 0.035]) g.add(at(box(0.004, 0.01, 0.028, M.black), 0.151, 0.1, z));
     } else {
       // The rounded nose plate
       const nose = cyl(0.03, 0.03, W * 0.6, paint, 18); nose.geometry.rotateX(Math.PI / 2);
@@ -2268,7 +2353,9 @@ const Models = (() => {
   // B: Ausf. F2, 1942 (Stalingrad's): panzer grey, no skirts, the turret off to the left with its side hatches and the
   // stowage bin on its back, the long 7.5 cm with the round single-baffle muzzle brake, spare road wheels on the nose
   function panzer4New(look) {
-    const paint = look === 'A' ? camoPaint() : M.panzerGrey;
+    // (A in panzer grey after all, Steve 2026-11-15; 'Acamo' keeps the camouflage for the variants page)
+    const paint = look === 'Acamo' ? camoPaint() : M.panzerGrey;
+    if (look === 'Acamo') look = 'A';
     const g = new T.Group(), W = 0.19, L = 0.39;
     g.add(at(box(0.36, 0.055, W * 0.6, paint), 0, 0.065, 0));
     // The superstructure over the tracks, its stepped front: the driver's plate standing forward of the bow MG's
@@ -2323,7 +2410,8 @@ const Models = (() => {
   // the others, so it is plainly the biggest German tank on the table
   function pantherNew(look) {
     const paint = look === 'A' ? camoPaint() : M.panzerGrey;
-    const s0 = look === 'B' ? 1.08 : 1;
+    // (B a size bigger again, so it stands out: Steve, 2026-11-15)
+    const s0 = look === 'B' ? 1.18 : 1;
     const g = new T.Group(), W = 0.22, L = 0.46;
     g.add(at(box(0.4, 0.05, W * 0.6, paint), -0.01, 0.06, 0));
     // The hull: the long sloped glacis, the upper sides leaning in, the short sloped back
@@ -2354,8 +2442,11 @@ const Models = (() => {
     for (let k = 0; k < 7; k++) { const a = k / 7 * Math.PI * 2; g.add(at(box(0.005, 0.007, 0.005, M.black), -0.07 + Math.cos(a) * 0.021, 0.222, 0.032 + Math.sin(a) * 0.021)); }
     if (look === 'A') for (const s of [-1, 1]) for (let k = 0; k < 4; k++) g.add(at(box(0.012, 0.03, 0.004, M.track), -0.07 + k * 0.016, 0.184, s * 0.066, s * 0.35, 0, 0));
     for (const s of [-1, 1]) g.add(at(crossMesh(0.022), -0.12, 0.12, s * (W * 0.5 + (look === 'A' ? 0.036 : 0.002)), 0, s > 0 ? 0 : Math.PI, 0));
+    // (the size inside a group of its own: the table sets the outer one's scale)
     g.scale.setScalar(s0);
-    return castAll(g);
+    const outer = new T.Group();
+    outer.add(g);
+    return castAll(outer);
   }
 
   // The Sherman. A: the M4A1 as it really looks: the tall, rounded cast hull, the sponsons over the tracks, three VVSS

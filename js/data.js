@@ -519,7 +519,7 @@ const PIECES = {
   // Stalingrad, 1942 (Steve)
   t34:      { name: 'T-34/76', soft: 1.5, hard: 1.5, he: 1, tank: true, armour: 1, cutter: true },
   // The Panzer IV F2 (Steve: the Germans' answer to the KV-2 at Stalingrad): the long 7.5 cm gun; the Panzer IV's model
-  pz4f2:    { name: 'Panzer IV F2', soft: 1.5, hard: 2.5, he: 1, tank: true, armour: 0, cutter: true, look: 'pz4' },
+  pz4f2:    { name: 'Panzer IV F2', soft: 1.5, hard: 2.5, he: 1, tank: true, armour: 0, cutter: true },   // its own model now: the grey F2 (Steve, 2026-11-15)
   // The KV-2 (Steve): the heavy tank with the huge turret and its 152 mm howitzer: thick armour (2, as the Matilda),
   // slow; a big shell among men, but few rounds and slow to load, so one die against tanks. Balanced by robots (40
   // games): with the Germans' Panzer IV F2 and two PaK 40s, Soviets 23, Germans 15, 2 draws

@@ -1259,7 +1259,9 @@ const Board = (() => {
         // Stalingrad, 1942 (Steve)
         t34: Models.t34, kv2: Models.kv2,
         // Stalingrad's round 3 reinforcements (Steve, 2026-11-15)
-        t35: Models.t35, stug3: Models.stug3 }[kind];
+        t35: Models.t35, stug3: Models.stug3,
+        // Stalingrad's Panzer IV F2: grey, no skirts, the round muzzle brake (Steve picked it, 2026-11-15)
+        pz4f2: () => Models.panzer4('B') }[kind];
       return [0].map(() => { const m = Models.mergeParts(make()); markerSpots(m); m.scale.setScalar(TANKS); m.userData.slowTurn = true; return m; });
     }
     if (PIECES[kind].bunker) return [bunkerBase(kind === 'bunker_gun')];
