@@ -4930,5 +4930,60 @@ check('the artillery\'s rounds stand in a line in front of the gun, twice as big
   assert(ship.z === 5.1 && ship.x > -1.1 && ship.size > first.size, 'the warship\'s shells moved or are smaller');
 });
 
+check('I go, you go (Steve, 2026-11-15): the side with fewer tokens first, then turn about, the other finishing; no timer when left out', () => {
+  for (let seed = 1; seed <= 8; seed++) {
+    // (two humans: nobody moves on a token, so only the order shows)
+    const st = Sim.newGame(seed, 'both', 'hedges', { order: 'turns', timer: false });
+    Sim.startRound(st);
+    const start = { us: st.bag.us, de: st.bag.de };
+    assert(st.bag.timer === 0, 'the timer is in the bag though it was left out');
+    const order = [];
+    for (let k = 0; k < 60; k++) { const side = Sim.drawToken(st); if (!side) break; order.push(side); Sim.passToken(st); }
+    assert(!order.includes('timer'), `seed ${seed}: the timer came out`);
+    assert(order.length === start.us + start.de, `seed ${seed}: ${order.length} tokens out of ${start.us + start.de}`);
+    const fewer = start.us < start.de ? 'us' : start.de < start.us ? 'de' : order[0];
+    assert(order[0] === fewer, `seed ${seed}: ${order[0]} went first with ${start[order[0]]} tokens`);
+    // Turn about while both have tokens, then the side with more carries on
+    const both = Math.min(start.us, start.de) * 2;
+    for (let i = 1; i < both; i++) assert(order[i] !== order[i - 1], `seed ${seed}: the same side twice at token ${i + 1}`);
+    assert(order.slice(both).every(x => x === order[1]), `seed ${seed}: the side with fewer had a token after running out`);
+  }
+});
+
+check('the timer stays in the bag unless left out, and the blind draw can still end on it', () => {
+  const st = Sim.newGame(3, 'both', 'hedges');
+  Sim.startRound(st);
+  assert(st.bag.timer === ROUND_TIMER && !st.alternate, 'a plain game lost its timer or its blind draw');
+  // Left out, the blind draw never brings it
+  for (let seed = 1; seed <= 20; seed++) {
+    const g = Sim.newGame(seed, 'both', 'hedges', { timer: false });
+    Sim.startRound(g);
+    for (let k = 0; k < 60; k++) { const side = Sim.drawToken(g); assert(side !== 'timer', `seed ${seed}: the timer came out`); if (!side) break; Sim.passToken(g); }
+  }
+});
+
+check('the goal in big letters (Steve, 2026-11-15): capture the village or destroy all, said for the player', () => {
+  const st = Sim.newGame(3, 'us', 'hedges');
+  const place = st.objective.name;
+  assert(Sim.goalLines(st).join('|') === `Capture ${place}|or destroy all Germans`, Sim.goalLines(st).join('|'));
+  st.holdUntil = 4;
+  assert(Sim.goalLines(st)[2] === 'Held: keep it all round 4', 'no word that it is held');
+  const de = Sim.newGame(3, 'de', 'hedges');
+  assert(Sim.goalLines(de).join('|') === `Hold ${de.objective.name}|or destroy all Americans`, Sim.goalLines(de).join('|'));
+  const beach = Sim.newGame(3, 'us', 'beach');
+  assert(Sim.goalLines(beach).join('|') === 'Destroy all Germans', Sim.goalLines(beach).join('|'));
+  const su = Sim.newGame(3, 'us', 'stalingrad');
+  assert(Sim.goalLines(su)[0] === 'Capture the Univermag', Sim.goalLines(su)[0]);
+  Sim.newGame(1);
+});
+
+check('a click off the table puts the chosen gun or bomber down (Steve, 2026-11-15)', () => {
+  const code = pageCode('ui.js', 'function dropSupport() {', '\n  }');
+  const view = { support: 'bomber', mode: 'fire:bomber', sel: null };
+  const dropSupport = vm.runInNewContext(`(${code})`, { view });
+  assert(dropSupport() === true && view.support === null && view.mode === null, 'the bomber is still chosen');
+  assert(dropSupport() === false, 'nothing chosen, but something was put down');
+});
+
 console.log(failed ? `\n${failed} failed` : '\nall passed');
 process.exit(failed ? 1 : 0);

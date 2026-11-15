@@ -218,7 +218,9 @@ const Sim = (() => {
   // token; with two robots nobody acts on it. st.won means the Americans won and st.lost the Germans did, whoever plays
   // them: the page turns that into a win or a loss for the player
   // mapId: which of MAPS (Steve)
-  function newGame(seed, mode = 'us', mapId = MAPS[0].id) {
+  // rules (Steve, 2026-11-15: picked with the sides): { timer: false } takes the timer token out of the bag;
+  // { order: 'turns' } plays I go, you go in place of the blind draw
+  function newGame(seed, mode = 'us', mapId = MAPS[0].id, rules = {}) {
     seed = seed || (Date.now() % 1e9);
     let map = MAPS.find(m => m.id === mapId) || MAPS[0];
     const human = mode === 'de' ? 'de' : 'us';
@@ -240,6 +242,10 @@ const Sim = (() => {
         de: Object.assign({ mortars: DE_MORTAR.ammo, artillery: DE_ARTILLERY.ammo, bomber: BOMBER.ammo }, map.ammo && map.ammo.de),
       },
       won: false, lost: false,
+      // No timer token in the bag (the round runs until every token is out)
+      noTimer: rules.timer === false,
+      // I go, you go: the sides take a token each in turn, the side with fewer tokens first
+      alternate: rules.order === 'turns',
       spin: {},           // the bomber's compass this round, each side: picked again, it spins to the same direction (Steve)
     };
     // This game's objective: one of the villages
@@ -458,6 +464,23 @@ const Sim = (() => {
     if (names && names[side]) return names[side];
     return side === 'us' ? 'Americans' : 'Germans';
   }
+  // The goal in big letters on the table (Steve, 2026-11-15: as Dunkirk's count), a line each. Said for the side the
+  // player commands; with two humans or two robots, for the side attacking
+  function goalLines(st) {
+    // Dunkirk: the count so far
+    if (st.evac) return [`${st.evac.saved} of ${st.map.evacuate.need} sections`, 'evacuated'];
+    const player = st.mode === 'de' ? 'de' : 'us';
+    const foe = player === 'us' ? 'de' : 'us';
+    const destroy = `destroy all ${sideName(st, foe)}`;
+    // Nothing to take (the beach): only destroying the other side wins
+    if (st.noGoal) return [destroy.charAt(0).toUpperCase() + destroy.slice(1)];
+    const place = st.objective.name;
+    const lines = player === 'us' ? [`Capture ${place}`, `or ${destroy}`] : [`Hold ${place}`, `or ${destroy}`];
+    // Taken and to be held for a whole round: which round, or the Germans must take it back by then
+    if (st.holdUntil) lines.push(player === 'us' ? `Held: keep it all round ${st.holdUntil}` : `Lost: retake it in round ${st.holdUntil}`);
+    return lines;
+  }
+
   // Whose army the 'us' side is on this map: 'us' the Americans, 'uk' the British (Dunkirk), 'su' the Soviets (Stalingrad)
   function armyOf(st) {
     if (st.map && st.map.army) return st.map.army;
@@ -3463,9 +3486,13 @@ const Sim = (() => {
     // Every gun with rounds left can fire again, either side, and has its token (Steve: a German gun that fired used to miss
     // the next bag)
     st.fired = { us: {}, de: {} };
-    st.bag = { us: movable(st, 'us'), de: movable(st, 'de'), timer: ROUND_TIMER };
+    // (no timer token if it was left out at the start)
+    const timer = st.noTimer ? 0 : ROUND_TIMER;
+    st.bag = { us: movable(st, 'us'), de: movable(st, 'de'), timer };
     // Tokens drawn so far this round (the timer can't be the first, Steve)
     st.drawnThisRound = 0;
+    // I go, you go: the side whose token came out last (none yet this round)
+    st.lastSide = null;
     st.drawn = null;
     st.activeId = null;
     st.roundRep = [];
@@ -3498,6 +3525,25 @@ const Sim = (() => {
     st.bag.de = Math.min(st.bag.de, movable(st, 'de'));
   }
 
+  // I go, you go (Steve, 2026-11-15): whose token comes out. pick: the draw's die, 0 up to every token left (the
+  // timer's share at the top). The timer still ends the round on its share. Otherwise:
+  function alternateSide(st, pick) {
+    const left = st.bag.us + st.bag.de;
+    // The timer's share of the draw
+    if (pick >= left) return 'timer';
+    // Only one side has tokens left: it carries on until it is done
+    if (!st.bag.us) return 'de';
+    if (!st.bag.de) return 'us';
+    // Both have: the other side from last time
+    if (st.lastSide === 'us') return 'de';
+    if (st.lastSide === 'de') return 'us';
+    // The round's first token: the side with fewer goes first
+    if (st.bag.us < st.bag.de) return 'us';
+    if (st.bag.de < st.bag.us) return 'de';
+    // Level: a coin toss (the same die, so the seed still decides it)
+    return pick < left / 2 ? 'us' : 'de';
+  }
+
   // Draw a token: 'us', 'de', 'timer' or null when the bag is empty. The timer (Steve) empties the bag: the round ends
   // there and then, so the next draw is null. On a German token the Germans' move is set up (see computerStep):
   // one of their pieces, or their mortar or artillery
@@ -3516,7 +3562,7 @@ const Sim = (() => {
     st.tokensDrawn = (st.tokensDrawn || 0) + 1;
     // Which token comes out: one of the Americans', one of the Germans', or the timer
     const pick = st.rand() * total;
-    const side = pick < st.bag.us ? 'us' : pick < st.bag.us + st.bag.de ? 'de' : 'timer';
+    const side = st.alternate ? alternateSide(st, pick) : pick < st.bag.us ? 'us' : pick < st.bag.us + st.bag.de ? 'de' : 'timer';
     if (side === 'timer') {
       // Time's up: every token left in the bag goes unused (it stays in the bag on the table: st.leftInBag)
       st.leftInBag = { us: st.bag.us, de: st.bag.de };
@@ -3529,6 +3575,7 @@ const Sim = (() => {
     }
     st.bag[side]--;
     st.drawn = side;
+    st.lastSide = side;
     st.activeId = null;
     st.fx = [];
     for (const u of st.units) { u.halfShot = false; u.mayAmbush = false; }
@@ -3711,6 +3758,7 @@ const Sim = (() => {
     isBunker, isCar, hurtsCars, trainCars, lineSideOf, moveTrains, inFrontOf, bunkerFace, shotOnTheMove, wrecksBeside, isRoad, featuresAt, walkDistance, fireSound, wreckAt, remove, computerSide, isRobot, piecesToAsk, takeCover, enemyOf, gunStats, diceShown, menDiceShown, bomberName, boatKind, armyOf, hedgeWord, inCourtyard, closeRangeOnly, isAtGun, isEmplaced, edgeKey, atCloseRange, closeCells, hailMaryCells,
     newGame, roll, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, chargeSpots,
     rallyTargets, canAct, canReact, firepower, canCallFire, takesGoal, cannotWin, artilleryTarget, mortarTarget, holdsObjective, roundText, roomFor,
+    goalLines,
     computerStep, answer, finishRound, startRound, drawToken, endComputerToken, activationOver, passToken, humanCanMove, endRound, canFire, actSkip, actSkipShot, skipSupport,
     smallTarget, menDice, armourOf, shotNeed, mayFire, shootCells, tokensHome, captainCanRally, fireAt, wholeDice: dice,
     actShoot, actMoveShoot, moveShootSpots, chargeRoutes, DIRS, needWhy, shellNeed, shellWhy, shellFields,

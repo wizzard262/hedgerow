@@ -1908,6 +1908,15 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - Hovering over a minefield now says "Minefield: movement damage on 5+" (the number from MINES.need; `featureLine` in main.js). Other things keep their lines
 - Assumptions: done for every army's artillery, not just Stalingrad's, so the piles all match; the mortar bombs are unchanged; rubble still says "nobody can stand there"
 
+## 324. Timer token and I go, you go; the goal in big letters; off the table puts the bomber down (v193)
+
+- Steve: when picking human or computer, options to 1. remove the timer token, 2. I go, you go (the side with fewer pieces goes first, the side with more carries on until done); assume it doesn't change the balance as it is the same for both sides. Make the goal more prominent on every battle, as at Dunkirk (capture X or destroy all). And: clicking off the board should put the bomber down (with no artillery or mortars it could not be put down)
+- New game has two more rows under the sides: **Timer token** (In the bag / Left out) and **Turns** (Blind draw / I go, you go), remembered on this computer (`hedgerow-rules`). `Sim.newGame(seed, mode, map, rules)`: `st.noTimer` leaves the timer out of each round's bag; `st.alternate` picks whose token comes out (`alternateSide` in sim.js)
+- I go, you go: the round's first token goes to the side with fewer tokens in the bag (pieces and guns), a coin toss if level; then the other side each time while both have tokens; then the side with tokens left takes the rest. The tokens still fly in and out as before
+- The goal is written large above the top left of the board on every battle (`Sim.goalLines`, drawn where Dunkirk's count is; mirrored on Stalingrad's flipped table): "Capture <village>" / "or destroy all Germans"; playing the Germans "Hold <village>" / "or destroy all Americans"; the beach "Destroy all Germans". Once taken, a third line: "Held: keep it all round N" (the Germans: "Lost: retake it in round N")
+- A click off the table puts down a chosen gun or the bomber (`UI.dropSupport`); its token stays unused
+- Assumptions: the timer still works with I go, you go if it is left in; "pieces" counted as tokens (guns with rounds left count); the sign speaks for the player's side, and for the attackers with two humans or two robots; no balance run (Steve: same for both sides)
+
 ## Sessions
 
 | # | Date | Length | What we did |

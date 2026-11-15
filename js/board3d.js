@@ -398,13 +398,15 @@ const Board = (() => {
     return p < 1;
   }
 
-  // Dunkirk's score in big letters on the beach above the board (Steve: the panel's was too small), on two lines, half
-  // as far from the top of the screen as it was (Steve). gap: how far the second line is below the first
+  // The goal in big letters above the board (Steve): Dunkirk's score on the beach (the panel's was too small), on two
+  // lines, half as far from the top of the screen as it was; every other battle's goal the same way (Steve, 2026-11-15:
+  // capture the village or destroy all the other side). gap: how far each line is below the one above
   const EVAC_SIGN = { x: 1.55, z: -1.2, scale: 1.9, gap: 0.5, colour: '#f4ead0' };
   let evacSign = null;               // { sign, text }
   function updateEvacSign(st) {
-    if (!st.map.evacuate || !st.evac) return;
-    const lines = [`${st.evac.saved} of ${st.map.evacuate.need} sections`, 'evacuated'];
+    // Dunkirk's count waits for its boats; every other map has its goal from the start
+    if (st.map.evacuate && !st.evac) return;
+    const lines = Sim.goalLines(st);
     const text = lines.join(' ');
     // (the same words, still on this table, and the screen the same shape: nothing to do)
     if (evacSign && evacSign.text === text && evacSign.sign.parent === built && evacSign.aspect === camera.aspect) return;
@@ -413,13 +415,16 @@ const Board = (() => {
     const sign = new T.Group();
     // Where it goes: half way up from the board to the top of the screen, but always on the screen (Steve: on a smaller
     // window its top line went out of sight); moved down the beach until the top line shows
-    let z = EVAC_SIGN.z;
+    // (on a flipped table, Stalingrad, the top left of the screen is the far corner: mirrored there)
+    const x = flipped ? COLS - EVAC_SIGN.x : EVAC_SIGN.x;
+    let z = flipped ? ROWS - EVAC_SIGN.z : EVAC_SIGN.z;
     const topLine = (lines.length - 1) * EVAC_SIGN.gap;
-    for (let k = 0; k < 20 && offTop(new T.Vector3(EVAC_SIGN.x, 0.08 + topLine, z), 0.3); k++) z += 0.1;
+    // (each step down the screen, towards the board)
+    for (let k = 0; k < 20 && offTop(new T.Vector3(x, 0.08 + topLine, z), 0.3); k++) z += screenUp() * -0.1;
     lines.forEach((line, i) => {
       const sprite = word(line, EVAC_SIGN.colour, true);
       sprite.scale.multiplyScalar(EVAC_SIGN.scale);
-      sprite.position.set(EVAC_SIGN.x, 0.08 + (lines.length - 1 - i) * EVAC_SIGN.gap, z);
+      sprite.position.set(x, 0.08 + (lines.length - 1 - i) * EVAC_SIGN.gap, z);
       // (drawn after the surf, so the water's edge never shows through the words)
       sprite.renderOrder = 3;
       sign.add(sprite);

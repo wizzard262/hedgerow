@@ -33,6 +33,14 @@ const UI = (() => {
     view.support = which;
     view.mode = canFire(which) ? 'fire:' + which : null;
   }
+  // A click off the table (Steve, 2026-11-15: the bomber could not be put down without another gun to pick): the gun
+  // chosen is put down, its token still unused. True if there was one
+  function dropSupport() {
+    if (!view.support) return false;
+    view.support = null;
+    view.mode = null;
+    return true;
+  }
   // For the rings under the guns
   function supportState() {
     const out = {};
@@ -738,6 +746,6 @@ const UI = (() => {
   return {
     init, setState, update, asksForShot, asksForField, clickField, openMenu, openGunMenu, openAsk, closeMenu, litFieldRects, chargesInto,
     inspect, actsOn, spots, moveSpotsFor, targets, shootTarget, rallies, rallyTarget, view, selected,
-    selectSupport, supportState, flyToken, returnTokens, KIND,
+    selectSupport, dropSupport, supportState, flyToken, returnTokens, KIND,
   };
 })();

@@ -33,12 +33,29 @@ window.Game = (() => {
     try { localStorage.setItem(MODE_KEY, mode); } catch (e) { /* not remembered: this game still plays that way */ }
   }
 
+  // How the bag plays (Steve, 2026-11-15: picked with the sides, the same for both): the timer token in or out, and the
+  // blind draw or I go, you go. Remembered on this computer
+  const RULES_KEY = 'hedgerow-rules';
+  function rememberedRules() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(RULES_KEY) || '{}');
+      // Anything not saved yet: as the game always played (timer in, blind draw)
+      const timer = saved.timer !== false;
+      const order = saved.order === 'turns' ? 'turns' : 'bag';
+      return { timer, order };
+    } catch (e) { return { timer: true, order: 'bag' }; }
+  }
+  function rememberRules(r) {
+    try { localStorage.setItem(RULES_KEY, JSON.stringify(r)); } catch (e) { /* not remembered: this game still plays that way */ }
+  }
+  const rules = rememberedRules();
+
   // A fresh table, with nothing moving yet
   function setTable(seed, mode, mapId) {
     gameNumber++;
     drawing = false; computerPicked = null; shownMove = null; resultWaiting = false; asking = false;
     Board.reset();
-    st = Sim.newGame(seed, mode, mapId);
+    st = Sim.newGame(seed, mode, mapId, rules);
     G.state = st;
     UI.closeMenu();
     UI.setState(st);
@@ -511,7 +528,11 @@ window.Game = (() => {
       return;
     }
     const f = Board.fieldAt(e.clientX, e.clientY);
-    if (!f) return;
+    // Off the table: a gun or the bomber chosen is put down (Steve)
+    if (!f) {
+      if (UI.dropSupport()) changed();
+      return;
+    }
     // The enemy's piece clicked, when the click isn't the chosen piece's action: ring it and show what it is (Steve).
     // Its model under the pointer, or the nearest of them in a field with none of yours
     const under = Board.pieceUnder(st, e.clientX, e.clientY);
@@ -640,11 +661,23 @@ window.Game = (() => {
   function lightSides() {
     for (const side of ['us', 'de']) for (const who of ['human', 'robot']) $(`#${side}-${who}`).className = picked[side] === who ? 'on' : '';
   }
+  // The two bag choices: whichever is in use is lit
+  function lightRules() {
+    $('#timer-on').className = rules.timer ? 'on' : '';
+    $('#timer-off').className = rules.timer ? '' : 'on';
+    $('#order-bag').className = rules.order === 'bag' ? 'on' : '';
+    $('#order-turns').className = rules.order === 'turns' ? 'on' : '';
+  }
+  $('#timer-on').onclick = () => { rules.timer = true; lightRules(); };
+  $('#timer-off').onclick = () => { rules.timer = false; lightRules(); };
+  $('#order-bag').onclick = () => { rules.order = 'bag'; lightRules(); };
+  $('#order-turns').onclick = () => { rules.order = 'turns'; lightRules(); };
   function askSide() {
     const mode = st.mode;
     picked.us = mode === 'us' || mode === 'both' ? 'human' : 'robot';
     picked.de = mode === 'de' || mode === 'both' ? 'human' : 'robot';
     lightSides();
+    lightRules();
     lightMap();
     $('#newgame [data-close]').hidden = !gameStarted;
     $('#newgame').hidden = false;
@@ -709,6 +742,7 @@ window.Game = (() => {
     $('#newgame').hidden = true;
     rememberMode(mode);
     rememberMap(chosenMap);
+    rememberRules(rules);
     start(undefined, mode);
   };
   $('#newgame [data-close]').onclick = () => { $('#newgame').hidden = true; };
