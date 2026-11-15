@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tank variations</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #1b1a17; color: #eee; font: 14px/1.35 system-ui, sans-serif; overflow: hidden; }
+  canvas { display: block; }
+  .tag { position: absolute; transform: translate(-50%, 0); text-align: center; width: 300px; pointer-events: none; text-shadow: 0 1px 3px #000; font-size: 13px; }
+  .tag b { color: #ffd36b; font-size: 20px; }
+  .row { position: absolute; left: 12px; transform: translate(0, -50%); width: 150px; font-weight: 700; font-size: 16px; color: #ffd36b; text-shadow: 0 1px 3px #000; pointer-events: none; }
+  #picker { position: absolute; left: 0; right: 0; top: 12px; text-align: center; }
+  #picker button { font: inherit; font-size: 15px; padding: 7px 14px; margin: 0 4px; border-radius: 6px; border: 1px solid #777; background: #2d2b27; color: #eee; cursor: pointer; }
+  #picker button.on { background: #ffd36b; color: #222; }
+  #bar { position: absolute; left: 0; right: 0; bottom: 10px; text-align: center; }
+  #bar button, #bar a { font: inherit; padding: 6px 14px; margin: 0 4px; border-radius: 6px; border: 1px solid #777; background: #2d2b27; color: #eee; cursor: pointer; text-decoration: none; }
+  #bar .on { background: #ffd36b; color: #222; }
+</style>
+</head>
+<body>
+<div id="bar"><a href="?set=german" id="set-german">German tanks</a><a href="?set=sherman" id="set-sherman">Shermans</a><button id="spin" class="on">Turning</button></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="../js/models.js"></script>
+<script>
+// Tank variations for Steve to pick from (2026-11-15: the German tanks look too alike; the Sherman looks wrong). A row a
+// tank: the one in the game now, then A and B. ?set=german or ?set=sherman
+const T = THREE;
+const TANKS = 1.6;         // the tanks' scale on the table (board3d.js)
+const SETS = {
+  german: [
+    { name: 'Panzer I', make: look => Models.panzer1(look), A: 'Ausf. A: tiny, four wheels and the idler on the ground, a girder, superstructure over the tracks, little 8-sided turret off to the right', B: 'Ausf. B: a little longer, five wheels, raised idler, a box on the deck, big white turret number' },
+    { name: 'Panzer II', make: look => Models.panzer2(look), A: 'Ausf. C: rounded nose, five big wheels on leaf springs, turret off to the left with a cupola, thin 2 cm', B: 'Ausf. F: flat upright front with visors, boxes on the track guards, bin on the turret back' },
+    { name: 'Panzer III', make: look => Models.panzer3(look), A: 'Ausf. J (1942): upright front, big turret with side hatches, cupola, bin on the turret back, short 5 cm, track links on the nose', B: 'Ausf. E (1940): lower turret, inner mantlet, short 3.7 cm and two MGs, white turret numbers, tool boxes' },
+    { name: 'Panzer IV', make: look => Models.panzer4(look), A: 'Ausf. H, Normandy 1944: dark yellow camouflage, skirts down the sides and round the turret, long gun, double muzzle brake', B: 'Ausf. F2, 1942 (Stalingrad): grey, no skirts, turret off to the left with side hatches and a bin, round muzzle brake, spare wheels on the nose' },
+    { name: 'Panther', make: look => Models.panther(look), A: 'Ausf. A, Normandy: dark yellow camouflage, skirts, spare track on the turret, very long gun', B: 'Grey, no skirts, and a size bigger than now, so it is plainly the biggest German tank' },
+    { name: 'StuG III (picked)', make: look => Models.stug3(look === 'now' ? 'C' : look === 'A' ? 'A' : 'B'), A: 'the sloped wedge without the skirts and the rounded mantlet', B: 'the boxy Ausf. F' },
+  ],
+  sherman: [
+    { name: 'Sherman 75mm', make: look => Models.sherman(Models.M.olive, false, look), A: 'M4A1: tall rounded cast hull, three VVSS bogies with the return roller on top, turret with flat mantlet and a bustle over the back, short 75 mm', B: 'M4: the welded hull, flat slab sides and one straight glacis, the same turret' },
+    { name: 'Sherman 76mm', make: look => Models.sherman(Models.M.olive, true, look), A: 'M4A1(76): cast hull, the bigger T23 turret with a cupola, the long 76 mm with its muzzle brake (no box on the back)', B: 'M4A3(76): the welded hull, the T23 turret, the long 76 mm' },
+  ],
+};
+const params = new URLSearchParams(location.search);
+const setName = params.get('set') === 'sherman' ? 'sherman' : 'german';
+document.getElementById('set-' + setName).classList.add('on');
+const ROWS = SETS[setName];
+const LOOKS = ['now', 'A', 'B'];
+// One tank at a time, big (Steve can switch with the buttons above): ?tank=<number>
+let current = Math.min(ROWS.length - 1, Math.max(0, +(params.get('tank') || 0)));
+const picker = document.createElement('div');
+picker.id = 'picker';
+document.body.append(picker);
+ROWS.forEach((row, r) => {
+  const b = document.createElement('button');
+  b.textContent = row.name;
+  b.onclick = () => show(r);
+  picker.append(b);
+});
+
+const renderer = new T.WebGLRenderer({ antialias: true });
+renderer.outputEncoding = T.sRGBEncoding;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = T.PCFSoftShadowMap;
+document.body.prepend(renderer.domElement);
+const scene = new T.Scene();
+scene.background = new T.Color('#1b1a17');
+scene.add(new T.HemisphereLight(0xdfe8ff, 0x3a3020, 0.6));
+const lamp = new T.DirectionalLight(0xffe8c8, 1.4);
+lamp.position.set(-3, 10, 2);
+lamp.target.position.set(1.6, 0, 0.5);
+lamp.castShadow = true;
+lamp.shadow.mapSize.set(2048, 2048);
+Object.assign(lamp.shadow.camera, { left: -6, right: 6, top: 6, bottom: -6, near: 1, far: 30 });
+scene.add(lamp, lamp.target);
+const camera = new T.PerspectiveCamera(30, 1, 0.1, 80);
+Models.materials();
+
+// Three fields side by side: Now, A, B
+const GAP = 1.15;
+const cellX = k => 0.5 + k * GAP;
+LOOKS.forEach((look, k) => {
+  const ground = Models.field('field', false, k);
+  ground.position.set(cellX(k), 0, 0.5);
+  scene.add(ground);
+});
+const tags = LOOKS.map((look, k) => {
+  const tag = document.createElement('div');
+  tag.className = 'tag';
+  document.body.append(tag);
+  return { tag, x: cellX(k), z: 1.1 };
+});
+let tanks = [];
+// Show one tank's three looks, with what each is under it
+function show(r) {
+  current = r;
+  for (const m of tanks) scene.remove(m);
+  const row = ROWS[r];
+  tanks = LOOKS.map((look, k) => {
+    const m = row.make(look);
+    m.scale.multiplyScalar(TANKS);
+    m.position.set(cellX(k), 0, 0.5);
+    // (its front three-quarters to the camera)
+    m.rotation.y = -0.7;
+    scene.add(m);
+    return m;
+  });
+  const words = { now: 'as in the game today', A: row.A, B: row.B };
+  LOOKS.forEach((look, k) => { tags[k].tag.innerHTML = `<b>${look === 'now' ? 'Now' : look}</b><br>${words[look] || ''}`; });
+  [...picker.children].forEach((b, i) => b.classList.toggle('on', i === r));
+}
+
+// The camera: low at the front, as at the table but closer, far enough back for the three fields
+function fit() {
+  renderer.setSize(innerWidth, innerHeight);
+  camera.aspect = innerWidth / innerHeight;
+  const midX = cellX(1);
+  const back = Math.max(2.6, 2.1 / (Math.tan(15 * Math.PI / 180) * camera.aspect));
+  camera.position.set(midX, back * 0.45, 0.5 + back * 0.9);
+  camera.lookAt(midX, 0.05, 0.6);
+  camera.updateProjectionMatrix();
+  camera.updateMatrixWorld();
+  for (const t of tags) {
+    const p = new T.Vector3(t.x, 0, t.z).project(camera);
+    t.tag.style.left = ((p.x + 1) / 2 * innerWidth) + 'px';
+    t.tag.style.top = ((1 - p.y) / 2 * innerHeight) + 'px';
+  }
+}
+addEventListener('resize', fit);
+fit();
+show(current);
+
+let spinning = true;
+document.getElementById('spin').onclick = e => { spinning = !spinning; e.target.classList.toggle('on', spinning); };
+let last = performance.now();
+function frame(now) {
+  const dt = (now - last) / 1000; last = now;
+  if (spinning) for (const m of tanks) m.rotation.y += dt * 0.3;
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

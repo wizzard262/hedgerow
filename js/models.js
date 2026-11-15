@@ -1379,7 +1379,9 @@ const Models = (() => {
   // Built along +x (the gun points +x). About 0.42 long: a big model next to the figures, as on a real table
 
   // Road wheels as a short cylinder lying on its side
-  function wheel(r, w, m) { const c = cyl(r, r, w, m, 18); c.rotation.x = Math.PI / 2; return c; }
+  // (turned in its geometry, not by its rotation, so at() placing it doesn't stand it back up on its edge: Steve,
+  // 2026-11-15, the wheels at the ends of the tracks were lying on their sides)
+  function wheel(r, w, m) { const c = cyl(r, r, w, m, 18); c.geometry.rotateX(Math.PI / 2); return c; }
 
   // A track: the top run, the bottom run on the ground and the curve round the sprocket and idler, with links marked
   function trackRun(len, h, w, y, z) {
@@ -1427,11 +1429,13 @@ const Models = (() => {
   // The M4A1 Sherman: cast hull rounded at every edge, sponsons over the tracks, three VVSS bogies a side with their
   // return rollers, the rounded transmission cover, a low round turret with its mantlet and the short 75 mm, a .50 on the roof.
   // The Firefly has the long 17-pounder with its muzzle brake and a box on the turret's back
-  function sherman(paint, firefly = false) {
+  function sherman(paint, firefly = false, look = 'B') {
+    // (a new look to pick from: see shermanNew)
+    if (look !== 'now') return shermanNew(look, firefly);
     const g = new T.Group(), W = 0.2, L = 0.4;
     // Lower hull between the tracks, and the rounded transmission cover at the nose
     g.add(at(box(0.36, 0.05, W * 0.55, paint), -0.01, 0.06, 0));
-    const nose = cyl(0.04, 0.04, W * 0.62, paint, 20); nose.rotation.x = Math.PI / 2; g.add(at(nose, 0.16, 0.07, 0));
+    const nose = cyl(0.04, 0.04, W * 0.62, paint, 20); nose.geometry.rotateX(Math.PI / 2); g.add(at(nose, 0.16, 0.07, 0));
     // Upper hull: a cast shell, its sloped glacis, wider than the hull so it covers the tops of the tracks
     g.add(at(profile([[-0.2, 0.085], [0.16, 0.085], [0.11, 0.16], [-0.19, 0.16], [-0.2, 0.15]], W, paint, 0.018), 0, 0, 0));
     // Driver's and co-driver's hatches and periscopes, the bow machine gun, headlights with guards
@@ -1478,7 +1482,8 @@ const Models = (() => {
 
   // The Panther: long sloped glacis, upper sides sloping in, eight big interleaved road wheels a side, rear deck fans,
   // a narrow-fronted turret with a rounded mantlet, the commander's cupola, the long 75 mm with a double muzzle brake
-  function panther() {
+  function panther(look = 'now') {
+    if (look !== 'now') return pantherNew(look);
     const paint = M.panzerGrey;
     const g = new T.Group(), W = 0.22, L = 0.46;
     g.add(at(box(0.4, 0.05, W * 0.6, paint), -0.01, 0.06, 0));
@@ -1503,7 +1508,7 @@ const Models = (() => {
     }
     // Turret, set back: sloped sides, narrow front, the pot mantlet
     g.add(at(profile([[-0.075, 0], [0.055, 0], [0.065, 0.05], [-0.06, 0.056]], 0.12, paint, 0.008), -0.035, 0.155, 0));
-    const mant = cyl(0.026, 0.026, 0.09, paint, 20); mant.rotation.x = Math.PI / 2; mant.scale.set(1, 1, 0.6); g.add(at(mant, 0.035, 0.18, 0));
+    const mant = cyl(0.026, 0.026, 0.09, paint, 20); mant.geometry.rotateX(Math.PI / 2); mant.scale.set(0.6, 1, 1); g.add(at(mant, 0.035, 0.18, 0));
     g.add(at(cyl(0.007, 0.009, 0.34, M.steel, 14), 0.22, 0.18, 0, 0, 0, Math.PI / 2));
     g.add(at(cyl(0.012, 0.012, 0.012, M.steel, 14), 0.39, 0.18, 0, 0, 0, Math.PI / 2));
     g.add(at(cyl(0.012, 0.012, 0.012, M.steel, 14), 0.405, 0.18, 0, 0, 0, Math.PI / 2));
@@ -1517,7 +1522,8 @@ const Models = (() => {
 
   // The Panzer IV (late model): a box hull, eight small road wheels in pairs on four bogies, return rollers,
   // armour skirts hung beside the hull and round the turret, the long 75 mm with its double muzzle brake
-  function panzer4() {
+  function panzer4(look = 'now') {
+    if (look !== 'now') return panzer4New(look);
     const paint = M.panzerGrey;
     const g = new T.Group(), W = 0.19, L = 0.38;
     g.add(at(box(0.36, 0.055, W * 0.62, paint), 0, 0.065, 0));
@@ -1573,7 +1579,7 @@ const Models = (() => {
     g.add(at(cyl(0.05, 0.05, 0.002, M.black, 24), -0.02, 0.166, 0));
     g.add(at(box(0.022, 0.028, 0.04, paint), 0.04, 0.143, 0));
     g.add(at(cyl(0.006, 0.007, 0.12, M.steel, 12), 0.11, 0.145, 0, 0, 0, Math.PI / 2));
-    const ring = new T.Mesh(new T.TorusGeometry(0.05, 0.003, 6, 24), M.steel); ring.rotation.x = Math.PI / 2; g.add(at(ring, -0.02, 0.178, 0));
+    const ring = new T.Mesh(new T.TorusGeometry(0.05, 0.003, 6, 24), M.steel); ring.geometry.rotateX(Math.PI / 2); g.add(at(ring, -0.02, 0.178, 0));
     g.add(at(cyl(0.003, 0.003, 0.06, M.steel, 6), -0.05, 0.19, 0.02, 0, 0, Math.PI / 2 - 0.15));
     // White stars on the sides
     for (const s of [-1, 1]) g.add(at(starMesh(0.02), -0.06, 0.085, s * (W * 0.4 + 0.002), 0, s > 0 ? 0 : Math.PI, 0));
@@ -2043,7 +2049,8 @@ const Models = (() => {
 
   // The Panzer I (Steve: a short turret, unlike the Panzer II): small, four road wheels a side with the girder outside
   // them, a low turret set off to the right with its two machine guns
-  function panzer1() {
+  function panzer1(look = 'now') {
+    if (look !== 'now') return panzer1New(look);
     const paint = M.panzerGrey;
     const g = new T.Group(), W = 0.16, L = 0.3;
     g.add(at(box(0.28, 0.04, W * 0.56, paint), 0, 0.05, 0));
@@ -2065,7 +2072,8 @@ const Models = (() => {
 
   // The Panzer II (Steve: a short turret): five big road wheels a side and no girder, a low turret in the middle with the
   // 2 cm cannon and a machine gun beside it, a hatch on top
-  function panzer2() {
+  function panzer2(look = 'now') {
+    if (look !== 'now') return panzer2New(look);
     const paint = M.panzerGrey;
     const g = new T.Group(), W = 0.17, L = 0.33;
     g.add(at(box(0.31, 0.045, W * 0.58, paint), 0, 0.055, 0));
@@ -2089,7 +2097,8 @@ const Models = (() => {
 
   // The Panzer III (1940): a box hull, six road wheels a side and three return rollers, a turret with its cupola at the
   // back and the short 37 mm
-  function panzer3() {
+  function panzer3(look = 'now') {
+    if (look !== 'now') return panzer3New(look);
     const paint = M.panzerGrey;
     const g = new T.Group(), W = 0.18, L = 0.36;
     g.add(at(box(0.34, 0.05, W * 0.6, paint), 0, 0.06, 0));
@@ -2107,6 +2116,314 @@ const Models = (() => {
     g.add(at(box(0.02, 0.026, 0.04, paint), 0.045, 0.148, 0));
     g.add(at(cyl(0.005, 0.006, 0.12, M.steel, 12), 0.11, 0.15, 0, 0, 0, Math.PI / 2));
     for (const s of [-1, 1]) g.add(at(crossMesh(0.02), -0.03, 0.105, s * (W / 2 + 0.002), 0, s > 0 ? 0 : Math.PI, 0));
+    return castAll(g);
+  }
+
+  // ---------- Tank variations to pick from (Steve, 2026-11-15: the German tanks look too alike, the Sherman wrong) ----------
+  // Each tank's look: 'now' as it is in the game; 'A' and 'B' new ones, each built round what tells that tank apart at a
+  // glance. tools/tank-variants.html shows them side by side
+
+  // A run of road wheels along one side: n wheels from x0, spaced dx, radius r; hub: a darker centre
+  function roadWheels(g, n, x0, dx, y, z, r, w, m, hub = M.black) {
+    for (let k = 0; k < n; k++) {
+      g.add(at(wheel(r, w, m), x0 + k * dx, y, z));
+      g.add(at(wheel(r * 0.45, w + 0.002, hub), x0 + k * dx, y, z));
+    }
+  }
+  // A white turret number on each side of a turret (a plain light panel at this size)
+  function turretNumber(g, x, y, zHalf, len = 0.03) {
+    for (const s of [-1, 1]) g.add(at(box(len, 0.012, 0.002, mat('#ece6d6', 0.8)), x, y, s * zHalf));
+  }
+
+  // The Panzer I. A: Ausf. A, tiny and narrow: four road wheels and a trailing idler down on the ground, a girder along
+  // them, the superstructure wider than the hull hanging over the tracks, a little eight-sided turret well off to the
+  // right with its twin MGs. B: Ausf. B, a little longer: five road wheels, the idler raised, a box on the engine deck,
+  // a big white turret number
+  function panzer1New(look) {
+    const paint = M.panzerGrey;
+    const g = new T.Group(), W = 0.15, L = look === 'B' ? 0.32 : 0.29;
+    g.add(at(box(L * 0.92, 0.036, W * 0.52, paint), 0, 0.048, 0));
+    // The superstructure over the tracks, its sides leaning in, and the lower engine deck behind
+    g.add(at(frustum({ x0: -0.06, x1: L / 2 - 0.02, w: W * 1.02 }, { x0: -0.05, x1: L / 2 - 0.05, w: W * 0.86 }, 0.066, 0.1, paint), 0, 0, 0));
+    g.add(at(frustum({ x0: -L / 2, x1: -0.06, w: W * 0.9 }, { x0: -L / 2 + 0.01, x1: -0.06, w: W * 0.8 }, 0.066, 0.088, paint), 0, 0, 0));
+    for (const s of [-1, 1]) {
+      const z = s * W * 0.4;
+      g.add(trackRun(L * 0.94, 0.038, 0.026, 0.024, z));
+      if (look === 'B') {
+        roadWheels(g, 5, -0.105, 0.052, 0.02, z, 0.016, 0.022, M.steel);
+        g.add(at(wheel(0.015, 0.024, M.steel), -L / 2 + 0.01, 0.038, z));
+      } else {
+        roadWheels(g, 4, -0.06, 0.052, 0.02, z, 0.017, 0.022, M.steel);
+        // The big idler at the back, down on the ground
+        g.add(at(wheel(0.02, 0.024, M.steel), -L / 2 + 0.015, 0.022, z));
+      }
+      // The girder along the wheels, the return rollers, the sprocket at the front
+      g.add(at(box(L * 0.55, 0.008, 0.004, paint), 0.01, 0.034, z + s * 0.016));
+      for (let k = 0; k < 3; k++) g.add(at(wheel(0.006, 0.014, M.steel), -0.06 + k * 0.06, 0.046, z));
+      g.add(at(sprocket(0.016, 0.026, paint), L / 2 - 0.015, 0.038, z));
+    }
+    // The small eight-sided turret, well off to the right, with its twin machine guns and a hatch
+    const tz = -0.022;
+    g.add(at(cyl(0.03, 0.032, 0.03, paint, 8), 0.03, 0.115, tz));
+    g.add(at(hatch(0.014, paint), 0.022, 0.132, tz));
+    g.add(at(box(0.012, 0.016, 0.026, paint), 0.06, 0.115, tz));
+    for (const dz of [-0.007, 0.007]) g.add(at(cyl(0.0026, 0.0026, 0.05, M.steel, 6), 0.09, 0.116, tz + dz, 0, 0, Math.PI / 2));
+    if (look === 'B') {
+      g.add(at(box(0.05, 0.016, 0.06, paint), -0.1, 0.096, 0));
+      turretNumber(g, 0.03, 0.118, 0.031, 0.032);
+    }
+    for (const s of [-1, 1]) g.add(at(crossMesh(0.016), -0.02, 0.083, s * (W * 0.47 + 0.002), 0, s > 0 ? 0 : Math.PI, 0));
+    return castAll(g);
+  }
+
+  // The Panzer II. A: Ausf. C, the rounded nose plate, five big road wheels on leaf springs (a spring box over each),
+  // four return rollers, the turret off to the left with a commander's cupola, the thin 2 cm and its MG. B: Ausf. F, a
+  // flat, upright front plate with the dummy visor, stowage boxes on the track guards, a stowage bin on the turret's back
+  function panzer2New(look) {
+    const paint = M.panzerGrey;
+    const g = new T.Group(), W = 0.17, L = 0.33;
+    g.add(at(box(L * 0.9, 0.044, W * 0.56, paint), 0, 0.054, 0));
+    // The superstructure over the tracks
+    g.add(at(frustum({ x0: -L / 2, x1: 0.12, w: W * 1.02 }, { x0: -L / 2 + 0.01, x1: 0.1, w: W * 0.94 }, 0.076, 0.114, paint), 0, 0, 0));
+    if (look === 'B') {
+      // The flat, upright front plate, the dummy visor and the real one
+      g.add(at(box(0.03, 0.06, W * 0.94, paint), 0.135, 0.084, 0));
+      for (const z of [-0.035, 0.035]) g.add(at(box(0.004, 0.01, 0.028, M.black), 0.151, 0.1, z));
+    } else {
+      // The rounded nose plate
+      const nose = cyl(0.03, 0.03, W * 0.6, paint, 18); nose.geometry.rotateX(Math.PI / 2);
+      g.add(at(nose, 0.135, 0.07, 0));
+      g.add(at(box(0.004, 0.01, 0.03, M.black), 0.124, 0.108, 0.03));
+    }
+    for (const s of [-1, 1]) {
+      const z = s * W * 0.4;
+      g.add(trackRun(L * 0.9, 0.05, 0.03, 0.028, z));
+      roadWheels(g, 5, -0.11, 0.055, 0.025, z, 0.022, 0.026, M.steel);
+      // A leaf-spring box over each wheel
+      for (let k = 0; k < 5; k++) g.add(at(box(0.026, 0.008, 0.006, paint), -0.11 + k * 0.055, 0.05, z + s * 0.017));
+      for (let k = 0; k < 4; k++) g.add(at(wheel(0.006, 0.014, M.steel), -0.09 + k * 0.06, 0.056, z));
+      g.add(at(sprocket(0.018, 0.028, paint), 0.15, 0.045, z));
+      if (look === 'B') g.add(at(box(0.06, 0.018, 0.026, paint), -0.06, 0.122, s * 0.07));
+    }
+    // The turret, off to the left: sloped sides, the cupola, the 2 cm and the MG
+    const tz = 0.016;
+    g.add(at(frustum({ x0: -0.05, x1: 0.04, w: 0.08 }, { x0: -0.044, x1: 0.032, w: 0.066 }, 0.114, 0.144, paint), 0, 0, tz));
+    g.add(at(cyl(0.013, 0.014, 0.014, paint, 12), -0.026, 0.151, tz + 0.012));
+    g.add(at(box(0.012, 0.022, 0.034, paint), 0.044, 0.128, tz));
+    g.add(at(cyl(0.0034, 0.0038, 0.1, M.steel, 10), 0.098, 0.13, tz - 0.007, 0, 0, Math.PI / 2));
+    g.add(at(cyl(0.0024, 0.0024, 0.03, M.steel, 6), 0.06, 0.126, tz + 0.009, 0, 0, Math.PI / 2));
+    if (look === 'B') g.add(at(box(0.03, 0.022, 0.06, paint), -0.064, 0.13, tz));
+    for (const s of [-1, 1]) g.add(at(crossMesh(0.017), -0.07, 0.095, s * (W * 0.51 + 0.002), 0, s > 0 ? 0 : Math.PI, 0));
+    return castAll(g);
+  }
+
+  // The Panzer III. A: Ausf. J, 1942: an upright, flat front, a big turret with its two-part side hatches, the
+  // cupola at the back and a stowage bin on the turret's back, the short 5 cm in its outer mantlet, spare track links on
+  // the nose. B: Ausf. E, 1940: a lower turret with the split inner mantlet and the short 3.7 cm, no bin, big white
+  // turret numbers, the long engine deck with two tool boxes
+  function panzer3New(look) {
+    const paint = M.panzerGrey;
+    const g = new T.Group(), W = 0.18, L = 0.36;
+    g.add(at(box(0.34, 0.05, W * 0.6, paint), 0, 0.06, 0));
+    // The superstructure over the tracks: an upright front plate, the deck behind
+    g.add(at(frustum({ x0: -0.18, x1: 0.15, w: W * 1.02 }, { x0: -0.17, x1: 0.145, w: W * 0.98 }, 0.085, 0.128, paint), 0, 0, 0));
+    g.add(at(frustum({ x0: 0.13, x1: 0.18, w: W * 0.66 }, { x0: 0.13, x1: 0.15, w: W * 0.66 }, 0.06, 0.09, paint), 0, 0, 0));
+    // The driver's visor and the bow MG ball, spare track links across the nose
+    g.add(at(box(0.004, 0.01, 0.03, M.black), 0.152, 0.115, 0.04));
+    g.add(at(sphere(0.008, paint, 10, 8), 0.15, 0.108, -0.04));
+    if (look !== 'B') for (let k = 0; k < 5; k++) g.add(at(box(0.008, 0.012, 0.03, M.track), 0.17, 0.08, -0.06 + k * 0.03, 0, 0, 0.6));
+    for (const s of [-1, 1]) {
+      const z = s * W * 0.42;
+      g.add(trackRun(L * 0.9, 0.05, 0.033, 0.03, z));
+      roadWheels(g, 6, -0.125, 0.05, 0.024, z, 0.02, 0.025, M.steel);
+      for (let k = 0; k < 3; k++) g.add(at(wheel(0.006, 0.015, M.steel), -0.08 + k * 0.07, 0.055, z));
+      g.add(at(sprocket(0.02, 0.03, paint), 0.165, 0.045, z));
+      g.add(at(wheel(0.017, 0.03, M.steel), -0.165, 0.04, z));
+    }
+    if (look === 'B') for (const s of [-1, 1]) g.add(at(box(0.07, 0.016, 0.022, paint), -0.1, 0.136, s * 0.06));
+    // The turret: sloped sides, its side hatches, the cupola at the back
+    const top = look === 'B' ? 0.162 : 0.17;
+    g.add(at(frustum({ x0: -0.065, x1: 0.05, w: 0.115 }, { x0: -0.058, x1: 0.04, w: 0.095 }, 0.128, top, paint), 0, 0, 0));
+    for (const s of [-1, 1]) g.add(at(box(0.026, 0.024, 0.002, M.black), -0.01, 0.15, s * 0.053));
+    g.add(at(cyl(0.017, 0.018, 0.02, paint, 16), -0.048, top + 0.01, 0));
+    for (let k = 0; k < 6; k++) { const a = k / 6 * Math.PI * 2; g.add(at(box(0.004, 0.006, 0.004, M.black), -0.048 + Math.cos(a) * 0.018, top + 0.012, Math.sin(a) * 0.018)); }
+    if (look === 'B') {
+      // The split inner mantlet and the short 3.7 cm, with the two MGs beside it; big white numbers
+      g.add(at(box(0.008, 0.026, 0.05, paint), 0.052, 0.148, 0));
+      g.add(at(cyl(0.004, 0.005, 0.09, M.steel, 10), 0.1, 0.148, -0.006, 0, 0, Math.PI / 2));
+      for (const dz of [0.01, 0.02]) g.add(at(cyl(0.0024, 0.0024, 0.02, M.steel, 6), 0.065, 0.146, dz, 0, 0, Math.PI / 2));
+      turretNumber(g, -0.012, 0.155, 0.052, 0.04);
+    } else {
+      // The outer mantlet and the short 5 cm; the stowage bin on the turret's back
+      g.add(at(box(0.022, 0.03, 0.05, paint), 0.06, 0.15, 0));
+      g.add(at(cyl(0.0055, 0.0065, 0.1, M.steel, 12), 0.12, 0.151, 0, 0, 0, Math.PI / 2));
+      g.add(at(box(0.034, 0.03, 0.09, paint), -0.085, 0.15, 0));
+    }
+    for (const s of [-1, 1]) g.add(at(crossMesh(0.02), -0.06, 0.105, s * (W * 0.51 + 0.002), 0, s > 0 ? 0 : Math.PI, 0));
+    return castAll(g);
+  }
+
+  // The Panzer IV. A: Ausf. H in Normandy, 1944: dark yellow with green and brown bands, armour skirts down the sides and
+  // right round the turret (the cupola poking up through), the long 7.5 cm with its double muzzle brake, a stepped front.
+  // B: Ausf. F2, 1942 (Stalingrad's): panzer grey, no skirts, the turret off to the left with its side hatches and the
+  // stowage bin on its back, the long 7.5 cm with the round single-baffle muzzle brake, spare road wheels on the nose
+  function panzer4New(look) {
+    const paint = look === 'A' ? camoPaint() : M.panzerGrey;
+    const g = new T.Group(), W = 0.19, L = 0.39;
+    g.add(at(box(0.36, 0.055, W * 0.6, paint), 0, 0.065, 0));
+    // The superstructure over the tracks, its stepped front: the driver's plate standing forward of the bow MG's
+    g.add(at(frustum({ x0: -0.19, x1: 0.14, w: W * 1.02 }, { x0: -0.18, x1: 0.135, w: W }, 0.09, 0.135, paint), 0, 0, 0));
+    g.add(at(box(0.024, 0.045, W * 0.5, paint), 0.152, 0.112, 0.04));
+    g.add(at(box(0.004, 0.01, 0.03, M.black), 0.165, 0.125, 0.04));
+    g.add(at(sphere(0.008, paint, 10, 8), 0.142, 0.115, -0.045));
+    g.add(at(frustum({ x0: 0.14, x1: 0.195, w: W * 0.66 }, { x0: 0.14, x1: 0.16, w: W * 0.66 }, 0.06, 0.092, paint), 0, 0, 0));
+    for (const s of [-1, 1]) {
+      const z = s * W * 0.42;
+      g.add(trackRun(L * 0.92, 0.05, 0.035, 0.032, z));
+      // Eight small road wheels in pairs on four bogies, four return rollers
+      for (let b = 0; b < 4; b++) {
+        g.add(at(box(0.034, 0.012, 0.008, paint), -0.125 + b * 0.08, 0.036, z + s * 0.018));
+        for (const wx of [-0.018, 0.018]) { g.add(at(wheel(0.015, 0.025, M.steel), -0.125 + b * 0.08 + wx, 0.021, z)); g.add(at(wheel(0.007, 0.027, M.black), -0.125 + b * 0.08 + wx, 0.021, z)); }
+      }
+      for (let r = 0; r < 4; r++) g.add(at(wheel(0.006, 0.015, M.steel), -0.12 + r * 0.08, 0.056, z));
+      g.add(at(sprocket(0.02, 0.03, paint), 0.175, 0.046, z));
+      g.add(at(wheel(0.018, 0.03, M.steel), -0.178, 0.042, z));
+      if (look === 'A') {
+        // The skirt plates on their rail
+        g.add(at(box(0.34, 0.004, 0.004, M.steel), -0.005, 0.11, z + s * 0.03));
+        for (let k = 0; k < 6; k++) g.add(at(box(0.054, 0.056, 0.003, paint), -0.145 + k * 0.057, 0.08, z + s * 0.033, 0, (k % 2 ? 0.03 : -0.02), 0));
+      } else if (s > 0) {
+        // Spare road wheels on the nose
+        for (const zz of [-0.04, 0.04]) g.add(at(wheel(0.015, 0.012, M.steel), 0.185, 0.095, zz, Math.PI / 2, 0, -0.5));
+      }
+    }
+    // The turret, off to the left: sloped sides, the cupola at the back, the mantlet and the long gun
+    const tz = look === 'A' ? 0 : 0.012;
+    g.add(at(frustum({ x0: -0.07, x1: 0.05, w: 0.115 }, { x0: -0.062, x1: 0.042, w: 0.096 }, 0.135, 0.18, paint), 0, 0, tz));
+    g.add(at(cyl(0.017, 0.018, 0.022, paint, 16), -0.05, 0.19, tz));
+    g.add(at(box(0.024, 0.03, 0.05, paint), 0.06, 0.158, tz));
+    g.add(at(cyl(0.0062, 0.0078, 0.25, M.steel, 14), 0.195, 0.16, tz, 0, 0, Math.PI / 2));
+    if (look === 'A') {
+      for (const dx of [0.322, 0.336]) g.add(at(cyl(0.011, 0.011, 0.009, M.steel, 14), dx, 0.16, tz, 0, 0, Math.PI / 2));
+      // The turret skirt: round the sides and the back, standing off the turret
+      for (const s of [-1, 1]) g.add(at(box(0.13, 0.04, 0.003, paint), -0.03, 0.16, s * 0.074));
+      g.add(at(box(0.003, 0.04, 0.15, paint), -0.098, 0.16, 0));
+    } else {
+      g.add(at(sphere(0.011, M.steel, 12, 10), 0.325, 0.16, tz));
+      for (const s of [-1, 1]) g.add(at(box(0.026, 0.026, 0.002, M.black), -0.005, 0.158, tz + s * 0.054));
+      g.add(at(box(0.034, 0.03, 0.1, paint), -0.087, 0.158, tz));
+    }
+    for (const s of [-1, 1]) g.add(at(crossMesh(0.02), -0.06, 0.112, s * (W * 0.51 + (look === 'A' ? 0.032 : 0.002)), 0, s > 0 ? 0 : Math.PI, 0));
+    return castAll(g);
+  }
+
+  // The Panther. A: Ausf. A in Normandy: dark yellow with bands, the big interleaved wheels, the long sloped glacis, the
+  // turret's sloped sides set well back with the rounded mantlet, the very long 7.5 cm with its double muzzle brake,
+  // skirts along the sides, spare track on the turret side. B: as A in panzer grey, no skirts, and taller and longer than
+  // the others, so it is plainly the biggest German tank on the table
+  function pantherNew(look) {
+    const paint = look === 'A' ? camoPaint() : M.panzerGrey;
+    const s0 = look === 'B' ? 1.08 : 1;
+    const g = new T.Group(), W = 0.22, L = 0.46;
+    g.add(at(box(0.4, 0.05, W * 0.6, paint), -0.01, 0.06, 0));
+    // The hull: the long sloped glacis, the upper sides leaning in, the short sloped back
+    g.add(at(frustum({ x0: -0.225, x1: 0.235, w: W * 1.02 }, { x0: -0.2, x1: 0.12, w: W * 0.84 }, 0.082, 0.158, paint), 0, 0, 0));
+    // The fans on the back deck, the driver's visor and the bow MG
+    for (const z of [-0.045, 0.045]) { g.add(at(cyl(0.02, 0.022, 0.008, paint, 18), -0.165, 0.162, z)); g.add(at(cyl(0.012, 0.012, 0.009, M.black, 14), -0.165, 0.163, z)); }
+    g.add(at(box(0.004, 0.008, 0.03, M.black), 0.14, 0.15, 0.04, 0, 0, -0.9));
+    g.add(at(sphere(0.008, paint, 10, 8), 0.15, 0.145, -0.05));
+    for (const s of [-1, 1]) {
+      const z = s * W * 0.4;
+      g.add(trackRun(L * 0.86, 0.07, 0.05, 0.038, z));
+      for (let k = 0; k < 8; k++) {
+        const outer = k % 2 === 0;
+        g.add(at(wheel(0.031, 0.012, paint), -0.165 + k * 0.047, 0.04, z + s * (outer ? 0.017 : 0.002)));
+        g.add(at(wheel(0.012, 0.014, M.steel), -0.165 + k * 0.047, 0.04, z + s * (outer ? 0.019 : 0.004)));
+      }
+      g.add(at(sprocket(0.026, 0.04, paint), 0.2, 0.06, z));
+      g.add(at(wheel(0.024, 0.035, M.steel), -0.2, 0.06, z));
+      if (look === 'A') for (let k = 0; k < 6; k++) g.add(at(box(0.06, 0.04, 0.003, paint), -0.16 + k * 0.062, 0.1, z + s * 0.034));
+    }
+    // The turret, set back: sloped sides, a narrow front, the rounded mantlet, the very long gun
+    g.add(at(frustum({ x0: -0.11, x1: 0.05, w: 0.15 }, { x0: -0.1, x1: 0.03, w: 0.11 }, 0.158, 0.21, paint), 0, 0, 0));
+    const mant = cyl(0.028, 0.028, 0.09, paint, 20); mant.geometry.rotateX(Math.PI / 2); mant.scale.set(0.65, 1, 1);
+    g.add(at(mant, 0.045, 0.185, 0));
+    g.add(at(cyl(0.007, 0.009, 0.34, M.steel, 14), 0.23, 0.186, 0, 0, 0, Math.PI / 2));
+    for (const dx of [0.4, 0.415]) g.add(at(cyl(0.012, 0.012, 0.012, M.steel, 14), dx, 0.186, 0, 0, 0, Math.PI / 2));
+    g.add(at(cyl(0.02, 0.022, 0.02, paint, 18), -0.07, 0.22, 0.032));
+    for (let k = 0; k < 7; k++) { const a = k / 7 * Math.PI * 2; g.add(at(box(0.005, 0.007, 0.005, M.black), -0.07 + Math.cos(a) * 0.021, 0.222, 0.032 + Math.sin(a) * 0.021)); }
+    if (look === 'A') for (const s of [-1, 1]) for (let k = 0; k < 4; k++) g.add(at(box(0.012, 0.03, 0.004, M.track), -0.07 + k * 0.016, 0.184, s * 0.066, s * 0.35, 0, 0));
+    for (const s of [-1, 1]) g.add(at(crossMesh(0.022), -0.12, 0.12, s * (W * 0.5 + (look === 'A' ? 0.036 : 0.002)), 0, s > 0 ? 0 : Math.PI, 0));
+    g.scale.setScalar(s0);
+    return castAll(g);
+  }
+
+  // The Sherman. A: the M4A1 as it really looks: the tall, rounded cast hull, the sponsons over the tracks, three VVSS
+  // bogies a side with the return roller on top of each, the turret a rounded casting with its flat-faced mantlet and
+  // the bustle hanging over the back, the 75 mm; the 76 mm version the T23's bigger turret and the long 76 mm with its
+  // muzzle brake. B: the M4 welded hull: flat, slab sides and a single straight glacis plate, the same turret
+  function shermanNew(look, long = false) {
+    const paint = M.olive;
+    const g = new T.Group(), W = 0.2, L = 0.4;
+    // The lower hull and the rounded transmission cover at the nose
+    g.add(at(box(0.36, 0.05, W * 0.55, paint), -0.01, 0.06, 0));
+    // The transmission cover: a low rounded nose right across the front (Steve: not a big drum in the middle)
+    const nose = cyl(0.028, 0.028, W * 0.8, paint, 20); nose.geometry.rotateX(Math.PI / 2); nose.scale.set(1.3, 1, 1); g.add(at(nose, 0.168, 0.066, 0));
+    if (look === 'B') {
+      // Welded: slab sides leaning in a little, one straight glacis, a flat back
+      g.add(at(frustum({ x0: -0.2, x1: 0.17, w: W * 1.02 }, { x0: -0.19, x1: 0.09, w: W * 0.92 }, 0.085, 0.168, paint), 0, 0, 0));
+    } else {
+      // Cast: a rounded shell, tall, its glacis and sides curving
+      g.add(at(profile([[-0.2, 0.085], [0.17, 0.085], [0.15, 0.115], [0.1, 0.165], [-0.18, 0.168], [-0.2, 0.15]], W, paint, 0.022), 0, 0, 0));
+    }
+    // Driver's and co-driver's hatches with their hoods, the bow MG, the headlights
+    for (const z of [-0.045, 0.045]) { g.add(at(box(0.03, 0.014, 0.03, paint), 0.1, 0.168, z)); g.add(at(hatch(0.015, paint), 0.085, 0.172, z)); }
+    g.add(at(sphere(0.011, paint, 10, 8), 0.145, 0.13, 0.045));
+    g.add(at(cyl(0.003, 0.003, 0.03, M.steel, 6), 0.162, 0.13, 0.045, 0, 0, Math.PI / 2));
+    for (const z of [-0.075, 0.075]) g.add(at(cyl(0.007, 0.007, 0.01, M.steel, 10), 0.17, 0.112, z, 0, 0, Math.PI / 2));
+    // The engine deck grilles and the rear plate
+    for (let k = 0; k < 6; k++) g.add(at(box(0.004, 0.003, 0.12, M.steel), -0.17 + k * 0.012, 0.17, 0));
+    // The running gear: three VVSS bogies a side, each with two wheels, the bogie frame and the return roller on top
+    for (const s of [-1, 1]) {
+      const z = s * W * 0.42;
+      g.add(trackRun(L * 0.9, 0.066, 0.042, 0.04, z));
+      for (const bx of [-0.12, 0, 0.12]) {
+        g.add(at(box(0.05, 0.034, 0.012, paint), bx, 0.044, z + s * 0.024));
+        g.add(at(box(0.012, 0.012, 0.012, paint), bx + 0.012, 0.066, z + s * 0.018));
+        for (const wx of [-0.021, 0.021]) roadWheels(g, 1, bx + wx, 0, 0.025, z, 0.019, 0.03, M.steel);
+        g.add(at(wheel(0.008, 0.02, M.steel), bx + 0.012, 0.073, z));
+      }
+      g.add(at(sprocket(0.025, 0.036, paint), 0.178, 0.058, z));
+      g.add(at(wheel(0.02, 0.03, M.steel), -0.178, 0.04, z));
+    }
+    // The turret: a rounded casting, set forward of the middle, its bustle over the back; on the 76 mm version, the
+    // bigger T23 turret
+    const big = long ? 1.12 : 1;
+    // A squat round casting, its sides tapering in, the roof rounded over at the edge (not a dome)
+    const tall = long ? 0.052 : 0.046;
+    const body = cyl(0.058 * big, 0.068 * big, tall, paint, 28); body.scale.set(1, 1, 0.92);
+    g.add(at(body, -0.01, 0.17 + tall / 2, 0));
+    const roof = sphere(0.058 * big, paint, 28, 10); roof.scale.set(1, 0.22, 0.92);
+    g.add(at(roof, -0.01, 0.17 + tall, 0));
+    // The bustle hanging over the back, a little lower than the roof
+    const bustle = cyl(0.04 * big, 0.046 * big, tall * 0.8, paint, 20); bustle.scale.set(1.25, 1, 1.15);
+    g.add(at(bustle, -0.06 * big, 0.17 + tall * 0.42, 0));
+    // The flat-faced mantlet and the gun
+    g.add(at(box(0.018, 0.04, 0.074, paint), 0.068 * big, 0.192, 0));
+    g.add(at(box(0.012, 0.03, 0.05, paint), 0.08 * big, 0.192, 0));
+    const len = long ? 0.28 : 0.17;
+    g.add(at(cyl(0.0068, 0.0085, len, M.steel, 14), 0.08 * big + len / 2, 0.188, 0, 0, 0, Math.PI / 2));
+    if (long) g.add(at(cyl(0.011, 0.011, 0.02, M.steel, 14), 0.08 * big + len, 0.188, 0, 0, 0, Math.PI / 2));
+    // The commander's hatch (a cupola on the 76 mm), the loader's hatch, the .50 on its mount
+    const roofY = 0.17 + tall + 0.01;
+    if (long) g.add(at(cyl(0.02, 0.022, 0.018, paint, 16), -0.03, roofY + 0.008, 0.032));
+    else g.add(at(hatch(0.022, paint), -0.03, roofY, 0.032));
+    g.add(at(hatch(0.016, paint), -0.02, roofY - 0.002, -0.034));
+    g.add(at(cyl(0.002, 0.002, 0.03, M.steel, 6), -0.05, roofY + 0.015, 0.032));
+    g.add(at(cyl(0.0035, 0.003, 0.07, M.steel, 8), -0.025, roofY + 0.03, 0.032, 0, 0, Math.PI / 2 - 0.1));
+    // White stars on the sides and the deck
+    for (const s of [-1, 1]) g.add(at(starMesh(0.024), -0.02, 0.128, s * (W / 2 + 0.003), 0, s > 0 ? 0 : Math.PI, 0));
+    g.add(at(starMesh(0.03), -0.12, 0.172, 0, -Math.PI / 2, 0, 0));
     return castAll(g);
   }
 

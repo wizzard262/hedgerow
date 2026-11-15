@@ -1958,6 +1958,14 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - The casemate is now one sloped block (`frustum` in models.js: a box whose top is smaller than its bottom) as wide as the hull over the track guards, the front sloping well back, the sides leaning in, a low flat roof; the cast mantlet on the slope, the long 7.5 cm out of it; side skirts in four plates over the running gear. `Models.stug3(look)` keeps the other looks for the variants page
 - Assumption: the "pig's head" mantlet and skirts are a later (1943 to 1944) look than the Ausf. F of 1942; kept as Steve picked it, the name and numbers unchanged
 
+## 330. Tank variations; the Sherman's welded hull; wheels the right way up (v199)
+
+- Steve: all the German tanks look too similar: show me variants for each. And the Sherman looks wrong again: show variants. Then: Sherman B looks good, but the wheels at the ends are on their sides, and I don't like the big drum cylinder at the front centre; the same for the 75 mm and the 76 mm
+- `tools/tank-variants.html` (`?set=german` or `?set=sherman`): one tank at a time, big, Now beside A and B, each with what it is; buttons along the top switch tanks. German: Panzer I (A Ausf. A, B Ausf. B), Panzer II (A Ausf. C, B Ausf. F), Panzer III (A Ausf. J 1942, B Ausf. E 1940), Panzer IV (A Ausf. H in Normandy camouflage with skirts, B Ausf. F2 grey), Panther (A Normandy camouflage with skirts, B grey and a size bigger), and the StuG. Sherman: A the M4A1 cast hull, B the M4 welded hull; on the 76 mm both with the bigger T23 turret and the long gun with its muzzle brake. The German picks are still to come; the game keeps their old models until then (`look` on each model function: 'now', 'A', 'B')
+- **The Sherman is now B** for both the 75 mm and the 76 mm: the welded hull with flat slab sides and one straight glacis, a squat round turret with its flat mantlet and the bustle over the back (no longer a dome), three VVSS bogies a side with the return roller on top; the 76 mm with the T23 turret and cupola (no box on its back)
+- **Wheels**: `wheel()` turned its cylinder with the mesh's rotation, and `at()` (which places every part) set the rotation back, so every wheel in the game lay flat on its side: road wheels, the curved ends of every track, armoured cars, lorries. It is now turned in its geometry, so all of them stand upright. The same fault stood the Sherman's transmission cover, the Panther's mantlet, the Panzer II's nose and the M8's gun ring on end; all fixed. The Sherman's nose is now a low rounded cover right across the front, not a drum in the middle
+- Assumption: the wheel fix changes how every tank, car and lorry looks (for the better), not only the Sherman
+
 ## Sessions
 
 | # | Date | Length | What we did |
