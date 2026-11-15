@@ -398,39 +398,65 @@ const Board = (() => {
     return p < 1;
   }
 
-  // The goal in big letters above the board (Steve): Dunkirk's score on the beach (the panel's was too small), on two
-  // lines, half as far from the top of the screen as it was; every other battle's goal the same way (Steve, 2026-11-15:
-  // capture the village or destroy all the other side). gap: how far each line is below the one above
-  const EVAC_SIGN = { x: 1.55, z: -1.2, scale: 1.9, gap: 0.5, colour: '#f4ead0' };
+  // The goal in big letters above the board (Steve): Dunkirk's score on the beach (the panel's was too small); every
+  // other battle's goal the same way (Steve, 2026-11-15: capture the village or destroy all the other side). One line,
+  // as big as the first sign (Steve, 2026-11-15), in the gap between the board's top edge and the top of the screen,
+  // never over the board ("Hold La Gare" sat on the board on a smaller window); smaller only when it can't fit
+  const EVAC_SIGN = { scale: 1.9, colour: '#f4ead0' };
   let evacSign = null;               // { sign, text }
   function updateEvacSign(st) {
     // Dunkirk's count waits for its boats; every other map has its goal from the start
     if (st.map.evacuate && !st.evac) return;
+    // The goal on one line: "Capture X or destroy all Germans", and once taken " · Held: keep it all round N"
     const lines = Sim.goalLines(st);
-    const text = lines.join(' ');
+    const text = lines.slice(0, 2).join(' ') + (lines[2] ? ` · ${lines[2]}` : '');
     // (the same words, still on this table, and the screen the same shape: nothing to do)
     if (evacSign && evacSign.text === text && evacSign.sign.parent === built && evacSign.aspect === camera.aspect) return;
     if (evacSign && evacSign.sign.parent) evacSign.sign.parent.remove(evacSign.sign);
-    // One sprite a line, the second below the first
-    const sign = new T.Group();
-    // Where it goes: half way up from the board to the top of the screen, but always on the screen (Steve: on a smaller
-    // window its top line went out of sight); moved down the beach until the top line shows
-    // (on a flipped table, Stalingrad, the top left of the screen is the far corner: mirrored there)
-    const x = flipped ? COLS - EVAC_SIGN.x : EVAC_SIGN.x;
-    let z = flipped ? ROWS - EVAC_SIGN.z : EVAC_SIGN.z;
-    const topLine = (lines.length - 1) * EVAC_SIGN.gap;
-    // (each step down the screen, towards the board)
-    for (let k = 0; k < 20 && offTop(new T.Vector3(x, 0.08 + topLine, z), 0.3); k++) z += screenUp() * -0.1;
-    lines.forEach((line, i) => {
-      const sprite = word(line, EVAC_SIGN.colour, true);
-      sprite.scale.multiplyScalar(EVAC_SIGN.scale);
-      sprite.position.set(x, 0.08 + (lines.length - 1 - i) * EVAC_SIGN.gap, z);
-      // (drawn after the surf, so the water's edge never shows through the words)
-      sprite.renderOrder = 3;
-      sign.add(sprite);
-    });
-    built.add(sign);
-    evacSign = { sign, text, aspect: camera.aspect };
+    const sprite = word(text, EVAC_SIGN.colour, true);
+    // Over the middle of the board, across the screen
+    const x = COLS / 2;
+    const fit = signFit(x, sprite.scale.x, sprite.scale.y);
+    sprite.scale.multiplyScalar(fit.scale);
+    sprite.position.set(x, 0.08, fit.z);
+    // (drawn after the surf, so the water's edge never shows through the words)
+    sprite.renderOrder = 3;
+    built.add(sprite);
+    evacSign = { sign: sprite, text, aspect: camera.aspect };
+  }
+
+  // Where the goal's line fits above the board: the biggest letters (up to EVAC_SIGN.scale) that clear the board's top
+  // edge on the screen and stay on the screen, top and sides; as near the board as that allows. wide, tall: the
+  // words' size before scaling. { scale, z }
+  const SIGN_SMALLEST = 0.5;
+  function signFit(x, wide, tall) {
+    // The board's top edge on the screen, under the sign
+    const edgeZ = flipped ? ROWS : 0;
+    const edgeY = new T.Vector3(x, 0, edgeZ).project(camera).y;
+    // Up the screen, and the camera's up and across, in the world
+    const away = screenUp();
+    const up = new T.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
+    const right = new T.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+    // For each size of letters, biggest first:
+    for (let scale = EVAC_SIGN.scale; scale >= SIGN_SMALLEST; scale -= 0.1) {
+      const half = tall * scale / 2;
+      const across = wide * scale / 2;
+      // From the board's edge outwards, the first place where the line clears the board:
+      for (let k = 0; k <= 60; k++) {
+        const z = edgeZ + away * (0.05 + k * 0.05);
+        const middle = new T.Vector3(x, 0.08, z);
+        const bottom = middle.clone().addScaledVector(up, -half).project(camera).y;
+        if (bottom < edgeY + 0.01) continue;
+        // There: off the top or either side of the screen, these letters are too big
+        const top = middle.clone().addScaledVector(up, half).project(camera).y;
+        const left = middle.clone().addScaledVector(right, -across).project(camera).x;
+        const rightEnd = middle.clone().addScaledVector(right, across).project(camera).x;
+        if (top > 0.97 || left < -0.97 || rightEnd > 0.97) break;
+        return { scale, z };
+      }
+    }
+    // No room at all: the smallest letters, just past the board's edge
+    return { scale: SIGN_SMALLEST, z: edgeZ + away * 0.3 };
   }
 
   // Show as many rounds beside each gun as it has shots left

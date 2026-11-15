@@ -1917,6 +1917,14 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - A click off the table puts down a chosen gun or the bomber (`UI.dropSupport`); its token stays unused
 - Assumptions: the timer still works with I go, you go if it is left in; "pieces" counted as tokens (guns with rounds left count); the sign speaks for the player's side, and for the attackers with two humans or two robots; no balance run (Steve: same for both sides)
 
+## 325. The Germans hold out; take cover against the sniper; the goal on one line above the board (v194)
+
+- Steve: as the Germans in Paris I've no anti-tank left to destroy his tank, so can I not win? Picked: the Germans win when nobody is left to take the goal; apply it to all relevant battles. Then: a sniper hit Germans who had taken cover in a village on a 3: taking cover should add +2 for the sniper. Then: "Hold La Gare" is on the board: put it in the gap above the board, same for all; then: as big as it was, but on one line
+- The Germans hold out (`germansHoldOut` in sim.js, every battle with a goal and the beach; not Dunkirk, which has its own ending): at the end of a round, if the Americans have no rifle platoon or captain left to take the goal (on the beach there is none to take) and nothing German can hurt any American piece left (no anti-tank weapon; no machine gun when the piece is an armoured car; no mortar, artillery or bomber run left), the attack has failed: a German win. It works whoever plays each side. The German player's end screen says "The attack has failed"
+- The sniper: taking cover now adds +2 against him too (the label says "+2 take cover"); houses, hedges and range still don't help against him
+- The goal sign is one line ("Hold Le Dépôt or destroy all Americans"; once taken "… · Held: keep it all round N"; Dunkirk "0 of 12 sections evacuated"), as big as the first sign, over the middle of the board in the gap between its top edge and the top of the screen (`signFit` in board3d.js). On a small window it gets smaller rather than going over the board
+- Assumptions: the hold-out is checked at the end of a round, as the attackers' own "cannot win" is; with Americans who can't be hurt but could still wipe out the Germans, the Germans still win (Steve's pick)
+
 ## Sessions
 
 | # | Date | Length | What we did |

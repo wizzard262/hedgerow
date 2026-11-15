@@ -463,6 +463,9 @@ window.Game = (() => {
     if (st.draw) return { title: '🤝 A draw', text: st.report[0] };
     const round = Sim.roundText(st.turn);
     const us = Sim.sideName(st, 'us');
+    // Held out (Steve, 2026-11-15): nobody of theirs left to take the goal, and nothing of yours can hurt what is left
+    const usLeft = st.units.some(u => u.side === 'us' && u.x !== null);
+    if (st.lost && usLeft) return { title: '🏆 The attack has failed', text: st.report[0] };
     if (st.lost) return { title: `🏆 The ${us} are destroyed`, text: `🏆 Nothing is left of the ${us} on the table, in ${round}. The attack has failed.` };
     const germansLeft = st.units.some(u => u.side === 'de' && u.x !== null);
     if (germansLeft) return { title: `💀 ${st.objective.name} has fallen`, text: `💀 The ${us} took ${st.objective.name} and held it for the whole of ${round}.` };

@@ -1765,10 +1765,13 @@ check('ranges: rifles 4, machine guns and tanks 6; the sniper the whole board, i
     assert(Sim.sight(st, mg, open(6, row)), 'a machine gun does not reach 6 fields');
     assert(Sim.sight(st, sn, open(6, row)), 'the sniper cannot see across the board');
   }
-  // The sniper ignores cover and range: a far target in a village needs just 3+
-  const tgt = { x: 4, y: 4, kind: 'company', side: 'de', at: 'w', down: true };
+  // The sniper ignores cover and range: a far target in a village needs just 3+; taking cover still adds 2 (Steve,
+  // 2026-11-15)
+  const tgt = { x: 4, y: 4, kind: 'company', side: 'de', at: 'w', down: false };
   sn.quality = 'standard'; sn.shocked = false;
   assert(Sim.needFor(st, sn, tgt) === TO_HIT, 'the sniper was slowed by cover or range');
+  tgt.down = true;
+  assert(Sim.needFor(st, sn, tgt) === TO_HIT + TAKE_COVER, 'taking cover did not help against the sniper');
 });
 
 check('the German artillery shells Americans it can see, clear of its own men, and runs out', () => {
@@ -2896,8 +2899,9 @@ check('playing the Germans: nothing goes negative, out of range or crowded in 40
       assert(fieldOk(st, u.x, u.y), `seed ${seed}: too many units share ${u.x},${u.y}`);
     }
     for (const n of [st.ammo.us.mortars, st.ammo.us.artillery, st.ammo.us.bomber, st.ammo.de.mortars, st.ammo.de.artillery, st.ammo.de.bomber]) assert(n >= 0, `seed ${seed}: negative ammunition`);
-    // A German win means no American left on the table
-    if (st.lost && !st.draw) assert(!live(st).some(u => u.side === 'us'), `seed ${seed}: a German win with Americans left`);
+    // A German win means no American left on the table, or (Steve, 2026-11-15) none left to take the goal and nothing
+    // German that can hurt the rest
+    if (st.lost && !st.draw) assert(!live(st).some(u => u.side === 'us') || /The attack has failed/.test(st.report.join(' ')), `seed ${seed}: a German win with Americans left`);
   }
   assert(germanWins > 0, 'the Germans can never win');
 });
@@ -4983,6 +4987,32 @@ check('a click off the table puts the chosen gun or bomber down (Steve, 2026-11-
   const dropSupport = vm.runInNewContext(`(${code})`, { view });
   assert(dropSupport() === true && view.support === null && view.mode === null, 'the bomber is still chosen');
   assert(dropSupport() === false, 'nothing chosen, but something was put down');
+});
+
+check('the Germans hold out (Steve, 2026-11-15): no American left to take the goal, and nothing German can hurt what is left', () => {
+  for (const map of ['paris', 'hedges', 'stalingrad', 'beach']) {
+    const st = Sim.newGame(3, 'de', map);
+    Sim.startRound(st);
+    // The Americans down to one tank; the Germans down to riflemen, with no fire support left
+    const tank = st.units.find(u => u.side === 'us' && u.x !== null && Sim.isTank(u) && !PIECES[u.kind].car);
+    const rifles = st.units.find(u => u.side === 'de' && u.x !== null && u.kind === 'company');
+    assert(tank && rifles, `${map}: no American tank or German platoon to test with`);
+    for (const u of st.units) if (u !== tank && u !== rifles) u.x = u.y = null;
+    st.ammo.de = { mortars: 0, artillery: 0, bomber: 0 };
+    // (out of the way of each other, nobody holding anything)
+    st.holdUntil = null;
+    Sim.finishRound(st);
+    assert(st.lost && !st.won, `${map}: the Germans did not hold out against a tank they cannot hurt`);
+    // With a mortar round left, or an American platoon to take the goal, it goes on
+    const st2 = Sim.newGame(3, 'de', map);
+    Sim.startRound(st2);
+    const tank2 = st2.units.find(u => u.id === tank.id), rifles2 = st2.units.find(u => u.id === rifles.id);
+    for (const u of st2.units) if (u !== tank2 && u !== rifles2) u.x = u.y = null;
+    st2.ammo.de = { mortars: 1, artillery: 0, bomber: 0 };
+    Sim.finishRound(st2);
+    assert(!st2.lost && !st2.won, `${map}: it ended though the German mortars can still hurt the tank`);
+  }
+  Sim.newGame(1);
 });
 
 console.log(failed ? `\n${failed} failed` : '\nall passed');

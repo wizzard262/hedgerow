@@ -1420,6 +1420,30 @@ const Sim = (() => {
     return left.mortars <= 0 && left.artillery <= 0 && left.bomber <= 0;
   }
 
+  // Have the Germans held out (Steve, 2026-11-15, every battle with a goal, and the beach)? The Americans have nobody left
+  // who can take the goal, and the Germans nothing left that can hurt any American piece still on the table: no
+  // anti-tank weapon, no machine gun for an armoured car, and no mortar, artillery or bomber run left
+  function germansHoldOut(st) {
+    const us = st.units.filter(u => u.side === 'us' && u.x !== null);
+    // Nothing left of them: that is a win already (or a draw)
+    if (!us.length) return false;
+    // Someone who can still take the goal (on the beach there is no goal to take)
+    if (!st.noGoal && us.some(u => takesGoal(u))) return false;
+    // Fire support with rounds or a run left can hurt anything
+    const left = st.ammo.de;
+    if (left.mortars > 0 || left.artillery > 0 || left.bomber > 0) return false;
+    // A German piece that can hurt one of the American pieces still on the table
+    const de = st.units.filter(u => u.side === 'de' && u.x !== null);
+    return !de.some(shooter => us.some(target => canEverHurt(st, shooter, target)));
+  }
+  // Could this piece ever hurt that one, whatever the range: anything hurts men; only anti-tank weapons hurt a tank;
+  // machine guns hurt an armoured car too (as in targets)
+  function canEverHurt(st, shooter, target) {
+    if (!isTank(target)) return true;
+    if (firepower(st, shooter).hard > 0) return true;
+    return isCar(target) && hurtsCars(shooter);
+  }
+
   // With no goal: is a German bunker or tank left that nothing American can knock out? Anti-tank weapons on the table,
   // artillery or a bomber run can; mortars can knock out a tank but only shake a bunker
   function noGoalCannotWin(st, us) {
@@ -1460,9 +1484,10 @@ const Sim = (() => {
     const small = smallTarget(target) ? SMALL_TARGET : 0;
     // Close range: one less, whoever shoots (Steve)
     const close = closeBonus(shooter, target) - bunkerExtra(shooter, target);
-    // Taking cover: two more from every weapon (Steve), but not the sniper (no cover helps against him)
+    // Taking cover: two more from every weapon (Steve), the sniper too (Steve, 2026-11-15: he hit men down in a village
+    // on a 3); houses, hedges and range still don't help against him
     const down = target.down ? TAKE_COVER : 0;
-    if (PIECES[shooter.kind].sniper) return TO_HIT + small + (moving ? ON_THE_MOVE : 0) + (shooter.shocked ? SHAKEN_SHOOT : 0) - QUALITY[shooter.quality || 'standard'].shoot - close;
+    if (PIECES[shooter.kind].sniper) return TO_HIT + small + down + (moving ? ON_THE_MOVE : 0) + (shooter.shocked ? SHAKEN_SHOOT : 0) - QUALITY[shooter.quality || 'standard'].shoot - close;
     return TO_HIT + cover(st, shooter, target) + small + down + smallGunAt(shooter, target) + (moving ? ON_THE_MOVE : 0) + (shooter.shocked ? SHAKEN_SHOOT : 0) - QUALITY[shooter.quality || 'standard'].shoot - close;
   }
   // A small gun at a tank (Steve: the 2 cm and 37 mm): one more needed
@@ -1517,6 +1542,7 @@ const Sim = (() => {
     if (PIECES[shooter.kind].sniper) {
       why.push('sniper: no cover or range');
       if (smallTarget(target)) why.push(`+${SMALL_TARGET} small target`);
+      if (target.down) why.push(`+${TAKE_COVER} take cover`);
       if (moving) why.push(`+${ON_THE_MOVE} moving`);
       if (shooter.shocked) why.push(`+${SHAKEN_SHOOT} shaken`);
       if (atCloseRange(shooter, target)) why.push(`−${CLOSE_BONUS} close range`);
@@ -3705,6 +3731,14 @@ const Sim = (() => {
       rep.unshift(st.noGoal
         ? '⌛ Nothing is left that can knock out the last German bunkers or tanks. The attack has failed.'
         : '⌛ No rifle platoon or captain is left to take the village, and nothing is left that can hurt the German tanks. The attack has failed.');
+    } else if (germansHoldOut(st)) {
+      // The other way round (Steve, 2026-11-15: as the Germans with nothing left to hurt the last American tank, there
+      // was no way to win): nobody left to take the goal, and nothing German can hurt what is left
+      st.lost = true;
+      const us = sideName(st, 'us');
+      rep.unshift(st.noGoal
+        ? `⌛ Nothing the Germans have left can hurt what is left of the ${us}, and the ${us} cannot take the beach from them. The attack has failed.`
+        : `⌛ No rifle platoon or captain of the ${us} is left to take ${st.objective.name}, and nothing the Germans have left can hurt what is left of them. The attack has failed.`);
     } else if (TURNS && st.turn >= TURNS) {
       st.lost = true;
       rep.unshift(st.noGoal ? `⌛ After ${TURNS} rounds the attack has run out of time.` : `⌛ After ${TURNS} rounds the attack has run out of time short of ${st.objective.name}.`);
