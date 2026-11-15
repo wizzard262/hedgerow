@@ -575,6 +575,12 @@ window.Game = (() => {
       UI.openMenu([cap], spot.x - box.left, spot.y - box.top, box);
       return;
     }
+    // The T-35 after its move, its hull machine guns still to fire (Steve): its menu by it, with Hull MGs and Hold
+    if (cap && cap.acted && st.activeId === cap.id && Sim.canHullMg(st, cap)) {
+      const box = board.getBoundingClientRect(), spot = Board.pieceScreen(cap);
+      UI.openMenu([cap], spot.x - box.left, spot.y - box.top, box);
+      return;
+    }
     // Only the captain, after his move, on his own token, with someone to rally
     if (!cap || cap.kind !== 'captain' || !cap.acted || st.activeId !== cap.id || !Sim.captainCanRally(st, cap)) return;
     const r = board.getBoundingClientRect(), p = Board.pieceScreen(cap);

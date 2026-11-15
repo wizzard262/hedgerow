@@ -1257,7 +1257,9 @@ const Board = (() => {
         // Dunkirk, 1940 (Steve)
         matilda: Models.matilda, carrier: Models.carrier, pz1: Models.panzer1, pz2: Models.panzer2, pz3: Models.panzer3, sdkfz231: Models.sdkfz231,
         // Stalingrad, 1942 (Steve)
-        t34: Models.t34, kv2: Models.kv2 }[kind];
+        t34: Models.t34, kv2: Models.kv2,
+        // Stalingrad's round 3 reinforcements (Steve, 2026-11-15)
+        t35: Models.t35, stug3: Models.stug3 }[kind];
       return [0].map(() => { const m = Models.mergeParts(make()); markerSpots(m); m.scale.setScalar(TANKS); m.userData.slowTurn = true; return m; });
     }
     if (PIECES[kind].bunker) return [bunkerBase(kind === 'bunker_gun')];
@@ -1284,6 +1286,11 @@ const Board = (() => {
     if (u.quality === 'elite') for (const b of g.userData.bases) Models.eliteBand(b);
     // A tank drives (Steve): it turns towards where it is going and goes forward, in curves, instead of sliding
     if (Sim.isTank(u) || Sim.isLorry(u)) g.userData.drives = g.userData.bases[0];
+    // A reinforcement (Steve: Stalingrad, round 3) drives on from off its side's edge of the board
+    if (u.enter && u.x !== null) {
+      g.position.set(u.x + u.enter * 1.6, 0, u.y);
+      g.userData.placed = true;
+    }
     if (Sim.isLorry(u)) {
       g.position.set(u.x + 0.5, 0, -0.9);
       g.userData.bases[0].rotation.y = -Math.PI / 2;
@@ -1341,7 +1348,9 @@ const Board = (() => {
           if (u.snag.x !== x) { cx = u.snag.x < x ? 0.03 : 0.97; cz = 0.5; }
           if (u.snag.y !== y) { cz = u.snag.y < y ? 0.03 : 0.97; cx = 0.5; }
         }
-        const facing = u.aim !== undefined ? u.aim : g.userData.face;
+        let facing = u.aim !== undefined ? u.aim : g.userData.face;
+        // A long tank (Steve: the T-35) lies along its 3 by 2 areas: whichever end of them is nearer the way it would face
+        if (Sim.sizeOf(u) === 6) facing = alongItsAreas(u, facing);
         // Side by side across the way they face, far enough apart that they never overlap (Steve); one left: in the middle
         const shown = shownStrength(u);
         const half = (g.userData.bases[0].userData.halfWidth || 0.08) * TANKS;
@@ -1367,6 +1376,16 @@ const Board = (() => {
       g.userData.to.y = standsAt(x, y);
     }
   }
+  // The way a long tank points: along the half of the field it lies in (n or s: east or west; e or w: north or south),
+  // the end nearer the way it would otherwise face
+  function alongItsAreas(u, facing) {
+    const half = Sim.footprint(u)[1];
+    const across = half === 'n' || half === 's';
+    const ends = across ? [0, Math.PI] : [Math.PI / 2, -Math.PI / 2];
+    const off = a => Math.abs(Math.atan2(Math.sin(a - facing), Math.cos(a - facing)));
+    return off(ends[0]) <= off(ends[1]) ? ends[0] : ends[1];
+  }
+
   // Wire a tank has hit (Steve: it goes from straight to stretched). Each half of the fence, from its end post, is dragged
   // the way the tank went: while a tank is snagged in it, in to the tank's front corners, a V with the tank at its point;
   // once the tank has gone on (or went straight through), pulled aside, leaving a gap in the middle that stops nobody

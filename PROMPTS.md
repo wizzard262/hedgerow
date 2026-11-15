@@ -1940,6 +1940,17 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - Panzer I: 2 dice at men (was 1½)
 - Assumptions: no balance run (Steve); the robots use the longer Move & shoot too, as both sides play by the same rules
 
+## 328. Stalingrad round 3: a T-35 for the Soviets, a StuG III for the Germans (v197)
+
+- Steve: at Stalingrad on round 3 the Soviets get reinforcements at their board edge (if no space, move them forward until there is); a T-35 tank, long, so it takes 3 by 2 areas; check, but I think it has a small anti-tank gun, and its small turrets can make 1 MG shot as well per turn; slow, so -1 move. The Germans also get reinforcements: give me options to balance. Picked: a StuG III assault gun; the extra MG shot as a second shot each turn
+- Checked: the real T-35 had a short 76.2 mm gun in the big turret, two 45 mm anti-tank guns in two of the small turrets and five or six machine guns; thin armour (about 30 mm at most); very slow and unreliable. (They were all lost in 1941, so none fought at Stalingrad: here it is a what-if)
+- **Reinforcements** (`reinforce` in the map, `reinforceNow` in sim.js): at the start of round 3 each piece comes on at its own side's edge (the Soviets' x 0, the Germans' last column), in the field nearest the middle row with room for it and no enemy in it; with none on the edge, one column further in, and so on. On the table it drives on from off the edge. It moves that round
+- **The T-35** (`t35`): soft 1, hard 1 (a small gun: one more against tanks), he 1, armour 0, slow (-1), and `long`: it takes 3 by 2 areas, lying along one half of its field (n, s, e or w; `LONG_PLACES`), so it fits only where those six areas are free (never with a wreck in the field). The model: the long hull behind armoured skirts, five turrets (the big one with the short 76 mm and the handrail aerial, two 45 mm, two MG turrets); it always points along its areas
+- **Hull MGs** (`hullMg: 2`): once a round, on the T-35's token, before or after its move, a shot of their own: 2 dice, men only, any target in its reach. In its menu: **Hull MGs**, then click a red target; after its move the token waits for them, and **Hold MG fire** ends it. The robot fires them after its move on the target it needs least for
+- **The StuG III Ausf. F** (`stug3`): no machine gun (soft 0), the long 7.5 cm (hard 2.5), he 1, armour 1; a new model on the Panzer III running gear with a low casemate, the long gun with its muzzle brake
+- Robots (6 games, a quick look, no balance run): the Soviets won 4, the Germans 2
+- Assumptions: the reinforcements are placed by the rules (no choosing where); the hull MGs use the T-35's own reach and need (one more if shaken, none for moving); the T-35's main shot at men rolls its 1 MG die plus its 76 mm, as other tanks do
+
 ## Sessions
 
 | # | Date | Length | What we did |

@@ -5033,5 +5033,80 @@ check('submachine guns Move & shoot as far as a Charge, still one more on the mo
   Sim.newGame(1);
 });
 
+check('Stalingrad round 3 (Steve, 2026-11-15): the T-35 and the StuG come on at their own edges, one column in when the edge is full', () => {
+  const st = Sim.newGame(5, 'none', 'stalingrad');
+  Sim.startRound(st);
+  assert(!st.units.some(u => u.id === 'T3' || u.id === 'dstug'), 'a reinforcement was on the table from the start');
+  // Round 2: still nobody
+  st.bag = { us: 0, de: 0, timer: 0 }; Sim.finishRound(st);
+  assert(st.turn === 2 && !st.units.some(u => u.id === 'T3'), 'the T-35 came before round 3');
+  st.bag = { us: 0, de: 0, timer: 0 }; Sim.finishRound(st);
+  const t35 = Sim.unitById(st, 'T3'), stug = Sim.unitById(st, 'dstug');
+  assert(st.turn === 3 && t35 && stug, 'no reinforcements in round 3');
+  assert(t35.x === 0 && stug.x === COLS - 1, `they came on at ${t35.x} and ${stug.x}, not at their own edges`);
+  assert(!t35.acted && !stug.acted, 'a reinforcement cannot move in the round it arrives');
+  assert(Sim.footprint(t35).length === 6 && Sim.sizeOf(t35) === 6, 'the T-35 does not take 3 by 2 areas');
+  // The whole Soviet edge taken by Germans: the T-35 comes on one column in
+  const g = Sim.newGame(5, 'none', 'stalingrad');
+  Sim.startRound(g);
+  const filler = g.units.filter(u => u.side === 'de' && u.x !== null && !PIECES[u.kind].fixed);
+  for (let y = 0; y < ROWS; y++) { const u = filler[y % filler.length]; if (y < filler.length) { u.x = 0; u.y = y; } }
+  // (every edge field needs an enemy in it, so fill those left with copies of the first German)
+  for (let y = filler.length; y < ROWS; y++) g.units.push(Object.assign({}, filler[0], { id: 'fill' + y, x: 0, y }));
+  g.turn = 2; g.bag = { us: 0, de: 0, timer: 0 }; Sim.finishRound(g);
+  const moved = Sim.unitById(g, 'T3');
+  assert(moved && moved.x === 1, `with the edge full the T-35 came on at column ${moved && moved.x}`);
+  Sim.newGame(1);
+});
+
+check('a long tank takes 3 by 2 areas: four places in a field, each starting with a corner (Steve, 2026-11-15)', () => {
+  const st = Sim.newGame(5, 'none', 'stalingrad');
+  const t35 = { id: 'x', kind: 't35', side: 'us', platoons: 1, x: 0, y: 0 };
+  for (const at of ['n', 's', 'e', 'w']) {
+    const areas = Sim.footprint(t35, at);
+    assert(areas.length === 6 && new Set(areas).size === 6 && areas[0].length === 2, `${at}: ${areas}`);
+  }
+  // A corner asked for gives its north or south half
+  assert(Sim.footprint(t35, 'ne').join() === Sim.footprint(t35, 'n').join(), 'a corner gave the wrong half');
+  Sim.newGame(1);
+});
+
+check('the T-35\'s hull machine guns: once a round on its token, men only, before or after its move; the token waits for them (Steve, 2026-11-15)', () => {
+  const st = Sim.newGame(5, 'us', 'stalingrad');
+  Sim.startRound(st);
+  st.hedges = {}; st.wire = {};
+  const t35 = Object.assign({ id: 'T3', kind: 't35', name: 'T-35', side: 'us', platoons: 1, shocked: false, acted: false, quality: 'standard' }, { x: 2, y: 3, at: 'n' });
+  st.units.push(t35);
+  const foe = st.units.find(u => u.side === 'de' && u.kind === 'company');
+  const panzer = st.units.find(u => u.side === 'de' && Sim.isTank(u));
+  for (const u of st.units) if (u !== t35 && u !== foe && u !== panzer) u.x = u.y = null;
+  foe.x = 4; foe.y = 3; foe.at = null; panzer.x = 5; panzer.y = 3; panzer.at = null;
+  // Its token
+  st.drawn = 'us'; st.human = 'us'; st.activeId = null; st.computer = null;
+  assert(Sim.hullMgTargets(st, t35).includes(foe) && !Sim.hullMgTargets(st, t35).includes(panzer), 'the hull MGs can fire on a tank, or not on men');
+  assert(Sim.canHullMg(st, t35), 'the hull MGs cannot fire on its token');
+  const r = Sim.actHullMg(st, t35, foe);
+  assert(r.ok && st.activeId === 'T3' && t35.mgFired, 'firing the hull MGs did not take the token');
+  assert(!Sim.canHullMg(st, t35), 'the hull MGs could fire twice in a round');
+  assert(Sim.canAct(st, t35), 'after its hull MGs the T-35 had lost its move');
+  // Its move after: the token now ends
+  assert(Sim.actShoot(st, t35, panzer).ok, 'the T-35 could not shoot after its hull MGs');
+  assert(Sim.activationOver(st), 'the token did not end after both');
+  // The other way round: its move first, then the token waits for the MGs until they fire or hold
+  const st2 = Sim.newGame(5, 'us', 'stalingrad');
+  Sim.startRound(st2);
+  st2.hedges = {}; st2.wire = {};
+  const t2 = Object.assign({}, t35, { mgFired: false, acted: false });
+  st2.units.push(t2);
+  const foe2 = st2.units.find(u => u.id === foe.id), pz2 = st2.units.find(u => u.id === panzer.id);
+  for (const u of st2.units) if (u !== t2 && u !== foe2 && u !== pz2) u.x = u.y = null;
+  foe2.x = 4; foe2.y = 3; foe2.at = null; pz2.x = 5; pz2.y = 3; pz2.at = null;
+  st2.drawn = 'us'; st2.human = 'us'; st2.activeId = null; st2.computer = null;
+  assert(Sim.actShoot(st2, t2, pz2).ok, 'the T-35 could not shoot');
+  assert(!Sim.activationOver(st2), 'the token ended with the hull MGs still to fire');
+  assert(Sim.actHoldMg(st2, t2).ok && Sim.activationOver(st2), 'holding the hull MGs did not end the token');
+  Sim.newGame(1);
+});
+
 console.log(failed ? `\n${failed} failed` : '\nall passed');
 process.exit(failed ? 1 : 0);

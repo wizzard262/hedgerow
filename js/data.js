@@ -309,7 +309,7 @@ const MAPS = [
     // Piles of rubble and minefields made new each game (generated: 'ruins'). The 'us' side is the Soviets (army 'su');
     // the table is seen from the other side (flip), so they come in from the right and the Germans hold the left (Steve)
     id: 'stalingrad', bonus: true, date: 'November 1942', name: 'Stalingrad',
-    note: 'A bombed-out city. The Soviets attack the Germans holding the ruins of the Univermag store: an open courtyard of four fields, walled all round. The walls of ruined buildings stand between the fields and work as hedges do: you see over one only from right beside it, men climb through the windows, and lining one is cover. Lines of rubble do the same; piles of rubble give cover, and minefields may blow up whoever goes in. Each side has a section of submachine gunners: two bases of three men, 3 dice a base (6 in all), at close range only. The Germans have an 8.8 cm Flak in a fixed position on a crossroads, looking down an open street; the Soviets a T-34 and a KV-2 heavy tank; the Germans two PaK 40s and a long-gunned Panzer IV F2 to meet it.',
+    note: 'A bombed-out city. The Soviets attack the Germans holding the ruins of the Univermag store: an open courtyard of four fields, walled all round. The walls of ruined buildings stand between the fields and work as hedges do: you see over one only from right beside it, men climb through the windows, and lining one is cover. Lines of rubble do the same; piles of rubble give cover, and minefields may blow up whoever goes in. Each side has a section of submachine gunners: two bases of three men, 3 dice a base (6 in all), at close range only. The Germans have an 8.8 cm Flak in a fixed position on a crossroads, looking down an open street; the Soviets a T-34 and a KV-2 heavy tank; the Germans two PaK 40s and a long-gunned Panzer IV F2 to meet it. In round 3 reinforcements come on at each side\'s edge: a five-turreted T-35 for the Soviets, a StuG III assault gun for the Germans.',
     generated: 'ruins',
     ruins: true,
     army: 'su',
@@ -333,6 +333,12 @@ const MAPS = [
     courtyard: { x: 7, y: 3, w: 2, h: 2 },
     // The walls: more of them than hedges in the bocage; a little wire across the gaps
     gap: 0.35, wire: 0.1,
+    // Reinforcements at the start of round 3 (Steve, 2026-11-15), each at its own side's edge of the board
+    reinforce: {
+      round: 3,
+      us: [{ id: 'T3', kind: 't35', name: 'T-35' }],
+      de: [{ id: 'dstug', kind: 'stug3', name: 'StuG III Ausf. F', reserve: true }],
+    },
     // The Soviet guns by name; no Soviet bomber for now
     guns: { us: { artillery: 'Katyusha rockets', mortars: '82 mm mortars' } },
     ammo: { us: { bomber: 0 } },
@@ -517,6 +523,13 @@ const PIECES = {
   // The KV-2 (Steve): the heavy tank with the huge turret and its 152 mm howitzer: thick armour (2, as the Matilda),
   // slow; a big shell among men, but few rounds and slow to load, so one die against tanks. Balanced by robots (40
   // games): with the Germans' Panzer IV F2 and two PaK 40s, Soviets 23, Germans 15, 2 draws
+  // The Stalingrad reinforcements in round 3 (Steve, 2026-11-15). The T-35: the long five-turreted heavy tank, slow (-1),
+  // thin armour; its 45 mm guns are small against tanks, its short 76 mm fires high explosive; long: it takes 3 by 2
+  // areas; hullMg: the dice of its small turrets' machine guns, a shot of their own once a round
+  t35:      { name: 'T-35', soft: 1, hard: 1, he: 1, tank: true, armour: 0, cutter: true, extraMove: -1, smallGun: true, long: true, hullMg: 2 },
+  // The StuG III Ausf. F (Steve picked it for the Germans): an assault gun, the long 7.5 cm StuK 40 in a low casemate,
+  // thick front armour (1), no machine gun of its own
+  stug3:    { name: 'StuG III Ausf. F', soft: 0, hard: 2.5, he: 1, tank: true, armour: 1, cutter: true },
   kv2:      { name: 'KV-2', soft: 1, hard: 1, he: 1.5, tank: true, armour: 2, cutter: true, extraMove: -1 },
   // His submachine gun (Steve): three dice, and closeOnly: he can't shoot beyond close range at all
   // Bunkers (Steve): they can't move, take two areas, and fire only out of the front. BUNKER says how they are hurt

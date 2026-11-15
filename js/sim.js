@@ -49,14 +49,27 @@ const Sim = (() => {
   function sizeOf(u) {
     // (a bare field or point, with no piece: one area)
     if (!PIECES[u.kind]) return 1;
+    // A long tank (Steve, 2026-11-15: the T-35): 3 areas long, 2 wide
+    if (PIECES[u.kind].long) return 6;
     if (PIECES[u.kind].atGun || PIECES[u.kind].bunker) return 2;
     if (isTank(u) || PIECES[u.kind].big || (u.kind === 'company' && u.platoons >= 2)) return 4;
     return 1;
   }
   // The areas a piece takes, standing at `at` (its corner for a 2×2 block, its pair for the PaK; a big piece in the
   // middle keeps the four edges clear too)
+  // A long tank's places: which half of the field it lies along (n, s: across the field, east to west; e, w: up and down
+  // it), each list starting with a corner (see leaveWreck)
+  const LONG_PLACES = {
+    n: ['nw', 'n', 'ne', 'w', 'c', 'e'], s: ['sw', 's', 'se', 'w', 'c', 'e'],
+    w: ['nw', 'w', 'sw', 'n', 'c', 's'], e: ['ne', 'e', 'se', 'n', 'c', 's'],
+  };
   function footprint(u, at = u.at) {
     const size = sizeOf(u);
+    if (size === 6) {
+      // A corner asked for gives the half on its north or south side; the middle, the north half
+      const half = LONG_PLACES[at] ? at : at && LONG_PLACES[at[0]] ? at[0] : 'n';
+      return LONG_PLACES[half];
+    }
     if (size === 4) {
       if (!at || at === 'c') return ['c', 'n', 'e', 's', 'w'];
       // A block sits in a corner; an edge asked for gives the corner on that side
@@ -69,7 +82,7 @@ const Sim = (() => {
   // The areas a piece is actually in (for seeing and lining hedges): a big piece in the middle only the centre
   const standsIn = (u, at = u.at) => (sizeOf(u) === 4 && !at ? ['c'] : footprint(u, at));
   // Every place a piece of its size could stand in a field
-  const anchorsFor = u => (sizeOf(u) === 4 ? [...CORNERS, null] : sizeOf(u) === 2 ? PAIRS : PLACES);
+  const anchorsFor = u => (sizeOf(u) === 6 ? Object.keys(LONG_PLACES) : sizeOf(u) === 4 ? [...CORNERS, null] : sizeOf(u) === 2 ? PAIRS : PLACES);
   // Where a piece is in its field, as one point (the middle of its areas): for the table and for distances
   function spotXY(u, at = u.at) {
     const areas = standsIn(u, at).map(areaXY);
@@ -207,7 +220,8 @@ const Sim = (() => {
   function roomFor(st, unit, x, y, leaving = []) {
     const here = at(st, x, y).filter(u => !leaving.includes(u) && u !== unit);
     // (a building in the field may leave no room for a big piece)
-    if (!here.length && !featuresAt(st, x, y).length) return true;
+    // (a wreck may leave no room for a long tank)
+    if (!here.length && !featuresAt(st, x, y).length && !wreckAt(st, x, y)) return true;
     if (here.some(u => u.side !== unit.side)) return false;
     return anchorsFor(unit).some(a => fitsAt(st, unit, x, y, a, leaving));
   }
@@ -1688,7 +1702,9 @@ const Sim = (() => {
   }
 
   function fireAt(st, shooter, target, withdraw = false, moving = false, blast = false) {
-    const f = firepower(st, shooter);
+    // (the T-35's hull machine guns firing on their own, Steve: only their dice)
+    const f = shooter.hullFire ? hullMgFire(shooter) : firepower(st, shooter);
+    const weapon = shooter.hullFire ? 'mg' : weaponOf(shooter);
     // An anti-tank gun swings round onto what it fires at, and stays facing it (Steve: its shield faces that way)
     if (isAtGun(shooter)) shooter.aim = Math.atan2(-(target.y - shooter.y), target.x - shooter.x);
     // The computer's piece fired on takes cover when it is wise to (Steve), as you can
@@ -1730,7 +1746,7 @@ const Sim = (() => {
     const deadly = isTank(shooter) ? gunHits : ['bazooka', 'schreck', 'bunker_gun'].includes(shooter.kind) || isAtGun(shooter);
     // A crewed gun (Steve: the 88, the PaK) under small arms, rifles, machine guns, submachine guns or a sniper: a hit
     // only shakes it (its crew pinned, the gun still there), but one on a gun already shaken kills it, as everywhere
-    const smallArms = isAtGun(target) && ['rifle', 'mg'].includes(weaponOf(shooter)) && !isTank(shooter);
+    const smallArms = isAtGun(target) && ['rifle', 'mg'].includes(weapon) && (!isTank(shooter) || !!shooter.hullFire);
     const out = (pre ? [pre.line] : []).concat(damage(st, target, softHits, hardHits, deadly, smallArms));
     // In a word, what the shot did, for the words that float up off the target
     const lost = before.strength - (target.x === null ? 0 : target.platoons);
@@ -1741,7 +1757,7 @@ const Sim = (() => {
     st.fx.push({
       from: { id: shooter.id, x: shooter.x, y: shooter.y },
       to: { id: target.id },
-      weapon: weaponOf(shooter),
+      weapon,
       armour: isTank(target),
       x: target.x === null ? stood.x : target.x,
       y: target.x === null ? stood.y : target.y,
@@ -1753,7 +1769,8 @@ const Sim = (() => {
       tookCover: !!pre,
     });
     // A tank firing high explosive at men hits the whole field, like a mortar: every other piece on foot in it rolls too
-    if (isTank(shooter) && !isTank(target) && !blast) {
+    // (not its machine guns alone)
+    if (isTank(shooter) && !isTank(target) && !blast && !shooter.hullFire) {
       for (const other of at(st, stood.x, stood.y, target.side)) {
         if (other === target || isTank(other)) continue;
         out.push(...fireAt(st, shooter, other, false, moving, true));
@@ -3351,6 +3368,15 @@ const Sim = (() => {
     }
     const u = unitById(st, shot.shooter);
     if (u.x === null) return;
+    // The T-35's hull machine guns (Steve): their own shot, on men
+    if (shot.hullMg) {
+      u.hullFire = true;
+      const lines = fireAt(st, u, t, withdraw, false, true);
+      u.hullFire = false;
+      st.computer.rep.push(`🔺 ${u.name} fires its hull machine guns on ${t.name}: ${lines.join(', ')}.`);
+      springAmbushes(st, u, []);
+      return;
+    }
     const fired = shot.moving ? 'moves and fires on' : 'fires on';
     st.computer.rep.push(`🔺 ${u.name} ${fired} ${t.name}: ` + fireAt(st, u, t, withdraw, !!shot.moving).join(', ') + '.');
     // Shooting gives it away to any ambush that can see it (Steve)
@@ -3394,6 +3420,18 @@ const Sim = (() => {
     }
     // A side wiped out: nothing more happens
     if (st.won || st.lost) return { done: true };
+    // The T-35's hull machine guns (Steve): once a round, after its move, on the best target of men it has
+    const mover = st.computer.move && st.computer.move.id ? unitById(st, st.computer.move.id) : null;
+    if (mover && mover.x !== null && hullMgDice(mover) && !mover.mgFired) {
+      mover.mgFired = true;
+      const t = bestHullMgTarget(st, mover);
+      if (t) {
+        computerSays(st, `Hull machine guns on ${t.name}`);
+        const r = plan({ shooter: mover.id, target: t.id, hullMg: true });
+        if (r) return r;
+        if (st.won || st.lost) return { done: true };
+      }
+    }
     const side = computerSide(st);
     // Shells on a whole field: the artillery, and the American mortars (German mortars drop on one piece, further down)
     const fieldGun = st.computer.artillery ? 'artillery' : st.computer.mortar && side === 'us' ? 'mortars' : null;
@@ -3662,7 +3700,89 @@ const Sim = (() => {
     const u = unitById(st, st.activeId);
     if (u.x === null) return true;
     const rallyLeft = u.kind === 'captain' && captainCanRally(st, u);
-    return !canAct(st, u) && !u.halfShot && !u.mayAmbush && !rallyLeft;
+    // (the T-35's hull machine guns still to fire, or hold)
+    return !canAct(st, u) && !u.halfShot && !u.mayAmbush && !rallyLeft && !canHullMg(st, u);
+  }
+
+  // ---------- The T-35's hull machine guns (Steve, 2026-11-15) ----------
+  // Besides its move or shot, once a round on its token, before or after, it can fire its small turrets' machine guns:
+  // their own dice (PIECES hullMg), at men only, at any piece in its reach, a different target if it likes
+  const hullMgDice = u => (u && PIECES[u.kind] && PIECES[u.kind].hullMg) || 0;
+  const hullMgFire = u => ({ soft: hullMgDice(u), hard: 0, men: hullMgDice(u), he: 0 });
+  // Who they can fire on: anyone it could shoot but a tank
+  function hullMgTargets(st, u) {
+    return targets(st, u).filter(t => !isTank(t));
+  }
+  // Can they fire now (a person playing): not yet this round, on its own token, with someone to fire on
+  function canHullMg(st, u) {
+    if (!u || !hullMgDice(u) || u.x === null || u.mgFired || st.won || st.lost || st.computer) return false;
+    if (st.tokens && (st.drawn !== u.side || (st.activeId && st.activeId !== u.id))) return false;
+    return hullMgTargets(st, u).length > 0;
+  }
+  // The robot's pick: the target its dice need least for, then the weakest
+  function bestHullMgTarget(st, u) {
+    const options = hullMgTargets(st, u);
+    options.sort((a, b) => needFor(st, u, a) - needFor(st, u, b) || a.platoons - b.platoons);
+    return options[0] || null;
+  }
+  // Fire them. On its token before its move, the token is now this piece's
+  function actHullMg(st, u, target) {
+    if (!canHullMg(st, u) || !hullMgTargets(st, u).includes(target)) return { ok: false };
+    if (st.tokens && !st.activeId) { st.activeId = u.id; activated(st, { side: u.side, id: u.id }); }
+    u.mgFired = true;
+    u.hullFire = true;
+    const lines = [`🔫 ${u.name} fires its hull machine guns on ${target.name}: ` + fireAt(st, u, target, false, false, true).join(', ')];
+    u.hullFire = false;
+    springAmbushes(st, u, lines);
+    return { ok: true, lines: [lines.join(', ') + '.'] };
+  }
+  // Hold their fire this round (after its move, so the token can end)
+  function actHoldMg(st, u) {
+    if (!canHullMg(st, u)) return { ok: false };
+    u.mgFired = true;
+    return { ok: true, lines: [`⏭️ ${u.name} holds its hull machine guns.`] };
+  }
+
+  // ---------- Reinforcements (Steve, 2026-11-15: Stalingrad, round 3) ----------
+  // A map's reinforce: { round, us: [pieces], de: [pieces] }. At the start of that round each piece comes on at its
+  // side's own edge of the board (the Soviets' west, the Germans' east), in the field nearest the middle with room for
+  // it and no enemy in it; with no room on the edge, the next column in, and so on. They move that round
+  function reinforceNow(st) {
+    const r = st.map.reinforce;
+    if (!r || st.turn !== r.round || st.reinforced) return;
+    st.reinforced = true;
+    const news = [];
+    for (const side of ['us', 'de']) {
+      for (const def of r[side] || []) {
+        const u = makeUnit(def, side);
+        const spot = reinforceSpot(st, u);
+        // Nowhere at all: it doesn't come
+        if (!spot) continue;
+        u.x = spot.x; u.y = spot.y;
+        u.at = freePlace(st, u, spot.x, spot.y, sizeOf(u) === 6 ? 'n' : side === 'us' ? 'e' : 'w');
+        // (on the table it drives on from off the edge)
+        u.enter = side === 'us' ? -1 : 1;
+        st.units.push(u);
+        news.push(`🚚 Reinforcements: the ${sideName(st, side)}' ${u.name} comes on at their edge of the board. It can move this round.`);
+      }
+    }
+    if (news.length) st.news = (st.news || []).concat(news);
+  }
+  // Where a reinforcement comes on: column by column in from its side's edge; in each, the fields nearest the middle row
+  // first. A field with no enemy, nothing it can't stand on, and room for it
+  function reinforceSpot(st, u) {
+    const middle = (ROWS - 1) / 2;
+    const rows = [...Array(ROWS).keys()].sort((a, b) => Math.abs(a - middle) - Math.abs(b - middle) || a - b);
+    for (let k = 0; k < COLS; k++) {
+      const x = u.side === 'us' ? k : COLS - 1 - k;
+      for (const y of rows) {
+        if (['river', 'sea', 'pond'].includes(tileType(x, y))) continue;
+        if (at(st, x, y, enemyOf(u.side)).length) continue;
+        if (!anchorsFor(u).some(a => fitsAt(st, u, x, y, a))) continue;
+        return { x, y };
+      }
+    }
+    return null;
   }
 
   // Pass on the player's token, or finish with it
@@ -3777,6 +3897,8 @@ const Sim = (() => {
       if (u.x === null) continue;
       const missed = !!u.spentNext;
       u.acted = missed; u.spentNext = false; u.rallied = 0; u.fired = false; u.skipped = false;
+      // The T-35's hull machine guns can fire again (Steve)
+      u.mgFired = false;
       // An ambush doesn't carry over to the next round (Steve)
       u.ambush = false;
       // Down in cover: it stays down through a round it misses, then gets up
@@ -3786,6 +3908,8 @@ const Sim = (() => {
     st.spin = {};
     // An airdrop, if this is its round
     airdropNow(st);
+    // Reinforcements, if this is their round (Steve: Stalingrad, round 3)
+    reinforceNow(st);
     // Dunkirk (Steve): new boats come in, lorries come down the coast road, and every lorry drives for a boat
     if (st.evac) {
       newBoats(st);
@@ -3799,7 +3923,7 @@ const Sim = (() => {
     isBunker, isCar, hurtsCars, trainCars, lineSideOf, moveTrains, inFrontOf, bunkerFace, shotOnTheMove, wrecksBeside, isRoad, featuresAt, walkDistance, fireSound, wreckAt, remove, computerSide, isRobot, piecesToAsk, takeCover, enemyOf, gunStats, diceShown, menDiceShown, bomberName, boatKind, armyOf, hedgeWord, inCourtyard, closeRangeOnly, isAtGun, isEmplaced, edgeKey, atCloseRange, closeCells, hailMaryCells,
     newGame, roll, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, chargeSpots,
     rallyTargets, canAct, canReact, firepower, canCallFire, takesGoal, cannotWin, artilleryTarget, mortarTarget, holdsObjective, roundText, roomFor,
-    goalLines,
+    goalLines, hullMgTargets, canHullMg, actHullMg, actHoldMg, hullMgDice,
     computerStep, answer, finishRound, startRound, drawToken, endComputerToken, activationOver, passToken, humanCanMove, endRound, canFire, actSkip, actSkipShot, skipSupport,
     smallTarget, menDice, armourOf, shotNeed, mayFire, shootCells, tokensHome, captainCanRally, fireAt, wholeDice: dice,
     actShoot, actMoveShoot, moveShootSpots, chargeRoutes, DIRS, needWhy, shellNeed, shellWhy, shellFields,

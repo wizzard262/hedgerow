@@ -13,7 +13,7 @@ const UI = (() => {
                  // Dunkirk, 1940 (Steve)
                  matilda: 'Matilda II', carrier: 'Universal Carrier (Bren)', lorry: 'Lorry of men for the boats', boys: 'Boys anti-tank rifle team', pz1: 'Panzer I', pz2: 'Panzer II', pz3: 'Panzer III', sdkfz231: 'Sd.Kfz. 231 armoured car',
                  // Stalingrad, 1942 (Steve)
-                 t34: 'T-34/76', kv2: 'KV-2 heavy tank (152 mm)', pz4f2: 'Panzer IV F2 (long 7.5 cm)', flak88: '8.8 cm Flak 36' };
+                 t34: 'T-34/76', kv2: 'KV-2 heavy tank (152 mm)', t35: 'T-35 heavy tank (five turrets)', stug3: 'StuG III Ausf. F assault gun', pz4f2: 'Panzer IV F2 (long 7.5 cm)', flak88: '8.8 cm Flak 36' };
   // What a piece is, in words: a rifle platoon with submachine guns is a section of submachine gunners (Steve)
   const kindName = u => (u.arms === 'smg' ? 'Submachine-gun section' : KIND[u.kind]);
 
@@ -100,11 +100,13 @@ const UI = (() => {
     }
     const fields = list => list.map(p => ({ x: p.x, y: p.y }));
     const uniq = list => list.filter((p, i) => list.findIndex(q => q.x === p.x && q.y === p.y) === i);
-    const kind = { charge: 'charge', moveShoot: 'hatch', shoot: 'shoot', halfShot: 'shoot', rally: 'rally' }[view.mode];
+    const kind = { charge: 'charge', moveShoot: 'hatch', shoot: 'shoot', halfShot: 'shoot', hullMg: 'shoot', rally: 'rally' }[view.mode];
     let list = [];
     if (view.mode === 'charge') list = Sim.chargeSpots(st, u);
     if (view.mode === 'moveShoot') list = Sim.moveShootSpots(st, u);
     if (view.mode === 'shoot' || view.mode === 'halfShot') list = fields(Sim.targets(st, u, view.mode === 'halfShot'));
+    // The T-35's hull machine guns (Steve): the men it could fire on
+    if (view.mode === 'hullMg') list = fields(Sim.hullMgTargets(st, u));
     if (view.mode === 'rally') list = fields(Sim.rallyTargets(st, u));
     // A charge into a field the Germans hold is a hand-to-hand fight: marked differently
     const marked = uniq(list).map(p => Object.assign(p, { kind: view.mode === 'charge' && Sim.at(st, p.x, p.y, enemy()).length ? 'assault' : kind }));
@@ -153,6 +155,14 @@ const UI = (() => {
     }
     const u = selected();
     if (!u) return [];
+    // The T-35's hull machine guns (Steve): men only, their own dice
+    if (view.mode === 'hullMg') {
+      return Sim.hullMgTargets(st, u).map(t => {
+        t.needNow = Sim.needFor(st, u, t);
+        t.needWhy = Sim.needWhy(st, u, t);
+        return t;
+      });
+    }
     // Just picked and it can shoot from where it stands (Steve): its targets show straight away, a click fires
     const shootFromHere = view.mode === 'go' && Sim.canAct(st, u) && actionButtonsFor(u).some(a => a.mode === 'shoot' && a.ok);
     if (!['shoot', 'halfShot'].includes(view.mode) && !shootFromHere) return [];
@@ -211,6 +221,12 @@ const UI = (() => {
     }
     const u = selected();
     if (!u || !t) return false;
+    // The T-35's hull machine guns: then its move, if it still has it
+    if (view.mode === 'hullMg') {
+      const fired = Sim.actHullMg(st, u, t);
+      if (fired.ok) view.mode = Sim.canAct(st, u) ? 'go' : null;
+      return fired.ok;
+    }
     const r = view.mode === 'halfShot' ? Sim.actHalfShot(st, u, t) : Sim.actShoot(st, u, t);
     if (r.ok) view.mode = null;
     return r.ok;
@@ -218,7 +234,8 @@ const UI = (() => {
 
   // The best target for a shooter in a field: tanks for anti-tank weapons, otherwise the infantry
   function pickTarget(u, x, y) {
-    const ts = Sim.targets(st, u, view.mode === 'halfShot').filter(t => t.x === x && t.y === y);
+    const all = view.mode === 'hullMg' ? Sim.hullMgTargets(st, u) : Sim.targets(st, u, view.mode === 'halfShot');
+    const ts = all.filter(t => t.x === x && t.y === y);
     const f = Sim.firepower(st, u);
     ts.sort((a, b) => ((Sim.isTank(b) ? f.hard : f.soft) - (Sim.isTank(a) ? f.hard : f.soft)));
     return ts[0] || null;
@@ -234,6 +251,8 @@ const UI = (() => {
     }
     const u = selected();
     if (!u) return null;
+    // (the T-35's hull machine guns)
+    if (view.mode === 'hullMg') return Sim.canHullMg(st, u) && Sim.hullMgTargets(st, u).includes(t) ? Sim.piecesToAsk(st, 'shot', t.x, t.y, t) : null;
     const moving = view.mode === 'halfShot';
     const can = moving ? u.halfShot : Sim.canAct(st, u) && Sim.mayFire(u);
     if (!can || !Sim.targets(st, u, moving).includes(t)) return null;
@@ -249,7 +268,7 @@ const UI = (() => {
       if (!canFire(which)) return null;
       return Sim.piecesToAsk(st, which, x, y, Sim.at(st, x, y, enemy())[0]);
     }
-    if (view.mode !== 'shoot' && view.mode !== 'halfShot') return null;
+    if (view.mode !== 'shoot' && view.mode !== 'halfShot' && view.mode !== 'hullMg') return null;
     const t = pickTarget(selected(), x, y);
     return t ? Sim.piecesToAsk(st, 'shot', x, y, t) : null;
   }
@@ -283,12 +302,14 @@ const UI = (() => {
       else if (how === 'moveShoot') r = Sim.actMoveShoot(st, u, x, y, side);
       else if (view.mode === 'shoot') r = Sim.actShoot(st, u, pickTarget(u, x, y));
       else if (view.mode === 'halfShot') r = Sim.actHalfShot(st, u, pickTarget(u, x, y));
+      else if (view.mode === 'hullMg') r = Sim.actHullMg(st, u, pickTarget(u, x, y));
       else if (view.mode === 'rally') r = Sim.actRally(st, u, Sim.rallyTargets(st, u).find(t => t.x === x && t.y === y));
       if (r && r.ok) {
         // After moving with Move & shoot, offer the half-dice shot straight away, with red targets on who can be hit
         if (how === 'moveShoot' || how === 'line' || (how === 'charge' && spot.kind === 'line')) {
           view.mode = u.halfShot ? 'halfShot' : null;
-        } else view.mode = null;
+        } else if (view.mode === 'hullMg') view.mode = Sim.canAct(st, u) ? 'go' : null;
+        else view.mode = null;
       }
       return null;
     }
@@ -328,7 +349,7 @@ const UI = (() => {
       menu.append(el('div', 'mhead', `<b>${u.name}${u.quality === 'elite' ? ' ★' : ''}</b><span>${state}</span>`));
       // Moving and shooting are done by clicking the lit areas and red targets, so the menu only ever has Skip and Rally
       // (Steve: never Move & shoot, not even its shot after the move)
-      const acts = actionButtons(u).filter(a => ['ambush', 'skip', 'skipShot', 'rally', 'selfRally'].includes(a.mode));
+      const acts = actionButtons(u).filter(a => ['ambush', 'skip', 'skipShot', 'rally', 'selfRally', 'hullMg', 'holdMg'].includes(a.mode));
       for (const a of acts) {
         const b = el('button', '', a.label);
         b.disabled = !a.ok; b.title = a.title || '';
@@ -476,6 +497,12 @@ const UI = (() => {
     if (u.mayAmbush && !u.halfShot) b.push({ mode: 'skipShot', label: '⏭️ No ambush', ok: true, title: 'Don\'t lie in ambush; the token is used', run: () => Sim.actSkipShot(st, u) });
     // Moved with Move & shoot and not wanting to fire (Steve: no Pass button): skip the shot, and the token is done
     // (moved within its field it could fire or lie in ambush, Steve: one button gives up both)
+    // The T-35's hull machine guns (Steve): a shot of their own once a round, before or after its move; after it, they can
+    // be held so the token ends
+    if (Sim.hullMgDice(u)) {
+      b.push({ mode: 'hullMg', label: '🔫 Hull MGs', ok: Sim.canHullMg(st, u), title: `Its small turrets' machine guns: ${Sim.hullMgDice(u)} dice at men, a shot of their own once a round, before or after its move` });
+      if (!Sim.canAct(st, u) && Sim.canHullMg(st, u)) b.push({ mode: 'holdMg', label: '⏭️ Hold MG fire', ok: true, title: 'Don\'t fire the hull machine guns this round; the token is used', run: () => Sim.actHoldMg(st, u) });
+    }
     if (u.halfShot) b.push({ mode: 'skipShot', label: u.mayAmbush ? '⏭️ Neither' : '⏭️ Skip the shot', ok: true, title: u.mayAmbush ? 'Neither fire nor lie in ambush; the token is used' : "Don't fire after moving; the token is used", run: () => Sim.actSkipShot(st, u) });
     return b;
   }
@@ -491,13 +518,14 @@ const UI = (() => {
     if (u.kind === 'company' || Sim.isTank(u)) {
       const fight = Sim.chargeSpots(st, u).some(p => Sim.at(st, p.x, p.y, enemy()).length);
       add('charge', fight ? '⚔️ Charge (hand to hand)' : '⚔️ Charge', Sim.chargeSpots(st, u).length > 0, `Up to three fields without shooting (men climbing a ${Sim.hedgeWord()} or cutting wire use one more); hand to hand if the enemy holds the field it ends in`);
-      add('moveShoot', '➡️ Move & shoot', Sim.moveShootSpots(st, u).length > 0, 'Up to two fields to where it can fire (the red-hatched fields), then fire needing one more on the dice');
+      // (submachine gunners as far as a Charge, Steve)
+      add('moveShoot', '➡️ Move & shoot', Sim.moveShootSpots(st, u).length > 0, `Up to ${u.arms === 'smg' ? 'three' : 'two'} fields to where it can fire (the red-hatched fields), then fire needing one more on the dice`);
       add('shoot', '🎯 Shoot', Sim.targets(st, u).length > 0, 'Fire with every die');
     } else if (u.kind === 'captain') {
       // The four actions (Steve): Charge, Move & shoot, Shoot, Rally. The captain does all four
       add('charge', '⚔️ Charge', Sim.chargeSpots(st, u).length > 0, `Up to three fields, no shooting (climbing a ${Sim.hedgeWord()} uses one more)`);
       // (after two rallies only a charge is left, Steve)
-      add('moveShoot', '➡️ Move & shoot', Sim.mayFire(u) && Sim.moveShootSpots(st, u).length > 0, 'Up to two fields to where he can fire (the red-hatched fields), then fire needing one more on the dice');
+      add('moveShoot', '➡️ Move & shoot', Sim.mayFire(u) && Sim.moveShootSpots(st, u).length > 0, 'Up to three fields (his submachine gun: as far as a Charge) to where he can fire (the red-hatched fields), then fire needing one more on the dice');
       add('shoot', '🎯 Shoot', Sim.mayFire(u) && Sim.targets(st, u).length > 0, `His submachine gun: ${PIECES[u.kind].soft} dice, at close range only`);
       // Rallying isn't his move (Steve): two rallies if he stays put or charges (before, after or either side of the
       // charge), one if he shoots or moves and shoots (before or after). Only with someone in reach to rally
@@ -605,7 +633,9 @@ const UI = (() => {
     // A captain's submachine gun reaches close range only (Steve)
     const closeOnly = Sim.closeRangeOnly(u) ? ' (SMG: close range only)' : '';
     // (as rolled: less than one die is one, Steve)
-    const dice = `🎲 ${Sim.menDiceShown(u, f)} dice vs men${closeOnly}${f.hard ? `, ${Sim.diceShown(f.hard)} vs tanks` : ''}`;
+    // (the T-35's hull machine guns, Steve: a shot of their own)
+    const hull = Sim.hullMgDice(u) ? `, hull MGs ${Sim.hullMgDice(u)} at men (own shot)` : '';
+    const dice = `🎲 ${Sim.menDiceShown(u, f)} dice vs men${closeOnly}${f.hard ? `, ${Sim.diceShown(f.hard)} vs tanks` : ''}${hull}`;
     // A tank's armour (Steve): what it adds to the score anti-tank dice need
     const armour = Sim.isTank(u) ? `🛡️ Armour +${Sim.armourOf(u)}` : '';
     const inCover = `Taking cover: +2 cover; ${u.kind === 'captain' ? 'no rallies until next round' : 'the captain can get it up'}`;
@@ -647,6 +677,7 @@ const UI = (() => {
       : view.mode.startsWith('fire:') ? `Click a red target, or a field with ${foes()} your troops can see.`
       : view.mode === 'halfShot' ? `Moved. Click a red target to fire on it (${selected() && !Sim.shotOnTheMove(selected()) ? 'moved within its field: nothing more needed' : 'one more needed on the move'}), or Esc to hold fire.`
       : view.mode === 'shoot' ? 'Click a red target to fire on it. Esc cancels.'
+      : view.mode === 'hullMg' ? 'Hull machine guns: click a red target (men only) to fire on it. Esc cancels.'
       : view.mode === 'rally' ? `Bright green: pieces he can rally; click one. Pale green: how far he reaches (${RALLY_RANGE} fields). Esc cancels.`
       : view.mode === 'go' ? `${targets().length ? 'Red targets: shoot from here. ' : ''}Red hatching: Move & shoot (crossed: close range; pale: only a Hail Mary from there). Other marked fields: Charge. ${st.human === 'us' ? 'Blue: the village. ' : ''}Click where in the field to stand: a corner, an edge (lining its ${Sim.hedgeWord()}) or the middle. Or use the menu.`
       : view.mode === 'charge' ? `${st.human === 'us' ? 'Blue hatching: the village to take. ' : ''}Click where in a field to go: by a ${Sim.hedgeWord()} to line it (green: cover), or the middle for the open. Bright red fields are held by the ${foes()}: a hand-to-hand fight. Its own field (green): line another ${Sim.hedgeWord()}. Esc cancels.`

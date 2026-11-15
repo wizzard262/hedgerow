@@ -612,6 +612,53 @@ const Models = (() => {
     return castAll(g);
   }
 
+  // The T-35 (Steve, 2026-11-15: Stalingrad's round 3 reinforcement): the very long hull on eight small road wheels a
+  // side behind armoured skirts, and five turrets: the big one in the middle with the short 76 mm and a handrail aerial
+  // round it, a 45 mm turret front right and another back left, a machine-gun turret front left and another back right.
+  // Front +x. About half as long again as the T-34
+  function t35() {
+    const paint = sovietPaint();
+    const g = new T.Group(), W = 0.21, L = 0.54;
+    // The hull: a long low box, the upper hull with its short sloped nose and flat deck
+    g.add(at(box(L * 0.94, 0.05, W * 0.6, paint), 0, 0.06, 0));
+    g.add(at(profile([[-0.27, 0.085], [0.23, 0.085], [0.272, 0.062], [0.272, 0.08], [0.24, 0.112], [-0.26, 0.112], [-0.27, 0.1]], W, paint, 0.004), 0, 0, 0));
+    for (const s of [-1, 1]) {
+      const z = s * W * 0.43;
+      g.add(trackRun(L * 0.96, 0.05, 0.04, 0.03, z));
+      // Eight small road wheels peeping out under the skirt, the sprocket at the back, the idler at the front
+      for (let k = 0; k < 8; k++) g.add(at(wheel(0.016, 0.03, M.steel), -0.2 + k * 0.057, 0.02, z));
+      g.add(at(sprocket(0.022, 0.034, paint), -0.255, 0.04, z));
+      g.add(at(wheel(0.02, 0.034, M.steel), 0.255, 0.04, z));
+      // The armoured skirt over the suspension, with its row of access hatches
+      g.add(at(box(L * 0.86, 0.036, 0.006, paint), 0, 0.058, s * (W / 2 + 0.004)));
+      for (let k = 0; k < 6; k++) g.add(at(box(0.03, 0.016, 0.002, M.steel), -0.18 + k * 0.072, 0.06, s * (W / 2 + 0.008)));
+    }
+    // The main turret, on a raised ring in the middle, with the short 76 mm gun and the handrail aerial round it
+    g.add(at(cyl(0.05, 0.052, 0.012, paint, 18), 0, 0.118, 0));
+    g.add(at(profile([[-0.055, 0], [0.045, 0], [0.055, 0.04], [-0.055, 0.044]], 0.11, paint, 0.006), 0, 0.124, 0));
+    g.add(at(box(0.016, 0.024, 0.034, paint), 0.058, 0.145, 0));
+    g.add(at(cyl(0.0075, 0.0085, 0.06, M.steel, 12), 0.09, 0.146, 0, 0, 0, Math.PI / 2));
+    const aerial = new T.Mesh(new T.TorusGeometry(0.07, 0.0018, 4, 28), M.steel);
+    g.add(at(aerial, 0, 0.19, 0, Math.PI / 2, 0, 0));
+    for (let k = 0; k < 4; k++) g.add(at(cyl(0.0015, 0.0015, 0.024, M.steel, 4), Math.cos(k * Math.PI / 2 + 0.8) * 0.06, 0.178, Math.sin(k * Math.PI / 2 + 0.8) * 0.06));
+    g.add(at(cyl(0.012, 0.012, 0.006, paint, 12), -0.02, 0.17, 0.02));
+    // A small turret: round, with its gun; dir +1 points forward, -1 back
+    const smallTurret = (x, z, r, gunLength, gunR, dir) => {
+      g.add(at(cyl(r, r * 1.05, 0.034, paint, 16), x, 0.13, z));
+      g.add(at(cyl(r * 0.6, r * 0.6, 0.006, paint, 12), x - dir * r * 0.2, 0.15, z));
+      g.add(at(cyl(gunR, gunR, gunLength, M.steel, 10), x + dir * (r + gunLength / 2 - 0.004), 0.132, z, 0, 0, Math.PI / 2));
+    };
+    // The two 45 mm turrets (front right, back left) and the two machine-gun turrets (front left, back right)
+    smallTurret(0.15, -0.05, 0.034, 0.075, 0.004, 1);
+    smallTurret(-0.15, 0.05, 0.034, 0.075, 0.004, -1);
+    smallTurret(0.13, 0.06, 0.022, 0.03, 0.0025, 1);
+    smallTurret(-0.17, -0.055, 0.022, 0.03, 0.0025, -1);
+    // The engine grilles on the back deck, a white tactical number on the main turret
+    for (const z of [-0.03, 0.03]) g.add(at(box(0.06, 0.004, 0.035, M.steel), -0.225, 0.114, z));
+    for (const s of [-1, 1]) g.add(at(box(0.03, 0.012, 0.002, mat('#e8e4d8', 0.8)), 0, 0.146, s * 0.056));
+    return castAll(g);
+  }
+
   // The KV-2 (Steve): the long, boxy KV hull on six road wheels a side with return rollers, and the huge, tall slab-sided
   // turret with its short, fat 152 mm howitzer in a big mantlet. Front +x
   function kv2() {
@@ -2063,6 +2110,38 @@ const Models = (() => {
     return castAll(g);
   }
 
+  // The StuG III Ausf. F (Steve picked it, 2026-11-15: the Germans' round 3 reinforcement at Stalingrad): the Panzer III's
+  // running gear under a low, flat casemate with no turret, the long 7.5 cm StuK 40 with its muzzle brake out of the front
+  // a little right of the middle, the commander's hatch and the stowage boxes on the track guards. Front +x
+  function stug3() {
+    const paint = M.panzerGrey;
+    const g = new T.Group(), W = 0.18, L = 0.36;
+    g.add(at(box(0.34, 0.05, W * 0.6, paint), 0, 0.06, 0));
+    g.add(at(profile([[-0.18, 0.085], [0.155, 0.085], [0.18, 0.1], [0.16, 0.112], [-0.18, 0.112]], W, paint, 0.004), 0, 0, 0));
+    for (const s of [-1, 1]) {
+      const z = s * W * 0.42;
+      g.add(trackRun(L * 0.9, 0.05, 0.033, 0.03, z));
+      for (let k = 0; k < 6; k++) g.add(at(wheel(0.02, 0.025, M.steel), -0.125 + k * 0.05, 0.024, z));
+      for (let k = 0; k < 3; k++) g.add(at(wheel(0.006, 0.015, M.steel), -0.08 + k * 0.07, 0.055, z));
+      g.add(at(sprocket(0.02, 0.03, paint), 0.165, 0.045, z));
+      g.add(at(wheel(0.017, 0.03, M.steel), -0.165, 0.04, z));
+      // A stowage box on each track guard
+      g.add(at(box(0.07, 0.022, 0.026, paint), -0.06, 0.124, s * 0.072));
+    }
+    // The low casemate: sloped front, flat roof, its sides sloping in
+    g.add(at(profile([[-0.07, 0], [0.09, 0], [0.11, 0.022], [0.075, 0.048], [-0.07, 0.048]], 0.12, paint, 0.004), 0, 0.112, 0));
+    // The gun's mantlet and the long 7.5 cm with its muzzle brake, a little right of the middle
+    g.add(at(box(0.026, 0.03, 0.036, paint), 0.1, 0.134, -0.012));
+    g.add(at(cyl(0.0048, 0.006, 0.17, M.steel, 12), 0.2, 0.136, -0.012, 0, 0, Math.PI / 2));
+    g.add(at(cyl(0.0085, 0.0085, 0.016, M.steel, 12), 0.29, 0.136, -0.012, 0, 0, Math.PI / 2));
+    // The commander's hatch and his scissor periscope, the loader's hatch
+    g.add(at(cyl(0.014, 0.014, 0.008, paint, 12), -0.02, 0.164, 0.025));
+    g.add(at(box(0.004, 0.022, 0.004, M.steel), -0.01, 0.176, 0.025));
+    g.add(at(box(0.03, 0.006, 0.026, paint), -0.03, 0.163, -0.025));
+    for (const s of [-1, 1]) g.add(at(crossMesh(0.02), -0.02, 0.1, s * (W / 2 + 0.002), 0, s > 0 ? 0 : Math.PI, 0));
+    return castAll(g);
+  }
+
   // The Sd.Kfz. 231 (8-rad) (Steve: its turret further forward than the Puma's): the long eight-wheeled hull, the turret
   // well forward with its 2 cm gun, the bed-frame aerial over the back
   function sdkfz231() {
@@ -2915,5 +2994,5 @@ const Models = (() => {
     return castAll(g);
   }
 
-  return { PARIS, PARIS_LOOKS, parisFront, parisCorner, greyhound, stuart, puma, c47, supplyCrate, EIFFEL_HEIGHT, eiffel, landingCraft, littleShip, matilda, carrier, panzer1, panzer2, panzer3, sdkfz231, lorry, destroyer, battleship, strongpoint, setBritish, tankTrap, hulk, crater, seaWall, seaWallRubble, bunker, bunkerCrew, BUNKER, track, bufferStop, engine, carriage, wagon, signalbox, signal, watertower, coal, cow, sheep, lampPost, posterColumn, marketStall, cafe, barn, fountain, pond, reeds, BRIDGE_DECK, materials, M, mergeParts, eliteBand, water, bridge, soldier, squad, team, captain, pak, mortar, bomber, blenheim, bomberOnStand, setArmy, t34, kv2, flak88, ruinWall, ruinCorner, rubbleLine, rubblePile, minefield, STOREY, howitzer, nebelwerfer, katyusha, artillery, artilleryRound, round, coin, token, sherman, panther, panzer4, hedge, tree, house, die, table, field, lane, at };
+  return { PARIS, PARIS_LOOKS, parisFront, parisCorner, greyhound, stuart, puma, c47, supplyCrate, EIFFEL_HEIGHT, eiffel, landingCraft, littleShip, matilda, carrier, panzer1, panzer2, panzer3, sdkfz231, lorry, destroyer, battleship, strongpoint, setBritish, tankTrap, hulk, crater, seaWall, seaWallRubble, bunker, bunkerCrew, BUNKER, track, bufferStop, engine, carriage, wagon, signalbox, signal, watertower, coal, cow, sheep, lampPost, posterColumn, marketStall, cafe, barn, fountain, pond, reeds, BRIDGE_DECK, materials, M, mergeParts, eliteBand, water, bridge, soldier, squad, team, captain, pak, mortar, bomber, blenheim, bomberOnStand, setArmy, t34, t35, stug3, kv2, flak88, ruinWall, ruinCorner, rubbleLine, rubblePile, minefield, STOREY, howitzer, nebelwerfer, katyusha, artillery, artilleryRound, round, coin, token, sherman, panther, panzer4, hedge, tree, house, die, table, field, lane, at };
 })();
