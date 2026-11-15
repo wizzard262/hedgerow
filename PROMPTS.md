@@ -1974,6 +1974,12 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - `tools/tank-variants.html` has **Soviet** (T-34: A the 1942 hexagonal turret with its two round hatches, B the same in winter whitewash; KV-2: A with spare track links and the turret door, B whitewash; T-35: A with the parade bands round its turret, B whitewash) and **British** (Matilda II and the Universal Carrier: A the BEF's 1940 khaki green with dark green bands, B plain khaki with kit). New paints: `whitewashPaint`, `befPaint`. Their picks are still to come
 - Assumption: "lose the flat front vi..." read as: no visors on the Panzer II's flat front plate
 
+## 332. Soviet tanks in winter whitewash; the British in the BEF's 1940 bands (v201)
+
+- Steve picked: the Soviets B (winter whitewash), the British A (the BEF's 1940 bands)
+- At Stalingrad the T-34 (now with the 1942 hexagonal turret and its two round hatches, fuel drums on the back), the KV-2 (spare track links, the turret door) and the T-35 are in rough winter white with the green showing through. At Dunkirk the Matilda II and the Universal Carrier are khaki green with bold dark green bands
+- Every tank model now has the look Steve picked as its default; `tools/tank-variants.html` still shows Now, A and B for each
+
 ## Sessions
 
 | # | Date | Length | What we did |

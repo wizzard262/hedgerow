@@ -621,7 +621,8 @@ const Models = (() => {
   // no return rollers, wide tracks, the cast turret well forward with its long 76 mm gun. Front +x
   // look (Steve, 2026-11-15, to pick from): 'now' the cast turret; 'A' the 1942 hexagonal turret with its two round
   // hatches ('Mickey Mouse ears'), fuel drums on the back; 'B' as A in winter whitewash
-  function t34(look = 'now') {
+  // (Steve picked B, 2026-11-15)
+  function t34(look = 'B') {
     const paint = look === 'B' ? whitewashPaint() : sovietPaint();
     const g = new T.Group(), W = 0.2, L = 0.37;
     // The hull: the sloped glacis and back, the sloped upper sides
@@ -668,7 +669,8 @@ const Models = (() => {
   // Front +x. About half as long again as the T-34
   // look (Steve, 2026-11-15): 'now' / 'A' green, A with the red-and-white parade bands round its main turret; 'B' winter
   // whitewash
-  function t35(look = 'now') {
+  // (Steve picked B, 2026-11-15)
+  function t35(look = 'B') {
     const paint = look === 'B' ? whitewashPaint() : sovietPaint();
     const g = new T.Group(), W = 0.21, L = 0.54;
     // The hull: a long low box, the upper hull with its short sloped nose and flat deck
@@ -720,7 +722,8 @@ const Models = (() => {
   // turret with its short, fat 152 mm howitzer in a big mantlet. Front +x
   // look (Steve, 2026-11-15): 'now' / 'A' green, A with spare track links on the hull sides and the turret's rear door;
   // 'B' as A in winter whitewash
-  function kv2(look = 'now') {
+  // (Steve picked B, 2026-11-15)
+  function kv2(look = 'B') {
     const paint = look === 'B' ? whitewashPaint() : sovietPaint();
     const g = new T.Group(), W = 0.21, L = 0.4;
     g.add(at(box(L * 0.92, 0.05, W * 0.64, paint), 0, 0.06, 0));
@@ -2065,7 +2068,8 @@ const Models = (() => {
   // chutes, a small cast turret, the thin 2-pounder
   // look (Steve, 2026-11-15): 'now' plain khaki; 'A' the BEF's 1940 khaki green with dark green bands; 'B' plain khaki
   // with kit: a stowage box on the back, a rolled tarpaulin, the turret's name and number panel
-  function matilda(look = 'now') {
+  // (Steve picked A, 2026-11-15)
+  function matilda(look = 'A') {
     britishPaint();
     const paint = look === 'A' ? befPaint() : M.khaki;
     const g = new T.Group(), W = 0.2, L = 0.4;
@@ -2098,7 +2102,8 @@ const Models = (() => {
   // showing, a Bren on the front
   // look (Steve, 2026-11-15): 'now' plain khaki; 'A' the BEF's 1940 bands; 'B' plain khaki, crammed: a third crewman, kit
   // boxes, a tarpaulin rolled across the back
-  function carrier(look = 'now') {
+  // (Steve picked A, 2026-11-15)
+  function carrier(look = 'A') {
     britishPaint();
     const paint = look === 'A' ? befPaint() : M.khaki;
     const g = new T.Group(), L = 0.26, W = 0.15;
