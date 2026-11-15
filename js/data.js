@@ -529,7 +529,7 @@ const PIECES = {
   // A lorry-load of men for the boats (Steve): no weapons, no orders; it drives itself. big: a corner block, as a tank
   lorry:    { name: 'Lorry', soft: 0, hard: 0, big: true, lorry: true },
   boys:     { name: 'Boys anti-tank rifle team', soft: 0, hard: 1, vsMen: 1, team: true, men: 2 },
-  pz1:      { name: 'Panzer I', soft: 1.5, hard: 0, he: 0, tank: true, armour: 0, cutter: true },   // two machine guns, no gun
+  pz1:      { name: 'Panzer I', soft: 2, hard: 0, he: 0, tank: true, armour: 0, cutter: true },   // two machine guns, no gun: 2 dice at men (Steve, 2026-11-15)
   pz2:      { name: 'Panzer II', soft: 1, hard: 1, he: 1, tank: true, armour: 0, cutter: true, smallGun: true },  // a 2 cm cannon
   pz3:      { name: 'Panzer III', soft: 1.5, hard: 1, he: 1, tank: true, armour: 0, cutter: true },
   sdkfz231: { name: 'Sd.Kfz. 231', soft: 1, hard: 1, he: 1, tank: true, armour: 0, car: true, smallGun: true },   // eight-wheeled armoured car

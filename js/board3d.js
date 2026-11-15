@@ -281,7 +281,8 @@ const Board = (() => {
   function coinSpot(side) {
     const gun = GUNS[side].artillery;
     // (Dunkirk and the Normandy beach: out at sea at the top, clear of the boats, the warship being at the bottom, Steve)
-    if (side === 'us' && GUNS === DUNKIRK_GUNS) return { x: -2.1, z: -0.3 };
+    // (lower down the sea, Steve 2026-11-15: at the very top the destroyer's dice stacked up into the corner, out of view)
+    if (side === 'us' && GUNS === DUNKIRK_GUNS) return { x: -2.2, z: 2.6 };
     // (above it on the screen, whichever way round the table is seen)
     return { x: gun.x + (side === 'us' ? -0.1 : 0.1), z: gun.z + screenUp() * 1.15 };
   }

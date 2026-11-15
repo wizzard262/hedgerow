@@ -1932,6 +1932,14 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - The little ships' decks: on the tug the deck's top was level with the bow's, and on the cabin cruiser the deck, the trim and the bow all topped out at the same height, so they fought to be seen and flickered. Each layer is now a clear step above the one below it (hull and bow level, trim above, deck above that), and the cruiser's cabin roof a little thicker
 - Assumption: the battleship on the Normandy beach gets matt shells too, as it is the same line of shells
 
+## 327. Dunkirk's dice in view; submachine guns Move & shoot as far as a Charge; Panzer I 2 dice (v196)
+
+- Steve: the destroyer's dice at Dunkirk are too high in the corner and out of view. Submachine guns (the captains and the Stalingrad sections) can shoot at full Charge distance, with the movement penalty they already have. The Panzer I can have 2 dice against men: it only has machine guns
+- Dunkirk: the British token (and so the dice beside it) now lands lower down the sea, about level with the third row, clear of the boats' lane, not in the top corner (`coinSpot` in board3d.js)
+- Submachine guns (anyone `closeRangeOnly`: the captains and the SMG sections): a Move & shoot goes as far as a Charge, three fields, still one more needed on the move (`moveShootFields` in sim.js)
+- Panzer I: 2 dice at men (was 1½)
+- Assumptions: no balance run (Steve); the robots use the longer Move & shoot too, as both sides play by the same rules
+
 ## Sessions
 
 | # | Date | Length | What we did |

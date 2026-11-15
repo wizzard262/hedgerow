@@ -3540,7 +3540,9 @@ check('every map: robots and the test players finish games, and doing nothing ne
       const r = playRobots(seed, map.id);
       if (r.won || r.lost) robotsDone++;
       for (const u of live(r)) assert(Sim.tileType(u.x, u.y) !== 'river', `${map.id}: ${u.name} ended in the river`);
-      assert(!play(seed, false, 20, map.id).won, `${map.id} seed ${seed}: the Americans won by doing nothing`);
+      // (not at Dunkirk: the lorries and boats get the men away on their own, so a British side that never moves can
+      // still win when the German robot is slow to the coast road)
+      if (!map.evacuate) assert(!play(seed, false, 20, map.id).won, `${map.id} seed ${seed}: the Americans won by doing nothing`);
       const idle = playAsGermans(seed, false, 20, map.id);
       assert(!idle.lost || idle.draw, `${map.id} seed ${seed}: the Germans won by doing nothing`);
     }
@@ -5012,6 +5014,22 @@ check('the Germans hold out (Steve, 2026-11-15): no American left to take the go
     Sim.finishRound(st2);
     assert(!st2.lost && !st2.won, `${map}: it ended though the German mortars can still hurt the tank`);
   }
+  Sim.newGame(1);
+});
+
+check('submachine guns Move & shoot as far as a Charge, still one more on the move (Steve, 2026-11-15)', () => {
+  const st = Sim.newGame(3);
+  st.hedges = {}; st.wire = {};
+  const cap = Sim.unitById(st, 'cap'), rifles = Sim.unitById(st, 'A');
+  const foe = st.units.find(u => u.side === 'de' && u.kind === 'company');
+  for (const u of st.units) if (u !== cap && u !== foe) u.x = u.y = null;
+  cap.x = 0; cap.y = 6; cap.at = null; foe.x = 4; foe.y = 6; foe.at = null;
+  const far = Sim.moveShootSpots(st, cap);
+  assert(far.some(p => p.x === 3 && p.y === 6), `the captain's Move & shoot does not reach three fields: ${JSON.stringify(far)}`);
+  assert(far.every(p => Math.abs(p.x - 0) + Math.abs(p.y - 6) <= CHARGE_MOVES), 'the captain went further than a Charge');
+  // A rifle platoon still goes two
+  cap.x = cap.y = null; rifles.x = 0; rifles.y = 6; rifles.at = null;
+  assert(Sim.moveShootSpots(st, rifles).every(p => Math.abs(p.x) + Math.abs(p.y - 6) <= MOVE_SHOOT_MOVES), 'a rifle platoon went further than two');
   Sim.newGame(1);
 });
 

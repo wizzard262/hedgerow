@@ -2138,10 +2138,17 @@ const Sim = (() => {
   // Can it fire after moving: not a machine gun or a dug-in gun, nor a captain with no shot left (Steve)
   const firesOnTheMove = u => u.kind !== 'mg' && u.kind !== 'mg42' && !PIECES[u.kind].fixed && mayFire(u);
 
+  // How far a Move & shoot goes: submachine guns (the captains, the SMG sections) as far as a Charge (Steve, 2026-11-15),
+  // still one more needed on the move; anyone else MOVE_SHOOT_MOVES
+  function moveShootFields(u) {
+    if (closeRangeOnly(u)) return CHARGE_MOVES;
+    return MOVE_SHOOT_MOVES;
+  }
+
   function moveShootRoutes(st, u) {
     if (!firesOnTheMove(u)) return [];
     const home = { x: u.x, y: u.y, at: u.at }, out = [];
-    for (const route of routesFor(st, u, reach(u, MOVE_SHOOT_MOVES), false)) {
+    for (const route of routesFor(st, u, reach(u, moveShootFields(u)), false)) {
       // Try it: stand at the goal by each hedge in turn, or in the open; any place with a shot will do
       const goal = route[route.length - 1];
       u.x = goal.x; u.y = goal.y;
