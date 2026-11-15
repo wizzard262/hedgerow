@@ -1925,6 +1925,13 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - The goal sign is one line ("Hold Le Dépôt or destroy all Americans"; once taken "… · Held: keep it all round N"; Dunkirk "0 of 12 sections evacuated"), as big as the first sign, over the middle of the board in the gap between its top edge and the top of the screen (`signFit` in board3d.js). On a small window it gets smaller rather than going over the board
 - Assumptions: the hold-out is checked at the end of a round, as the attackers' own "cannot win" is; with Americans who can't be hurt but could still wipe out the Germans, the Germans still win (Steve's pick)
 
+## 326. Dunkirk: matt shells by the destroyer; the little ships' decks stop flickering (v195)
+
+- Steve: on Dunkirk remove the reflection on the destroyer's shells; also the small boats still glitch on the deck surface
+- The warship's line of shells (the destroyers at Dunkirk, USS Texas on the Normandy beach) is matt now: the same brass, olive and yellow, with no shine (`navalShell` in models.js). The land artillery's shells keep their polish
+- The little ships' decks: on the tug the deck's top was level with the bow's, and on the cabin cruiser the deck, the trim and the bow all topped out at the same height, so they fought to be seen and flickered. Each layer is now a clear step above the one below it (hull and bow level, trim above, deck above that), and the cruiser's cabin roof a little thicker
+- Assumption: the battleship on the Normandy beach gets matt shells too, as it is the same line of shells
+
 ## Sessions
 
 | # | Date | Length | What we did |

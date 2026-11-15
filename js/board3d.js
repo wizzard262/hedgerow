@@ -214,7 +214,8 @@ const Board = (() => {
         const rounds = [];
         for (let k = 0; k < PILE_MAX && which !== 'bomber'; k++) {
           // (the warship fires shells; each army's artillery its own: shells or rockets)
-          const kind = which === 'artillery' ? (ship ? 'shell' : Models.artilleryRound(side)) : 'bomb';
+          // (the warship's matt, Steve: no shine on the destroyer's shells)
+          const kind = which === 'artillery' ? (ship ? 'navalShell' : Models.artilleryRound(side)) : 'bomb';
           const r = Models.round(kind);
           // (where this round stands, and how big)
           const place = pileSpot(spot, which, k, side);

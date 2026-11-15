@@ -1196,6 +1196,10 @@ const Models = (() => {
     warhead: () => mat('#6d7440', 0.55, 0.15),       // a lighter olive than the guns, so it shows on the wood
     band: () => mat('#f2c933', 0.5, 0.1),            // the yellow high-explosive band
     brass: () => mat('#e3be55', 0.25, 0.85),         // the shell's case, polished
+    // The warship's shells (Steve, 2026-11-15: no shine on the destroyer's shells): the same colours, matt
+    mattBrass: () => mat('#d9b552', 0.9, 0),
+    mattWarhead: () => mat('#6d7440', 0.9, 0),
+    mattBand: () => mat('#f2c933', 0.9, 0),
   };
   function round(kind) {
     const g = new T.Group();
@@ -1206,12 +1210,16 @@ const Models = (() => {
       g.add(at(cyl(0.0071, 0.0071, 0.004, ROUND_LOOK.band(), 12), 0, 0.036, 0));
       g.add(at(new T.Mesh(new T.ConeGeometry(0.0068, 0.012, 12), ROUND_LOOK.warhead()), 0, 0.056, 0));
       for (const r of [0, Math.PI / 2]) g.add(at(box(0.016, 0.01, 0.001, ROUND_LOOK.rocketBody()), 0, 0.005, 0, 0, r, 0));
-    } else if (kind === 'shell') {
-      // The brass case, the body, the yellow band round it, the nose
-      g.add(at(cyl(0.0065, 0.0065, 0.024, ROUND_LOOK.brass(), 12), 0, 0.012, 0));
-      g.add(at(cyl(0.0062, 0.0065, 0.014, ROUND_LOOK.warhead(), 12), 0, 0.031, 0));
-      g.add(at(cyl(0.0066, 0.0066, 0.004, ROUND_LOOK.band(), 12), 0, 0.034, 0));
-      g.add(at(new T.Mesh(new T.ConeGeometry(0.0062, 0.016, 12), ROUND_LOOK.warhead()), 0, 0.046, 0));
+    } else if (kind === 'shell' || kind === 'navalShell') {
+      // The brass case, the body, the yellow band round it, the nose (a warship's: matt, no shine)
+      const matt = kind === 'navalShell';
+      const brass = matt ? ROUND_LOOK.mattBrass() : ROUND_LOOK.brass();
+      const warhead = matt ? ROUND_LOOK.mattWarhead() : ROUND_LOOK.warhead();
+      const band = matt ? ROUND_LOOK.mattBand() : ROUND_LOOK.band();
+      g.add(at(cyl(0.0065, 0.0065, 0.024, brass, 12), 0, 0.012, 0));
+      g.add(at(cyl(0.0062, 0.0065, 0.014, warhead, 12), 0, 0.031, 0));
+      g.add(at(cyl(0.0066, 0.0066, 0.004, band, 12), 0, 0.034, 0));
+      g.add(at(new T.Mesh(new T.ConeGeometry(0.0062, 0.016, 12), warhead), 0, 0.046, 0));
     } else {
       const body = sphere(0.007, M.olive, 12, 10); body.scale.set(1, 1.8, 1);
       g.add(at(body, 0, 0.012, 0));
@@ -2177,9 +2185,11 @@ const Models = (() => {
     const funnel = mat(['#c9a13a', '#b23a2a', '#2a2a2a'][seed % 3], 0.7, 0);
     g.add(at(box(B * 1.02, 0.012, L, M.redLead), 0, 0.006, 0));
     g.add(at(box(B, 0.07, L, M.black), 0, 0.04, 0));
-    g.add(at(box(B * 0.72, 0.074, B * 0.72, M.black), 0, 0.042, -L / 2, 0, Math.PI / 4, 0));
+    // (the bow and stern level with the hull, and the deck a clear step above them all: Steve, 2026-11-15, the deck
+    // flickered where its top was level with the bow's)
+    g.add(at(box(B * 0.72, 0.07, B * 0.72, M.black), 0, 0.04, -L / 2, 0, Math.PI / 4, 0));
     g.add(at(cyl(B / 2, B / 2, 0.07, M.black, 18), 0, 0.04, L / 2));
-    g.add(at(box(B * 0.95, 0.004, L * 0.95, M.deck || M.canvas), 0, 0.077, 0));
+    g.add(at(box(B * 0.95, 0.008, L * 0.95, M.deck || M.canvas), 0, 0.081, 0));
     // The closed deckhouse, the wheelhouse on it with its windows, the big funnel, the mast
     g.add(at(box(0.18, 0.07, 0.32, house), 0, 0.11, 0.02));
     g.add(at(box(0.15, 0.06, 0.12, house), 0, 0.175, -0.08));
@@ -2202,13 +2212,15 @@ const Models = (() => {
     const trim = mat(['#2d4f7c', '#e9e4d6', '#7c2a24'][seed % 3], 0.6, 0.05);
     const wood = mat('#8a6440', 0.6, 0.05);
     g.add(at(box(B, 0.06, L, hull), 0, 0.035, 0));
-    g.add(at(box(B * 1.01, 0.01, L, trim), 0, 0.064, 0));
-    g.add(at(box(B * 0.72, 0.064, B * 0.72, hull), 0, 0.037, -L / 2, 0, Math.PI / 4, 0));
+    // (each layer a clear step above the one below, so no two tops are level: Steve, 2026-11-15, the deck flickered
+    // where it, the trim and the bow all topped out at the same height)
+    g.add(at(box(B * 1.01, 0.01, L, trim), 0, 0.07, 0));
+    g.add(at(box(B * 0.72, 0.06, B * 0.72, hull), 0, 0.035, -L / 2, 0, Math.PI / 4, 0));
     g.add(at(cyl(B / 2, B / 2, 0.06, hull, 18), 0, 0.035, L / 2));
-    g.add(at(box(B * 0.94, 0.004, L * 0.95, wood), 0, 0.067, 0));
+    g.add(at(box(B * 0.94, 0.008, L * 0.95, wood), 0, 0.081, 0));
     // The closed cabin with a row of windows each side, the raised wheelhouse at its front with a windscreen
     g.add(at(box(0.17, 0.06, 0.34, hull), 0, 0.1, 0.04));
-    g.add(at(box(0.18, 0.008, 0.35, wood), 0, 0.134, 0.04));
+    g.add(at(box(0.18, 0.012, 0.35, wood), 0, 0.136, 0.04));
     for (const s of [-1, 1]) for (let k = 0; k < 4; k++) g.add(at(box(0.002, 0.016, 0.045, M.glass), s * 0.086, 0.104, -0.07 + k * 0.075));
     g.add(at(box(0.15, 0.045, 0.1, hull), 0, 0.16, -0.08));
     g.add(at(box(0.13, 0.025, 0.002, M.glass), 0, 0.165, -0.131));
