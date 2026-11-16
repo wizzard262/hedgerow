@@ -521,7 +521,8 @@ const Board = (() => {
         if (t === 'river') addReeds(x, y, seed);
       }
       // (in the Ardennes a pine forest, Steve: thick with snowy pines)
-      if (t === 'orchard' && st.map.forest) for (const [ox, oz] of forestTrees(seed)) built.add(at(Models.pine(seed + ox * 10 + oz * 3, 1.1 + ((ox * 31 + oz * 17) % 1) * 0.4), x + ox, 0, y + oz));
+      // (Steve picked H, 2026-11-16: tall, airy, feathery pines standing between the men's places: tools/pine-variants.html)
+      if (t === 'orchard' && st.map.forest) for (const [ox, oz, size] of Models.forestLayout(seed, 'A')) built.add(at(Models.featherPine(seed * 31 + Math.round(ox * 50 + oz * 70), size, 'H'), x + ox, 0, y + oz));
       else if (t === 'orchard') for (const [ox, oz] of orchardTrees(seed)) built.add(at(Models.tree(seed + ox * 10 + oz * 3, 0.68 + ((ox * 31 + oz * 17) % 1) * 0.15), x + ox, 0, y + oz));
       if (t === 'village' || t === 'hamlet') addHouses(x, y, seed);
     }
@@ -561,16 +562,6 @@ const Board = (() => {
       built.add(at(Models.field('field', false, land * 7 + y * 13), land + 0.5, -0.001, y + 0.5, -Math.PI / 2, 0, 0));
       built.add(at(Models.seaWall(1.02, land * 31 + y), land, 0, y + 0.5));
     }
-  }
-
-  // Where a forest's pines stand (the Ardennes, Steve): a dozen or so, scattered all over the field, some near the edges
-  function forestTrees(seed) {
-    const R = seeded(seed * 7 + 5), out = [];
-    for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) {
-      if (R() < 0.2) continue;
-      out.push([0.12 + i * 0.25 + (R() - 0.5) * 0.12, 0.12 + j * 0.25 + (R() - 0.5) * 0.12]);
-    }
-    return out;
   }
 
   // Where an orchard's trees stand (Steve: a couple more, staggered at random): six trees, each pushed about its own

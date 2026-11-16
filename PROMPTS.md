@@ -2043,7 +2043,7 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - **A click outside** How to play or New game closes it (New game only once a game is on the table)
 - **Pine forest options** in `tools/pine-variants.html`: Now, and three with fuzzy, tufty pines (`Models.fuzzyPine`): A on the lines between the nine areas so the men stand in the gaps, B the same thinner and smaller, C round the edge of the field with the middle clear (`Models.forestLayout`). The pick is still to come
 - Steve: something much more feathery than all those options. New options: **D** feathery (three crossed cut-out cards painted with drooping boughs of fine needles and snow along them, their shadows cut out too: `Models.featherPine`), **E** the same, open below so men show through, **F** a taller, slimmer spruce. Still to pick
-- Steve: E, but a bit taller like F, and a bit more open and feathery; show me. New options **G** (as tall as F, gaps between the boughs all the way up, longer finer needles) and **H** (more open again). Still to pick
+- Steve: E, but a bit taller like F, and a bit more open and feathery; show me. New options **G** (as tall as F, gaps between the boughs all the way up, longer finer needles) and **H** (more open again). Steve picked **H** (v210): every pine forest (the Winter War, the Bulge) is now tall, airy, feathery pines standing on the lines between the nine areas, so men in a forest field show between them
 
 ## Sessions
 
