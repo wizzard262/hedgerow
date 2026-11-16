@@ -2042,6 +2042,7 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - **How to play** is three tabs: How to play (the basics), Seeing, cover and dice, and The battles (the campaign and each bonus battle, in date order, each its own paragraph). Each tab fits the screen with no scrolling: two columns, the type smaller until it fits, three columns if need be (checked at 1280 by 720 and 1600 by 950). It has its own **New game** button beside To the table
 - **A click outside** How to play or New game closes it (New game only once a game is on the table)
 - **Pine forest options** in `tools/pine-variants.html`: Now, and three with fuzzy, tufty pines (`Models.fuzzyPine`): A on the lines between the nine areas so the men stand in the gaps, B the same thinner and smaller, C round the edge of the field with the middle clear (`Models.forestLayout`). The pick is still to come
+- Steve: something much more feathery than all those options. New options: **D** feathery (three crossed cut-out cards painted with drooping boughs of fine needles and snow along them, their shadows cut out too: `Models.featherPine`), **E** the same, open below so men show through, **F** a taller, slimmer spruce. Still to pick
 
 ## Sessions
 

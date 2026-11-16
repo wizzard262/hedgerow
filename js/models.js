@@ -104,6 +104,8 @@ const Models = (() => {
       if (colours) merged.setAttribute('color', new T.BufferAttribute(colours, 3));
       const mesh = new T.Mesh(merged, parts[0].material);
       mesh.castShadow = parts[0].castShadow; mesh.receiveShadow = parts[0].receiveShadow;
+      // (a cut-out card's shadow, cut out too: the feathery pines)
+      if (parts[0].customDepthMaterial) mesh.customDepthMaterial = parts[0].customDepthMaterial;
       for (const c of parts) { c.parent.remove(c); c.geometry.dispose(); }
       model.add(mesh);
     }
@@ -3181,6 +3183,73 @@ const Models = (() => {
     return out;
   }
 
+  // A feathery pine (Steve, 2026-11-16: much more feathery): three crossed upright cards, each painted with a pine's
+  // drooping boughs of fine needles, cut out round their outline (alphaTest), snow along the tops of the boughs. look:
+  // 'D' dense boughs to the ground; 'E' the lower boughs sparse, so men show through; 'F' tall and slim, like a spruce
+  const featherMats = {};
+  function featherMaterial(look) {
+    if (featherMats[look]) return featherMats[look];
+    const R = seeded(look.charCodeAt(0) * 7);
+    const c = document.createElement('canvas'); c.width = 256; c.height = 512;
+    const g2 = c.getContext('2d');
+    const slim = look === 'F' ? 0.72 : 1, open = look === 'E';
+    // The trunk
+    g2.strokeStyle = '#4a3423'; g2.lineWidth = 7;
+    g2.beginPath(); g2.moveTo(128, 505); g2.lineTo(128, 30); g2.stroke();
+    // The boughs, top to bottom, wider as they go down, each drooping out from the trunk with fine needles along it
+    const greens = ['#1f3a24', '#2a4a2c', '#335a34', '#24412a', '#3c6440'];
+    for (let y = 34; y < 470; y += 7 + R() * 4) {
+      const down = (y - 30) / 440;
+      // Sparse lower boughs: every other one left out, and the rest shorter
+      if (open && down > 0.55 && R() < 0.55) continue;
+      const reach = (12 + down * 106) * slim * (open && down > 0.55 ? 0.8 : 1) * (0.85 + R() * 0.3);
+      for (const s of [-1, 1]) {
+        const ex = 128 + s * reach, ey = y + reach * (0.32 + R() * 0.15);
+        g2.strokeStyle = '#2d2a1c'; g2.lineWidth = 2;
+        g2.beginPath(); g2.moveTo(128, y); g2.quadraticCurveTo(128 + s * reach * 0.55, y - 4, ex, ey); g2.stroke();
+        // The needles: short strokes off the bough, pointing out and down
+        const n = Math.round(reach / 2.2);
+        for (let k = 0; k < n; k++) {
+          const f = k / n, bx = 128 + s * reach * f, by = y + (ey - y) * f * f - 3 * (1 - f) * f * 4;
+          g2.strokeStyle = greens[Math.floor(R() * greens.length)]; g2.lineWidth = 1.6;
+          for (const t of [-1, 1]) {
+            const len = 6 + R() * 8 * (1 - f * 0.4);
+            g2.beginPath(); g2.moveTo(bx, by); g2.lineTo(bx + s * len * 0.5, by + t * len * 0.45 + len * 0.55); g2.stroke();
+          }
+        }
+        // Snow lying along the top of the bough, in patches
+        g2.strokeStyle = 'rgba(240,244,246,0.95)'; g2.lineWidth = 3;
+        for (let k = 0; k < 3; k++) {
+          const f0 = 0.15 + R() * 0.6, f1 = Math.min(1, f0 + 0.12 + R() * 0.15);
+          g2.beginPath();
+          g2.moveTo(128 + s * reach * f0, y + (ey - y) * f0 * f0 - 3);
+          g2.lineTo(128 + s * reach * f1, y + (ey - y) * f1 * f1 - 3);
+          g2.stroke();
+        }
+      }
+    }
+    const tex = new T.CanvasTexture(c);
+    tex.encoding = T.sRGBEncoding;
+    tex.anisotropy = 8;
+    const m = new T.MeshStandardMaterial({ map: tex, alphaTest: 0.5, side: T.DoubleSide, roughness: 0.95 });
+    // Its shadow cut out the same way, not a square card
+    m.userData.depth = new T.MeshDepthMaterial({ depthPacking: T.RGBADepthPacking, map: tex, alphaTest: 0.5 });
+    featherMats[look] = m;
+    return m;
+  }
+  function featherPine(seed, size = 1, look = 'D') {
+    const g = new T.Group(), R = seeded(seed * 5 + 3);
+    const m = featherMaterial(look);
+    const tall = (look === 'F' ? 0.3 : 0.26) * size, wide = tall * 0.5;
+    const turn = R() * Math.PI;
+    for (let k = 0; k < 3; k++) {
+      const card = new T.Mesh(new T.PlaneGeometry(wide, tall), m);
+      card.customDepthMaterial = m.userData.depth;
+      g.add(at(card, 0, tall / 2, 0, 0, turn + k * Math.PI / 3, 0));
+    }
+    return castAll(g);
+  }
+
   // A box with sloping faces: its bottom and top each a rectangle (x0 to x1 along, w across), at heights y0 and y1. For
   // armour plates that lean in: a casemate's sloped front, back and sides
   function frustum(bottom, top, y0, y1, m) {
@@ -4115,5 +4184,5 @@ const Models = (() => {
     return castAll(g);
   }
 
-  return { PARIS, PARIS_LOOKS, parisFront, parisCorner, greyhound, stuart, puma, c47, supplyCrate, EIFFEL_HEIGHT, eiffel, landingCraft, littleShip, matilda, carrier, panzer1, panzer2, panzer3, sdkfz231, lorry, destroyer, battleship, strongpoint, setBritish, tankTrap, hulk, crater, seaWall, seaWallRubble, bunker, bunkerCrew, BUNKER, track, bufferStop, engine, carriage, wagon, signalbox, signal, watertower, coal, cow, sheep, lampPost, posterColumn, marketStall, cafe, barn, fountain, pond, reeds, BRIDGE_DECK, materials, M, mergeParts, eliteBand, water, bridge, soldier, squad, team, captain, pak, mortar, bomber, blenheim, bomberOnStand, setArmy, t34, t35, stug3, kv2, flak88, kingTiger, m10, m36, pine, panzer38t, jagdpanther, hetzer, m18, m24, jumbo, t26, t28, t38, aerosan, vickers6t, bofors37, setDeArmy, tiger1, ferdinand, t70, kv1, fuzzyPine, forestLayout, ruinWall, ruinCorner, rubbleLine, rubblePile, minefield, STOREY, howitzer, nebelwerfer, katyusha, artillery, artilleryRound, round, coin, token, sherman, panther, panzer4, hedge, tree, house, die, table, field, lane, at };
+  return { PARIS, PARIS_LOOKS, parisFront, parisCorner, greyhound, stuart, puma, c47, supplyCrate, EIFFEL_HEIGHT, eiffel, landingCraft, littleShip, matilda, carrier, panzer1, panzer2, panzer3, sdkfz231, lorry, destroyer, battleship, strongpoint, setBritish, tankTrap, hulk, crater, seaWall, seaWallRubble, bunker, bunkerCrew, BUNKER, track, bufferStop, engine, carriage, wagon, signalbox, signal, watertower, coal, cow, sheep, lampPost, posterColumn, marketStall, cafe, barn, fountain, pond, reeds, BRIDGE_DECK, materials, M, mergeParts, eliteBand, water, bridge, soldier, squad, team, captain, pak, mortar, bomber, blenheim, bomberOnStand, setArmy, t34, t35, stug3, kv2, flak88, kingTiger, m10, m36, pine, panzer38t, jagdpanther, hetzer, m18, m24, jumbo, t26, t28, t38, aerosan, vickers6t, bofors37, setDeArmy, tiger1, ferdinand, t70, kv1, fuzzyPine, forestLayout, featherPine, ruinWall, ruinCorner, rubbleLine, rubblePile, minefield, STOREY, howitzer, nebelwerfer, katyusha, artillery, artilleryRound, round, coin, token, sherman, panther, panzer4, hedge, tree, house, die, table, field, lane, at };
 })();
