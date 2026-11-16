@@ -181,6 +181,17 @@ const Models = (() => {
   // The British (Steve: Dunkirk): the 'us' side's men in light brown battledress and a green Brodie helmet. Set for each
   // game's table (see Board's build)
   let britishLook = false, sovietLook = false;
+  // The 'de' side's army for this table (Steve, 2026-11-16: the Finns in the Winter War): 'de' the Germans, 'fi' the Finns
+  let finnLook = false;
+  function setDeArmy(army) {
+    finnLook = army === 'fi';
+    // The Finns: white snowsuits and white hoods over their grey
+    if (!M.fiSuit) {
+      M.fiSuit = mat('#e9ebe6', 0.9);
+      M.fiTrousers = mat('#dcded8', 0.9);
+      M.fiWebbing = mat('#7d7a6c', 0.9);
+    }
+  }
   // Which army the 'us' side is for this table: 'us', 'uk' (Dunkirk) or 'su' (Stalingrad, Steve)
   function setArmy(army) {
     setBritish(army === 'uk');
@@ -204,12 +215,12 @@ const Models = (() => {
   }
   function soldier(side, pose = 0, base = true, elite = false, arms = '') {
     const us = side === 'us', g = new T.Group();
-    const uk = us && britishLook, su = us && sovietLook;
+    const uk = us && britishLook, su = us && sovietLook, fi = !us && finnLook;
     // (Soviet guards look as the others do: no camouflage, Steve)
-    const fj = !us && elite, ranger = us && elite && !uk && !su;
-    const uni = fj ? camoCloth('de') : su ? M.suUniform : uk ? M.ukUniform : ranger ? M.rangerJacket : us ? M.usUniform : M.deUniform;
-    const legs = su ? M.suTrousers : uk ? M.ukTrousers : ranger ? M.rangerTrousers : us ? M.usTrousers : M.deTrousers;
-    const web = su ? M.suWebbing : uk ? M.ukWebbing : us ? M.usWebbing : M.deWebbing;
+    const fj = !us && elite && !fi, ranger = us && elite && !uk && !su;
+    const uni = fi ? M.fiSuit : fj ? camoCloth('de') : su ? M.suUniform : uk ? M.ukUniform : ranger ? M.rangerJacket : us ? M.usUniform : M.deUniform;
+    const legs = fi ? M.fiTrousers : su ? M.suTrousers : uk ? M.ukTrousers : ranger ? M.rangerTrousers : us ? M.usTrousers : M.deTrousers;
+    const web = fi ? M.fiWebbing : su ? M.suWebbing : uk ? M.ukWebbing : us ? M.usWebbing : M.deWebbing;
     // Base: a black disc with a bevel
     if (base) g.add(at(cyl(0.032, 0.034, 0.008, M.base, 24), 0, 0.004, 0));
     // Legs apart, boots (US leggings are paler)
@@ -239,7 +250,11 @@ const Models = (() => {
     g.add(at(sphere(0.0045, M.flesh, 8, 6), 0.02, 0.083, 0.004));
     // Head and helmet: the round American M1, the flared German Stahlhelm
     g.add(at(sphere(0.0085, M.flesh, 12, 10), 0, 0.104, 0));
-    if (su) {
+    if (fi) {
+      // The Finn's white snowsuit hood, pulled up round his head
+      const hood = sphere(0.0118, M.fiSuit, 14, 10); hood.scale.set(1, 1.05, 1);
+      g.add(at(hood, -0.002, 0.106, 0));
+    } else if (su) {
       // The SSh-40: a deep round dome with a short flared rim all round
       const lathe = new T.LatheGeometry([[0, 0.0128], [0.0085, 0.0118], [0.0122, 0.006], [0.013, 0.0], [0.0142, -0.0028], [0.0144, -0.0034]].map(([x, y]) => new T.Vector2(x, y)), 16);
       g.add(at(new T.Mesh(lathe, M.suHelmet), 0, 0.108, 0));
@@ -378,6 +393,7 @@ const Models = (() => {
     const flag = new T.Group();
     // Blue with crossed rifles in white for the Americans; plain red for the Germans (Steve)
     if (flagOf === 'uk') unionJack(flag);
+    else if (flagOf === 'fi') finnishFlag(flag);
     else if (flagOf === 'su') {
       // The Soviets' red banner with a gold star (Steve)
       flag.add(at(box(0.07, 0.045, 0.002, mat('#b3261e', 0.8)), 0.035, 0, 0));
@@ -1292,13 +1308,15 @@ const Models = (() => {
   // Each army's artillery (Steve, 2026-11-14: all of it replaced, but not the warships): the Americans' 105 mm howitzer
   // pointed high, the Germans' Nebelwerfer 41, the Soviets' Katyusha
   function artillery(side) {
+    // (the Winter War, 1940, Steve: no rockets yet; field guns on both sides)
+    if (finnLook) return howitzer(side, false);
     if (side === 'de') return nebelwerfer();
     if (sovietLook) return katyusha();
     return howitzer(side, true);
   }
   // What lies in the pile beside each army's artillery: rockets for the Nebelwerfer and the Katyusha, shells for the howitzer
   function artilleryRound(side) {
-    const rockets = side === 'de' || sovietLook;
+    const rockets = !finnLook && (side === 'de' || sovietLook);
     return rockets ? 'rocket' : 'shell';
   }
 
@@ -1381,9 +1399,9 @@ const Models = (() => {
     if (!coinTex[side]) {
       const c = document.createElement('canvas'); c.width = c.height = 256;
       const g = c.getContext('2d');
-      g.fillStyle = side === 'us' ? '#3f8a36' : side === 'su' ? '#b3261e' : side === 'timer' ? '#141414' : '#8c8c86';
+      g.fillStyle = side === 'us' ? '#3f8a36' : side === 'su' ? '#b3261e' : side === 'timer' ? '#141414' : side === 'fi' ? '#f2f2ee' : '#8c8c86';
       g.beginPath(); g.arc(128, 128, 128, 0, Math.PI * 2); g.fill();
-      g.lineWidth = 14; g.strokeStyle = side === 'us' ? '#2a5e24' : side === 'su' ? '#7a1712' : side === 'timer' ? '#3a3a3a' : '#5d5d57';
+      g.lineWidth = 14; g.strokeStyle = side === 'us' ? '#2a5e24' : side === 'su' ? '#7a1712' : side === 'timer' ? '#3a3a3a' : side === 'fi' ? '#b9c3d0' : '#5d5d57';
       g.beginPath(); g.arc(128, 128, 112, 0, Math.PI * 2); g.stroke();
       if (side === 'timer') {
         // A white sand-glass (Steve): the top and bottom bars, and the glass bulging out between them, pinched in the
@@ -1396,6 +1414,11 @@ const Models = (() => {
         g.beginPath(); g.moveTo(93, 52); g.bezierCurveTo(78, 100, 122, 112, 122, 128); g.bezierCurveTo(122, 144, 78, 156, 93, 204); g.stroke();
         g.beginPath(); g.moveTo(163, 52); g.bezierCurveTo(178, 100, 134, 112, 134, 128); g.bezierCurveTo(134, 144, 178, 156, 163, 204); g.stroke();
         g.restore();
+      } else if (side === 'fi') {
+        // The Finns' token (Steve): the blue Nordic cross on white, its upright set towards the hoist
+        g.fillStyle = '#173c84';
+        g.fillRect(28, 104, 200, 48);
+        g.fillRect(84, 28, 48, 200);
       } else if (side === 'us' || side === 'su') {
         // A five-pointed gold star (the Soviets', Steve: yellow on red, upright for the table seen from the far side)
         g.fillStyle = side === 'su' ? '#ffd23a' : '#f2c94c';
@@ -2808,6 +2831,192 @@ const Models = (() => {
     return g;
   }
 
+  // ---------- The Winter War, 1939 to 1940 (Steve, 2026-11-16) ----------
+
+  // The Finns' three-colour camouflage on their few tanks: green, brown and a sandy grey in soft patches
+  let finnTex = null;
+  function finnPaint() {
+    if (!finnTex) finnTex = canvasTexture(512, 512, (g2, w, h) => {
+      const R = seeded(91);
+      g2.fillStyle = '#5c6644'; g2.fillRect(0, 0, w, h);
+      g2.filter = 'blur(5px)';
+      for (let k = 0; k < 18; k++) {
+        g2.fillStyle = k % 2 ? '#6e5a3e' : '#9c977c';
+        g2.beginPath(); const x = R() * w, y = R() * h;
+        g2.ellipse(x, y, 30 + R() * 50, 16 + R() * 26, R() * 3, 0, Math.PI * 2); g2.fill();
+      }
+      g2.filter = 'none';
+    }, [5, 5]);
+    if (!M.finn) M.finn = new T.MeshStandardMaterial({ map: finnTex, roughness: 0.7, metalness: 0.1 });
+    return M.finn;
+  }
+
+  // The T-26 (model 1933): the most common Soviet tank, a small box hull with leaf-spring bogies (eight small wheels in
+  // pairs a side, four return rollers), a round turret with the 45 mm and the handrail aerial round it. Front +x
+  function t26() {
+    const paint = whitewashPaint();
+    const g = new T.Group(), W = 0.17, L = 0.33;
+    g.add(at(box(L * 0.9, 0.045, W * 0.56, paint), 0, 0.054, 0));
+    g.add(at(frustum({ x0: -0.16, x1: 0.15, w: W * 1.02 }, { x0: -0.155, x1: 0.12, w: W * 0.96 }, 0.074, 0.112, paint), 0, 0, 0));
+    for (const s of [-1, 1]) {
+      const z = s * W * 0.42;
+      g.add(trackRun(L * 0.92, 0.046, 0.03, 0.028, z));
+      for (let b = 0; b < 4; b++) {
+        g.add(at(box(0.03, 0.01, 0.006, paint), -0.105 + b * 0.07, 0.036, z + s * 0.016));
+        for (const wx of [-0.015, 0.015]) roadWheels(g, 1, -0.105 + b * 0.07 + wx, 0, 0.02, z, 0.013, 0.022, M.steel);
+      }
+      for (let r = 0; r < 4; r++) g.add(at(wheel(0.005, 0.012, M.steel), -0.1 + r * 0.068, 0.052, z));
+      g.add(at(sprocket(0.017, 0.026, paint), 0.15, 0.04, z));
+    }
+    // The round turret, its 45 mm and the handrail aerial
+    g.add(at(cyl(0.044, 0.048, 0.04, paint, 18), 0.01, 0.132, 0));
+    g.add(at(hatch(0.014, paint), -0.005, 0.153, 0.01));
+    g.add(at(box(0.012, 0.022, 0.036, paint), 0.058, 0.132, 0));
+    g.add(at(cyl(0.0042, 0.005, 0.1, M.steel, 10), 0.11, 0.133, 0, 0, 0, Math.PI / 2));
+    const rail = new T.Mesh(new T.TorusGeometry(0.056, 0.0015, 4, 24), M.steel); rail.geometry.rotateX(Math.PI / 2);
+    g.add(at(rail, 0.01, 0.17, 0));
+    for (let k = 0; k < 4; k++) g.add(at(cyl(0.0012, 0.0012, 0.018, M.steel, 4), 0.01 + Math.cos(k * Math.PI / 2 + 0.8) * 0.048, 0.162, Math.sin(k * Math.PI / 2 + 0.8) * 0.048));
+    // A white tactical number on the turret
+    for (const s of [-1, 1]) g.add(at(box(0.026, 0.01, 0.002, mat('#a8261e', 0.8)), 0.01, 0.135, s * 0.047));
+    return castAll(g);
+  }
+
+  // The T-28: a medium tank with three turrets, the big one in the middle with the short 76 mm, two little machine-gun
+  // turrets side by side in front of it; a long hull with skirts over its small wheels. Its MG turrets fire a shot of
+  // their own (hullMg, as the T-35's). Front +x
+  function t28() {
+    const paint = whitewashPaint();
+    const g = new T.Group(), W = 0.2, L = 0.44;
+    g.add(at(box(L * 0.92, 0.05, W * 0.6, paint), 0, 0.06, 0));
+    g.add(at(frustum({ x0: -0.22, x1: 0.2, w: W * 1.02 }, { x0: -0.21, x1: 0.17, w: W * 0.96 }, 0.085, 0.118, paint), 0, 0, 0));
+    for (const s of [-1, 1]) {
+      const z = s * W * 0.43;
+      g.add(trackRun(L * 0.94, 0.05, 0.036, 0.03, z));
+      for (let k = 0; k < 6; k++) roadWheels(g, 2, -0.17 + k * 0.06, 0.022, 0.02, z, 0.012, 0.03, M.steel);
+      // The skirt over the wheels, with its access hatches
+      g.add(at(box(L * 0.8, 0.03, 0.006, paint), 0, 0.058, s * (W / 2 + 0.004)));
+      g.add(at(sprocket(0.02, 0.032, paint), -0.205, 0.042, z));
+      g.add(at(wheel(0.018, 0.032, M.steel), 0.205, 0.042, z));
+    }
+    // The main turret with the short 76 mm and its aerial rail
+    g.add(at(cyl(0.05, 0.054, 0.044, paint, 18), -0.01, 0.14, 0));
+    g.add(at(hatch(0.015, paint), -0.03, 0.163, 0.01));
+    g.add(at(box(0.014, 0.026, 0.04, paint), 0.044, 0.142, 0));
+    g.add(at(cyl(0.0075, 0.0085, 0.06, M.steel, 12), 0.08, 0.143, 0, 0, 0, Math.PI / 2));
+    const rail = new T.Mesh(new T.TorusGeometry(0.062, 0.0015, 4, 24), M.steel); rail.geometry.rotateX(Math.PI / 2);
+    g.add(at(rail, -0.01, 0.18, 0));
+    // The two little MG turrets in front, side by side
+    for (const s of [-1, 1]) {
+      g.add(at(cyl(0.022, 0.024, 0.03, paint, 14), 0.12, 0.133, s * 0.045));
+      g.add(at(cyl(0.0025, 0.0025, 0.03, M.steel, 6), 0.152, 0.134, s * 0.045, 0, 0, Math.PI / 2));
+    }
+    return castAll(g);
+  }
+
+  // The T-38: a tiny amphibious tankette, a boat-shaped hull, four small wheels a side, a little turret off to the left
+  // with one machine gun, the propeller under its tail. Front +x
+  function t38() {
+    const paint = whitewashPaint();
+    const g = new T.Group(), W = 0.14, L = 0.26;
+    g.add(at(box(L * 0.86, 0.04, W * 0.6, paint), 0, 0.046, 0));
+    // The boat-shaped hull, wider than the tracks, its nose sloping
+    g.add(at(frustum({ x0: -0.13, x1: 0.13, w: W * 1.04 }, { x0: -0.125, x1: 0.1, w: W }, 0.062, 0.094, paint), 0, 0, 0));
+    for (const s of [-1, 1]) {
+      const z = s * W * 0.4;
+      g.add(trackRun(L * 0.86, 0.038, 0.024, 0.022, z));
+      roadWheels(g, 4, -0.075, 0.05, 0.018, z, 0.014, 0.02, M.steel);
+      g.add(at(sprocket(0.014, 0.022, paint), 0.11, 0.032, z));
+    }
+    // The little turret off to the left, its MG
+    g.add(at(cyl(0.024, 0.026, 0.026, paint, 12), 0.01, 0.107, 0.02));
+    g.add(at(cyl(0.0025, 0.0025, 0.035, M.steel, 6), 0.045, 0.108, 0.02, 0, 0, Math.PI / 2));
+    // The propeller at the back
+    g.add(at(box(0.004, 0.02, 0.004, M.steel), -0.13, 0.04, 0));
+    return castAll(g);
+  }
+
+  // The RF-8-GAZ-98 aerosan (Steve): a propeller sled. A plywood boat on three skis, the two crew sitting in it one behind
+  // the other, the machine gun on the front, the engine behind them and the big two-bladed propeller at the back. Front +x
+  function aerosan() {
+    britishPaint();
+    const paint = whitewashPaint();
+    const g = new T.Group();
+    // The skis: two at the back, one steering ski at the front, each with its strut
+    for (const s of [-1, 1]) {
+      g.add(at(box(0.12, 0.005, 0.016, M.wood), -0.06, 0.006, s * 0.06));
+      g.add(at(box(0.006, 0.026, 0.006, M.steel), -0.06, 0.02, s * 0.06));
+    }
+    g.add(at(box(0.1, 0.005, 0.016, M.wood), 0.1, 0.006, 0));
+    g.add(at(box(0.006, 0.024, 0.006, M.steel), 0.1, 0.02, 0));
+    // The plywood hull: a boat, pointed at the front, open on top where the crew sit
+    g.add(at(frustum({ x0: -0.13, x1: 0.08, w: 0.1 }, { x0: -0.13, x1: 0.06, w: 0.11 }, 0.03, 0.07, paint), 0, 0, 0));
+    g.add(at(frustum({ x0: 0.08, x1: 0.15, w: 0.1 }, { x0: 0.06, x1: 0.1, w: 0.04 }, 0.03, 0.07, paint), 0, 0, 0));
+    g.add(at(box(0.12, 0.004, 0.08, M.black), -0.0, 0.071, 0));
+    // The two crew, the driver in front and the gunner behind him
+    crewman(g, 0.03, 0.035, 0);
+    crewman(g, -0.03, 0.035, 0);
+    // The machine gun on the front, on its ring
+    g.add(at(cyl(0.0025, 0.0025, 0.05, M.steel, 6), 0.1, 0.09, 0, 0, 0, Math.PI / 2));
+    g.add(at(box(0.024, 0.008, 0.007, M.steel), 0.07, 0.088, 0));
+    // The engine in its cowling at the back, and the big propeller on its frame
+    g.add(at(cyl(0.022, 0.026, 0.05, paint, 12), -0.1, 0.09, 0, 0, 0, Math.PI / 2));
+    for (const s of [-1, 1]) g.add(at(box(0.004, 0.06, 0.004, M.steel), -0.09, 0.07, s * 0.03, s * 0.4, 0, 0));
+    const prop = new T.Group();
+    prop.add(at(box(0.004, 0.16, 0.012, M.wood), 0, 0, 0, 0, 0, 0));
+    prop.add(at(cyl(0.008, 0.008, 0.012, M.steel, 10), 0, 0, 0, 0, 0, Math.PI / 2));
+    g.add(at(prop, -0.132, 0.09, 0, 0.5, 0, 0));
+    // A red star on each side
+    for (const s of [-1, 1]) g.add(at(box(0.016, 0.016, 0.002, mat('#a8261e', 0.8)), 0.02, 0.05, s * 0.054, 0, 0, Math.PI / 4));
+    return castAll(g);
+  }
+
+  // The Vickers 6-ton (Finland's own, with the 37 mm Bofors): a small box hull, the leaf-spring bogies with four pairs of
+  // small wheels a side, the big square-ish turret with the long-barrelled 37 mm; Finnish three-colour camouflage
+  function vickers6t() {
+    const paint = finnPaint();
+    const g = new T.Group(), W = 0.17, L = 0.33;
+    g.add(at(box(L * 0.9, 0.045, W * 0.56, paint), 0, 0.054, 0));
+    g.add(at(frustum({ x0: -0.16, x1: 0.15, w: W * 1.0 }, { x0: -0.155, x1: 0.125, w: W * 0.94 }, 0.074, 0.11, paint), 0, 0, 0));
+    for (const s of [-1, 1]) {
+      const z = s * W * 0.42;
+      g.add(trackRun(L * 0.92, 0.046, 0.03, 0.028, z));
+      for (let b = 0; b < 2; b++) {
+        g.add(at(box(0.07, 0.012, 0.006, paint), -0.06 + b * 0.12, 0.04, z + s * 0.016));
+        for (const wx of [-0.03, -0.01, 0.01, 0.03]) roadWheels(g, 1, -0.06 + b * 0.12 + wx, 0, 0.018, z, 0.011, 0.022, M.steel);
+      }
+      for (let r = 0; r < 4; r++) g.add(at(wheel(0.005, 0.012, M.steel), -0.1 + r * 0.068, 0.052, z));
+      g.add(at(sprocket(0.017, 0.026, paint), 0.15, 0.04, z));
+    }
+    // The turret overhanging at the back, the long 37 mm
+    g.add(at(frustum({ x0: -0.07, x1: 0.04, w: 0.1 }, { x0: -0.066, x1: 0.034, w: 0.092 }, 0.11, 0.15, paint), 0, 0, 0));
+    g.add(at(hatch(0.014, paint), -0.03, 0.152, 0.01));
+    g.add(at(box(0.012, 0.022, 0.034, paint), 0.046, 0.13, 0));
+    g.add(at(cyl(0.004, 0.0048, 0.12, M.steel, 10), 0.11, 0.131, 0, 0, 0, Math.PI / 2));
+    return castAll(g);
+  }
+
+  // The Bofors 37 mm anti-tank gun (the Finns'): a small, low gun on two spoked wheels, a little shield, a long thin barrel,
+  // its crew of three in snowsuits
+  function bofors37() {
+    const g = new T.Group(), paint = finnPaint();
+    for (const s of [-1, 1]) g.add(at(box(0.09, 0.007, 0.007, paint), -0.05, 0.011, s * 0.02, 0, s * 0.3, 0));
+    for (const s of [-1, 1]) g.add(at(wheel(0.019, 0.01, M.track), 0.0, 0.019, s * 0.034));
+    g.add(at(box(0.005, 0.04, 0.07, paint), 0.01, 0.034, 0, 0, 0, -0.12));
+    g.add(at(cyl(0.0032, 0.004, 0.12, M.steel, 10), 0.07, 0.034, 0, 0, 0, Math.PI / 2));
+    const gunner = soldier('de', 0, false); gunner.scale.y = 0.75; g.add(at(gunner, -0.025, 0, -0.026, 0, 0, 0));
+    const loader = soldier('de', 1, false); loader.scale.y = 0.8; g.add(at(loader, -0.03, 0, 0.03, 0, -0.3, 0));
+    const third = soldier('de', -1, false); third.scale.y = 0.72; g.add(at(third, -0.07, 0, 0, 0, 0.2, 0));
+    return castAll(g);
+  }
+
+  // The Finnish flag on the captain's pole (Steve): white with the blue cross, set off towards the pole
+  function finnishFlag(flag) {
+    const white = mat('#f4f4f0', 0.8), blue = mat('#173c84', 0.8);
+    flag.add(at(box(0.07, 0.045, 0.002, white), 0.035, 0, 0));
+    flag.add(at(box(0.07, 0.011, 0.003, blue), 0.035, 0, 0));
+    flag.add(at(box(0.011, 0.045, 0.003, blue), 0.025, 0, 0));
+  }
+
   // A box with sloping faces: its bottom and top each a rectangle (x0 to x1 along, w across), at heights y0 and y1. For
   // armour plates that lean in: a casemate's sloped front, back and sides
   function frustum(bottom, top, y0, y1, m) {
@@ -3742,5 +3951,5 @@ const Models = (() => {
     return castAll(g);
   }
 
-  return { PARIS, PARIS_LOOKS, parisFront, parisCorner, greyhound, stuart, puma, c47, supplyCrate, EIFFEL_HEIGHT, eiffel, landingCraft, littleShip, matilda, carrier, panzer1, panzer2, panzer3, sdkfz231, lorry, destroyer, battleship, strongpoint, setBritish, tankTrap, hulk, crater, seaWall, seaWallRubble, bunker, bunkerCrew, BUNKER, track, bufferStop, engine, carriage, wagon, signalbox, signal, watertower, coal, cow, sheep, lampPost, posterColumn, marketStall, cafe, barn, fountain, pond, reeds, BRIDGE_DECK, materials, M, mergeParts, eliteBand, water, bridge, soldier, squad, team, captain, pak, mortar, bomber, blenheim, bomberOnStand, setArmy, t34, t35, stug3, kv2, flak88, kingTiger, m10, m36, pine, panzer38t, jagdpanther, hetzer, m18, m24, jumbo, ruinWall, ruinCorner, rubbleLine, rubblePile, minefield, STOREY, howitzer, nebelwerfer, katyusha, artillery, artilleryRound, round, coin, token, sherman, panther, panzer4, hedge, tree, house, die, table, field, lane, at };
+  return { PARIS, PARIS_LOOKS, parisFront, parisCorner, greyhound, stuart, puma, c47, supplyCrate, EIFFEL_HEIGHT, eiffel, landingCraft, littleShip, matilda, carrier, panzer1, panzer2, panzer3, sdkfz231, lorry, destroyer, battleship, strongpoint, setBritish, tankTrap, hulk, crater, seaWall, seaWallRubble, bunker, bunkerCrew, BUNKER, track, bufferStop, engine, carriage, wagon, signalbox, signal, watertower, coal, cow, sheep, lampPost, posterColumn, marketStall, cafe, barn, fountain, pond, reeds, BRIDGE_DECK, materials, M, mergeParts, eliteBand, water, bridge, soldier, squad, team, captain, pak, mortar, bomber, blenheim, bomberOnStand, setArmy, t34, t35, stug3, kv2, flak88, kingTiger, m10, m36, pine, panzer38t, jagdpanther, hetzer, m18, m24, jumbo, t26, t28, t38, aerosan, vickers6t, bofors37, setDeArmy, ruinWall, ruinCorner, rubbleLine, rubblePile, minefield, STOREY, howitzer, nebelwerfer, katyusha, artillery, artilleryRound, round, coin, token, sherman, panther, panzer4, hedge, tree, house, die, table, field, lane, at };
 })();

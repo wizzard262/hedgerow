@@ -332,7 +332,45 @@ const Sim = (() => {
 
   // Each side starts spread at random over its own end of the board (DEPLOY of the width, or the map's), in cover where it can be:
   // a field with a hedge facing the enemy, an orchard or the village. Captains and teams start with a platoon
+  // The motti (Steve, 2026-11-16: the Winter War): the Soviets strung out along the road, column by column from the west;
+  // the Finns in the forest fields at least two rows off the road, spread along it. Each piece in the first field with
+  // room for it
+  function mottiDeploy(st, side) {
+    const row = st.map.motti.row;
+    const open = (x, y) => tileType(x, y) !== 'orchard';
+    // Where each kind of piece may start: the Soviets on the road; of the Finns, a tank in a clearing beside the road
+    // (it can't go into the forest), a gun that never moves just beside the road, everyone else in the forest
+    const wanted = u => {
+      const out = [];
+      for (let x = 0; x < COLS; x++) for (let y = 0; y < ROWS; y++) {
+        const off = Math.abs(y - row);
+        if (side === 'us') { if (off === 0 && x > 0 && x < COLS - 1) out.push({ x, y, order: x }); continue; }
+        if (isTank(u)) { if (off === 1 && open(x, y)) out.push({ x, y, order: luck[x + ',' + y] }); continue; }
+        if (PIECES[u.kind].fixed) { if (off === 1) out.push({ x, y, order: luck[x + ',' + y] }); continue; }
+        if (off >= 2 && !open(x, y)) out.push({ x, y, order: luck[x + ',' + y] });
+      }
+      return out.sort((p, q) => p.order - q.order);
+    };
+    // (the same luck for every piece, so the Finns spread out over the forest)
+    const luck = {};
+    for (let x = 0; x < COLS; x++) for (let y = 0; y < ROWS; y++) luck[x + ',' + y] = st.rand();
+    let next = 0;
+    for (const u of st.units.filter(o => o.side === side)) {
+      const fields = wanted(u);
+      // From the field after the last one used, round again if need be
+      for (let k = 0; k < fields.length; k++) {
+        const f = fields[(next + k) % fields.length];
+        if (!roomFor(st, u, f.x, f.y)) continue;
+        u.x = f.x; u.y = f.y;
+        u.at = freePlace(st, u, f.x, f.y, side === 'us' ? 'e' : null);
+        next = next + k + 1;
+        break;
+      }
+    }
+  }
+
   function deploy(st, side) {
+    if (st.map.motti) return mottiDeploy(st, side);
     // (a landing: the Americans all start out in the sea, in the landing craft)
     const landing = st.map.landing && side === 'us';
     const cols = landing ? 1 : Math.max(1, Math.round(COLS * (st.map.deploy || DEPLOY)));
@@ -500,6 +538,10 @@ const Sim = (() => {
   }
 
   // Whose army the 'us' side is on this map: 'us' the Americans, 'uk' the British (Dunkirk), 'su' the Soviets (Stalingrad)
+  // Whose army the 'de' side is on this map: 'de' the Germans, 'fi' the Finns (Steve, 2026-11-16: the Winter War)
+  function deArmyOf(st) {
+    return (st.map && st.map.deArmy) || 'de';
+  }
   function armyOf(st) {
     if (st.map && st.map.army) return st.map.army;
     if (st.map && st.map.evacuate) return 'uk';
@@ -2032,7 +2074,9 @@ const Sim = (() => {
     // The attacker's dice: 3+, one more against men behind the hedge it went over or in houses; elite one less
     const sheltered = hedge(st, u.x, u.y, x, y) || ['village', 'hamlet'].includes(tileType(x, y));
     // (shaken: one more, Steve)
-    const attackNeed = TO_HIT + (sheltered ? 1 : 0) - QUALITY[u.quality || 'standard'].shoot + (u.shocked ? SHAKEN_SHOOT : 0);
+    // (Molotov cocktails against tanks, Steve: the Winter War: MOLOTOV more, the men must get right up to the tank)
+    const atTanks = u.molotov && defenders.every(d => isTank(d));
+    const attackNeed = TO_HIT + (sheltered ? 1 : 0) - QUALITY[u.quality || 'standard'].shoot + (u.shocked ? SHAKEN_SHOOT : 0) + (atTanks ? MOLOTOV : 0);
     const attackers = [u];
     const standing = list => list.filter(p => p.x !== null);
     // For the table (Steve: each exchange shown): the fight's field, where the attacker came from, everyone's bases at
@@ -2078,7 +2122,7 @@ const Sim = (() => {
     const lines = [];
     let able = false;
     const blow = { side: strikers[0] ? strikers[0].side : null, strikers: strikers.filter(s => s.x !== null).map(s => s.id), victims: victims.map(v => v.id), faces: [], losses: [] };
-    const canHurt = (s, v) => !isTank(v) || isTank(s) || PIECES[s.kind].hard > 0;
+    const canHurt = (s, v) => !isTank(v) || isTank(s) || PIECES[s.kind].hard > 0 || !!s.molotov;
     for (const s of strikers) {
       if (s.x === null) continue;
       let hits = 0;
@@ -2114,7 +2158,7 @@ const Sim = (() => {
     const left = side => st.units.some(u => u.side === side && u.x !== null);
     if (!left('de')) {
       st.won = true;
-      st.report = [`🏆 Every German on the field is destroyed in ${roundText(st.turn)}!`];
+      st.report = [`🏆 Every one of the ${sideName(st, 'de')} on the field is destroyed in ${roundText(st.turn)}!`];
     } else if (!left('us') && !st.evac) {
       st.lost = true;
       st.report = ['💀 Nothing is left of the company. The attack has failed.'];
@@ -2356,7 +2400,7 @@ const Sim = (() => {
           // and they fall back (Steve), but not on other tanks or a dug-in gun
           // (a bunker can be stormed from the side or the back, never from in front of it, Steve)
           const facesBunker = enemies.some(e => isBunker(e) && inFrontOf(e, here));
-          const platoonFights = !facesBunker && fightsHandToHand(u) && (enemies.some(e => !isTank(e)) || firepower(st, u).hard > 0);
+          const platoonFights = !facesBunker && fightsHandToHand(u) && (enemies.some(e => !isTank(e)) || firepower(st, u).hard > 0 || !!u.molotov);
           const tankDrivesIn = isTank(u) && enemies.every(e => !isTank(e) && !PIECES[e.kind].fixed);
           const canFight = charging && (platoonFights || tankDrivesIn);
           if (canFight) { cheapest[key] = cost; fewestRolls[key] = rolls; routeTo[key] = here.path.concat([{ x, y, assault: true }]); }
@@ -2417,7 +2461,11 @@ const Sim = (() => {
   function reach(u, full) {
     // Bazooka and Panzerschreck teams go one field further (Steve)
     const extra = PIECES[u.kind].extraMove || 0;
-    const far = full + extra;
+    let far = full + extra;
+    // The Winter War (Steve, 2026-11-16): on skis a field further; Soviet men without skis, starting off the road, wade
+    // through the deep snow a field slower
+    if (u.ski) far += 1;
+    else if (currentMap.deepSnow && u.side === 'us' && !isTank(u) && !isRoad(u.x, u.y)) far = Math.max(1, far - 1);
     // Not shaken: the whole way
     if (!u.shocked) return far;
     // Shaken: half of that
@@ -3865,7 +3913,7 @@ const Sim = (() => {
     } else if (!germansLeft) {
       // Every German on the table destroyed wins too (Steve), even with no rifle platoons left to take the village
       st.won = true;
-      rep.unshift(`🏆 Every German on the field is destroyed in ${roundText(st.turn)}!`);
+      rep.unshift(`🏆 Every one of the ${sideName(st, 'de')} on the field is destroyed in ${roundText(st.turn)}!`);
     } else if (!st.units.some(u => u.side === 'us' && u.x !== null)) {
       st.lost = true;
       rep.unshift('💀 Nothing is left of the company. The attack has failed.');
@@ -3940,7 +3988,7 @@ const Sim = (() => {
     isBunker, isCar, hurtsCars, trainCars, lineSideOf, moveTrains, inFrontOf, bunkerFace, shotOnTheMove, wrecksBeside, isRoad, featuresAt, walkDistance, fireSound, wreckAt, remove, computerSide, isRobot, piecesToAsk, takeCover, enemyOf, gunStats, diceShown, menDiceShown, bomberName, boatKind, armyOf, hedgeWord, inCourtyard, closeRangeOnly, isAtGun, isEmplaced, edgeKey, atCloseRange, closeCells, hailMaryCells,
     newGame, roll, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, chargeSpots,
     rallyTargets, canAct, canReact, firepower, canCallFire, takesGoal, cannotWin, artilleryTarget, mortarTarget, holdsObjective, roundText, roomFor,
-    goalLines, hullMgTargets, canHullMg, actHullMg, actHoldMg, hullMgDice,
+    goalLines, deArmyOf, hullMgTargets, canHullMg, actHullMg, actHoldMg, hullMgDice,
     computerStep, answer, finishRound, startRound, drawToken, endComputerToken, activationOver, passToken, humanCanMove, endRound, canFire, actSkip, actSkipShot, skipSupport,
     smallTarget, menDice, armourOf, shotNeed, mayFire, shootCells, tokensHome, captainCanRally, fireAt, wholeDice: dice,
     actShoot, actMoveShoot, moveShootSpots, chargeRoutes, DIRS, needWhy, shellNeed, shellWhy, shellFields,

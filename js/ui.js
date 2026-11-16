@@ -13,7 +13,7 @@ const UI = (() => {
                  // Dunkirk, 1940 (Steve)
                  matilda: 'Matilda II', carrier: 'Universal Carrier (Bren)', lorry: 'Lorry of men for the boats', boys: 'Boys anti-tank rifle team', pz1: 'Panzer I', pz2: 'Panzer II', pz3: 'Panzer III', sdkfz231: 'Sd.Kfz. 231 armoured car',
                  // Stalingrad, 1942 (Steve)
-                 t34: 'T-34/76', kv2: 'KV-2 heavy tank (152 mm)', t35: 'T-35 heavy tank (five turrets)', kingtiger: 'King Tiger (Tiger II)', m10: 'M10 Wolverine tank destroyer', m36: 'M36 Jackson tank destroyer', pz38t: 'Panzer 38(t) light tank', jagdpanther: 'Jagdpanther tank destroyer', hetzer: 'Hetzer tank destroyer', m18: 'M18 Hellcat tank destroyer', jumbo: 'Sherman Jumbo (M4A3E2)', m24: 'M24 Chaffee light tank', stug3: 'StuG III Ausf. F assault gun', pz4f2: 'Panzer IV F2 (long 7.5 cm)', flak88: '8.8 cm Flak 36' };
+                 t34: 'T-34/76', kv2: 'KV-2 heavy tank (152 mm)', t35: 'T-35 heavy tank (five turrets)', kingtiger: 'King Tiger (Tiger II)', m10: 'M10 Wolverine tank destroyer', m36: 'M36 Jackson tank destroyer', t26: 'T-26 light tank', t28: 'T-28 medium tank (three turrets)', t38: 'T-38 tankette', aerosan: 'RF-8-GAZ-98 aerosan (propeller sled)', vickers6t: 'Vickers 6-ton (Finnish)', bofors37: 'Bofors 37 mm anti-tank gun', lahti: 'Lahti 20 mm anti-tank rifle team', pz38t: 'Panzer 38(t) light tank', jagdpanther: 'Jagdpanther tank destroyer', hetzer: 'Hetzer tank destroyer', m18: 'M18 Hellcat tank destroyer', jumbo: 'Sherman Jumbo (M4A3E2)', m24: 'M24 Chaffee light tank', stug3: 'StuG III Ausf. F assault gun', pz4f2: 'Panzer IV F2 (long 7.5 cm)', flak88: '8.8 cm Flak 36' };
   // What a piece is, in words: a rifle platoon with submachine guns is a section of submachine gunners (Steve)
   const kindName = u => (u.arms === 'smg' ? 'Submachine-gun section' : KIND[u.kind]);
 
@@ -23,7 +23,7 @@ const UI = (() => {
   const enemy = () => Sim.enemyOf(st.human);
   const foes = () => Sim.sideName(st, enemy());
   // One of a side, as a word before a noun: 'American', 'British', 'German'
-  const adjective = side => ({ Americans: 'American', British: 'British', Soviets: 'Soviet', Germans: 'German' })[Sim.sideName(st, side)];
+  const adjective = side => ({ Americans: 'American', British: 'British', Soviets: 'Soviet', Germans: 'German', Finns: 'Finnish' })[Sim.sideName(st, side)];
 
   // ---------- Your mortars and artillery, off the board ----------
   // Clicking one chooses it like a piece (Steve): its targets show at once if it can fire this round
@@ -688,12 +688,14 @@ const UI = (() => {
 
   // The goal on a map with nothing to take (Steve: the beach): destroy every piece of the other side
   function goalWithout() {
+    // (each side by its name on this map: the Soviets and the Finns in the Winter War, Steve)
+    const us = Sim.sideName(st, 'us'), de = Sim.sideName(st, 'de');
     // Two robots playing
-    if (st.mode === 'none') return '🎯 Two robots: the Americans must destroy every German, the Germans hold out. Click any piece to see what it is.';
-    // Playing the Germans
-    if (st.human === 'de') return "🎯 Destroy every American piece on the table (guns and bomber off it don't count), or hold out.";
-    // Playing the Americans
-    return `🎯 Destroy every German on the table${TURNS ? `, within ${TURNS} rounds` : ' (no time limit for now)'}. There is no goal to take here.`;
+    if (st.mode === 'none') return `🎯 Two robots: the ${us} must destroy every one of the ${de}, the ${de} every one of the ${us}. Click any piece to see what it is.`;
+    // Playing the 'de' side
+    if (st.human === 'de') return `🎯 Destroy every ${adjective('us')} piece on the table (guns and bomber off it don't count).`;
+    // Playing the 'us' side
+    return `🎯 Destroy every one of the ${de} on the table${TURNS ? `, within ${TURNS} rounds` : ' (no time limit for now)'}. There is no goal to take here.`;
   }
 
   // The goal at Dunkirk (Steve): get enough away on the boats, or stop them; with the count so far
@@ -754,6 +756,8 @@ const UI = (() => {
     uk: '<span class="tok uk"><svg viewBox="15 0 30 30" preserveAspectRatio="xMidYMid slice"><path d="M0,0v30h60v-30z" fill="#012169"/><path d="M0,0 L60,30 M60,0 L0,30" stroke="#fff" stroke-width="6"/><path d="M0,0 L60,30 M60,0 L0,30" stroke="#C8102E" stroke-width="2.5"/><path d="M30,0 v30 M0,15 h60" stroke="#fff" stroke-width="10"/><path d="M30,0 v30 M0,15 h60" stroke="#C8102E" stroke-width="6"/></svg></span>',
     timer: '<span class="tok timer" title="Timer: drawn, it ends the round"><svg viewBox="0 0 20 20"><path d="M5 2h10M5 18h10M6.5 2C5 7 9.6 8 9.6 10S5 13 6.5 18M13.5 2C15 7 10.4 8 10.4 10S15 13 13.5 18" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>',
     de: '<span class="tok de"><svg viewBox="0 0 20 20"><path d="M7 2h6v5h5v6h-5v5H7v-5H2V7h5z" fill="#111" stroke="#eee" stroke-width="1.4"/></svg></span>',
+    // The Finns (Steve, 2026-11-16): the blue cross on white
+    fi: '<span class="tok fi"><svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="9.3" fill="#f2f2ee" stroke="#b9c3d0" stroke-width="1"/><path d="M2 8.3h16v3.4H2zM6.6 2h3.4v16H6.6z" fill="#173c84"/></svg></span>',
   };
   function bag() {
     // While the round's tokens fly back in, only those home so far. When the timer has ended the round, the tokens
@@ -763,7 +767,7 @@ const UI = (() => {
     $('#bag-us').innerHTML = TOKEN[Sim.armyOf(st)].repeat(b.us);
     // (each side's tokens on its own side of the screen, Steve: the Germans on the left at Stalingrad)
     $('#bagbox').classList.toggle('flipped', !!st.map.flip);
-    $('#bag-de').innerHTML = TOKEN.de.repeat(b.de);
+    $('#bag-de').innerHTML = TOKEN[Sim.deArmyOf(st)].repeat(b.de);
     // The timer token, between the two sides' tokens (Steve)
     $('#bag-timer').innerHTML = b.timer ? TOKEN.timer + '<span class="timer-label">TIMER</span>' : '';
     $('#round').textContent = `ROUND ${st.turn}`;

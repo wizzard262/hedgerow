@@ -356,6 +356,70 @@ const MAPS = [
     },
   },
   {
+    // The Winter War (Steve, 2026-11-16): a motti in the Finnish forest, January 1940. A Soviet column strung out along
+    // the one road through deep, snowy pine forest; Finnish ski troops all round it in the trees. Nothing to take:
+    // destroy the other side. motti: the Soviets start along the road, the Finns in the forest either side of it, two
+    // rows off; deepSnow: Soviet men off the road go a field less; ski (on a piece): a field further; molotov (on a
+    // piece): Finnish infantry can charge tanks hand to hand with Molotov cocktails and satchel charges. Tanks and the
+    // aerosan keep out of the forest (forest), as in the Ardennes
+    id: 'winterwar', bonus: true, date: 'January 1940', name: 'Winter War',
+    note: 'A motti on the Raate road: a Soviet column of T-26s, a T-28, T-38 tankettes, an aerosan and infantry is strung out along the one road through deep, snowy forest; Finnish ski troops close in from the trees all round. Tanks keep to the road and the clearings; Soviet infantry off the road wade through the snow a field slower, the Finns on skis go a field further, and Finnish platoons can rush the tanks with Molotov cocktails. Destroy the other side.',
+    noGoal: true,
+    winter: true,
+    forest: true,
+    motti: { row: 3 },
+    deepSnow: true,
+    army: 'su',
+    deArmy: 'fi',
+    names: { us: 'Soviets', de: 'Finns' },
+    rows: [
+      'oooo.oooo.oo',
+      'oo.oooo.oooo',
+      'o.oo.ooo.o.o',
+      '============',
+      'oo.o.ooo.oo.',
+      'o.oooo.ooo.o',
+      'ooo.oo.oooo.',
+      'oooooo.ooooo',
+    ],
+    villages: [{ x: 6, y: 3, name: 'the Raate road' }],
+    gap: 1, wire: 0,
+    // Few shells for anyone, the Finns fewest; no bombers in the forest
+    guns: { us: { artillery: '76 mm regimental guns', mortars: '82 mm mortars' }, de: { artillery: 'Finnish field guns', mortars: '81 mm mortars' } },
+    ammo: { us: { artillery: 2, mortars: 2, bomber: 0 }, de: { artillery: 1, mortars: 2, bomber: 0 } },
+    us: {
+      only: [
+        { id: 'A', kind: 'company', name: '1st Rifle Platoon', quality: 'standard' },
+        { id: 'B', kind: 'company', name: '2nd Rifle Platoon', quality: 'standard' },
+        { id: 'C', kind: 'company', name: '3rd Rifle Platoon', quality: 'standard' },
+        { id: 'cap', kind: 'captain', name: 'Kapitan (company HQ)' },
+        { id: 'mg1', kind: 'mg', name: 'Maxim MG' },
+        { id: 'T1', kind: 't26', name: 'T-26 (1)' },
+        { id: 'T2', kind: 't26', name: 'T-26 (2)' },
+        { id: 'T3', kind: 't28', name: 'T-28' },
+        { id: 'TK1', kind: 't38', name: 'T-38 (1)' },
+        { id: 'TK2', kind: 't38', name: 'T-38 (2)' },
+        { id: 'AS1', kind: 'aerosan', name: 'RF-8-GAZ-98 aerosan' },
+      ],
+    },
+    // Balanced by robots (40 games), with a second Maxim and a second Lahti for the Finns: Soviets 20, Finns 19, 1 draw
+    de: {
+      only: [
+        { id: 'd1', kind: 'company', name: '1. Ski Platoon', quality: 'elite', ski: true, molotov: true, reserve: true },
+        { id: 'd2', kind: 'company', name: '2. Ski Platoon', quality: 'standard', ski: true, molotov: true, reserve: true },
+        { id: 'd3', kind: 'company', name: '3. Ski Platoon', quality: 'standard', ski: true, molotov: true, reserve: true },
+        { id: 'dsmg', kind: 'company', arms: 'smg', name: 'Suomi Section', quality: 'standard', ski: true, molotov: true, reserve: true },
+        { id: 'dcap', kind: 'captain', name: 'Kapteeni (company HQ)', ski: true, reserve: true },
+        { id: 'dmg1', kind: 'mg42', name: 'Maxim M/32 MG (1)', reserve: true },
+        { id: 'dmg2', kind: 'mg42', name: 'Maxim M/32 MG (2)', reserve: true },
+        { id: 'dat1', kind: 'lahti', name: 'Lahti 20 mm Team (1)', ski: true, reserve: true },
+        { id: 'dat2', kind: 'lahti', name: 'Lahti 20 mm Team (2)', ski: true, reserve: true },
+        { id: 'dpak', kind: 'bofors37', name: 'Bofors 37 mm', reserve: true },
+        { id: 'dt1', kind: 'vickers6t', name: 'Vickers 6-ton', reserve: true },
+      ],
+    },
+  },
+  {
     // Stalingrad (Steve, 2026-11-12): a bonus battle, not in the campaign. A bombed-out city: the walls of ruined buildings
     // stand on the edges between fields and act as hedges do (seen over only from beside them; men climb through the
     // windows; lining one is cover), with tall corners where they meet, and lines of rubble here and there doing the same.
@@ -436,10 +500,11 @@ const CAMPAIGN = ['beach', 'deep', 'hedges', 'farmland', 'river', 'town', 'stati
 // Bonus battles (Steve, 2026-11-11): outside the campaign, shown at the top right of the New game choice, Dunkirk on the
 // left and Stalingrad on the right. stamp: the word across its picture while it can't be played yet (no map in MAPS). One with a map takes its note from there
 const BONUS = [
-  // (Steve, 2026-11-16: the Bulge first, before Dunkirk)
-  { id: 'bulge', name: 'Battle of the Bulge', date: 'December 1944' },
+  // In date order (Steve, 2026-11-16)
+  { id: 'winterwar', name: 'Winter War', date: 'January 1940' },
   { id: 'dunkirk', name: 'Dunkirk', date: '31 May 1940' },
   { id: 'stalingrad', name: 'Stalingrad', date: 'November 1942' },
+  { id: 'bulge', name: 'Battle of the Bulge', date: 'December 1944' },
 ];
 const COLS = MAPS[0].rows[0].length, ROWS = MAPS[0].rows.length;
 // Sharing a field (Steve): each field is nine areas; pieces share it while their areas don't overlap (see footprint in
@@ -465,7 +530,10 @@ const START_DATE = 'Tue 11 July 1944';
 
 // Reacting (Steve): a piece fired on can take cover. Its men get down where they are: every shot or shell at it needs
 // two more for the rest of the round, but it misses its move unless the captain gets it up
-const TAKE_COVER = 2;            // added to the score needed against a piece that has taken cover, from every weapon (Steve: +2)
+const TAKE_COVER = 2;
+// Molotov cocktails (Steve, 2026-11-16: the Winter War): Finnish infantry charging a tank need this many more on the dice
+// in hand to hand (5+), as they have to get right up to it
+const MOLOTOV = 2;            // added to the score needed against a piece that has taken cover, from every weapon (Steve: +2)
 
 // Shooting: each point of firepower rolls one six-sided die, which hits on TO_HIT or more.
 // Cover adds to the score needed, elite troops take one off; a shot needing more than MAX_NEED is a Hail Mary
@@ -595,6 +663,17 @@ const PIECES = {
   // Panther's hull, the long 8.8 cm in a casemate. The Hetzer: small, low and sloped, the 7.5 cm. The M18 Hellcat: the
   // fastest (a field more), thin, the 76 mm. The Sherman Jumbo: thick armour, slow, the 75 mm. The M24 Chaffee: light
   // and quick (a field more), the 75 mm
+  // The Winter War (Steve, 2026-11-16). Soviet: the T-26 (45 mm), the T-28 (three turrets: the short 76 mm and two MG
+  // turrets that fire a shot of their own, hullMg, as the T-35's), the T-38 tankette (one MG, thin: machine guns hurt
+  // it, car), the RF-8-GAZ-98 aerosan (a propeller sled: fast, plywood, one MG). Finnish: the Vickers 6-ton (37 mm),
+  // the Bofors 37 mm anti-tank gun, the Lahti 20 mm anti-tank rifle team
+  t26:      { name: 'T-26', soft: 1.5, hard: 1, he: 1, tank: true, armour: 0, cutter: true },
+  t28:      { name: 'T-28', soft: 1, hard: 1, he: 1.5, tank: true, armour: 0, cutter: true, extraMove: -1, hullMg: 2 },
+  t38:      { name: 'T-38 tankette', soft: 1, hard: 0, he: 0, tank: true, armour: 0, car: true },
+  aerosan:  { name: 'RF-8-GAZ-98 aerosan', soft: 1.5, hard: 0, he: 0, tank: true, armour: 0, car: true, extraMove: 2 },
+  vickers6t: { name: 'Vickers 6-ton', soft: 1, hard: 1, he: 1, tank: true, armour: 0, cutter: true },
+  bofors37: { name: 'Bofors 37 mm gun', soft: 1, hard: 2, vsMen: 1, team: true, fixed: true, atGun: true },
+  lahti:    { name: 'Lahti anti-tank rifle team', soft: 0, hard: 1, vsMen: 1, team: true, men: 2, look: 'boys' },
   pz38t:    { name: 'Panzer 38(t)', soft: 1.5, hard: 1, he: 1, tank: true, armour: 0, cutter: true },
   jagdpanther: { name: 'Jagdpanther', soft: 1, hard: 3, he: 1, tank: true, armour: 1, cutter: true },
   hetzer:   { name: 'Hetzer', soft: 1, hard: 2, he: 1, tank: true, armour: 1, cutter: true },

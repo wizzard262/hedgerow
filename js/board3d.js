@@ -287,7 +287,8 @@ const Board = (() => {
     return { x: gun.x + (side === 'us' ? -0.1 : 0.1), z: gun.z + screenUp() * 1.15 };
   }
   // Which face a side's token has: the British their Union Jack (Steve)
-  const coinFace = side => (side === 'us' && army !== 'us' ? army : side);
+  const coinFace = side => (side === 'us' && army !== 'us' ? army : side === 'de' && deArmy !== 'de' ? deArmy : side);
+  let deArmy = 'de';
   function flyToken(side, clientX, clientY, done) {
     clearTokenNow();
     const mesh = Models.coin(coinFace(side));
@@ -488,6 +489,9 @@ const Board = (() => {
     british = army === 'uk';
     soviet = army === 'su';
     Models.setArmy(army);
+    // The 'de' side's army (Steve: the Finns in the Winter War)
+    deArmy = Sim.deArmyOf(st);
+    Models.setDeArmy(deArmy);
     // Seen from the other side (Steve: Stalingrad): the camera fits the table again
     const flip = !!st.map.flip;
     if (flip !== flipped) { flipped = flip; if (shownW) resize(shownW, shownH); }
@@ -1278,15 +1282,17 @@ const Board = (() => {
         // The Battle of the Bulge (Steve, 2026-11-16)
         kingtiger: Models.kingTiger, m10: Models.m10, m36: Models.m36,
         // More tanks (Steve, 2026-11-16)
-        pz38t: Models.panzer38t, jagdpanther: Models.jagdpanther, hetzer: Models.hetzer, m18: Models.m18, jumbo: Models.jumbo, m24: Models.m24 }[kind];
+        pz38t: Models.panzer38t, jagdpanther: Models.jagdpanther, hetzer: Models.hetzer, m18: Models.m18, jumbo: Models.jumbo, m24: Models.m24,
+        // The Winter War (Steve, 2026-11-16)
+        t26: Models.t26, t28: Models.t28, t38: Models.t38, aerosan: Models.aerosan, vickers6t: Models.vickers6t }[kind];
       return [0].map(() => { const m = Models.mergeParts(make()); markerSpots(m); m.scale.setScalar(TANKS); m.userData.slowTurn = true; return m; });
     }
     if (PIECES[kind].bunker) return [bunkerBase(kind === 'bunker_gun')];
     // A lorry-load of men (Steve: Dunkirk): the lorry, at the tanks' scale
     if (PIECES[kind].lorry) { const m = Models.mergeParts(Models.lorry()); markerSpots(m); m.scale.setScalar(TANKS); m.userData.slowTurn = true; return [m]; }
     // (the British captain carries the Union Jack, the Soviet one the red banner, Steve)
-    const flag = side === 'us' && army !== 'us' ? army : '';
-    const gunModel = { pak: Models.pak, flak88: Models.flak88 }[kind];
+    const flag = side === 'us' && army !== 'us' ? army : side === 'de' && deArmy !== 'de' ? deArmy : '';
+    const gunModel = { pak: Models.pak, flak88: Models.flak88, bofors37: Models.bofors37 }[kind];
     const m = Models.mergeParts(kind === 'captain' ? Models.captain(side, flag) : gunModel ? gunModel() : Models.team(side, kind));
     markerSpots(m);
     // (the 88 a quarter bigger again, Steve)

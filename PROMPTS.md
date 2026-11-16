@@ -2014,6 +2014,19 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - **Dunkirk**: the Germans get the Panzer 38(t) as well. Robots (40 games): British 31, Germans 9 (30 to 10 before it): Dunkirk still favours the British, as it did; left for Steve to try
 - Assumption: the M18 and the M24 get a field more like the Stuart; the Jumbo a field less
 
+## 338. The Winter War: a motti in the Finnish forest (v207)
+
+- Steve: what can we have in the Winter War? Very early interwar tanks, ski troops and so on. Picked: a motti in the forest; Soviet T-26, T-28 and T-38 tankettes; Finnish Vickers 6-ton, ski troops, a Bofors 37 mm and a Lahti anti-tank rifle; Molotov cocktails and deep snow. Then: a Soviet aerosan, two men sitting in it, a machine gun at the front and a fan at the back: the RF-8-GAZ-98. Then: put the bonus battles in date order
+- **The map** (`winterwar`, January 1940, the Raate road): one road straight across through deep snowy pine forest, a few clearings beside it (`winter`, `forest`: tanks and the aerosan keep out of the forest). Nothing to take: destroy the other side
+- **The motti** (`motti` in the map, `mottiDeploy` in sim.js): the Soviets start strung out along the road; the Finns in the forest at least two rows off it, their tank in a clearing beside the road, their gun just beside it
+- **Soviets** ('us', army 'su', names Soviets/Finns): three rifle platoons, the Kapitan, a Maxim, two **T-26s** (45 mm), a **T-28** (three turrets: the short 76 mm, and two MG turrets that fire a shot of their own once a round, as the T-35's: `hullMg`), two **T-38 tankettes** (one MG, thin: machine guns hurt them) and the **RF-8-GAZ-98 aerosan** (a plywood propeller sled on three skis, two crew, an MG at the front, the engine and big two-bladed propeller behind: two fields further, machine guns hurt it). All in winter whitewash. Their guns: 76 mm regimental guns and 82 mm mortars, 2 rounds each
+- **Finns** ('de', `deArmy: 'fi'`): men in white snowsuits and hoods (`setDeArmy`), the token the blue cross on white, the captain's flag Finland's. Three ski platoons and a Suomi submachine-gun section (`ski`: a field further; `molotov`), the Kapteeni, two Maxims, two **Lahti** 20 mm anti-tank rifle teams, a **Bofors 37 mm** anti-tank gun and the **Vickers 6-ton** in three-colour camouflage. Field guns 1 round, mortars 2
+- **Deep snow**: Soviet men starting off the road go a field less (`reach`). **Molotov cocktails**: a Finnish platoon with `molotov` can charge a field of tanks hand to hand, needing 5+ (`MOLOTOV` 2 more); each hit takes a tank
+- No rockets in 1940: field guns for both sides' artillery here; no herds in the snow (here or in the Ardennes)
+- Balance, robots (30 to 40 games): first 24 to 5 for the Soviets; with a fourth platoon and a second Maxim 19 to 9; all elite 23 to 5; settled on a second Maxim and a second Lahti: **20 to 19** (then 22 to 17 on a second run)
+- **Bonus battles in date order**: the Winter War, Dunkirk, Stalingrad, the Bulge
+- Assumptions: the RF-8 itself only came in 1941, a little after the Winter War (Steve asked for it by name); the Finns' robot uses its usual moves (it closes in, it may not use Molotovs as often as a person would)
+
 ## Sessions
 
 | # | Date | Length | What we did |

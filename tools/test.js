@@ -42,8 +42,8 @@ check('every script on the page parses (a slip in one stops the whole game loadi
   }
 });
 
-check('the bonus battles are the Bulge, Dunkirk then Stalingrad (Steve: the Bulge first), outside the campaign, each with a picture, and stamped while they have no map', () => {
-  assert(BONUS.map(b => b.id).join() === 'bulge,dunkirk,stalingrad', `the bonus battles are ${BONUS.map(b => b.id).join()}`);
+check('the bonus battles in date order (Steve, 2026-11-16): the Winter War, Dunkirk, Stalingrad, the Bulge, outside the campaign, each with a picture, and stamped while they have no map', () => {
+  assert(BONUS.map(b => b.id).join() === 'winterwar,dunkirk,stalingrad,bulge', `the bonus battles are ${BONUS.map(b => b.id).join()}`);
   // (Stalingrad is built now, Steve 2026-11-12: no stamp, it can be played)
   assert(!BONUS.find(b => b.id === 'stalingrad').stamp && MAPS.some(m => m.id === 'stalingrad'), 'Stalingrad is still stamped, or has no map');
   for (const b of BONUS) {
@@ -3452,7 +3452,8 @@ check('every map is the same size, has real tiles, and its villages are villages
     assert(played.villages.length >= 1 && map.name && map.note, `${map.id}: not filled in`);
     // (Dunkirk's is the beach, where the Germans make for, not a village to take)
     // (Stalingrad's is the Univermag's open courtyard, Steve)
-    if (!played.landing && !played.evacuate && played.generated !== 'paris') for (const v of played.villages) assert(Sim.tileType(v.x, v.y) === 'village' || Sim.inCourtyard(played, v.x, v.y), `${map.id}: ${v.name} is not in a village`);
+    // (the Winter War's is a spot on the road, Steve: the motti, nothing to take)
+    if (!played.landing && !played.evacuate && !played.motti && played.generated !== 'paris') for (const v of played.villages) assert(Sim.tileType(v.x, v.y) === 'village' || Sim.inCourtyard(played, v.x, v.y), `${map.id}: ${v.name} is not in a village`);
   }
   // Ids are all different
   assert(new Set(MAPS.map(m => m.id)).size === MAPS.length, 'two maps with the same id');

@@ -63,7 +63,8 @@ const Scenery = (() => {
           if (spot) out.push({ kind: 'crater', x: spot.x, y: spot.y, seed });
         }
       }
-      if (tile === 'field' && !st.map.landing && !Sim.featuresAt(st, x, y).length && R() < (onFarm ? ANIMALS.farm : ANIMALS.country)) herd(R() < SHEEP ? 'sheep' : 'cow', x, y, R, out);
+      // (no herds out in the winter snow, Steve 2026-11-16)
+      if (tile === 'field' && !st.map.landing && !st.map.winter && !Sim.featuresAt(st, x, y).length && R() < (onFarm ? ANIMALS.farm : ANIMALS.country)) herd(R() < SHEEP ? 'sheep' : 'cow', x, y, R, out);
       // (no market stalls under the Eiffel Tower)
       if (tile === 'square' && !Sim.featuresAt(st, x, y).some(f => f.kind === 'eiffel')) stalls(st, x, y, R, out);
       if (inCity && tile === 'street') {

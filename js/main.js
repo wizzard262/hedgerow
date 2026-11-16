@@ -632,7 +632,9 @@ window.Game = (() => {
     const here = Sim.at(st, f.x, f.y);
     // (Dunkirk's 'us' side is British, Steve)
     const usWord = { us: 'US', uk: 'British', su: 'Soviet' }[Sim.armyOf(st)];
-    const lines = here.map(u => `${u.side === 'us' ? usWord : 'German'} · ${u.name}${u.kind === 'company' ? ` · ${u.platoons} sections` : ''}${u.ambush ? ' · in ambush' : ''}${u.shocked ? ' · shaken' : ''}`);
+    // (the Finns, Steve: the Winter War)
+    const deWord = Sim.deArmyOf(st) === 'fi' ? 'Finnish' : 'German';
+    const lines = here.map(u => `${u.side === 'us' ? usWord : deWord} · ${u.name}${u.kind === 'company' ? ` · ${u.platoons} sections` : ''}${u.ambush ? ' · in ambush' : ''}${u.shocked ? ' · shaken' : ''}`);
     // A wreck in the field: it is there to be hidden behind
     if (Sim.wreckAt(st, f.x, f.y)) lines.push('Burnt-out tank: blocks the view, +1 cover past its corner');
     // A café, a barn, a fountain or a pond: what it takes, and whether it blocks the view
