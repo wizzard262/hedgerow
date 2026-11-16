@@ -705,6 +705,32 @@ const UI = (() => {
     return `🎯 Hold the Germans off the coast road while the lorries take the men to the boats: ${E.need} sections away within ${E.rounds} rounds wins; a German on the road loses. ${count}`;
   }
 
+  // ---------- The banner (Steve, 2026-11-16) ----------
+  // News in big letters over the table, in the goal's lettering, for BANNER_FOR milliseconds each, one after another:
+  // reinforcements arriving, paratroopers or supplies dropping
+  const BANNER_FOR = 4000;
+  let bannerShown = 0, bannerGame = null, bannerBusy = false;
+  function banner() {
+    // A new game: nothing of the last one's is shown
+    if (bannerGame !== st) { bannerGame = st; bannerShown = 0; }
+    const list = st.announce || [];
+    if (bannerBusy || bannerShown >= list.length) return;
+    const next = list[bannerShown++];
+    const box = $('#banner');
+    // The big line, then any smaller ones under it, each kept whole on its own line
+    box.innerHTML = '';
+    for (const line of [next.text].concat(next.more || [])) {
+      const div = document.createElement('div');
+      div.textContent = line;
+      if (line !== next.text) div.className = 'sub';
+      box.append(div);
+    }
+    box.classList.add('on');
+    bannerBusy = true;
+    // Gone after its time, then the next one, if any
+    setTimeout(() => { box.classList.remove('on'); setTimeout(() => { bannerBusy = false; banner(); }, 500); }, BANNER_FOR);
+  }
+
   function update() {
     const rounds = st.evac ? st.map.evacuate.rounds : TURNS;
     $('#clock').innerHTML = `<b>Round ${st.turn}</b>${rounds ? ` of ${rounds}` : ''} · ${st.map.name}`;
@@ -714,7 +740,7 @@ const UI = (() => {
       : st.human === 'de'
       ? `🎯 Destroy every ${adjective('us')} piece on the table (guns and bomber off it don't count). Don't let them hold ${st.objective.name} for a whole round.`
       : `🎯 Take ${st.objective.name} and hold it for the whole of the next round, or destroy every German${TURNS ? `, within ${TURNS} rounds` : ' (no time limit for now)'}.`;
-    card(); hint(); bag();
+    card(); hint(); bag(); banner();
   }
 
   // ---------- The bag of tokens, right of the button ----------

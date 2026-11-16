@@ -1985,6 +1985,12 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - Steve: no, remove the whole front plate (not just the visors)
 - The Panzer II (look B) has no flat front plate now: the superstructure's own sloped front shows, over the lower hull's nose
 
+## 334. Reinforcements and airdrops announced in big letters (v203)
+
+- Steve: when reinforcements come in at Stalingrad, pop up text like the level's goal text for 4 seconds over the game; the same for airdrops of paratroopers or supplies
+- A banner in the middle of the table, in the goal's lettering (cream Georgia with a dark edge), fades in, stays 4 seconds and fades out: "Reinforcements!" with a line for each side's newcomer under it ("Soviets: T-35", "Germans: StuG III Ausf. F"); "Paratroopers drop in!" (", off target" when they are); "Supplies dropped by parachute!". More than one waits its turn
+- `announce` in sim.js keeps them in `st.announce` (no DOM); the page's `banner` in ui.js shows each once (`#banner` in index.html)
+
 ## Sessions
 
 | # | Date | Length | What we did |

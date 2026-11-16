@@ -5108,5 +5108,25 @@ check('the T-35\'s hull machine guns: once a round on its token, men only, befor
   Sim.newGame(1);
 });
 
+check('reinforcements and airdrops are announced in big letters over the table (Steve, 2026-11-16)', () => {
+  const st = Sim.newGame(5, 'none', 'stalingrad');
+  Sim.startRound(st);
+  st.bag = { us: 0, de: 0, timer: 0 }; Sim.finishRound(st);
+  assert(!(st.announce || []).length, 'something was announced before round 3');
+  st.bag = { us: 0, de: 0, timer: 0 }; Sim.finishRound(st);
+  const said = (st.announce || []).map(a => [a.text].concat(a.more || []).join(' ')).join(' | ');
+  assert(/Reinforcements!/.test(said) && /T-35/.test(said) && /StuG/.test(said), `round 3 said: ${said}`);
+  // Paratroopers and supplies
+  for (const kind of ['paras', 'crate']) {
+    const g = Sim.newGame(3, 'none', 'hedges');
+    Sim.startRound(g);
+    g.airdrop = { kind, round: g.turn + 1, done: false };
+    g.bag = { us: 0, de: 0, timer: 0 }; Sim.finishRound(g);
+    const words = (g.announce || []).map(a => a.text).join(' | ');
+    assert(kind === 'paras' ? /Paratroopers drop in/.test(words) : /Supplies dropped/.test(words), `${kind}: ${words}`);
+  }
+  Sim.newGame(1);
+});
+
 console.log(failed ? `\n${failed} failed` : '\nall passed');
 process.exit(failed ? 1 : 0);

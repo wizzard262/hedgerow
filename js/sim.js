@@ -444,6 +444,7 @@ const Sim = (() => {
     // (the piece's id, so the board keeps it hidden until the parachutes are down)
     st.fx.push({ kind: 'paradrop', what: 'paras', x: land.x, y: land.y, id: para.id });
     st.news = [`🪂 A C-47 drops paratroopers of the 101st Airborne${off ? ', off target' : ''}. They can move this round.`];
+    announce(st, `Paratroopers drop in${off ? ', off target' : ''}!`);
   }
   // The supply crate: down on an empty field in the middle of the board
   function dropCrate(st) {
@@ -454,6 +455,7 @@ const Sim = (() => {
     st.fx.push({ kind: 'flyover', side: 'us', plane: 'c47', x: spot.x, y: spot.y, heading: 4, line: bomberLine(spot.x, spot.y, 4) });
     st.fx.push({ kind: 'paradrop', what: 'crate', x: spot.x, y: spot.y });
     st.news = [`📦 A supply crate comes down by parachute: the first side to reach its field gets ${AIRDROP.crateRounds} more artillery round.`];
+    announce(st, 'Supplies dropped by parachute!');
   }
   // A piece arriving in the crate's field: its side takes it, one more artillery round
   function takeCrate(st, u) {
@@ -3743,6 +3745,14 @@ const Sim = (() => {
     return { ok: true, lines: [`⏭️ ${u.name} holds its hull machine guns.`] };
   }
 
+  // Something to say in big letters over the table for a few seconds (Steve, 2026-11-16: reinforcements, airdrops), as
+  // the goal is written: the page shows each once, in turn (UI's banner)
+  // text: the big line; more: smaller lines under it, one each
+  function announce(st, text, more = []) {
+    st.announce = st.announce || [];
+    st.announce.push({ id: st.announce.length + 1, text, more });
+  }
+
   // ---------- Reinforcements (Steve, 2026-11-15: Stalingrad, round 3) ----------
   // A map's reinforce: { round, us: [pieces], de: [pieces] }. At the start of that round each piece comes on at its
   // side's own edge of the board (the Soviets' west, the Germans' east), in the field nearest the middle with room for
@@ -3767,6 +3777,9 @@ const Sim = (() => {
       }
     }
     if (news.length) st.news = (st.news || []).concat(news);
+    // In big letters over the table (Steve): who has come
+    const came = st.units.filter(u => u.enter && u.x !== null).map(u => `${u.side === 'us' ? sideName(st, 'us') : sideName(st, 'de')}: ${u.name}`);
+    if (came.length) announce(st, 'Reinforcements!', came);
   }
   // Where a reinforcement comes on: column by column in from its side's edge; in each, the fields nearest the middle row
   // first. A field with no enemy, nothing it can't stand on, and room for it
