@@ -2006,6 +2006,14 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - Steve: the forest is called an orchard; it should say tanks can't go in, not "tanks +1 cover". And: what other new tanks can we have?
 - Hovering over a forest field on the Bulge now says **Pine forest: Tanks can't go in. Nobody sees through it** (`fieldWords` in main.js); orchards elsewhere are unchanged
 
+## 337. Six more tanks; the Bulge rebalanced (v206)
+
+- Steve picked new tanks: German Panzer 38(t), Jagdpanther, Hetzer; American M18 Hellcat, Sherman Jumbo, M24 Chaffee (none of the British, French or Soviet ones). Then: rebalance so it's still a good fight
+- New models and numbers: **Panzer 38(t)** (riveted 1940 light tank, four big wheels on leaf springs, 3.7 cm and MG: 1½ dice at men, 1 at tanks); **Jagdpanther** (the Panther hull carried up into one sloped casemate, the long 8.8 cm: 3 at tanks, armour 1, camouflage); **Hetzer** (small, low wedge, the gun off to the right: 2 at tanks, armour 1, camouflage); **M18 Hellcat** (long and low, five big wheels, open sloped turret, 76 mm with muzzle brake: 2 at tanks, a field further); **Sherman Jumbo** (the welded Sherman with a thick glacis plate and a bigger straight-sided turret: armour 2, a field less); **M24 Chaffee** (low light tank, five big wheels, wide low turret: a field further)
+- **The Bulge** now: Germans King Tiger, Panther, Panzer IV, StuG III, Jagdpanther, Hetzer, and a second Panther in round 3; Americans two Shermans 75 mm, a Sherman 76 mm, the Jumbo, an M10 and the Chaffee, and in round 3 the M36, the Hellcat, a Sherman 76 mm and a Sherman 75 mm. Robots, 80 games: **Americans 40, Germans 37, 3 draws** (other tries: 14 to 22, 14 to 24, 12 to 24)
+- **Dunkirk**: the Germans get the Panzer 38(t) as well. Robots (40 games): British 31, Germans 9 (30 to 10 before it): Dunkirk still favours the British, as it did; left for Steve to try
+- Assumption: the M18 and the M24 get a field more like the Stuart; the Jumbo a field less
+
 ## Sessions
 
 | # | Date | Length | What we did |

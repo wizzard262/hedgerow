@@ -1276,7 +1276,9 @@ const Board = (() => {
         // Stalingrad's Panzer IV F2: grey, no skirts, the round muzzle brake (Steve picked it, 2026-11-15)
         pz4f2: () => Models.panzer4('B'),
         // The Battle of the Bulge (Steve, 2026-11-16)
-        kingtiger: Models.kingTiger, m10: Models.m10, m36: Models.m36 }[kind];
+        kingtiger: Models.kingTiger, m10: Models.m10, m36: Models.m36,
+        // More tanks (Steve, 2026-11-16)
+        pz38t: Models.panzer38t, jagdpanther: Models.jagdpanther, hetzer: Models.hetzer, m18: Models.m18, jumbo: Models.jumbo, m24: Models.m24 }[kind];
       return [0].map(() => { const m = Models.mergeParts(make()); markerSpots(m); m.scale.setScalar(TANKS); m.userData.slowTurn = true; return m; });
     }
     if (PIECES[kind].bunker) return [bunkerBase(kind === 'bunker_gun')];

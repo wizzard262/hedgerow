@@ -231,7 +231,7 @@ const MAPS = [
     // take their men off the beach. The 'us' side is the British here (names), the Germans attack from the east. The
     // village is only where the Germans make for: the beach; nobody has to take or hold it
     id: 'dunkirk', bonus: true, date: '31 May 1940', name: 'Dunkirk',
-    note: 'The British hold the Germans back while little ships take them off the beach. Lorries come down the coast road from the top and drive to the little ships lying off the beach, and the men run out of the back into the boats: one a round from round 2, each with 1 or 2 sections; get 12 sections away within 12 rounds. If a German reaches the coast road, the way to the boats is cut and you lose. Your men do not go: they hold the strongpoints along the front and keep the Germans off the road and the beach. 2 or 3 boats come in each round and sail at its end. A Matilda II, Universal Carriers, a Vickers and a Boys rifle against Panzer Is, IIs, a III and an armoured car. Destroyers offshore fire for the British.',
+    note: 'The British hold the Germans back while little ships take them off the beach. Lorries come down the coast road from the top and drive to the little ships lying off the beach, and the men run out of the back into the boats: one a round from round 2, each with 1 or 2 sections; get 12 sections away within 12 rounds. If a German reaches the coast road, the way to the boats is cut and you lose. Your men do not go: they hold the strongpoints along the front and keep the Germans off the road and the beach. 2 or 3 boats come in each round and sail at its end. A Matilda II, Universal Carriers, a Vickers and a Boys rifle against Panzer Is, IIs, a III, a 38(t) and an armoured car. Destroyers offshore fire for the British.',
     noGoal: true,
     names: { us: 'British', de: 'Germans' },
     // (the sea is off the board, out to the table's edge, Steve: the boats lie off the beach)
@@ -299,6 +299,8 @@ const MAPS = [
         { id: 'dt2', kind: 'pz2', name: 'Panzer II', reserve: true },
         { id: 'dt3', kind: 'pz3', name: 'Panzer III', reserve: true },
         { id: 'dac1', kind: 'sdkfz231', name: 'Sd.Kfz. 231', reserve: true },
+        // (Steve, 2026-11-16: a new tank for 1940)
+        { id: 'dt4', kind: 'pz38t', name: 'Panzer 38(t)', reserve: true },
       ],
     },
   },
@@ -308,7 +310,7 @@ const MAPS = [
     // crossroads, a village in the middle; no hedges, no wire. No goal to take: destroy every enemy tank. No bombers (low
     // cloud and fog, as in the real battle's first week) and no mortars; artillery as usual. Reinforcements in round 3
     id: 'bulge', bonus: true, date: '18 December 1944', name: 'Battle of the Bulge',
-    note: 'Tanks only, in the snowy Ardennes: pine forests no tank can get into and nobody sees through, narrow roads, open snowy fields and a village at the crossroads. Destroy every enemy tank. The Germans have a King Tiger, a Panther, two Panzer IVs and a StuG III, and a second Panther comes up in round 3; the Americans four Shermans and two M10 Wolverines, and in round 3 an M36 Jackson and two more Shermans come up. Low cloud: no bombers.',
+    note: 'Tanks only, in the snowy Ardennes: pine forests no tank can get into and nobody sees through, narrow roads, open snowy fields and a village at the crossroads. Destroy every enemy tank. The Germans have a King Tiger, a Panther, a Panzer IV, a StuG III, a Jagdpanther and a Hetzer, and a second Panther comes up in round 3; the Americans three Shermans, a Sherman Jumbo, an M10 Wolverine and an M24 Chaffee, and in round 3 an M36 Jackson, an M18 Hellcat and two more Shermans come up. Low cloud: no bombers.',
     noGoal: true,
     winter: true,
     forest: true,
@@ -325,30 +327,31 @@ const MAPS = [
     villages: [{ x: 5, y: 3, name: 'the crossroads village' }],
     gap: 1, wire: 0,
     ammo: { us: { mortars: 0, bomber: 0 }, de: { mortars: 0, bomber: 0 } },
-    // Reinforcements at the start of round 3, each side at its own edge (Steve: reinforcements come in). Balanced by
-    // robots (40 games): Americans 19, Germans 21
+    // Reinforcements at the start of round 3, each side at its own edge (Steve: reinforcements come in). With the new
+    // tanks (Steve, 2026-11-16: still a good fight), balanced by robots (80 games): Americans 40, Germans 37, 3 draws
     reinforce: {
       round: 3,
-      us: [{ id: 'TD3', kind: 'm36', name: 'M36 Jackson' }, { id: 'T5', kind: 'firefly', name: 'Sherman 76mm (2)' }, { id: 'T6', kind: 'sherman', name: 'Sherman 75mm (4)' }],
+      us: [{ id: 'TD2', kind: 'm36', name: 'M36 Jackson' }, { id: 'TD3', kind: 'm18', name: 'M18 Hellcat' }, { id: 'T5', kind: 'firefly', name: 'Sherman 76mm (2)' }, { id: 'T6', kind: 'sherman', name: 'Sherman 75mm (3)' }],
       de: [{ id: 'dp2', kind: 'panther', name: 'Panther (2)', reserve: true }],
     },
     us: {
       only: [
         { id: 'T1', kind: 'sherman', name: 'Sherman 75mm (1)' },
         { id: 'T2', kind: 'sherman', name: 'Sherman 75mm (2)' },
-        { id: 'T3', kind: 'sherman', name: 'Sherman 75mm (3)' },
         { id: 'T4', kind: 'firefly', name: 'Sherman 76mm (1)' },
-        { id: 'TD1', kind: 'm10', name: 'M10 Wolverine (1)' },
-        { id: 'TD2', kind: 'm10', name: 'M10 Wolverine (2)' },
+        { id: 'TJ', kind: 'jumbo', name: 'Sherman Jumbo' },
+        { id: 'TD1', kind: 'm10', name: 'M10 Wolverine' },
+        { id: 'LT1', kind: 'm24', name: 'M24 Chaffee' },
       ],
     },
     de: {
       only: [
         { id: 'dkt', kind: 'kingtiger', name: 'King Tiger', reserve: true },
         { id: 'dp1', kind: 'panther', name: 'Panther (1)', reserve: true },
-        { id: 'dt1', kind: 'pz4', name: 'Panzer IV (1)', reserve: true },
-        { id: 'dt2', kind: 'pz4', name: 'Panzer IV (2)', reserve: true },
+        { id: 'dt1', kind: 'pz4', name: 'Panzer IV', reserve: true },
         { id: 'dsg', kind: 'stug3', name: 'StuG III', reserve: true },
+        { id: 'djp', kind: 'jagdpanther', name: 'Jagdpanther', reserve: true },
+        { id: 'dhz', kind: 'hetzer', name: 'Hetzer', reserve: true },
       ],
     },
   },
@@ -588,6 +591,16 @@ const PIECES = {
   kingtiger: { name: 'King Tiger', soft: 1, hard: 3, he: 1, tank: true, armour: 2, cutter: true, extraMove: -1, long: true },
   m10:      { name: 'M10 Wolverine', soft: 1, hard: 2, he: 1, tank: true, armour: 0, cutter: true },
   m36:      { name: 'M36 Jackson', soft: 1, hard: 3, he: 1, tank: true, armour: 0, cutter: true },
+  // More tanks (Steve, 2026-11-16). The Panzer 38(t) (1940): a light tank, the 3.7 cm and two MGs. The Jagdpanther: the
+  // Panther's hull, the long 8.8 cm in a casemate. The Hetzer: small, low and sloped, the 7.5 cm. The M18 Hellcat: the
+  // fastest (a field more), thin, the 76 mm. The Sherman Jumbo: thick armour, slow, the 75 mm. The M24 Chaffee: light
+  // and quick (a field more), the 75 mm
+  pz38t:    { name: 'Panzer 38(t)', soft: 1.5, hard: 1, he: 1, tank: true, armour: 0, cutter: true },
+  jagdpanther: { name: 'Jagdpanther', soft: 1, hard: 3, he: 1, tank: true, armour: 1, cutter: true },
+  hetzer:   { name: 'Hetzer', soft: 1, hard: 2, he: 1, tank: true, armour: 1, cutter: true },
+  m18:      { name: 'M18 Hellcat', soft: 1, hard: 2, he: 1, tank: true, armour: 0, cutter: true, extraMove: 1 },
+  jumbo:    { name: 'Sherman Jumbo', soft: 1.5, hard: 1, he: 1, tank: true, armour: 2, cutter: true, extraMove: -1 },
+  m24:      { name: 'M24 Chaffee', soft: 1.5, hard: 1, he: 1, tank: true, armour: 0, cutter: true, extraMove: 1 },
   kv2:      { name: 'KV-2', soft: 1, hard: 1, he: 1.5, tank: true, armour: 2, cutter: true, extraMove: -1 },
   // His submachine gun (Steve): three dice, and closeOnly: he can't shoot beyond close range at all
   // Bunkers (Steve): they can't move, take two areas, and fire only out of the front. BUNKER says how they are hurt
