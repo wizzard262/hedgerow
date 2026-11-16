@@ -611,11 +611,24 @@ window.Game = (() => {
     return `${thing.name}: nobody can stand there`;
   }
 
+  // A field's name on hover, and what it does: houses' and trees' cover (see PLACE_COVER) and the view; the river. forest:
+  // the map's orchards are pine forest (Steve, 2026-11-16: the Bulge), which no tank can go into
+  function fieldWords(t, forest) {
+    const NAMES = { field: 'Field', orchard: 'Orchard', village: 'Village', hamlet: 'Hamlet', river: 'River', sea: 'Sea', beach: 'Beach', street: 'Street', square: 'Square', court: 'Courtyard', yard: 'Railway tracks', bridge: 'Bridge', laneEW: 'Lane', laneNS: 'Lane', crossroads: 'Crossroads' };
+    // The pine forest
+    if (forest && t === 'orchard') return { name: 'Pine forest', note: "Tanks can't go in. Nobody sees through it" };
+    const place = PLACE_COVER[t];
+    // Houses or trees
+    if (place) return { name: NAMES[t], note: `${t === 'orchard' ? 'Trees' : 'Houses'}: +${place.men} to hit men here, +${place.tank} a tank, +${place.shells} with mortars or artillery; none for an enemy in this same field. Seen into and out of, never through` };
+    // The river
+    if (t === 'river') return { name: NAMES[t], note: 'Nothing can cross except at a bridge' };
+    return { name: NAMES[t], note: '' };
+  }
+
   // What is in a field, on hover
   function tooltip(e, f) {
     const tip = $('#tip');
     if (!f) { tip.style.display = 'none'; return; }
-    const NAMES = { field: 'Field', orchard: 'Orchard', village: 'Village', hamlet: 'Hamlet', river: 'River', sea: 'Sea', beach: 'Beach', street: 'Street', square: 'Square', court: 'Courtyard', yard: 'Railway tracks', bridge: 'Bridge', laneEW: 'Lane', laneNS: 'Lane', crossroads: 'Crossroads' };
     const here = Sim.at(st, f.x, f.y);
     // (Dunkirk's 'us' side is British, Steve)
     const usWord = { us: 'US', uk: 'British', su: 'Soviet' }[Sim.armyOf(st)];
@@ -625,12 +638,10 @@ window.Game = (() => {
     // A café, a barn, a fountain or a pond: what it takes, and whether it blocks the view
     for (const thing of Sim.featuresAt(st, f.x, f.y)) lines.push(featureLine(thing));
     const t = Sim.tileType(f.x, f.y);
-    // Houses and trees: their cover (see PLACE_COVER), and the view
-    const place = PLACE_COVER[t];
-    const cover = place ? `${t === 'orchard' ? 'Trees' : 'Houses'}: +${place.men} to hit men here, +${place.tank} a tank, +${place.shells} with mortars or artillery; none for an enemy in this same field. Seen into and out of, never through` : t === 'river' ? 'Nothing can cross except at a bridge' : '';
+    const words = fieldWords(t, !!st.map.forest);
     // A village field takes the name of the nearest village
     const village = t === 'village' ? st.map.villages.slice().sort((a, b) => (Math.abs(a.x - f.x) + Math.abs(a.y - f.y)) - (Math.abs(b.x - f.x) + Math.abs(b.y - f.y)))[0].name : null;
-    tip.innerHTML = `<b>${village || NAMES[t]}</b>${cover ? `<br><span style="color:var(--muted)">${cover}</span>` : ''}${lines.length ? '<br>' + lines.join('<br>') : ''}`;
+    tip.innerHTML = `<b>${village || words.name}</b>${words.note ? `<br><span style="color:var(--muted)">${words.note}</span>` : ''}${lines.length ? '<br>' + lines.join('<br>') : ''}`;
     const r = board.getBoundingClientRect();
     tip.style.display = 'block';
     // Beside the pointer, but clear of the fields lit for the chosen piece, its targets and the pieces to rally (Steve:

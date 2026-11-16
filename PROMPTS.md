@@ -2001,6 +2001,11 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - New-game dialog a little wider (1240 px), the bonus battles three across; the Bulge's picture fills its frame with the board (no wood round it)
 - Assumptions: tank destroyers' open tops not modelled beyond armour 0; the German side's paint as picked before (Panzer IVs and Panthers grey), the King Tiger in camouflage so it stands out; animals still wander the snow
 
+## 336. The Bulge's forest named as a forest (v205)
+
+- Steve: the forest is called an orchard; it should say tanks can't go in, not "tanks +1 cover". And: what other new tanks can we have?
+- Hovering over a forest field on the Bulge now says **Pine forest: Tanks can't go in. Nobody sees through it** (`fieldWords` in main.js); orchards elsewhere are unchanged
+
 ## Sessions
 
 | # | Date | Length | What we did |

@@ -5157,5 +5157,12 @@ check('the Battle of the Bulge (Steve, 2026-11-16): tanks only, none in the pine
   Sim.newGame(1);
 });
 
+check('the Bulge\'s forest says what it is on hover (Steve, 2026-11-16): a pine forest no tank can go into, not an orchard with cover', () => {
+  const fieldWords = vm.runInThisContext(`(() => { const PLACE_COVER = ${JSON.stringify({ orchard: { men: 1, tank: 1, shells: 1 } })}; return ${pageCode('main.js', 'function fieldWords(t, forest) {', "\n    return { name: NAMES[t], note: '' };\n  }")}; })()`);
+  const pine = fieldWords('orchard', true);
+  assert(pine.name === 'Pine forest' && /Tanks can't go in/.test(pine.note) && !/\+1/.test(pine.note), JSON.stringify(pine));
+  assert(fieldWords('orchard', false).name === 'Orchard', 'an orchard elsewhere lost its name');
+});
+
 console.log(failed ? `\n${failed} failed` : '\nall passed');
 process.exit(failed ? 1 : 0);
