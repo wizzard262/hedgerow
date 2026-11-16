@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pine forest variations</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #1b1a17; color: #eee; font: 14px/1.35 system-ui, sans-serif; overflow: hidden; }
+  canvas { display: block; }
+  .tag { position: absolute; transform: translate(-50%, 0); text-align: center; width: 300px; pointer-events: none; text-shadow: 0 1px 3px #000; font-size: 13px; }
+  .tag b { display: block; font-size: 20px; color: #ffd36b; }
+</style>
+</head>
+<body>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="../js/models.js"></script>
+<script>
+// Pine forest variations for Steve to pick from (2026-11-16: fuzzier pines; they hid the men too much). Each field is a
+// forest field of the table at the game's sizes, with three bases of men standing in it: in a corner, in the middle and
+// by an edge, where pieces stand in the game
+const T = THREE;
+const MEN = 2.45;          // the men's scale on the table (board3d.js)
+const VARIANTS = [
+  { look: 'now', fuzzy: false, name: 'Now', note: 'smooth pines all over the field' },
+  { look: 'A', fuzzy: true, name: 'A: Fuzzy, between the men', note: 'ragged, tufty pines on the lines between the areas, so the men stand in the gaps' },
+  { look: 'B', fuzzy: true, name: 'B: Fuzzy, thinner', note: 'as A, fewer and a little smaller' },
+  { look: 'C', fuzzy: true, name: 'C: Fuzzy, round the edge', note: 'mostly round the edge of the field, the middle kept clear' },
+];
+const renderer = new T.WebGLRenderer({ antialias: true });
+renderer.outputEncoding = T.sRGBEncoding;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = T.PCFSoftShadowMap;
+document.body.prepend(renderer.domElement);
+const scene = new T.Scene();
+scene.background = new T.Color('#1b1a17');
+scene.add(new T.HemisphereLight(0xdfe8ff, 0x3a3020, 0.6));
+const lamp = new T.DirectionalLight(0xffe8c8, 1.4);
+lamp.position.set(-3, 9, -3);
+lamp.target.position.set(2.2, 0, 0.5);
+lamp.castShadow = true;
+lamp.shadow.mapSize.set(2048, 2048);
+Object.assign(lamp.shadow.camera, { left: -6, right: 6, top: 6, bottom: -6, near: 1, far: 30 });
+scene.add(lamp, lamp.target);
+const camera = new T.PerspectiveCamera(30, 1, 0.1, 80);
+Models.materials();
+Models.setDeArmy('fi');
+// The fields side by side, each with its pines and its men
+const GAP = 1.12;
+const colX = k => k * GAP;
+VARIANTS.forEach((v, k) => {
+  const ground = Models.field('snowwood', false, k);
+  ground.position.set(colX(k) + 0.5, 0, 0.5);
+  scene.add(ground);
+  for (const [x, z, size] of Models.forestLayout(k * 13 + 7, v.look)) {
+    const tree = v.fuzzy ? Models.fuzzyPine(k * 100 + Math.round(x * 50 + z * 70), size) : Models.pine(k * 100 + Math.round(x * 50 + z * 70), size);
+    tree.position.set(colX(k) + x, 0, z);
+    scene.add(tree);
+  }
+  // Men where pieces stand: a corner, the middle, an edge (the areas' middles: a sixth, a half, five sixths)
+  for (const [x, z, side] of [[1 / 6, 1 / 6, 'de'], [0.5, 0.5, 'de'], [5 / 6, 0.5, 'us']]) {
+    const s = Models.squad(side);
+    s.scale.setScalar(MEN);
+    s.position.set(colX(k) + x, 0, z);
+    scene.add(s);
+  }
+  const tag = document.createElement('div');
+  tag.className = 'tag';
+  tag.innerHTML = `<b>${v.name}</b>${v.note}`;
+  document.body.append(tag);
+  v.tag = tag;
+});
+function fit() {
+  renderer.setSize(innerWidth, innerHeight);
+  camera.aspect = innerWidth / innerHeight;
+  const midX = colX(1.5) + 0.5;
+  const back = Math.max(2.6, 2.6 / (Math.tan(15 * Math.PI / 180) * camera.aspect));
+  // (about the slant the table is seen at in the game)
+  camera.position.set(midX, back * 0.8, 0.5 + back * 0.6);
+  camera.lookAt(midX, 0, 0.55);
+  camera.updateProjectionMatrix();
+  camera.updateMatrixWorld();
+  VARIANTS.forEach((v, k) => {
+    const p = new T.Vector3(colX(k) + 0.5, 0, 1.08).project(camera);
+    v.tag.style.left = ((p.x + 1) / 2 * innerWidth) + 'px';
+    v.tag.style.top = ((1 - p.y) / 2 * innerHeight) + 'px';
+  });
+}
+addEventListener('resize', fit);
+fit();
+function frame() { renderer.render(scene, camera); requestAnimationFrame(frame); }
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

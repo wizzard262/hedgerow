@@ -664,12 +664,45 @@ window.Game = (() => {
   });
   $('#help-btn').onclick = openHelp;
   // The rules all on the screen at once: the text gets a little smaller until it fits (Steve: no scrolling)
-  function openHelp() {
+  // How to play, all on the screen with no scrolling (Steve): two tabs, the rules and the battles (Steve, 2026-11-16);
+  // the open tab's two columns, the type made smaller until it fits; if it still won't fit at a readable size, three
+  // columns, then smaller again (never below 7 px)
+  let helpTab = 'rules';
+  function fitHelp() {
     const help = $('#help'), card = help.querySelector('.card');
-    help.hidden = false;
-    let size = 12.5;
-    card.style.fontSize = size + 'px';
-    while (card.scrollHeight > card.clientHeight + 1 && size > 8.5) { size -= 0.25; card.style.fontSize = size + 'px'; }
+    const list = help.querySelector(`.help-tab[data-tab="${helpTab}"] ul`);
+    const fits = () => card.scrollHeight <= card.clientHeight + 1;
+    const tryAt = (cols, smallest) => {
+      list.style.columns = cols;
+      let size = 12.5;
+      card.style.fontSize = size + 'px';
+      while (!fits() && size > smallest) { size -= 0.25; card.style.fontSize = size + 'px'; }
+      return fits();
+    };
+    if (tryAt(2, 10)) return;
+    if (tryAt(3, 9)) return;
+    tryAt(3, 7);
+  }
+  function showHelpTab(tab) {
+    helpTab = tab;
+    for (const el of document.querySelectorAll('#help .help-tab')) el.hidden = el.dataset.tab !== tab;
+    for (const b of document.querySelectorAll('#help .help-tabs button')) b.classList.toggle('on', b.dataset.tab === tab);
+    fitHelp();
+  }
+  for (const b of document.querySelectorAll('#help .help-tabs button')) b.onclick = () => showHelpTab(b.dataset.tab);
+  function openHelp() {
+    $('#help').hidden = false;
+    showHelpTab(helpTab);
+  }
+  // How to play's own New game button (Steve): straight to the choice of battle
+  $('#help-new').onclick = () => { $('#help').hidden = true; askSide(); };
+  // A click outside a dialog closes it (Steve), as its close button does; New game only once a game is on the table
+  for (const id of ['help', 'newgame']) {
+    $('#' + id).addEventListener('click', e => {
+      if (e.target !== e.currentTarget) return;
+      if (id === 'newgame' && !gameStarted) return;
+      e.currentTarget.hidden = true;
+    });
   }
   // Sound on or off (remembered on this computer)
   const soundIcon = () => { $('#sound-btn').textContent = Sound.isOn() ? '🔊' : '🔇'; };

@@ -2036,6 +2036,13 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - **New game screen**: the eight campaign battles in one row across the top; under them who commands each side (with the 'de' side's name: Germans or Finns) on the left and the five bonus battles in a row on the right; the battle's note and Start underneath; no scrolling (checked at 1280 by 720 and 1600 by 950). **Start**, **How to play** and **New game** are bigger and bright orange
 - Ideas kept for later (in the notes): Monte Cassino, Pegasus Bridge, El Alamein, Tarawa, Burma, Iwo Jima, Arnhem
 
+## 340. How to play in three tabs, no scrolling; click outside to close; pine forest options (v209)
+
+- Steve: did we push? (No: v207 and v208 were waiting.) Fuzzier pine trees; How to play and New game: a click outside should close them; put the button in How to play, no scrolling. Then: fuzzier pines, show me options with men in them: at the moment they hide the men too much
+- **How to play** is three tabs: How to play (the basics), Seeing, cover and dice, and The battles (the campaign and each bonus battle, in date order, each its own paragraph). Each tab fits the screen with no scrolling: two columns, the type smaller until it fits, three columns if need be (checked at 1280 by 720 and 1600 by 950). It has its own **New game** button beside To the table
+- **A click outside** How to play or New game closes it (New game only once a game is on the table)
+- **Pine forest options** in `tools/pine-variants.html`: Now, and three with fuzzy, tufty pines (`Models.fuzzyPine`): A on the lines between the nine areas so the men stand in the gaps, B the same thinner and smaller, C round the edge of the field with the middle clear (`Models.forestLayout`). The pick is still to come
+
 ## Sessions
 
 | # | Date | Length | What we did |

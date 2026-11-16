@@ -3125,6 +3125,62 @@ const Models = (() => {
     return castAll(g);
   }
 
+  // A fuzzy pine (Steve, 2026-11-16: fuzzier pine trees): four tiers, each a cone ringed with little tufts of needles
+  // sticking out and drooping, so the outline is ragged, not smooth; snow lying in patches on the tiers
+  function fuzzyPine(seed, size = 1) {
+    const g = new T.Group(), R = seeded(seed * 3 + 11);
+    if (!M.pine) { M.pine = mat('#2f4630', 0.9, 0); M.snowCap = mat('#eef2f4', 0.85, 0); }
+    if (!M.pineDark) M.pineDark = mat('#263b27', 0.95, 0);
+    g.add(at(cyl(0.005 * size, 0.008 * size, 0.06 * size, M.wood, 6), 0, 0.03 * size, 0));
+    for (let k = 0; k < 4; k++) {
+      const r = (0.056 - k * 0.011) * size, h = (0.07 - k * 0.008) * size, y = (0.04 + k * 0.045) * size;
+      g.add(at(new T.Mesh(new T.ConeGeometry(r * 0.8, h, 7), k % 2 ? M.pine : M.pineDark), 0, y + h / 2, 0));
+      // The tufts round the tier's rim, pointing out and a little down
+      const tufts = 7 - k;
+      for (let t = 0; t < tufts; t++) {
+        const a = (t / tufts) * Math.PI * 2 + R() * 0.6;
+        const tuft = new T.Mesh(new T.ConeGeometry(r * 0.32, r * 0.9, 5), R() < 0.5 ? M.pine : M.pineDark);
+        // (a cone points up its y; laid over to point outward and droop)
+        tuft.rotation.set(0, 0, 0);
+        tuft.geometry.rotateZ(-Math.PI / 2 - 0.35);
+        g.add(at(tuft, Math.cos(a) * r * 0.62, y + h * 0.28, Math.sin(a) * r * 0.62, 0, -a, 0));
+      }
+      // Snow in patches on the tier
+      for (let s = 0; s < 3; s++) {
+        const a = R() * Math.PI * 2, d = r * (0.2 + R() * 0.35);
+        const blob = sphere(r * (0.22 + R() * 0.12), M.snowCap, 6, 4); blob.scale.y = 0.45;
+        g.add(at(blob, Math.cos(a) * d, y + h * (0.45 + R() * 0.2), Math.sin(a) * d));
+      }
+    }
+    return castAll(g);
+  }
+
+  // Where a forest field's pines stand (Steve, 2026-11-16: they hid the men too much). look: 'now' a dozen or so all over;
+  // 'A' on the lines between the nine areas, so a man standing in the middle of an area is seen between them; 'B' the
+  // same, fewer and smaller; 'C' round the edge of the field and along the middle lines, the middle area left clear.
+  // Each [x, z, size], x and z from 0 to 1 across the field
+  function forestLayout(seed, look = 'now') {
+    const R = seeded(seed * 7 + 5), out = [];
+    if (look === 'now') {
+      for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) {
+        if (R() < 0.2) continue;
+        out.push([0.12 + i * 0.25 + (R() - 0.5) * 0.12, 0.12 + j * 0.25 + (R() - 0.5) * 0.12, 1.1 + R() * 0.4]);
+      }
+      return out;
+    }
+    // The lines between the areas: thirds of the field, and its edges
+    const lines = [0.04, 1 / 3, 2 / 3, 0.96];
+    for (const x of lines) for (const z of lines) {
+      const edge = x < 0.1 || x > 0.9 || z < 0.1 || z > 0.9;
+      if (look === 'B' && R() < 0.35) continue;
+      if (look === 'C' && !edge && R() < 0.5) continue;
+      if (look !== 'C' && R() < 0.12) continue;
+      const size = look === 'B' ? 0.85 + R() * 0.25 : 1.05 + R() * 0.35;
+      out.push([x + (R() - 0.5) * 0.06, z + (R() - 0.5) * 0.06, size]);
+    }
+    return out;
+  }
+
   // A box with sloping faces: its bottom and top each a rectangle (x0 to x1 along, w across), at heights y0 and y1. For
   // armour plates that lean in: a casemate's sloped front, back and sides
   function frustum(bottom, top, y0, y1, m) {
@@ -4059,5 +4115,5 @@ const Models = (() => {
     return castAll(g);
   }
 
-  return { PARIS, PARIS_LOOKS, parisFront, parisCorner, greyhound, stuart, puma, c47, supplyCrate, EIFFEL_HEIGHT, eiffel, landingCraft, littleShip, matilda, carrier, panzer1, panzer2, panzer3, sdkfz231, lorry, destroyer, battleship, strongpoint, setBritish, tankTrap, hulk, crater, seaWall, seaWallRubble, bunker, bunkerCrew, BUNKER, track, bufferStop, engine, carriage, wagon, signalbox, signal, watertower, coal, cow, sheep, lampPost, posterColumn, marketStall, cafe, barn, fountain, pond, reeds, BRIDGE_DECK, materials, M, mergeParts, eliteBand, water, bridge, soldier, squad, team, captain, pak, mortar, bomber, blenheim, bomberOnStand, setArmy, t34, t35, stug3, kv2, flak88, kingTiger, m10, m36, pine, panzer38t, jagdpanther, hetzer, m18, m24, jumbo, t26, t28, t38, aerosan, vickers6t, bofors37, setDeArmy, tiger1, ferdinand, t70, kv1, ruinWall, ruinCorner, rubbleLine, rubblePile, minefield, STOREY, howitzer, nebelwerfer, katyusha, artillery, artilleryRound, round, coin, token, sherman, panther, panzer4, hedge, tree, house, die, table, field, lane, at };
+  return { PARIS, PARIS_LOOKS, parisFront, parisCorner, greyhound, stuart, puma, c47, supplyCrate, EIFFEL_HEIGHT, eiffel, landingCraft, littleShip, matilda, carrier, panzer1, panzer2, panzer3, sdkfz231, lorry, destroyer, battleship, strongpoint, setBritish, tankTrap, hulk, crater, seaWall, seaWallRubble, bunker, bunkerCrew, BUNKER, track, bufferStop, engine, carriage, wagon, signalbox, signal, watertower, coal, cow, sheep, lampPost, posterColumn, marketStall, cafe, barn, fountain, pond, reeds, BRIDGE_DECK, materials, M, mergeParts, eliteBand, water, bridge, soldier, squad, team, captain, pak, mortar, bomber, blenheim, bomberOnStand, setArmy, t34, t35, stug3, kv2, flak88, kingTiger, m10, m36, pine, panzer38t, jagdpanther, hetzer, m18, m24, jumbo, t26, t28, t38, aerosan, vickers6t, bofors37, setDeArmy, tiger1, ferdinand, t70, kv1, fuzzyPine, forestLayout, ruinWall, ruinCorner, rubbleLine, rubblePile, minefield, STOREY, howitzer, nebelwerfer, katyusha, artillery, artilleryRound, round, coin, token, sherman, panther, panzer4, hedge, tree, house, die, table, field, lane, at };
 })();
