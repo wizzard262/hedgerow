@@ -303,6 +303,56 @@ const MAPS = [
     },
   },
   {
+    // The Battle of the Bulge (Steve, 2026-11-16): a bonus battle, tanks only. The snowy Ardennes: pine forests ('o',
+    // forest: no tank can get into them, and they block the view), open snowy fields, two roads each way meeting at
+    // crossroads, a village in the middle; no hedges, no wire. No goal to take: destroy every enemy tank. No bombers (low
+    // cloud and fog, as in the real battle's first week) and no mortars; artillery as usual. Reinforcements in round 3
+    id: 'bulge', bonus: true, date: '18 December 1944', name: 'Battle of the Bulge',
+    note: 'Tanks only, in the snowy Ardennes: pine forests no tank can get into and nobody sees through, narrow roads, open snowy fields and a village at the crossroads. Destroy every enemy tank. The Germans have a King Tiger, a Panther, two Panzer IVs and a StuG III, and a second Panther comes up in round 3; the Americans four Shermans and two M10 Wolverines, and in round 3 an M36 Jackson and two more Shermans come up. Low cloud: no bombers.',
+    noGoal: true,
+    winter: true,
+    forest: true,
+    rows: [
+      'oo.o|oo.|ooo',
+      'o..o|.o.|.oo',
+      '====+===+===',
+      '.oo.|vv.|o.o',
+      'oo..|vv.|.oo',
+      '====+===+===',
+      'o.oo|.o.|o.o',
+      'ooo.|oo.|.oo',
+    ],
+    villages: [{ x: 5, y: 3, name: 'the crossroads village' }],
+    gap: 1, wire: 0,
+    ammo: { us: { mortars: 0, bomber: 0 }, de: { mortars: 0, bomber: 0 } },
+    // Reinforcements at the start of round 3, each side at its own edge (Steve: reinforcements come in). Balanced by
+    // robots (40 games): Americans 19, Germans 21
+    reinforce: {
+      round: 3,
+      us: [{ id: 'TD3', kind: 'm36', name: 'M36 Jackson' }, { id: 'T5', kind: 'firefly', name: 'Sherman 76mm (2)' }, { id: 'T6', kind: 'sherman', name: 'Sherman 75mm (4)' }],
+      de: [{ id: 'dp2', kind: 'panther', name: 'Panther (2)', reserve: true }],
+    },
+    us: {
+      only: [
+        { id: 'T1', kind: 'sherman', name: 'Sherman 75mm (1)' },
+        { id: 'T2', kind: 'sherman', name: 'Sherman 75mm (2)' },
+        { id: 'T3', kind: 'sherman', name: 'Sherman 75mm (3)' },
+        { id: 'T4', kind: 'firefly', name: 'Sherman 76mm (1)' },
+        { id: 'TD1', kind: 'm10', name: 'M10 Wolverine (1)' },
+        { id: 'TD2', kind: 'm10', name: 'M10 Wolverine (2)' },
+      ],
+    },
+    de: {
+      only: [
+        { id: 'dkt', kind: 'kingtiger', name: 'King Tiger', reserve: true },
+        { id: 'dp1', kind: 'panther', name: 'Panther (1)', reserve: true },
+        { id: 'dt1', kind: 'pz4', name: 'Panzer IV (1)', reserve: true },
+        { id: 'dt2', kind: 'pz4', name: 'Panzer IV (2)', reserve: true },
+        { id: 'dsg', kind: 'stug3', name: 'StuG III', reserve: true },
+      ],
+    },
+  },
+  {
     // Stalingrad (Steve, 2026-11-12): a bonus battle, not in the campaign. A bombed-out city: the walls of ruined buildings
     // stand on the edges between fields and act as hedges do (seen over only from beside them; men climb through the
     // windows; lining one is cover), with tall corners where they meet, and lines of rubble here and there doing the same.
@@ -383,6 +433,8 @@ const CAMPAIGN = ['beach', 'deep', 'hedges', 'farmland', 'river', 'town', 'stati
 // Bonus battles (Steve, 2026-11-11): outside the campaign, shown at the top right of the New game choice, Dunkirk on the
 // left and Stalingrad on the right. stamp: the word across its picture while it can't be played yet (no map in MAPS). One with a map takes its note from there
 const BONUS = [
+  // (Steve, 2026-11-16: the Bulge first, before Dunkirk)
+  { id: 'bulge', name: 'Battle of the Bulge', date: 'December 1944' },
   { id: 'dunkirk', name: 'Dunkirk', date: '31 May 1940' },
   { id: 'stalingrad', name: 'Stalingrad', date: 'November 1942' },
 ];
@@ -530,6 +582,12 @@ const PIECES = {
   // The StuG III Ausf. F (Steve picked it for the Germans): an assault gun, the long 7.5 cm StuK 40 in a low casemate,
   // thick front armour (1), no machine gun of its own
   stug3:    { name: 'StuG III Ausf. F', soft: 0, hard: 2.5, he: 1, tank: true, armour: 1, cutter: true },
+  // The Battle of the Bulge (Steve, 2026-11-16): the King Tiger, the biggest and best armoured tank on the table, slow,
+  // long (3 by 2 areas); the American tank destroyers: the M10 Wolverine's 3-inch and the M36 Jackson's 90 mm, both with
+  // thin, open-topped armour
+  kingtiger: { name: 'King Tiger', soft: 1, hard: 3, he: 1, tank: true, armour: 2, cutter: true, extraMove: -1, long: true },
+  m10:      { name: 'M10 Wolverine', soft: 1, hard: 2, he: 1, tank: true, armour: 0, cutter: true },
+  m36:      { name: 'M36 Jackson', soft: 1, hard: 3, he: 1, tank: true, armour: 0, cutter: true },
   kv2:      { name: 'KV-2', soft: 1, hard: 1, he: 1.5, tank: true, armour: 2, cutter: true, extraMove: -1 },
   // His submachine gun (Steve): three dice, and closeOnly: he can't shoot beyond close range at all
   // Bunkers (Steve): they can't move, take two areas, and fire only out of the front. BUNKER says how they are hurt

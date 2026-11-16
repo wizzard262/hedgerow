@@ -42,8 +42,8 @@ check('every script on the page parses (a slip in one stops the whole game loadi
   }
 });
 
-check('the bonus battles are Dunkirk then Stalingrad, outside the campaign, each with a picture, and stamped while they have no map', () => {
-  assert(BONUS.map(b => b.id).join() === 'dunkirk,stalingrad', `the bonus battles are ${BONUS.map(b => b.id).join()}`);
+check('the bonus battles are the Bulge, Dunkirk then Stalingrad (Steve: the Bulge first), outside the campaign, each with a picture, and stamped while they have no map', () => {
+  assert(BONUS.map(b => b.id).join() === 'bulge,dunkirk,stalingrad', `the bonus battles are ${BONUS.map(b => b.id).join()}`);
   // (Stalingrad is built now, Steve 2026-11-12: no stamp, it can be played)
   assert(!BONUS.find(b => b.id === 'stalingrad').stamp && MAPS.some(m => m.id === 'stalingrad'), 'Stalingrad is still stamped, or has no map');
   for (const b of BONUS) {
@@ -3471,6 +3471,8 @@ check('every map: nobody starts in a river, every piece has its place, and all o
       // A rifle platoon each side at least, and each side has a captain
       for (const side of ['us', 'de']) {
         const mine = live(st).filter(u => u.side === side);
+        // (the Bulge is tanks only, Steve: no platoons, no captains)
+        if (map.id === 'bulge') { assert(mine.length >= 4 && mine.every(u => Sim.isTank(u)), `${map.id}: ${side} short of tanks`); continue; }
         assert(mine.some(u => u.kind === 'company') && mine.some(u => u.kind === 'captain'), `${map.id}: ${side} short of pieces`);
       }
       // Every field that isn't river can reach the objective on foot
@@ -5125,6 +5127,33 @@ check('reinforcements and airdrops are announced in big letters over the table (
     const words = (g.announce || []).map(a => a.text).join(' | ');
     assert(kind === 'paras' ? /Paratroopers drop in/.test(words) : /Supplies dropped/.test(words), `${kind}: ${words}`);
   }
+  Sim.newGame(1);
+});
+
+check('the Battle of the Bulge (Steve, 2026-11-16): tanks only, none in the pine forest, every open field reachable, nothing to take, reinforcements on both sides in round 3', () => {
+  for (let seed = 1; seed <= 6; seed++) {
+    const st = Sim.newGame(seed, 'none', 'bulge');
+    const live = st.units.filter(u => u.x !== null);
+    assert(live.every(u => Sim.isTank(u)), `seed ${seed}: something other than a tank on the table`);
+    assert(live.every(u => Sim.tileType(u.x, u.y) !== 'orchard'), `seed ${seed}: a tank started in the forest`);
+    assert(st.noGoal, 'the Bulge has a goal to take');
+    // No tank route goes into the forest
+    for (const u of live) for (const p of Sim.chargeSpots(st, u)) assert(Sim.tileType(p.x, p.y) !== 'orchard', `seed ${seed}: ${u.name} could drive into the forest at ${p.x},${p.y}`);
+    assert(Sim.sizeOf(Sim.unitById(st, 'dkt')) === 6, 'the King Tiger does not take 3 by 2 areas');
+  }
+  // Every open field joined to every other, round the forest
+  const map = MAPS.find(m => m.id === 'bulge');
+  const open = (x, y) => Sim.inside(x, y) && map.rows[y][x] !== 'o';
+  const seen = new Set(['0,2']), todo = [[0, 2]];
+  while (todo.length) { const [x, y] = todo.pop(); for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const k = `${x + dx},${y + dy}`; if (open(x + dx, y + dy) && !seen.has(k)) { seen.add(k); todo.push([x + dx, y + dy]); } } }
+  let count = 0; for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) if (open(x, y)) count++;
+  assert(seen.size === count, `${count - seen.size} open fields cut off by the forest`);
+  // Round 3: both sides' reinforcements
+  const g = Sim.newGame(5, 'none', 'bulge');
+  Sim.startRound(g);
+  g.bag = { us: 0, de: 0, timer: 0 }; Sim.finishRound(g);
+  g.bag = { us: 0, de: 0, timer: 0 }; Sim.finishRound(g);
+  assert(['TD3', 'T5', 'T6', 'dp2'].every(id => Sim.unitById(g, id) && Sim.unitById(g, id).x !== null), 'not every reinforcement came in round 3');
   Sim.newGame(1);
 });
 

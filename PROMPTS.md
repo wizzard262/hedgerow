@@ -1991,6 +1991,16 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - A banner in the middle of the table, in the goal's lettering (cream Georgia with a dark edge), fades in, stays 4 seconds and fades out: "Reinforcements!" with a line for each side's newcomer under it ("Soviets: T-35", "Germans: StuG III Ausf. F"); "Paratroopers drop in!" (", off target" when they are); "Supplies dropped by parachute!". More than one waits its turn
 - `announce` in sim.js keeps them in `st.announce` (no DOM); the page's `banner` in ui.js shows each once (`#banner` in index.html)
 
+## 335. The Battle of the Bulge: tanks only in the snowy Ardennes (v204)
+
+- Steve: would the Battle of the Bulge work with mainly or just tanks? Win by destroying all the opposition. What terrain would it be? Then: make it; put it before Dunkirk on the new-game screen (there is space if you move some text); we want new tanks; make a balanced force, and reinforcements come in. Make the dialog a tiny bit wider for the new picture if needed, and make a nice picture
+- **The map** (`bulge`, a bonus battle, first of the three): December 1944, the Ardennes in snow. Pine forests (the 'o' fields, with `forest`: no tank can get into one, nobody sees through one, nobody starts in one), open snowy fields, two roads each way meeting at crossroads round a village in the middle; no hedges and no wire. Every open field joins every other round the forests (two that were cut off are forest now). `winter`: snow on the ground, slushy roads, snow-dusted pines (`Models.pine`, `forestTrees`)
+- **Tanks only**, nothing to take (`noGoal`): destroy every enemy tank. Low cloud: no bombers, no mortars; artillery as usual. Germans: a King Tiger, a Panther, two Panzer IVs, a StuG III; a second Panther in round 3. Americans: three Shermans 75 mm, a Sherman 76 mm, two M10 Wolverines; in round 3 an M36 Jackson, a Sherman 76 mm and a Sherman 75 mm (each side at its own edge, with the big announcement)
+- **New tanks**: the **King Tiger** (`kingtiger`: armour 2, 3 dice against tanks, slow, and long like the T-35: 3 by 2 areas; long sloped hull, nine interleaved wheels, the long Henschel turret, the very long 8.8 cm; in dark yellow camouflage, the biggest model on the table); the **M10 Wolverine** (`m10`: 2 dice against tanks; open-topped five-sided turret, wedge counterweights, the 3-inch) and the **M36 Jackson** (`m36`: 3 dice against tanks; round open-topped turret with a box counterweight, the 90 mm with its muzzle brake), both on the Sherman's running gear with sloped hull sides and thin armour (0)
+- Balance (robots, 40 games each try): first try 15 to 23 (Germans); a fourth Sherman for the Americans 14 to 25; one Panzer IV fewer 16 to 21; settled on the forces above (both sides reinforced): **Americans 19, Germans 21**, about 9 rounds a game
+- New-game dialog a little wider (1240 px), the bonus battles three across; the Bulge's picture fills its frame with the board (no wood round it)
+- Assumptions: tank destroyers' open tops not modelled beyond armour 0; the German side's paint as picked before (Panzer IVs and Panthers grey), the King Tiger in camouflage so it stands out; animals still wander the snow
+
 ## Sessions
 
 | # | Date | Length | What we did |

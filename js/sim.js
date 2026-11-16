@@ -340,7 +340,9 @@ const Sim = (() => {
     const from = (st.map.from && st.map.from[side]) || 0;
     const xs = side === 'us' ? [...Array(cols).keys()].map(i => from + i) : [...Array(cols).keys()].map(i => COLS - 1 - i);
     const fields = [];
-    for (const x of xs) for (let y = 0; y < ROWS; y++) if (tileType(x, y) !== 'river') fields.push({ x, y });
+    // (not in the Ardennes' pine forests, Steve: no tank can get into them, so none starts in one)
+    const noStart = (x, y) => tileType(x, y) === 'river' || (st.map.forest && tileType(x, y) === 'orchard');
+    for (const x of xs) for (let y = 0; y < ROWS; y++) if (!noStart(x, y)) fields.push({ x, y });
     // How good a field is to start in: cover towards the enemy, then a little luck
     const front = side === 'us' ? 1 : -1;
     const worth = f => {
@@ -2294,6 +2296,8 @@ const Sim = (() => {
     if (!inside(x, y) || tileType(x, y) === 'river' || tileType(x, y) === 'sea' || PIECES[u.kind].fixed) return null;
     // Tank traps stop tanks (Steve)
     if (isTank(u) && featuresAt(st, x, y).some(f => FEATURES[f.kind].stopsTanks)) return null;
+    // The Ardennes (Steve): no tank gets into the pine forest; they keep to the roads, the fields and the villages
+    if (isTank(u) && currentMap.forest && tileType(x, y) === 'orchard') return null;
     // Nothing crosses a train (Steve): no going over the railway's side of a field an engine or carriage stands in
     if (trainAcross(st, fx, fy, x, y)) return null;
     if (isTank(u)) return hedge(st, fx, fy, x, y) && !cutter(u) ? null : 1;

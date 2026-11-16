@@ -1849,6 +1849,16 @@ const Models = (() => {
   const texCache = {};
   const fieldMats = {};
   function field(type, wheat, seed) {
+    // (the Ardennes in winter, Steve 2026-11-16: snow on the open ground, and on the forest floor between the pines)
+    if (type === 'snow' && !texCache.sn) texCache.sn = flockTex('#dfe4e6', ['#d2d8db', '#eaeef0', '#c8cfd2', '#f2f4f5', '#b9c1c4'], 81);
+    if (type === 'snowwood' && !texCache.sw) texCache.sw = flockTex('#c4cbc9', ['#aeb6b2', '#d6dcdb', '#8f9a8f', '#e3e7e7', '#7d8a7a'], 83);
+    if (type === 'snow' || type === 'snowwood') {
+      const k = type === 'snow' ? 'sn' : 'sw';
+      if (!fieldMats[k]) fieldMats[k] = new T.MeshStandardMaterial({ map: texCache[k], roughness: 1 });
+      const sm = new T.Mesh(new T.PlaneGeometry(1, 1), fieldMats[k]);
+      sm.rotation.x = -Math.PI / 2; sm.receiveShadow = true;
+      return sm;
+    }
     const key = type === 'ruin' ? 'ru' : type === 'village' ? 'v' : type === 'orchard' ? 'o' : type === 'street' ? 'st' : type === 'square' ? 'sq' : type === 'court' ? 'ct' : type === 'yard' ? 'yd' : type === 'beach' ? 'bc' : type === 'sea' ? 'se' : wheat ? 'w' : 'g' + (seed % 3);
     // The city's paving (Steve: cobbled): grey cobbles for the streets, big pale flagstones for the squares
     if (key === 'st' && !texCache.st) texCache.st = cobbleTex(['#6b675f', '#5d5a53', '#77736a', '#524f49', '#827d73'], 26, 26, [4, 4], 41);
@@ -1892,8 +1902,15 @@ const Models = (() => {
   }
 
   // A lane of worn earth; cobbled (Steve), a strip of the street's cobbles, running along or across
-  function lane(len, width, cobbled = false) {
+  // snowy: a track churned through the snow (the Ardennes, Steve), grey-brown slush
+  function lane(len, width, cobbled = false, snowy = false) {
     if (!texCache.lane) texCache.lane = flockTex('#8f7d60', EARTH, 21);
+    if (snowy) {
+      if (!texCache.slush) texCache.slush = flockTex('#8d8a82', ['#7a766d', '#a3a099', '#6b665c', '#b8b6b0'], 85);
+      const sm = new T.Mesh(new T.PlaneGeometry(len, width), new T.MeshStandardMaterial({ map: texCache.slush, roughness: 1 }));
+      sm.rotation.x = -Math.PI / 2; sm.receiveShadow = true;
+      return sm;
+    }
     const across = len < width;
     const cobbleKey = across ? 'cobbleNS' : 'cobbleEW';
     if (cobbled && !texCache[cobbleKey]) texCache[cobbleKey] = cobbleTex(['#7a766c', '#6b675f', '#868175', '#5f5b53', '#8f8a7d'], 26, 26, across ? [1.4, 4.5] : [4.5, 1.4], 47);
@@ -2519,6 +2536,123 @@ const Models = (() => {
     // White stars on the sides and the deck
     for (const s of [-1, 1]) g.add(at(starMesh(0.024), -0.02, 0.128, s * (W / 2 + 0.003), 0, s > 0 ? 0 : Math.PI, 0));
     g.add(at(starMesh(0.03), -0.12, 0.172, 0, -Math.PI / 2, 0, 0));
+    return castAll(g);
+  }
+
+  // ---------- The Battle of the Bulge (Steve, 2026-11-16) ----------
+
+  // A pine of the Ardennes in winter: a trunk and three tiers of dark green, each dusted white on top
+  function pine(seed, size = 1) {
+    const g = new T.Group(), R = seeded(seed);
+    if (!M.pine) { M.pine = mat('#2f4630', 0.9, 0); M.snowCap = mat('#eef2f4', 0.85, 0); }
+    g.add(at(cyl(0.006 * size, 0.009 * size, 0.06 * size, M.wood, 6), 0, 0.03 * size, 0));
+    const lean = (R() - 0.5) * 0.06;
+    for (let k = 0; k < 3; k++) {
+      const r = (0.06 - k * 0.015) * size, h = (0.09 - k * 0.012) * size, y = (0.05 + k * 0.055) * size;
+      g.add(at(new T.Mesh(new T.ConeGeometry(r, h, 8), M.pine), lean * k * 0.3, y + h / 2, 0));
+      // The snow lying on the tier: a flatter white cone just over its top half
+      g.add(at(new T.Mesh(new T.ConeGeometry(r * 0.62, h * 0.5, 8), M.snowCap), lean * k * 0.3, y + h * 0.78, 0));
+    }
+    return castAll(g);
+  }
+
+  // The King Tiger (Tiger II, Henschel turret): the biggest tank on the table. The long hull with its long sloped
+  // glacis, nine big interleaved road wheels a side, the long slab-sided turret with its sloped narrow front, the very long
+  // 8.8 cm with its double muzzle brake, in dark yellow with green and brown bands. Front +x. It is long: 3 by 2 areas
+  function kingTiger() {
+    const paint = camoPaint();
+    const inner = new T.Group(), g = inner, W = 0.24, L = 0.5;
+    g.add(at(box(L * 0.9, 0.05, W * 0.6, paint), -0.01, 0.06, 0));
+    g.add(at(frustum({ x0: -0.25, x1: 0.255, w: W * 1.02 }, { x0: -0.225, x1: 0.13, w: W * 0.88 }, 0.082, 0.165, paint), 0, 0, 0));
+    // The fans and grilles on the back deck, the driver's periscope, the bow MG
+    for (const z of [-0.05, 0.05]) { g.add(at(cyl(0.022, 0.024, 0.008, paint, 18), -0.18, 0.169, z)); g.add(at(cyl(0.013, 0.013, 0.009, M.black, 14), -0.18, 0.17, z)); }
+    g.add(at(box(0.012, 0.008, 0.02, M.black), 0.15, 0.168, 0.05));
+    g.add(at(sphere(0.009, paint, 10, 8), 0.17, 0.15, -0.055));
+    for (const s of [-1, 1]) {
+      const z = s * W * 0.4;
+      g.add(trackRun(L * 0.88, 0.072, 0.056, 0.038, z));
+      // Nine big wheels, overlapping in two rows
+      for (let k = 0; k < 9; k++) {
+        const outer = k % 2 === 0;
+        g.add(at(wheel(0.03, 0.012, paint), -0.19 + k * 0.047, 0.04, z + s * (outer ? 0.02 : 0.004)));
+        g.add(at(wheel(0.011, 0.014, M.steel), -0.19 + k * 0.047, 0.04, z + s * (outer ? 0.022 : 0.006)));
+      }
+      g.add(at(sprocket(0.027, 0.042, paint), 0.22, 0.06, z));
+      g.add(at(wheel(0.024, 0.036, M.steel), -0.225, 0.06, z));
+    }
+    // The long turret set back of the middle: slab sides leaning in, the narrow sloped front, the cupola at the back left
+    g.add(at(frustum({ x0: -0.15, x1: 0.06, w: 0.17 }, { x0: -0.14, x1: 0.03, w: 0.14 }, 0.165, 0.222, paint), -0.03, 0, 0));
+    g.add(at(cyl(0.02, 0.022, 0.022, paint, 18), -0.13, 0.232, 0.04));
+    for (let k = 0; k < 7; k++) { const a = k / 7 * Math.PI * 2; g.add(at(box(0.005, 0.007, 0.005, M.black), -0.13 + Math.cos(a) * 0.021, 0.234, 0.04 + Math.sin(a) * 0.021)); }
+    // The small cast mantlet and the very long 8.8 cm
+    g.add(at(box(0.02, 0.034, 0.046, paint), 0.035, 0.195, 0));
+    g.add(at(cyl(0.0075, 0.0095, 0.4, M.steel, 14), 0.245, 0.196, 0, 0, 0, Math.PI / 2));
+    for (const dx of [0.45, 0.466]) g.add(at(cyl(0.013, 0.013, 0.013, M.steel, 14), dx, 0.196, 0, 0, 0, Math.PI / 2));
+    // Spare track links along the turret sides, crosses on the hull
+    for (const s of [-1, 1]) for (let k = 0; k < 4; k++) g.add(at(box(0.012, 0.03, 0.004, M.track), -0.12 + k * 0.016, 0.196, s * 0.074, s * 0.3, 0, 0));
+    for (const s of [-1, 1]) g.add(at(crossMesh(0.024), -0.14, 0.12, s * (W * 0.51 + 0.002), 0, s > 0 ? 0 : Math.PI, 0));
+    // (a size up, so it plainly outdoes the Panther: the table sets the outer group's scale)
+    inner.scale.setScalar(1.12);
+    const outer = new T.Group();
+    outer.add(inner);
+    return castAll(outer);
+  }
+
+  // The hull the American tank destroyers share (the M10's, on the Sherman's running gear): sides sloping in, a sloped
+  // glacis, the transmission cover across the nose, three VVSS bogies a side
+  function destroyerHull(g, paint, W, L) {
+    g.add(at(box(0.36, 0.05, W * 0.55, paint), -0.01, 0.06, 0));
+    g.add(at(frustum({ x0: -0.2, x1: 0.17, w: W * 1.04 }, { x0: -0.18, x1: 0.08, w: W * 0.78 }, 0.085, 0.158, paint), 0, 0, 0));
+    const nose = cyl(0.028, 0.028, W * 0.8, paint, 20); nose.geometry.rotateX(Math.PI / 2); nose.scale.set(1.3, 1, 1);
+    g.add(at(nose, 0.168, 0.066, 0));
+    for (const s of [-1, 1]) {
+      const z = s * W * 0.42;
+      g.add(trackRun(L * 0.9, 0.066, 0.042, 0.04, z));
+      for (const bx of [-0.12, 0, 0.12]) {
+        g.add(at(box(0.05, 0.034, 0.012, paint), bx, 0.044, z + s * 0.024));
+        for (const wx of [-0.021, 0.021]) roadWheels(g, 1, bx + wx, 0, 0.025, z, 0.019, 0.03, M.steel);
+        g.add(at(wheel(0.008, 0.02, M.steel), bx + 0.012, 0.073, z));
+      }
+      g.add(at(sprocket(0.025, 0.036, paint), 0.178, 0.058, z));
+      g.add(at(wheel(0.02, 0.03, M.steel), -0.178, 0.04, z));
+    }
+    // The engine grilles, white stars on the sides
+    for (let k = 0; k < 6; k++) g.add(at(box(0.004, 0.003, 0.1, M.steel), -0.17 + k * 0.012, 0.16, 0));
+    for (const s of [-1, 1]) g.add(at(starMesh(0.024), -0.03, 0.122, s * (W / 2 + 0.003), 0, s > 0 ? 0 : Math.PI, 0));
+  }
+
+  // The M10 Wolverine: the open-topped five-sided turret with the long 3-inch gun, two big wedge counterweights hanging off
+  // its back, a .50 on its rim. Front +x
+  function m10() {
+    const paint = M.olive;
+    const g = new T.Group(), W = 0.2, L = 0.4;
+    destroyerHull(g, paint, W, L);
+    // The turret: five-sided, open on top (the dark inside showing), a little back of the middle
+    g.add(at(cyl(0.062, 0.07, 0.044, paint, 5), -0.02, 0.18, 0, 0, Math.PI, 0));
+    g.add(at(cyl(0.05, 0.05, 0.002, M.black, 5), -0.02, 0.203, 0, 0, Math.PI, 0));
+    // The two wedge counterweights on the back
+    for (const s of [-1, 1]) g.add(at(frustum({ x0: -0.03, x1: 0.0, w: 0.03 }, { x0: -0.02, x1: 0.0, w: 0.026 }, 0.165, 0.2, paint), -0.085, 0, s * 0.03));
+    // The gun's mantlet and the long 3-inch
+    g.add(at(box(0.02, 0.03, 0.05, paint), 0.05, 0.19, 0));
+    g.add(at(cyl(0.0062, 0.0078, 0.27, M.steel, 14), 0.195, 0.19, 0, 0, 0, Math.PI / 2));
+    g.add(at(cyl(0.0035, 0.003, 0.06, M.steel, 8), -0.05, 0.215, 0.04, 0, 0, Math.PI / 2 - 0.1));
+    return castAll(g);
+  }
+
+  // The M36 Jackson: the same hull, a round-sided open-topped turret with a box counterweight over its back, the long
+  // 90 mm with its muzzle brake. Front +x
+  function m36() {
+    const paint = M.olive;
+    const g = new T.Group(), W = 0.2, L = 0.4;
+    destroyerHull(g, paint, W, L);
+    g.add(at(cyl(0.066, 0.072, 0.046, paint, 20), -0.015, 0.181, 0));
+    g.add(at(cyl(0.058, 0.058, 0.002, M.black, 20), -0.015, 0.205, 0));
+    // The box counterweight right across the back
+    g.add(at(box(0.04, 0.04, 0.11, paint), -0.09, 0.18, 0));
+    // The mantlet and the long 90 mm with its muzzle brake
+    g.add(at(box(0.024, 0.034, 0.06, paint), 0.058, 0.19, 0));
+    g.add(at(cyl(0.007, 0.0088, 0.32, M.steel, 14), 0.225, 0.19, 0, 0, 0, Math.PI / 2));
+    g.add(at(cyl(0.012, 0.012, 0.02, M.steel, 14), 0.39, 0.19, 0, 0, 0, Math.PI / 2));
     return castAll(g);
   }
 
@@ -3456,5 +3590,5 @@ const Models = (() => {
     return castAll(g);
   }
 
-  return { PARIS, PARIS_LOOKS, parisFront, parisCorner, greyhound, stuart, puma, c47, supplyCrate, EIFFEL_HEIGHT, eiffel, landingCraft, littleShip, matilda, carrier, panzer1, panzer2, panzer3, sdkfz231, lorry, destroyer, battleship, strongpoint, setBritish, tankTrap, hulk, crater, seaWall, seaWallRubble, bunker, bunkerCrew, BUNKER, track, bufferStop, engine, carriage, wagon, signalbox, signal, watertower, coal, cow, sheep, lampPost, posterColumn, marketStall, cafe, barn, fountain, pond, reeds, BRIDGE_DECK, materials, M, mergeParts, eliteBand, water, bridge, soldier, squad, team, captain, pak, mortar, bomber, blenheim, bomberOnStand, setArmy, t34, t35, stug3, kv2, flak88, ruinWall, ruinCorner, rubbleLine, rubblePile, minefield, STOREY, howitzer, nebelwerfer, katyusha, artillery, artilleryRound, round, coin, token, sherman, panther, panzer4, hedge, tree, house, die, table, field, lane, at };
+  return { PARIS, PARIS_LOOKS, parisFront, parisCorner, greyhound, stuart, puma, c47, supplyCrate, EIFFEL_HEIGHT, eiffel, landingCraft, littleShip, matilda, carrier, panzer1, panzer2, panzer3, sdkfz231, lorry, destroyer, battleship, strongpoint, setBritish, tankTrap, hulk, crater, seaWall, seaWallRubble, bunker, bunkerCrew, BUNKER, track, bufferStop, engine, carriage, wagon, signalbox, signal, watertower, coal, cow, sheep, lampPost, posterColumn, marketStall, cafe, barn, fountain, pond, reeds, BRIDGE_DECK, materials, M, mergeParts, eliteBand, water, bridge, soldier, squad, team, captain, pak, mortar, bomber, blenheim, bomberOnStand, setArmy, t34, t35, stug3, kv2, flak88, kingTiger, m10, m36, pine, ruinWall, ruinCorner, rubbleLine, rubblePile, minefield, STOREY, howitzer, nebelwerfer, katyusha, artillery, artilleryRound, round, coin, token, sherman, panther, panzer4, hedge, tree, house, die, table, field, lane, at };
 })();

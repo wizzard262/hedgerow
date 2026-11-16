@@ -499,11 +499,12 @@ const Board = (() => {
     for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
       const t = Sim.tileType(x, y), seed = x * 7 + y * 13;
       // (Stalingrad, Steve: every field the dust and broken brick of the ruins, every street cobbled)
-      const ground = st.map.ruins && t !== 'village' ? 'ruin' : t;
+      const ground = st.map.ruins && t !== 'village' ? 'ruin' : st.map.winter ? (t === 'orchard' ? 'snowwood' : t === 'village' ? t : 'snow') : t;
       built.add(at(Models.field(ground, t === 'field' && seed % 5 === 0 && !st.map.ruins, seed), x + 0.5, 0, y + 0.5, -Math.PI / 2, 0, 0));
       const cobbled = nearHouses(x, y) || !!st.map.ruins;
-      if (t === 'laneEW' || t === 'crossroads') built.add(at(Models.lane(1, 0.3, cobbled), x + 0.5, 0.001, y + 0.5, -Math.PI / 2, 0, 0));
-      if (t === 'laneNS' || t === 'crossroads') built.add(at(Models.lane(0.3, 1, cobbled), x + 0.5, 0.0012, y + 0.5, -Math.PI / 2, 0, 0));
+      const snowy = !!st.map.winter && !cobbled;
+      if (t === 'laneEW' || t === 'crossroads') built.add(at(Models.lane(1, 0.3, cobbled, snowy), x + 0.5, 0.001, y + 0.5, -Math.PI / 2, 0, 0));
+      if (t === 'laneNS' || t === 'crossroads') built.add(at(Models.lane(0.3, 1, cobbled, snowy), x + 0.5, 0.0012, y + 0.5, -Math.PI / 2, 0, 0));
       // The river: water down the field, joined to the river or bridge above and below; a bridge carries the lane over
       if (t === 'river' || t === 'bridge') {
         const wet = (xx, yy) => Sim.inside(xx, yy) && ['river', 'bridge'].includes(Sim.tileType(xx, yy));
@@ -513,7 +514,9 @@ const Board = (() => {
         // Reeds along the banks, here and there (Steve)
         if (t === 'river') addReeds(x, y, seed);
       }
-      if (t === 'orchard') for (const [ox, oz] of orchardTrees(seed)) built.add(at(Models.tree(seed + ox * 10 + oz * 3, 0.68 + ((ox * 31 + oz * 17) % 1) * 0.15), x + ox, 0, y + oz));
+      // (in the Ardennes a pine forest, Steve: thick with snowy pines)
+      if (t === 'orchard' && st.map.forest) for (const [ox, oz] of forestTrees(seed)) built.add(at(Models.pine(seed + ox * 10 + oz * 3, 1.1 + ((ox * 31 + oz * 17) % 1) * 0.4), x + ox, 0, y + oz));
+      else if (t === 'orchard') for (const [ox, oz] of orchardTrees(seed)) built.add(at(Models.tree(seed + ox * 10 + oz * 3, 0.68 + ((ox * 31 + oz * 17) % 1) * 0.15), x + ox, 0, y + oz));
       if (t === 'village' || t === 'hamlet') addHouses(x, y, seed);
     }
     if (st.map.joins) addTracks(st);
@@ -552,6 +555,16 @@ const Board = (() => {
       built.add(at(Models.field('field', false, land * 7 + y * 13), land + 0.5, -0.001, y + 0.5, -Math.PI / 2, 0, 0));
       built.add(at(Models.seaWall(1.02, land * 31 + y), land, 0, y + 0.5));
     }
+  }
+
+  // Where a forest's pines stand (the Ardennes, Steve): a dozen or so, scattered all over the field, some near the edges
+  function forestTrees(seed) {
+    const R = seeded(seed * 7 + 5), out = [];
+    for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) {
+      if (R() < 0.2) continue;
+      out.push([0.12 + i * 0.25 + (R() - 0.5) * 0.12, 0.12 + j * 0.25 + (R() - 0.5) * 0.12]);
+    }
+    return out;
   }
 
   // Where an orchard's trees stand (Steve: a couple more, staggered at random): six trees, each pushed about its own
@@ -1261,7 +1274,9 @@ const Board = (() => {
         // Stalingrad's round 3 reinforcements (Steve, 2026-11-15)
         t35: Models.t35, stug3: Models.stug3,
         // Stalingrad's Panzer IV F2: grey, no skirts, the round muzzle brake (Steve picked it, 2026-11-15)
-        pz4f2: () => Models.panzer4('B') }[kind];
+        pz4f2: () => Models.panzer4('B'),
+        // The Battle of the Bulge (Steve, 2026-11-16)
+        kingtiger: Models.kingTiger, m10: Models.m10, m36: Models.m36 }[kind];
       return [0].map(() => { const m = Models.mergeParts(make()); markerSpots(m); m.scale.setScalar(TANKS); m.userData.slowTurn = true; return m; });
     }
     if (PIECES[kind].bunker) return [bunkerBase(kind === 'bunker_gun')];
