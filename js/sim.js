@@ -378,9 +378,7 @@ const Sim = (() => {
     const from = (st.map.from && st.map.from[side]) || 0;
     const xs = side === 'us' ? [...Array(cols).keys()].map(i => from + i) : [...Array(cols).keys()].map(i => COLS - 1 - i);
     const fields = [];
-    // (not in the Ardennes' pine forests, Steve: no tank can get into them, so none starts in one)
-    const noStart = (x, y) => tileType(x, y) === 'river' || (st.map.forest && tileType(x, y) === 'orchard');
-    for (const x of xs) for (let y = 0; y < ROWS; y++) if (!noStart(x, y)) fields.push({ x, y });
+    for (const x of xs) for (let y = 0; y < ROWS; y++) if (tileType(x, y) !== 'river') fields.push({ x, y });
     // How good a field is to start in: cover towards the enemy, then a little luck
     const front = side === 'us' ? 1 : -1;
     const worth = f => {
@@ -422,7 +420,9 @@ const Sim = (() => {
       const options = fields.filter(f => !southers.includes(u) || southOfLine(f)).map(f => ({ f, w: worth(f) })).sort((a, b) => b.w - a.w);
       // Tanks start on a street (Steve: Paris), never in a courtyard behind the buildings they can't get through
       const street = o => !(st.map.blocks && isTank(u)) || tileType(o.f.x, o.f.y) !== 'court';
-      const spot = options.find(o => street(o) && roomFor(st, u, o.f.x, o.f.y)) || options.find(o => roomFor(st, u, o.f.x, o.f.y));
+      // (no tank starts in the Ardennes' pine forest, Steve: it could never get out)
+      const woods = o => st.map.forest && isTank(u) && tileType(o.f.x, o.f.y) === 'orchard';
+      const spot = options.find(o => street(o) && !woods(o) && roomFor(st, u, o.f.x, o.f.y)) || options.find(o => !woods(o) && roomFor(st, u, o.f.x, o.f.y));
       u.x = spot.f.x; u.y = spot.f.y;
       // (its place in the field straight away, so the next piece's room is judged by where this one really stands: by the
       // hedge towards the enemy as it starts, so a big piece takes a corner block and leaves room, never the whole middle)

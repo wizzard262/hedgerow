@@ -2027,6 +2027,15 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - **Bonus battles in date order**: the Winter War, Dunkirk, Stalingrad, the Bulge
 - Assumptions: the RF-8 itself only came in 1941, a little after the Winter War (Steve asked for it by name); the Finns' robot uses its usual moves (it closes in, it may not use Molotovs as often as a person would)
 
+## 339. The Bulge with infantry; Kursk, the all-tanks battle; the New game screen rearranged (v208)
+
+- Steve: when I said the Bulge I was thinking of Kursk: was making the Bulge all about tanks wrong? (Claude: the Bulge was mostly an infantry battle in snowy forest, with some big tank fights; Kursk is the classic all-tanks one.) Keep the Bulge but add infantry to make it more correct, then make Kursk; add the tanks suggested (Tigers, Ferdinands, against T-34s). Keep the other battles (Monte Cassino, Pegasus Bridge...) as ideas, not placeholders. No scrolling on the New game screen, smaller pictures if need be; the eight Normandy battles at the top, the controls and bonus battles at the bottom; Start, How to play and New game bigger and a more obvious colour
+- **The Bulge** keeps its tanks and gains infantry (men can go into the forest; no tank starts in it): two elite platoons of the 101st Airborne, their captain, a .30 cal and two bazookas; three Volksgrenadier platoons, their Hauptmann, an MG 42 and a Panzerschreck. Robots (40 games): Americans 21, Germans 16, 3 draws (with one bazooka, 12 to 26)
+- **Kursk** (`kursk`, 12 July 1943, Prokhorovka): tanks only on open steppe (`steppe`: wheat in most fields), a few copses and a state farm, roads across, no hedges or wire. Destroy the other side. Soviets ('us', army 'su'): six T-34s in summer green (`t34s`, the T-34's own look A), three **T-70s** (new: small, 45 mm, a field further), a **KV-1** (new: armour 2, slow); in round 3 two more T-34s and a T-70. Germans: two **Tiger Is** (new: armour 2, the 8.8 cm, slow; camouflage), a **Ferdinand** (new: the long 8.8 cm in a big casemate at the back, armour 2, slow, long: 3 by 2 areas), a Panther, two Panzer IV F2s, a StuG III. Il-2 and Stuka bombers, no mortars. Robots (80 games): **Soviets 41, Germans 38, 1 draw** (one T-34 more 60 to 20, one fewer 31 to 49)
+- **Bonus battles** in date order: Winter War, Dunkirk, Stalingrad, Kursk, Bulge
+- **New game screen**: the eight campaign battles in one row across the top; under them who commands each side (with the 'de' side's name: Germans or Finns) on the left and the five bonus battles in a row on the right; the battle's note and Start underneath; no scrolling (checked at 1280 by 720 and 1600 by 950). **Start**, **How to play** and **New game** are bigger and bright orange
+- Ideas kept for later (in the notes): Monte Cassino, Pegasus Bridge, El Alamein, Tarawa, Burma, Iwo Jima, Arnhem
+
 ## Sessions
 
 | # | Date | Length | What we did |

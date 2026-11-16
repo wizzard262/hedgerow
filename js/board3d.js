@@ -504,7 +504,9 @@ const Board = (() => {
       const t = Sim.tileType(x, y), seed = x * 7 + y * 13;
       // (Stalingrad, Steve: every field the dust and broken brick of the ruins, every street cobbled)
       const ground = st.map.ruins && t !== 'village' ? 'ruin' : st.map.winter ? (t === 'orchard' ? 'snowwood' : t === 'village' ? t : 'snow') : t;
-      built.add(at(Models.field(ground, t === 'field' && seed % 5 === 0 && !st.map.ruins, seed), x + 0.5, 0, y + 0.5, -Math.PI / 2, 0, 0));
+      // (the steppe at Kursk, Steve: wheat in most fields)
+      const wheat = t === 'field' && !st.map.ruins && (st.map.steppe ? seed % 3 !== 0 : seed % 5 === 0);
+      built.add(at(Models.field(ground, wheat, seed), x + 0.5, 0, y + 0.5, -Math.PI / 2, 0, 0));
       const cobbled = nearHouses(x, y) || !!st.map.ruins;
       const snowy = !!st.map.winter && !cobbled;
       if (t === 'laneEW' || t === 'crossroads') built.add(at(Models.lane(1, 0.3, cobbled, snowy), x + 0.5, 0.001, y + 0.5, -Math.PI / 2, 0, 0));
@@ -1284,7 +1286,9 @@ const Board = (() => {
         // More tanks (Steve, 2026-11-16)
         pz38t: Models.panzer38t, jagdpanther: Models.jagdpanther, hetzer: Models.hetzer, m18: Models.m18, jumbo: Models.jumbo, m24: Models.m24,
         // The Winter War (Steve, 2026-11-16)
-        t26: Models.t26, t28: Models.t28, t38: Models.t38, aerosan: Models.aerosan, vickers6t: Models.vickers6t }[kind];
+        t26: Models.t26, t28: Models.t28, t38: Models.t38, aerosan: Models.aerosan, vickers6t: Models.vickers6t,
+        // Kursk (Steve, 2026-11-16): the T-34 in summer green
+        tiger1: Models.tiger1, ferdinand: Models.ferdinand, t70: Models.t70, kv1: Models.kv1, t34s: () => Models.t34('A') }[kind];
       return [0].map(() => { const m = Models.mergeParts(make()); markerSpots(m); m.scale.setScalar(TANKS); m.userData.slowTurn = true; return m; });
     }
     if (PIECES[kind].bunker) return [bunkerBase(kind === 'bunker_gun')];

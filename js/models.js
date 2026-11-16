@@ -3017,6 +3017,114 @@ const Models = (() => {
     flag.add(at(box(0.011, 0.045, 0.003, blue), 0.025, 0, 0));
   }
 
+  // ---------- Kursk, July 1943 (Steve, 2026-11-16) ----------
+
+  // The Tiger I: the big box hull with its overhanging superstructure and upright plates, the interleaved road wheels, the
+  // wide rounded turret with its flat mantlet and the long 8.8 cm with its muzzle brake; dark yellow with bands. Front +x
+  function tiger1() {
+    const paint = camoPaint();
+    const g = new T.Group(), W = 0.23, L = 0.44;
+    g.add(at(box(L * 0.9, 0.05, W * 0.6, paint), 0, 0.06, 0));
+    // The superstructure: upright slabs out over the tracks, a short sloped glacis, the driver's visor block
+    g.add(at(frustum({ x0: -0.22, x1: 0.18, w: W * 1.04 }, { x0: -0.215, x1: 0.17, w: W * 1.02 }, 0.085, 0.152, paint), 0, 0, 0));
+    g.add(at(frustum({ x0: 0.17, x1: 0.225, w: W * 0.66 }, { x0: 0.17, x1: 0.19, w: W * 0.66 }, 0.06, 0.1, paint), 0, 0, 0));
+    g.add(at(box(0.01, 0.02, 0.04, paint), 0.185, 0.14, 0.045));
+    g.add(at(sphere(0.008, paint, 10, 8), 0.182, 0.135, -0.05));
+    for (const s of [-1, 1]) {
+      const z = s * W * 0.4;
+      g.add(trackRun(L * 0.88, 0.07, 0.054, 0.038, z));
+      for (let k = 0; k < 8; k++) {
+        const outer = k % 2 === 0;
+        g.add(at(wheel(0.03, 0.012, paint), -0.165 + k * 0.047, 0.04, z + s * (outer ? 0.02 : 0.004)));
+        g.add(at(wheel(0.011, 0.014, M.steel), -0.165 + k * 0.047, 0.04, z + s * (outer ? 0.022 : 0.006)));
+      }
+      g.add(at(sprocket(0.026, 0.04, paint), 0.2, 0.06, z));
+      g.add(at(wheel(0.024, 0.035, M.steel), -0.2, 0.06, z));
+    }
+    // The wide turret, round at the back and sides, the flat mantlet, the cupola, the long 8.8 cm
+    const tur = cyl(0.075, 0.078, 0.055, paint, 24); tur.scale.set(1.05, 1, 0.95);
+    g.add(at(tur, -0.015, 0.18, 0));
+    g.add(at(box(0.03, 0.048, 0.1, paint), 0.065, 0.18, 0));
+    g.add(at(cyl(0.019, 0.021, 0.02, paint, 16), -0.05, 0.217, 0.035));
+    g.add(at(cyl(0.007, 0.0088, 0.3, M.steel, 14), 0.225, 0.182, 0, 0, 0, Math.PI / 2));
+    g.add(at(cyl(0.013, 0.013, 0.02, M.steel, 14), 0.385, 0.182, 0, 0, 0, Math.PI / 2));
+    // Smoke dischargers on the turret front corners, crosses on the hull
+    for (const s of [-1, 1]) g.add(at(cyl(0.005, 0.005, 0.016, M.steel, 8), 0.04, 0.205, s * 0.06, 0, 0, Math.PI / 2 - 0.5));
+    for (const s of [-1, 1]) g.add(at(crossMesh(0.024), -0.12, 0.12, s * (W * 0.52 + 0.002), 0, s > 0 ? 0 : Math.PI, 0));
+    return castAll(g);
+  }
+
+  // The Ferdinand: the Porsche Tiger's long hull, the engines in the middle, and the great boxy casemate right at the back
+  // with the very long 8.8 cm reaching far out over the front; six big road wheels in pairs a side. Front +x. Long: 3 by 2
+  function ferdinand() {
+    const paint = camoPaint();
+    const inner = new T.Group(), g = inner, W = 0.23, L = 0.52;
+    g.add(at(box(L * 0.9, 0.05, W * 0.6, paint), 0, 0.06, 0));
+    g.add(at(frustum({ x0: -0.26, x1: 0.24, w: W * 1.02 }, { x0: -0.255, x1: 0.2, w: W }, 0.085, 0.13, paint), 0, 0, 0));
+    // The casemate at the back: tall, its plates leaning in a little
+    g.add(at(frustum({ x0: -0.25, x1: 0.02, w: W * 0.98 }, { x0: -0.24, x1: -0.01, w: W * 0.86 }, 0.13, 0.225, paint), 0, 0, 0));
+    for (const s of [-1, 1]) {
+      const z = s * W * 0.4;
+      g.add(trackRun(L * 0.9, 0.07, 0.054, 0.038, z));
+      for (let k = 0; k < 6; k++) roadWheels(g, 1, -0.2 + k * 0.08, 0, 0.04, z, 0.03, 0.03, paint);
+      g.add(at(sprocket(0.027, 0.042, paint), -0.24, 0.06, z));
+      g.add(at(wheel(0.024, 0.036, M.steel), 0.24, 0.06, z));
+    }
+    // The mantlet on the casemate's front and the very long gun over the whole front of the hull
+    g.add(at(box(0.024, 0.05, 0.07, paint), 0.03, 0.18, 0));
+    g.add(at(cyl(0.0075, 0.0095, 0.42, M.steel, 14), 0.25, 0.18, 0, 0, 0, Math.PI / 2));
+    for (const dx of [0.46, 0.476]) g.add(at(cyl(0.013, 0.013, 0.013, M.steel, 14), dx, 0.18, 0, 0, 0, Math.PI / 2));
+    for (const s of [-1, 1]) g.add(at(crossMesh(0.024), -0.12, 0.17, s * (W * 0.47 + 0.002), 0, s > 0 ? 0 : Math.PI, 0));
+    inner.scale.setScalar(1.08);
+    const outer = new T.Group();
+    outer.add(inner);
+    return castAll(outer);
+  }
+
+  // The T-70: a small light tank, five road wheels a side, a sloped hull, the little one-man turret off to the left with
+  // its 45 mm; Soviet green. Front +x
+  function t70() {
+    const paint = sovietPaint();
+    const g = new T.Group(), W = 0.16, L = 0.3;
+    g.add(at(box(L * 0.88, 0.042, W * 0.56, paint), 0, 0.052, 0));
+    g.add(at(frustum({ x0: -0.15, x1: 0.16, w: W * 1.02 }, { x0: -0.14, x1: 0.08, w: W * 0.92 }, 0.072, 0.11, paint), 0, 0, 0));
+    for (const s of [-1, 1]) {
+      const z = s * W * 0.42;
+      g.add(trackRun(L * 0.92, 0.046, 0.03, 0.028, z));
+      roadWheels(g, 5, -0.11, 0.055, 0.024, z, 0.02, 0.026, M.steel);
+      g.add(at(sprocket(0.017, 0.026, paint), 0.14, 0.04, z));
+    }
+    g.add(at(frustum({ x0: -0.04, x1: 0.04, w: 0.075 }, { x0: -0.034, x1: 0.03, w: 0.062 }, 0.11, 0.145, paint), 0, 0, 0.015));
+    g.add(at(box(0.012, 0.02, 0.03, paint), 0.046, 0.128, 0.015));
+    g.add(at(cyl(0.0042, 0.005, 0.1, M.steel, 10), 0.1, 0.129, 0.015, 0, 0, Math.PI / 2));
+    for (const s of [-1, 1]) g.add(at(box(0.024, 0.01, 0.002, mat('#e8e4d8', 0.8)), 0.0, 0.13, 0.015 + s * 0.032));
+    return castAll(g);
+  }
+
+  // The KV-1: the heavy tank the KV-2 was built on, the same long boxy hull and six road wheels a side with return
+  // rollers, its own big welded turret with the 76 mm; Soviet green. Front +x
+  function kv1() {
+    const paint = sovietPaint();
+    const g = new T.Group(), W = 0.21, L = 0.4;
+    g.add(at(box(L * 0.92, 0.05, W * 0.64, paint), 0, 0.06, 0));
+    g.add(at(profile([[-0.2, 0.085], [0.16, 0.085], [0.205, 0.065], [0.205, 0.085], [0.17, 0.12], [-0.19, 0.12], [-0.2, 0.105]], W, paint, 0.004), 0, 0, 0));
+    for (const s of [-1, 1]) {
+      const z = s * W * 0.43;
+      g.add(trackRun(L * 0.95, 0.05, 0.042, 0.03, z));
+      for (let k = 0; k < 6; k++) g.add(at(wheel(0.024, 0.03, M.steel), -0.15 + k * 0.06, 0.028, z));
+      for (let k = 0; k < 3; k++) g.add(at(wheel(0.008, 0.02, M.steel), -0.1 + k * 0.09, 0.056, z));
+      g.add(at(sprocket(0.024, 0.034, paint), -0.19, 0.04, z));
+      g.add(at(wheel(0.022, 0.034, M.steel), 0.19, 0.04, z));
+    }
+    // The welded turret, wide and low with a sloped front, its overhanging back, the 76 mm in its mantlet
+    g.add(at(frustum({ x0: -0.085, x1: 0.06, w: 0.14 }, { x0: -0.075, x1: 0.045, w: 0.12 }, 0.12, 0.172, paint), 0, 0, 0));
+    g.add(at(box(0.02, 0.034, 0.05, paint), 0.07, 0.146, 0));
+    g.add(at(cyl(0.0058, 0.0072, 0.14, M.steel, 12), 0.15, 0.147, 0, 0, 0, Math.PI / 2));
+    g.add(at(hatch(0.016, paint), -0.03, 0.174, 0.02));
+    for (const s of [-1, 1]) g.add(at(box(0.04, 0.014, 0.002, mat('#e8e4d8', 0.8)), -0.01, 0.15, s * 0.062));
+    return castAll(g);
+  }
+
   // A box with sloping faces: its bottom and top each a rectangle (x0 to x1 along, w across), at heights y0 and y1. For
   // armour plates that lean in: a casemate's sloped front, back and sides
   function frustum(bottom, top, y0, y1, m) {
@@ -3951,5 +4059,5 @@ const Models = (() => {
     return castAll(g);
   }
 
-  return { PARIS, PARIS_LOOKS, parisFront, parisCorner, greyhound, stuart, puma, c47, supplyCrate, EIFFEL_HEIGHT, eiffel, landingCraft, littleShip, matilda, carrier, panzer1, panzer2, panzer3, sdkfz231, lorry, destroyer, battleship, strongpoint, setBritish, tankTrap, hulk, crater, seaWall, seaWallRubble, bunker, bunkerCrew, BUNKER, track, bufferStop, engine, carriage, wagon, signalbox, signal, watertower, coal, cow, sheep, lampPost, posterColumn, marketStall, cafe, barn, fountain, pond, reeds, BRIDGE_DECK, materials, M, mergeParts, eliteBand, water, bridge, soldier, squad, team, captain, pak, mortar, bomber, blenheim, bomberOnStand, setArmy, t34, t35, stug3, kv2, flak88, kingTiger, m10, m36, pine, panzer38t, jagdpanther, hetzer, m18, m24, jumbo, t26, t28, t38, aerosan, vickers6t, bofors37, setDeArmy, ruinWall, ruinCorner, rubbleLine, rubblePile, minefield, STOREY, howitzer, nebelwerfer, katyusha, artillery, artilleryRound, round, coin, token, sherman, panther, panzer4, hedge, tree, house, die, table, field, lane, at };
+  return { PARIS, PARIS_LOOKS, parisFront, parisCorner, greyhound, stuart, puma, c47, supplyCrate, EIFFEL_HEIGHT, eiffel, landingCraft, littleShip, matilda, carrier, panzer1, panzer2, panzer3, sdkfz231, lorry, destroyer, battleship, strongpoint, setBritish, tankTrap, hulk, crater, seaWall, seaWallRubble, bunker, bunkerCrew, BUNKER, track, bufferStop, engine, carriage, wagon, signalbox, signal, watertower, coal, cow, sheep, lampPost, posterColumn, marketStall, cafe, barn, fountain, pond, reeds, BRIDGE_DECK, materials, M, mergeParts, eliteBand, water, bridge, soldier, squad, team, captain, pak, mortar, bomber, blenheim, bomberOnStand, setArmy, t34, t35, stug3, kv2, flak88, kingTiger, m10, m36, pine, panzer38t, jagdpanther, hetzer, m18, m24, jumbo, t26, t28, t38, aerosan, vickers6t, bofors37, setDeArmy, tiger1, ferdinand, t70, kv1, ruinWall, ruinCorner, rubbleLine, rubblePile, minefield, STOREY, howitzer, nebelwerfer, katyusha, artillery, artilleryRound, round, coin, token, sherman, panther, panzer4, hedge, tree, house, die, table, field, lane, at };
 })();

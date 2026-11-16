@@ -310,7 +310,7 @@ const MAPS = [
     // crossroads, a village in the middle; no hedges, no wire. No goal to take: destroy every enemy tank. No bombers (low
     // cloud and fog, as in the real battle's first week) and no mortars; artillery as usual. Reinforcements in round 3
     id: 'bulge', bonus: true, date: '18 December 1944', name: 'Battle of the Bulge',
-    note: 'Tanks only, in the snowy Ardennes: pine forests no tank can get into and nobody sees through, narrow roads, open snowy fields and a village at the crossroads. Destroy every enemy tank. The Germans have a King Tiger, a Panther, a Panzer IV, a StuG III, a Jagdpanther and a Hetzer, and a second Panther comes up in round 3; the Americans three Shermans, a Sherman Jumbo, an M10 Wolverine and an M24 Chaffee, and in round 3 an M36 Jackson, an M18 Hellcat and two more Shermans come up. Low cloud: no bombers.',
+    note: 'The snowy Ardennes: pine forests no tank can get into and nobody sees through (men can), narrow roads, open snowy fields and a village at the crossroads. Destroy the other side. American paratroopers of the 101st Airborne and German Volksgrenadiers fight among the tanks. The Germans have a King Tiger, a Panther, a Panzer IV, a StuG III, a Jagdpanther and a Hetzer, and a second Panther comes up in round 3; the Americans three Shermans, a Sherman Jumbo, an M10 Wolverine and an M24 Chaffee, and in round 3 an M36 Jackson, an M18 Hellcat and two more Shermans come up. Low cloud: no bombers.',
     noGoal: true,
     winter: true,
     forest: true,
@@ -328,7 +328,8 @@ const MAPS = [
     gap: 1, wire: 0,
     ammo: { us: { mortars: 0, bomber: 0 }, de: { mortars: 0, bomber: 0 } },
     // Reinforcements at the start of round 3, each side at its own edge (Steve: reinforcements come in). With the new
-    // tanks (Steve, 2026-11-16: still a good fight), balanced by robots (80 games): Americans 40, Germans 37, 3 draws
+    // tanks (Steve, 2026-11-16: still a good fight), balanced by robots (80 games): Americans 40, Germans 37, 3 draws;
+    // then the infantry came in (see below)
     reinforce: {
       round: 3,
       us: [{ id: 'TD2', kind: 'm36', name: 'M36 Jackson' }, { id: 'TD3', kind: 'm18', name: 'M18 Hellcat' }, { id: 'T5', kind: 'firefly', name: 'Sherman 76mm (2)' }, { id: 'T6', kind: 'sherman', name: 'Sherman 75mm (3)' }],
@@ -342,6 +343,14 @@ const MAPS = [
         { id: 'TJ', kind: 'jumbo', name: 'Sherman Jumbo' },
         { id: 'TD1', kind: 'm10', name: 'M10 Wolverine' },
         { id: 'LT1', kind: 'm24', name: 'M24 Chaffee' },
+        // The infantry (Steve, 2026-11-16: the Bulge was mostly an infantry battle): paratroopers of the 101st Airborne.
+        // With them, robots (40 games): Americans 21, Germans 16, 3 draws (without the second bazooka 12 to 26)
+        { id: 'A', kind: 'company', name: '1st Platoon, 101st Airborne', quality: 'elite' },
+        { id: 'B', kind: 'company', name: '2nd Platoon, 101st Airborne', quality: 'elite' },
+        { id: 'cap', kind: 'captain', name: 'Captain (company HQ)' },
+        { id: 'mg1', kind: 'mg', name: '.30 cal MG Team' },
+        { id: 'bz1', kind: 'bazooka', name: 'Bazooka Team (1)' },
+        { id: 'bz2', kind: 'bazooka', name: 'Bazooka Team (2)' },
       ],
     },
     de: {
@@ -352,6 +361,70 @@ const MAPS = [
         { id: 'dsg', kind: 'stug3', name: 'StuG III', reserve: true },
         { id: 'djp', kind: 'jagdpanther', name: 'Jagdpanther', reserve: true },
         { id: 'dhz', kind: 'hetzer', name: 'Hetzer', reserve: true },
+        // The infantry (Steve): Volksgrenadiers
+        { id: 'd1', kind: 'company', name: '1. Volksgrenadier-Zug', quality: 'standard', reserve: true },
+        { id: 'd2', kind: 'company', name: '2. Volksgrenadier-Zug', quality: 'standard', reserve: true },
+        { id: 'd3', kind: 'company', name: '3. Volksgrenadier-Zug', quality: 'standard', reserve: true },
+        { id: 'dcap', kind: 'captain', name: 'Hauptmann (company HQ)', reserve: true },
+        { id: 'dmg1', kind: 'mg42', name: 'MG 42 Team', reserve: true },
+        { id: 'dps1', kind: 'schreck', name: 'Panzerschreck Team', reserve: true },
+      ],
+    },
+  },
+  {
+    // Kursk (Steve, 2026-11-16: the all-tanks battle): Prokhorovka, 12 July 1943. Open steppe and wheat under a summer
+    // sky, a few copses and a state farm, the roads across it; no hedges, no wire. Tanks only, nothing to take: destroy
+    // the other side. The Soviets ('us', army 'su') come on in waves against the SS panzers. steppe: wheat everywhere
+    id: 'kursk', bonus: true, date: '12 July 1943', name: 'Kursk',
+    note: 'Prokhorovka, the greatest tank battle: open steppe and wheat, a few copses and a state farm. Tanks only: Tigers, a Ferdinand, a Panther, Panzer IVs and a StuG against waves of T-34s, T-70s and a KV-1; three more Soviet tanks come up in round 3. Long sight lines, no hedges. Destroy the other side.',
+    noGoal: true,
+    steppe: true,
+    army: 'su',
+    names: { us: 'Soviets', de: 'Germans' },
+    rows: [
+      '..|....h....',
+      '..|.o....o..',
+      '==+===+=====',
+      '..o...|..v..',
+      '.h....|..v..',
+      '======+=====',
+      '..o...|..o..',
+      '......|.....',
+    ],
+    villages: [{ x: 9, y: 3, name: 'the state farm' }],
+    gap: 1, wire: 0,
+    guns: { us: { artillery: '76 mm divisional guns', bomber: 'Il-2 Shturmovik' }, de: { artillery: '15 cm Nebelwerfer 41s', bomber: 'Ju 87 Stuka' } },
+    ammo: { us: { mortars: 0 }, de: { mortars: 0 } },
+    // Balanced by robots (80 games): Soviets 41, Germans 38, 1 draw (one T-34 more, or less, swung it to 60 to 20 or
+    // 31 to 49)
+    reinforce: {
+      round: 3,
+      us: [{ id: 'T7', kind: 't34s', name: 'T-34 (7)' }, { id: 'T8', kind: 't34s', name: 'T-34 (8)' }, { id: 'L3', kind: 't70', name: 'T-70 (3)' }],
+      de: [],
+    },
+    us: {
+      only: [
+        { id: 'T1', kind: 't34s', name: 'T-34 (1)' },
+        { id: 'T2', kind: 't34s', name: 'T-34 (2)' },
+        { id: 'T3', kind: 't34s', name: 'T-34 (3)' },
+        { id: 'T4', kind: 't34s', name: 'T-34 (4)' },
+        { id: 'T5', kind: 't34s', name: 'T-34 (5)' },
+        { id: 'T6', kind: 't34s', name: 'T-34 (6)' },
+        { id: 'L1', kind: 't70', name: 'T-70 (1)' },
+        { id: 'L2', kind: 't70', name: 'T-70 (2)' },
+        { id: 'L4', kind: 't70', name: 'T-70 (4)' },
+        { id: 'H1', kind: 'kv1', name: 'KV-1' },
+      ],
+    },
+    de: {
+      only: [
+        { id: 'dti1', kind: 'tiger1', name: 'Tiger (1)', reserve: true },
+        { id: 'dti2', kind: 'tiger1', name: 'Tiger (2)', reserve: true },
+        { id: 'dfe', kind: 'ferdinand', name: 'Ferdinand', reserve: true },
+        { id: 'dp1', kind: 'panther', name: 'Panther', reserve: true },
+        { id: 'dt1', kind: 'pz4f2', name: 'Panzer IV (1)', reserve: true },
+        { id: 'dt2', kind: 'pz4f2', name: 'Panzer IV (2)', reserve: true },
+        { id: 'dsg', kind: 'stug3', name: 'StuG III', reserve: true },
       ],
     },
   },
@@ -504,6 +577,7 @@ const BONUS = [
   { id: 'winterwar', name: 'Winter War', date: 'January 1940' },
   { id: 'dunkirk', name: 'Dunkirk', date: '31 May 1940' },
   { id: 'stalingrad', name: 'Stalingrad', date: 'November 1942' },
+  { id: 'kursk', name: 'Kursk', date: 'July 1943' },
   { id: 'bulge', name: 'Battle of the Bulge', date: 'December 1944' },
 ];
 const COLS = MAPS[0].rows[0].length, ROWS = MAPS[0].rows.length;
@@ -667,6 +741,14 @@ const PIECES = {
   // turrets that fire a shot of their own, hullMg, as the T-35's), the T-38 tankette (one MG, thin: machine guns hurt
   // it, car), the RF-8-GAZ-98 aerosan (a propeller sled: fast, plywood, one MG). Finnish: the Vickers 6-ton (37 mm),
   // the Bofors 37 mm anti-tank gun, the Lahti 20 mm anti-tank rifle team
+  // Kursk (Steve, 2026-11-16): the Tiger I (armour 2, the 8.8 cm, slow); the Ferdinand (the Porsche Tiger's hull with a
+  // casemate at the back and the long 8.8 cm: armour 2, long, slow, no machine gun); the T-70 light tank (quick); the
+  // KV-1 heavy tank (armour 2, slow); t34s: the T-34 in summer green (the T-34's numbers, its own look)
+  tiger1:   { name: 'Tiger I', soft: 1.5, hard: 3, he: 1.5, tank: true, armour: 2, cutter: true, extraMove: -1 },
+  ferdinand: { name: 'Ferdinand', soft: 0, hard: 3, he: 1, tank: true, armour: 2, cutter: true, extraMove: -1, long: true },
+  t70:      { name: 'T-70', soft: 1, hard: 1, he: 1, tank: true, armour: 0, cutter: true, extraMove: 1 },
+  kv1:      { name: 'KV-1', soft: 1.5, hard: 1.5, he: 1, tank: true, armour: 2, cutter: true, extraMove: -1 },
+  t34s:     { name: 'T-34/76', soft: 1.5, hard: 1.5, he: 1, tank: true, armour: 1, cutter: true },
   t26:      { name: 'T-26', soft: 1.5, hard: 1, he: 1, tank: true, armour: 0, cutter: true },
   t28:      { name: 'T-28', soft: 1, hard: 1, he: 1.5, tank: true, armour: 0, cutter: true, extraMove: -1, hullMg: 2 },
   t38:      { name: 'T-38 tankette', soft: 1, hard: 0, he: 0, tank: true, armour: 0, car: true },

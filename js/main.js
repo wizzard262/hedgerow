@@ -716,6 +716,8 @@ window.Game = (() => {
     $('#map-note').textContent = map.note;
     // Who the 'us' side is in this battle (Steve: the British at Dunkirk)
     $('#us-side-name').textContent = (map.names && map.names.us) || 'Americans';
+    // (the Finns in the Winter War, Steve)
+    $('#de-side-name').textContent = (map.names && map.names.de) || 'Germans';
   }
   // A battle that says which side the player is (Steve: the Soviets at Stalingrad): picked, the sides are set to that
   // (one human, the other side the robot); they can still be changed before Start
