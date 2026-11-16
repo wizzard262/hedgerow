@@ -3192,7 +3192,11 @@ const Models = (() => {
     const R = seeded(look.charCodeAt(0) * 7);
     const c = document.createElement('canvas'); c.width = 256; c.height = 512;
     const g2 = c.getContext('2d');
-    const slim = look === 'F' ? 0.72 : 1, open = look === 'E';
+    // G and H (Steve: E, but a bit taller like F, and more open and feathery): longer, finer needles, gaps between the
+    // boughs all the way up, H more open still
+    const airy = look === 'G' || look === 'H';
+    const slim = look === 'F' ? 0.72 : airy ? 0.9 : 1, open = look === 'E' || airy;
+    const gaps = look === 'H' ? 0.5 : look === 'G' ? 0.35 : 0.55, gapsFrom = airy ? 0.2 : 0.55;
     // The trunk
     g2.strokeStyle = '#4a3423'; g2.lineWidth = 7;
     g2.beginPath(); g2.moveTo(128, 505); g2.lineTo(128, 30); g2.stroke();
@@ -3201,8 +3205,8 @@ const Models = (() => {
     for (let y = 34; y < 470; y += 7 + R() * 4) {
       const down = (y - 30) / 440;
       // Sparse lower boughs: every other one left out, and the rest shorter
-      if (open && down > 0.55 && R() < 0.55) continue;
-      const reach = (12 + down * 106) * slim * (open && down > 0.55 ? 0.8 : 1) * (0.85 + R() * 0.3);
+      if (open && down > gapsFrom && R() < gaps) continue;
+      const reach = (12 + down * 106) * slim * (open && !airy && down > 0.55 ? 0.8 : 1) * (0.85 + R() * 0.3);
       for (const s of [-1, 1]) {
         const ex = 128 + s * reach, ey = y + reach * (0.32 + R() * 0.15);
         g2.strokeStyle = '#2d2a1c'; g2.lineWidth = 2;
@@ -3211,9 +3215,9 @@ const Models = (() => {
         const n = Math.round(reach / 2.2);
         for (let k = 0; k < n; k++) {
           const f = k / n, bx = 128 + s * reach * f, by = y + (ey - y) * f * f - 3 * (1 - f) * f * 4;
-          g2.strokeStyle = greens[Math.floor(R() * greens.length)]; g2.lineWidth = 1.6;
+          g2.strokeStyle = greens[Math.floor(R() * greens.length)]; g2.lineWidth = airy ? 1.1 : 1.6;
           for (const t of [-1, 1]) {
-            const len = 6 + R() * 8 * (1 - f * 0.4);
+            const len = (airy ? 9 + R() * 12 : 6 + R() * 8) * (1 - f * 0.4);
             g2.beginPath(); g2.moveTo(bx, by); g2.lineTo(bx + s * len * 0.5, by + t * len * 0.45 + len * 0.55); g2.stroke();
           }
         }
@@ -3240,7 +3244,7 @@ const Models = (() => {
   function featherPine(seed, size = 1, look = 'D') {
     const g = new T.Group(), R = seeded(seed * 5 + 3);
     const m = featherMaterial(look);
-    const tall = (look === 'F' ? 0.3 : 0.26) * size, wide = tall * 0.5;
+    const tall = (look === 'F' || look === 'G' || look === 'H' ? 0.3 : 0.26) * size, wide = tall * (look === 'F' ? 0.5 : 0.52);
     const turn = R() * Math.PI;
     for (let k = 0; k < 3; k++) {
       const card = new T.Mesh(new T.PlaneGeometry(wide, tall), m);
