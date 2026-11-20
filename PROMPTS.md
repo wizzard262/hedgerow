@@ -2045,6 +2045,13 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - Steve: something much more feathery than all those options. New options: **D** feathery (three crossed cut-out cards painted with drooping boughs of fine needles and snow along them, their shadows cut out too: `Models.featherPine`), **E** the same, open below so men show through, **F** a taller, slimmer spruce. Still to pick
 - Steve: E, but a bit taller like F, and a bit more open and feathery; show me. New options **G** (as tall as F, gaps between the boughs all the way up, longer finer needles) and **H** (more open again). Steve picked **H** (v210): every pine forest (the Winter War, the Bulge) is now tall, airy, feathery pines standing on the lines between the nine areas, so men in a forest field show between them
 
+## 341. The motti starved out; the aerosan's crew and propeller guard; hull MGs after a rally (v211)
+
+- Steve: in the Winter War, what happens when the Soviets have only tanks left and can't follow the last Finns into the forest? (It never ended: tanks can't go into a forest or see two fields into one, and with a person playing there is no round limit.) Picked: **the Finns win** once the Soviets have no men left, only tanks and the aerosan: "the motti is cut off and starved out" (`mottiStarved` in sim.js, checked the moment a piece goes, in `wipedOut`). The goal above the board and How to play say so
+- Steve: the RF-8-GAZ-98 aerosan needs men in it, and a big wire frame disk round its fan at the back. The two crew now sit up in the open cockpit, heads and shoulders showing, in white smocks and fur hats (they were sunk out of sight); the propeller has a **wire guard**: a hoop just outside the blades, eight wire spokes to a small ring at the hub, four struts slanting in to the engine (`propGuard` in models.js); engine and propeller a little higher so the hoop clears the snow
+- Steve: a tank with a second MG can't shoot after it rallied. The rules allowed it (rallying itself uses its move; its hull MGs are a shot of their own) but nothing offered it: after **Rally itself** the menu just closed. Now its red hull-MG targets come up at once with its menu by it (Hull MGs, Hold MG fire) (`offerHullMg` in ui.js)
+- Assumptions: "tanks" includes the T-38 tankettes and the aerosan; the guns off the table don't count as men. Tests 267 pass; no balance runs (Steve). No game screenshot: starting a local web server was blocked this session; the aerosan was checked in a preview render
+
 ## Sessions
 
 | # | Date | Length | What we did |

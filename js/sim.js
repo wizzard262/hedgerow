@@ -529,7 +529,10 @@ const Sim = (() => {
     const foe = player === 'us' ? 'de' : 'us';
     const destroy = `destroy all ${sideName(st, foe)}`;
     // Nothing to take (the beach): only destroying the other side wins
-    if (st.noGoal) return [destroy.charAt(0).toUpperCase() + destroy.slice(1)];
+    const first = destroy.charAt(0).toUpperCase() + destroy.slice(1);
+    // The motti (Steve, 2026-11-20): the Soviets' tanks alone can't win, so the Finns need only finish their men
+    if (st.map && st.map.motti) return [first, player === 'us' ? 'Lose all your men and the tanks are lost too' : 'or every one of their men'];
+    if (st.noGoal) return [first];
     const place = st.objective.name;
     const lines = player === 'us' ? [`Capture ${place}`, `or ${destroy}`] : [`Hold ${place}`, `or ${destroy}`];
     // Taken and to be held for a whole round: which round, or the Germans must take it back by then
@@ -2162,7 +2165,25 @@ const Sim = (() => {
     } else if (!left('us') && !st.evac) {
       st.lost = true;
       st.report = ['💀 Nothing is left of the company. The attack has failed.'];
+    } else if (mottiStarved(st)) {
+      // The motti (Steve, 2026-11-20): tanks alone can never clear the forest, so the Finns win there and then
+      st.lost = true;
+      const us = sideName(st, 'us'), de = sideName(st, 'de');
+      st.report = [`🌲 The ${us} have no men left, only tanks that cannot follow the ${de} into the forest. The motti is cut off and starved out: the ${de} win!`];
     }
+  }
+
+  // The Winter War's motti (Steve, 2026-11-20): the Soviets have no men left, only tanks and the aerosan, which can't go
+  // into the forest after the last Finns. Like the real mottis, the column is cut off and starved out: the Finns win
+  function mottiStarved(st) {
+    // Only on a motti map
+    if (!st.map || !st.map.motti) return false;
+    // The Soviet pieces still on the table
+    const us = st.units.filter(u => u.side === 'us' && u.x !== null);
+    // None left at all is a loss already (above)
+    if (!us.length) return false;
+    // Every one of them a tank (the aerosan counts as one): no man left to go into the trees
+    return us.every(u => isTank(u));
   }
 
   // ---------- The player's actions ----------

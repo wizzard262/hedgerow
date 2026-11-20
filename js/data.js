@@ -436,7 +436,7 @@ const MAPS = [
     // piece): Finnish infantry can charge tanks hand to hand with Molotov cocktails and satchel charges. Tanks and the
     // aerosan keep out of the forest (forest), as in the Ardennes
     id: 'winterwar', bonus: true, date: 'January 1940', name: 'Winter War',
-    note: 'A motti on the Raate road: a Soviet column of T-26s, a T-28, T-38 tankettes, an aerosan and infantry is strung out along the one road through deep, snowy forest; Finnish ski troops close in from the trees all round. Tanks keep to the road and the clearings; Soviet infantry off the road wade through the snow a field slower, the Finns on skis go a field further, and Finnish platoons can rush the tanks with Molotov cocktails. Destroy the other side.',
+    note: 'A motti on the Raate road: a Soviet column of T-26s, a T-28, T-38 tankettes, an aerosan and infantry is strung out along the one road through deep, snowy forest; Finnish ski troops close in from the trees all round. Tanks keep to the road and the clearings; Soviet infantry off the road wade through the snow a field slower, the Finns on skis go a field further, and Finnish platoons can rush the tanks with Molotov cocktails. Destroy the other side. If the Soviets have no men left, only tanks, the motti is starved out and the Finns win.',
     noGoal: true,
     winter: true,
     forest: true,

@@ -2937,6 +2937,50 @@ const Models = (() => {
     return castAll(g);
   }
 
+  // One of the aerosan's crew: a white winter smock and a fur hat, sitting so his head and shoulders show
+  function aerosanCrewman(g, x, y, z) {
+    const smock = mat('#e8e8e2', 0.9), fur = mat('#6b5a45', 1);
+    g.add(at(box(0.022, 0.03, 0.03, smock), x, y, z));
+    g.add(at(sphere(0.011, M.skin, 10, 8), x, y + 0.025, z));
+    g.add(at(cyl(0.012, 0.012, 0.012, fur, 12), x, y + 0.035, z));
+  }
+
+  // A wire guard round a propeller turning on the x axis (front +x): the hoop, a small ring at the hub, eight spokes
+  // between them, and four struts forward from the hoop. x, y: the middle of the guard; r: the hoop's radius
+  function propGuard(g, x, y, r) {
+    const wire = 0.0016;
+    // The hoop and the ring at the hub, both upright, facing along x
+    const hoop = new T.Mesh(new T.TorusGeometry(r, wire * 1.4, 4, 40), M.steel);
+    hoop.geometry.rotateY(Math.PI / 2);
+    g.add(at(hoop, x, y, 0));
+    const inner = new T.Mesh(new T.TorusGeometry(r * 0.2, wire, 4, 16), M.steel);
+    inner.geometry.rotateY(Math.PI / 2);
+    g.add(at(inner, x, y, 0));
+    // The spokes across the back of it, from the ring to the hoop
+    for (let k = 0; k < 8; k++) {
+      const a = k * Math.PI / 4;
+      const mid = r * 0.6;
+      g.add(at(box(wire, r * 0.8, wire, M.steel), x, y + Math.cos(a) * mid, Math.sin(a) * mid, a, 0, 0));
+    }
+    // Four struts, slanting from the hoop forward and in to the engine's cowling
+    for (let k = 0; k < 4; k++) {
+      const a = Math.PI / 4 + k * Math.PI / 2;
+      const from = new T.Vector3(x, y + Math.cos(a) * r, Math.sin(a) * r);
+      const to = new T.Vector3(x + 0.05, y + Math.cos(a) * 0.024, Math.sin(a) * 0.024);
+      g.add(rod(from, to, wire * 1.5));
+    }
+  }
+  // A thin steel rod from one point to another
+  function rod(from, to, radius) {
+    const length = from.distanceTo(to);
+    const mesh = new T.Mesh(new T.CylinderGeometry(radius, radius, length, 5), M.steel);
+    // A cylinder stands along y: turn it to lie along the line, and put it half way
+    const along = to.clone().sub(from).normalize();
+    mesh.quaternion.setFromUnitVectors(new T.Vector3(0, 1, 0), along);
+    mesh.position.copy(from).add(to).multiplyScalar(0.5);
+    return mesh;
+  }
+
   // The RF-8-GAZ-98 aerosan (Steve): a propeller sled. A plywood boat on three skis, the two crew sitting in it one behind
   // the other, the machine gun on the front, the engine behind them and the big two-bladed propeller at the back. Front +x
   function aerosan() {
@@ -2953,20 +2997,27 @@ const Models = (() => {
     // The plywood hull: a boat, pointed at the front, open on top where the crew sit
     g.add(at(frustum({ x0: -0.13, x1: 0.08, w: 0.1 }, { x0: -0.13, x1: 0.06, w: 0.11 }, 0.03, 0.07, paint), 0, 0, 0));
     g.add(at(frustum({ x0: 0.08, x1: 0.15, w: 0.1 }, { x0: 0.06, x1: 0.1, w: 0.04 }, 0.03, 0.07, paint), 0, 0, 0));
+    // The open cockpit: dark inside, the two crew sitting up in it
     g.add(at(box(0.12, 0.004, 0.08, M.black), -0.0, 0.071, 0));
-    // The two crew, the driver in front and the gunner behind him
-    crewman(g, 0.03, 0.035, 0);
-    crewman(g, -0.03, 0.035, 0);
+    // The two crew (Steve, 2026-11-20: they were sunk out of sight), the driver in front and the gunner behind him,
+    // heads and shoulders above the sides, in winter white
+    aerosanCrewman(g, 0.035, 0.064, 0);
+    aerosanCrewman(g, -0.03, 0.068, 0);
     // The machine gun on the front, on its ring
-    g.add(at(cyl(0.0025, 0.0025, 0.05, M.steel, 6), 0.1, 0.09, 0, 0, 0, Math.PI / 2));
-    g.add(at(box(0.024, 0.008, 0.007, M.steel), 0.07, 0.088, 0));
-    // The engine in its cowling at the back, and the big propeller on its frame
-    g.add(at(cyl(0.022, 0.026, 0.05, paint, 12), -0.1, 0.09, 0, 0, 0, Math.PI / 2));
-    for (const s of [-1, 1]) g.add(at(box(0.004, 0.06, 0.004, M.steel), -0.09, 0.07, s * 0.03, s * 0.4, 0, 0));
+    g.add(at(cyl(0.0025, 0.0025, 0.05, M.steel, 6), 0.1, 0.1, 0, 0, 0, Math.PI / 2));
+    g.add(at(box(0.024, 0.008, 0.007, M.steel), 0.07, 0.098, 0));
+    // The engine in its cowling at the back, up on its frame
+    const hub = { x: -0.1, y: 0.115 };
+    g.add(at(cyl(0.022, 0.026, 0.05, paint, 12), hub.x, hub.y, 0, 0, 0, Math.PI / 2));
+    for (const s of [-1, 1]) g.add(at(box(0.004, 0.06, 0.004, M.steel), -0.09, 0.085, s * 0.03, s * 0.4, 0, 0));
+    // The big two-bladed propeller
     const prop = new T.Group();
     prop.add(at(box(0.004, 0.16, 0.012, M.wood), 0, 0, 0, 0, 0, 0));
     prop.add(at(cyl(0.008, 0.008, 0.012, M.steel, 10), 0, 0, 0, 0, 0, Math.PI / 2));
-    g.add(at(prop, -0.132, 0.09, 0, 0.5, 0, 0));
+    g.add(at(prop, -0.132, hub.y, 0, 0.5, 0, 0));
+    // Round it (Steve, 2026-11-20), a big wire guard: a hoop just outside the blades, wire spokes across the back of it
+    // to a small inner ring, and struts tying the hoop to the hull
+    propGuard(g, -0.14, hub.y, 0.088);
     // A red star on each side
     for (const s of [-1, 1]) g.add(at(box(0.016, 0.016, 0.002, mat('#a8261e', 0.8)), 0.02, 0.05, s * 0.054, 0, 0, Math.PI / 4));
     return castAll(g);

@@ -359,6 +359,8 @@ const UI = (() => {
           if (a.run) { a.run(); view.mode = null; }
           else view.mode = a.mode;
           closeMenu(); refresh();
+          // Rallied itself (its move) with its hull MGs still to fire: straight on to them
+          if (a.mode === 'selfRally') offerHullMg(u);
         };
         menu.append(b);
       }
@@ -398,6 +400,21 @@ const UI = (() => {
     Sim.skipSupport(st, which);
     view.mode = null;
     refresh();
+  }
+
+  // A tank with hull MGs that has just used its move (Steve, 2026-11-20: after it rallied itself it couldn't shoot): its
+  // red targets for the hull MGs up at once, and its menu by it with Hull MGs and Hold MG fire
+  function offerHullMg(u) {
+    // Only with its move gone and the MGs still able to fire
+    if (Sim.canAct(st, u) || !Sim.canHullMg(st, u)) return;
+    // The red targets for the hull MGs
+    view.sel = u.id;
+    view.mode = 'hullMg';
+    refresh();
+    // Its menu by the piece on the table
+    const box = document.querySelector('#board').getBoundingClientRect();
+    const spot = Board.pieceScreen(u);
+    openMenu([u], spot.x - box.left, spot.y - box.top, box);
   }
 
   function closeMenu() {

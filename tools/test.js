@@ -5111,6 +5111,46 @@ check('the T-35\'s hull machine guns: once a round on its token, men only, befor
   Sim.newGame(1);
 });
 
+check('the motti: once the Soviets have only tanks left, the Finns win there and then (Steve, 2026-11-20)', () => {
+  const st = Sim.newGame(5, 'us', 'winterwar');
+  Sim.startRound(st);
+  // Every Soviet man gone but one rifle platoon: still playing
+  const men = st.units.filter(u => u.side === 'us' && !Sim.isTank(u));
+  const last = men.pop();
+  for (const u of men) u.x = u.y = null;
+  Sim.finishRound(st);
+  assert(!st.won && !st.lost, 'the game ended with a Soviet platoon still on the table');
+  // The last of their men goes: only tanks and the aerosan left, so the Finns win
+  st.report = [];
+  Sim.remove(st, last);
+  assert(st.lost && !st.draw, 'the Soviets with only tanks left did not lose');
+  assert(/starved out/.test(st.report.join(' ')), `the report said: ${st.report.join(' ')}`);
+  // The goal on the table says so
+  assert(/Lose all your men/.test(Sim.goalLines(Sim.newGame(5, 'us', 'winterwar')).join(' ')), 'the goal does not say tanks alone lose');
+  // Not on other maps: the Bulge's tanks alone still fight on
+  const b = Sim.newGame(5, 'us', 'bulge');
+  Sim.startRound(b);
+  for (const u of b.units) if (u.side === 'us' && !Sim.isTank(u)) Sim.remove(b, u);
+  assert(!b.lost, 'tanks alone lost on the Bulge too');
+  Sim.newGame(1);
+});
+
+check('a shaken T-35 that rallies itself can still fire its hull MGs (Steve, 2026-11-20)', () => {
+  const st = Sim.newGame(5, 'us', 'stalingrad');
+  Sim.startRound(st);
+  st.hedges = {}; st.wire = {};
+  const t35 = { id: 'T3', kind: 't35', name: 'T-35', side: 'us', platoons: 1, shocked: true, acted: false, quality: 'standard', x: 2, y: 3, at: 'n' };
+  st.units.push(t35);
+  const foe = st.units.find(u => u.side === 'de' && u.kind === 'company');
+  for (const u of st.units) if (u !== t35 && u !== foe) u.x = u.y = null;
+  foe.x = 4; foe.y = 3; foe.at = null;
+  st.drawn = 'us'; st.human = 'us'; st.activeId = null; st.computer = null;
+  assert(Sim.actSelfRally(st, t35).ok && !t35.shocked, 'the T-35 could not rally itself');
+  assert(!Sim.activationOver(st) && Sim.canHullMg(st, t35), 'after rallying the hull MGs could not fire');
+  assert(Sim.actHullMg(st, t35, foe).ok && Sim.activationOver(st), 'the hull MGs did not fire after the rally');
+  Sim.newGame(1);
+});
+
 check('reinforcements and airdrops are announced in big letters over the table (Steve, 2026-11-16)', () => {
   const st = Sim.newGame(5, 'none', 'stalingrad');
   Sim.startRound(st);
