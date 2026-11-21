@@ -653,6 +653,7 @@ const RANGES = {
   heavy: { sight: 6, long: 4 },     // machine guns and the PaK
   tank: { sight: 7, long: 4 },      // tanks (Steve: one further than the machine guns)
   sniper: { sight: 99, long: 99 },  // the sniper: anywhere he can see, no long range, and cover doesn't help the target
+  board: { sight: 99, long: 4 },    // the 88 (Steve, 2026-11-21): the whole length of the board; long range as the PaK's
 };
 // Close range (Steve): four areas across or less (a field is three), from whichever of their areas are nearest: one less
 // needed on the dice, for every shot; not mortars, artillery or bombs
@@ -712,7 +713,8 @@ const PIECES = {
   // at all, not even within its field (Steve: Stalingrad's 88)
   pak:      { name: 'PaK 40 gun', soft: 1, hard: 3, vsMen: 2, team: true, fixed: true, atGun: true },
   // shield: what its gun shield adds to a shot from in front of it, within SHIELD_ARC of the way it faces (Steve: the 88)
-  flak88:   { name: '8.8 cm Flak 36', soft: 1, hard: 4, team: true, fixed: true, atGun: true, emplaced: true, shield: 2 },
+  // wholeBoard: it shoots the whole length of the board (RANGES.board)
+  flak88:   { name: '8.8 cm Flak 36', soft: 1, hard: 4, team: true, fixed: true, atGun: true, emplaced: true, shield: 2, wholeBoard: true },
   // Stalingrad, 1942 (Steve)
   t34:      { name: 'T-34/76', soft: 1.5, hard: 1.5, he: 1, tank: true, armour: 1, cutter: true },
   // The Panzer IV F2 (Steve: the Germans' answer to the KV-2 at Stalingrad): the long 7.5 cm gun; the Panzer IV's model

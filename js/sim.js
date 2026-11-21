@@ -1057,6 +1057,8 @@ const Sim = (() => {
   function rangeOf(u) {
     if (!u.kind) return { sight: SIGHT_RANGE, long: 1 };
     if (PIECES[u.kind].sniper) return RANGES.sniper;
+    // (the 88: the whole length of the board, Steve 2026-11-21)
+    if (PIECES[u.kind].wholeBoard) return RANGES.board;
     // (the Universal Carrier's Bren reaches as far as a machine gun, Steve)
     if (u.kind === 'carrier') return RANGES.heavy;
     if (isTank(u)) return RANGES.tank;
@@ -1457,6 +1459,16 @@ const Sim = (() => {
     return out;
   }
 
+  // A crewed gun hit by the sniper (Steve, 2026-11-21): its crew pinned, so it is shaken, however many hits and even if
+  // it was shaken already; it is never lost to him
+  function pinCrew(u, hits) {
+    // No hits: nothing happens
+    if (hits <= 0) return [];
+    const was = u.shocked;
+    u.shocked = true;
+    return [was ? `${u.name} still shaken` : `${u.name} shaken`];
+  }
+
   // A piece leaves the board
   // One mission or bomb wiped out the last of both sides: a draw, whoever it hit first (Steve)
   function checkDraw(st) {
@@ -1802,7 +1814,10 @@ const Sim = (() => {
     // A crewed gun (Steve: the 88, the PaK) under small arms, rifles, machine guns, submachine guns or a sniper: a hit
     // only shakes it (its crew pinned, the gun still there), but one on a gun already shaken kills it, as everywhere
     const smallArms = isAtGun(target) && ['rifle', 'mg'].includes(weapon) && (!isTank(shooter) || !!shooter.hullFire);
-    const out = (pre ? [pre.line] : []).concat(damage(st, target, softHits, hardHits, deadly, smallArms));
+    // The sniper at a crewed gun (Steve, 2026-11-21: he killed the 88 too easily): he pins its crew, never kills it
+    const pinsOnly = isAtGun(target) && !!PIECES[shooter.kind].sniper;
+    const hurt = pinsOnly ? pinCrew(target, softHits + hardHits) : damage(st, target, softHits, hardHits, deadly, smallArms);
+    const out = (pre ? [pre.line] : []).concat(hurt);
     // In a word, what the shot did, for the words that float up off the target
     const lost = before.strength - (target.x === null ? 0 : target.platoons);
     const result = target.x === null ? (isTank(target) ? 'Destroyed' : 'Wiped out')

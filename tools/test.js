@@ -4541,7 +4541,7 @@ check('Stalingrad: the 88 has 2 cover from the front (its gun shield), and it ca
   Sim.newGame(1);
 });
 
-check('small arms only shake a crewed gun; a hit on one already shaken kills it (Steve: the sniper against the 88)', () => {
+check('small arms only shake a crewed gun; a hit on one already shaken kills it, but never the sniper\'s (Steve: the sniper against the 88)', () => {
   const st = Sim.newGame(3, 'us', 'stalingrad');
   const sn = Sim.unitById(st, 'sn1'), gun = Sim.unitById(st, 'd88');
   for (const u of st.units) if (u !== sn && u !== gun) u.x = u.y = null;
@@ -4551,8 +4551,12 @@ check('small arms only shake a crewed gun; a hit on one already shaken kills it 
   gun.shocked = false;
   Sim.fireAt(st, sn, gun);
   assert(gun.x !== null && gun.shocked, 'a sniper wiped out a fresh 88');
-  // Shaken already: the next hit kills it
+  // Shaken already: the sniper's next hit still only shakes it (Steve, 2026-11-21); a machine gun's kills it
   Sim.fireAt(st, sn, gun);
+  assert(gun.x !== null && gun.shocked, 'the sniper killed a shaken 88');
+  const mg = st.units.find(u => u.side === 'us' && u.kind === 'mg');
+  mg.x = sn.x; mg.y = sn.y; mg.at = null;
+  Sim.fireAt(st, mg, gun);
   assert(gun.x === null, 'a hit on a shaken 88 did not kill it');
   Sim.newGame(1);
 });
@@ -5272,6 +5276,52 @@ check('2026-11-21 fix: a shaken marker waits for the shot that shook it to land'
   assert(held.T1.shocked === false, 'a tank not yet shown shaken is held as shaken');
   // (and hand to hand)
   assert(pageCode('board3d.js', 'function startMelee(st, f, t0) {', '\n  }').includes('shocked: shockShown(id)'), 'hand to hand shows shaken at once');
+});
+
+check('2026-11-21 fix: the 88 shoots the whole length of the board; the PaK keeps its reach', () => {
+  const g = Sim.newGame(1, 'us', 'stalingrad');
+  const gun = g.units.find(u => u.kind === 'flak88');
+  const pak = g.units.find(u => u.kind === 'pak');
+  const foe = g.units.find(u => u.side === 'us' && u.kind === 'company');
+  // Only the two pieces on the table, so nothing else is in the way
+  g.units = [gun, foe];
+  // For each pair of fields further apart than the PaK reaches: the farthest the 88 can shoot along a clear line
+  let farthest = 0, pakToo = false;
+  for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
+    gun.x = x; gun.y = y;
+    for (let ty = 0; ty < ROWS; ty++) for (let tx = 0; tx < COLS; tx++) {
+      const dist = Math.hypot(tx - x, ty - y);
+      if (dist <= farthest || dist <= RANGES.heavy.sight + 0.01) continue;
+      foe.x = tx; foe.y = ty;
+      if (!Sim.sight(g, gun, foe)) continue;
+      farthest = dist;
+      // (the PaK in the 88's place)
+      pak.x = x; pak.y = y;
+      if (Sim.sight(g, pak, foe)) pakToo = true;
+    }
+  }
+  assert(farthest >= COLS - 2, `the 88's longest shot is ${farthest.toFixed(1)} fields`);
+  assert(!pakToo, 'the PaK reaches as far as the 88');
+  Sim.newGame(1);
+});
+
+check('2026-11-21 fix: the sniper only shakes the 88 and the PaK, never kills them; others still kill a shaken gun', () => {
+  const g = Sim.newGame(1, 'us', 'stalingrad');
+  const sniper = g.units.find(u => u.side === 'us' && PIECES[u.kind].sniper);
+  const gun = g.units.find(u => u.kind === 'flak88');
+  const pak = g.units.find(u => u.kind === 'pak');
+  assert(sniper, 'Stalingrad has no Soviet sniper');
+  // Every die a 6: every shot hits
+  g.rand = () => 0.99;
+  for (const target of [gun, pak]) {
+    for (let k = 0; k < 5; k++) Sim.fireAt(g, sniper, target);
+    assert(target.x !== null && target.shocked, `${target.name} was killed by the sniper, or not shaken`);
+  }
+  // A rifle platoon still kills the shaken 88, as everywhere
+  const men = g.units.find(u => u.side === 'us' && u.kind === 'company');
+  Sim.fireAt(g, men, gun);
+  assert(gun.x === null, 'riflemen no longer kill a shaken 88');
+  Sim.newGame(1);
 });
 
 console.log(failed ? `\n${failed} failed` : '\nall passed');
