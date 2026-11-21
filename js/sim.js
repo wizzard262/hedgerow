@@ -1774,6 +1774,9 @@ const Sim = (() => {
     const weapon = shooter.hullFire ? 'mg' : weaponOf(shooter);
     // An anti-tank gun swings round onto what it fires at, and stays facing it (Steve: its shield faces that way)
     if (isAtGun(shooter)) shooter.aim = Math.atan2(-(target.y - shooter.y), target.x - shooter.x);
+    // A long tank (the T-35, the King Tiger, the Ferdinand) turns to lie towards what it fires at before it fires, where
+    // there is room and it still sees the target from there (Steve, 2026-11-21: they fired sideways; turn first)
+    if (sizeOf(shooter) === 6) lieToward(st, shooter, Math.atan2(-(target.y - shooter.y), target.x - shooter.x), target);
     // The computer's piece fired on takes cover when it is wise to (Steve), as you can
     if (!withdraw && isRobot(st, target.side) && computerTakesCover(st, target, menDice(f), needFor(st, shooter, target, moving))) withdraw = true;
     // Taking cover happens before the dice roll: its men are already down (and two more are needed)
@@ -1823,9 +1826,6 @@ const Sim = (() => {
     const result = target.x === null ? (isTank(target) ? 'Destroyed' : 'Wiped out')
       : lost ? (isTank(target) ? `Tank knocked out` : lost > 1 ? `${lost} sections lost` : 'Section lost')
       : target.shocked && !before.shocked ? 'Shaken' : softHits + hardHits ? 'No effect' : 'Missed';
-    // A long tank (the T-35, the King Tiger, the Ferdinand) turns to lie towards what it fired at, where there is room
-    // (Steve, 2026-11-21: they fired sideways). After the dice, so the shot is the one it was offered
-    if (sizeOf(shooter) === 6) lieToward(st, shooter, Math.atan2(-(stood.y - shooter.y), stood.x - shooter.x));
     // What the table shows: the weapon's muzzle flash and tracers from the shooter, and what lands on the target
     st.fx.push({
       from: { id: shooter.id, x: shooter.x, y: shooter.y },
@@ -2037,7 +2037,8 @@ const Sim = (() => {
   // A long tank (3 by 2 areas) lies along one half of its field: n or s point it east or west, e or w north or south.
   // It turns onto a half that points it the way wanted (an angle, east 0, north a quarter turn), if that half is free;
   // with no room it stays as it is (Steve, 2026-11-21: they fired sideways)
-  function lieToward(st, u, angle) {
+  // seeing: a target it must still see once it has turned (otherwise it stays as it is)
+  function lieToward(st, u, angle, seeing = null) {
     // Mostly east or west: a half across the field; mostly north or south: one up and down it
     const eastWest = Math.abs(Math.cos(angle)) >= Math.abs(Math.sin(angle));
     const wanted = eastWest ? ['n', 's'] : ['e', 'w'];
@@ -2046,7 +2047,11 @@ const Sim = (() => {
     if (wanted.includes(half)) return;
     // The first of the two halves with room for it
     const free = wanted.find(h => fitsAt(st, u, u.x, u.y, h));
-    if (free) u.at = free;
+    if (!free) return;
+    const was = u.at;
+    u.at = free;
+    // (from there it must still see what it is firing at)
+    if (seeing && !sight(st, u, seeing)) u.at = was;
   }
 
   // ---------- Close assault ----------

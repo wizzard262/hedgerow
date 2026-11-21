@@ -5324,7 +5324,10 @@ check('2026-11-21 fix: the sniper only shakes the 88 and the PaK, never kills th
   Sim.newGame(1);
 });
 
-check('2026-11-21 fix: a long tank turns to lie towards what it fires at, where there is room', () => {
+check('2026-11-21 fix: a long tank turns to lie towards what it fires at, before it fires, where there is room', () => {
+  // (before the dice, Steve: the turn comes ahead of the score its shot needs)
+  const fireAtCode = pageCode('sim.js', 'function fireAt(st, shooter, target', 'const need = needFor(st, shooter, target, moving);');
+  assert(fireAtCode.includes('lieToward(st, shooter'), 'the long tank turns after the dice');
   const g = Sim.newGame(1, 'us', 'bulge');
   const kt = g.units.find(u => u.kind === 'kingtiger');
   const foe = g.units.find(u => u.side === 'us' && Sim.isTank(u));
@@ -5333,12 +5336,12 @@ check('2026-11-21 fix: a long tank turns to lie towards what it fires at, where 
   g.units = [kt, foe];
   g.wrecks = []; g.features = [];
   kt.x = 5; kt.y = 4; kt.at = 'n';
-  // A target due north: it turns to lie north to south
-  foe.x = 5; foe.y = 1;
+  // A target due north, in sight: it turns to lie north to south
+  foe.x = 5; foe.y = 3;
   Sim.fireAt(g, kt, foe);
   assert(['e', 'w'].includes(Sim.footprint(kt)[1]), `firing north it lies along ${Sim.footprint(kt).join()}`);
   // A target due east: back to lying east to west
-  if (foe.x === null) { foe.x = 8; foe.platoons = 1; } else foe.x = 8;
+  if (foe.x === null) { foe.x = 6; foe.platoons = 1; } else foe.x = 6;
   foe.y = 4;
   Sim.fireAt(g, kt, foe);
   assert(['n', 's'].includes(Sim.footprint(kt)[1]), `firing east it lies along ${Sim.footprint(kt).join()}`);
@@ -5349,7 +5352,7 @@ check('2026-11-21 fix: a long tank turns to lie towards what it fires at, where 
   g.units.push(blocker, blocker2);
   // (they don't stand where it is now)
   assert(Sim.fitsAt(g, kt, 5, 4, 's'), 'the blockers are in its way already');
-  foe.x = 5; foe.y = 1; foe.platoons = 1;
+  foe.x = 5; foe.y = 3; foe.platoons = 1;
   Sim.fireAt(g, kt, foe);
   assert(Sim.footprint(kt)[1] === 's', `with no room it turned to ${Sim.footprint(kt).join()}`);
   Sim.newGame(1);
