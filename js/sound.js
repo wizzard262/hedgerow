@@ -218,6 +218,23 @@ const Sound = (() => {
     // A bazooka or Panzerschreck, a tank, the PaK and a gun bunker (Steve): the bang of the launch and the rocket's roar away
     // (Steve: a roar as it flies) a longer, louder rush under the launch
     rocket(t) { noise(t, 0.05, 2500, 0.5, 0.8, 'highpass'); noise(t, 0.9, 700, 0.6, 0.9, 'bandpass'); noise(t + 0.05, 0.6, 250, 0.4, 0.8, 'lowpass'); tone(t, 0.6, 300, 900, 0.12, 'sawtooth'); },
+    // A bottle smashing (Steve, 2026-11-21: the Molotov cocktails): the crack of the glass, a bright shatter, and the
+    // pieces tinkling down after it
+    glass(t) {
+      noise(t, 0.02, 5200, 0.7, 0.55, 'highpass');
+      noise(t, 0.09, 3400 + Math.random() * 900, 1.6, 0.35, 'bandpass');
+      noise(t + 0.01, 0.05, 900, 1, 0.18, 'bandpass');
+      for (let k = 0; k < 9; k++) {
+        const w = t + 0.03 + Math.random() * 0.32;
+        const note = 2600 + Math.random() * 3800;
+        tone(w, 0.05 + Math.random() * 0.06, note, note * 0.97, 0.03 + Math.random() * 0.03, 'sine');
+      }
+    },
+    // Petrol catching light: a soft rushing whoosh that swells and dies, with a low roar under it
+    flames(t) {
+      noise(t, 0.7, 900, 0.5, 0.28, 'bandpass');
+      noise(t + 0.05, 0.9, 320, 0.4, 0.3, 'lowpass');
+    },
     // A mortar firing somewhere behind the lines: a hollow pop, and the bomb's rising whistle on the way up
     mortar(t) { tone(t, 0.2, 240, 120, 0.4, 'triangle'); noise(t, 0.15, 500, 0.6, 0.3); },
     // A round coming in: a falling whistle, getting louder, for as long as it takes to land

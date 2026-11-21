@@ -2702,6 +2702,19 @@ const Board = (() => {
   // the other side, Hit! or Miss rises over the other side for each die, and each base a hit takes drops away
   const MELEE_BLOW = 1.1;            // seconds for each side's blow
   const MELEE_LAND = 0.45;           // when in its blow the hits land
+  // A blow of Molotov cocktails is slower (Steve, 2026-11-21: they flew too fast to see): the bottles lob over for
+  // longer, land later, and the next blow waits for the fire
+  const MOLOTOV_BLOW = 2.4;          // seconds for a blow of bottles
+  const MOLOTOV_LAND = 1.15;         // when in it the first bottle lands
+  const MOLOTOV_GAP = 0.14;          // seconds between one bottle landing and the next
+  // How long a blow takes, when in it its hits land, and the gap between one die's hit and the next
+  const blowLength = b => (b.molotov ? MOLOTOV_BLOW : MELEE_BLOW);
+  const blowLand = b => (b.molotov ? MOLOTOV_LAND : MELEE_LAND);
+  const dieGap = b => (b.molotov ? MOLOTOV_GAP : 0.07);
+  // When blow k of a fight starts, in seconds from the fight's start: after every blow before it
+  const blowStart = (f, k) => f.strikes.slice(0, k).reduce((n, b) => n + blowLength(b), 0);
+  // How long the whole fight takes
+  const fightLength = f => blowStart(f, f.strikes.length);
   // Until when the fights on the table are still being shown (the page waits for them before the next token)
   let meleeUntil = 0;
   function busyFor() { return settledIn(); }
@@ -2716,8 +2729,8 @@ const Board = (() => {
   function startMelee(st, f, t0) {
     // When each piece loses each base, from the blows in order
     const steps = {};
-    f.strikes.forEach((b, k) => b.losses.forEach((id, j) => (steps[id] = steps[id] || []).push(t0 + (k * MELEE_BLOW + MELEE_LAND + j * 0.08) * 1000)));
-    const end = t0 + f.strikes.length * MELEE_BLOW * 1000;
+    f.strikes.forEach((b, k) => b.losses.forEach((id, j) => (steps[id] = steps[id] || []).push(t0 + (blowStart(f, k) + blowLand(b) + j * 0.08) * 1000)));
+    const end = t0 + fightLength(f) * 1000;
     meleeUntil = Math.max(meleeUntil, end + 300);
     // Everyone in the fight keeps the bases they started with until each is taken, and stays on the table till then
     for (const id of Object.keys(f.before)) {
@@ -2727,11 +2740,24 @@ const Board = (() => {
     // The sounds of each blow: rifles and the thud of blows, a tank's gun for a tank (the 88, an anti-tank rifle too, Steve
     // 2026-11-21: a boom, not a rifle's crack)
     f.strikes.forEach((b, k) => {
-      const wait = (t0 - performance.now()) / 1000 + k * MELEE_BLOW;
+      const wait = (t0 - performance.now()) / 1000 + blowStart(f, k);
+      // Molotov cocktails (Steve, 2026-11-21: no shot): each bottle smashing as it lands, and a hit catching light
+      if (b.molotov) { molotovSounds(b, wait); return; }
       const sound = meleeSound(st, b);
       Sound.play(sound, wait);
       // (a gun's round lands with a burst)
-      if (b.losses.length) Sound.play(sound === 'rocket' ? 'he' : 'bullets', wait + MELEE_LAND);
+      if (b.losses.length) Sound.play(sound === 'rocket' ? 'he' : 'bullets', wait + blowLand(b));
+    });
+  }
+
+  // A blow of Molotov cocktails heard: each bottle's glass breaking as it lands (when the picture shows it), and the
+  // whoosh of the petrol catching on the ones that hit
+  function molotovSounds(b, wait) {
+    b.faces.slice(0, 9).forEach((r, i) => {
+      // (when it lands: see playMolotovs)
+      const lands = wait + blowLand(b) - 0.1 + i * dieGap(b);
+      Sound.play('glass', lands);
+      if (r.hit) Sound.play('flames', lands + 0.04);
     });
   }
 
@@ -2748,10 +2774,10 @@ const Board = (() => {
   function playMelee(f, t, add) {
     // Molotov cocktails at tanks (Steve, 2026-11-21): bottles thrown, and fire on the tank or the ground, which burns on
     // past the end of the blow
-    f.strikes.forEach((b, k) => { if (b.molotov) playMolotovs(f, b, t - k * MELEE_BLOW, add); });
+    f.strikes.forEach((b, k) => { if (b.molotov) playMolotovs(f, b, t - blowStart(f, k), add); });
     f.strikes.forEach((b, k) => {
-      const bt = t - k * MELEE_BLOW;
-      if (bt < 0 || bt > MELEE_BLOW) return;
+      const bt = t - blowStart(f, k);
+      if (bt < 0 || bt > blowLength(b)) return;
       // Where the other side is: the middle of its pieces' bases
       const spots = b.victims.filter(id => pieces[id]).map(id => pieceCentre({ id, x: f.x, y: f.y }));
       if (!spots.length) return;
@@ -2772,21 +2798,21 @@ const Board = (() => {
       }
       // Hit! or Miss for each die, rising over the other side one after another
       b.faces.slice(0, 9).forEach((r, i) => {
-        const wt = bt - MELEE_LAND + 0.1 - i * 0.07;
+        const wt = bt - blowLand(b) + 0.1 - i * dieGap(b);
         if (wt < 0 || wt > 0.9) return;
         const w = add(word(r.hit ? 'Hit!' : 'Miss', r.hit ? '#ffcf6a' : '#cfcac0', false));
         w.material.opacity = Math.min(1, 2.5 * (0.9 - wt));
         w.position.set(aim.x + ((i % 3) - 1) * 0.28, 0.38 + wt * 0.4 + Math.floor(i / 3) * 0.12, aim.z);
       });
       // A puff of dust where the blows land
-      if (bt > MELEE_LAND - 0.1 && bt < MELEE_LAND + 0.5) {
-        const dt2 = bt - (MELEE_LAND - 0.1);
+      if (bt > blowLand(b) - 0.1 && bt < blowLand(b) + 0.5) {
+        const dt2 = bt - (blowLand(b) - 0.1);
         const d = add(new T.Sprite(new T.SpriteMaterial({ map: smokeTex(), color: 0x8a7a5a, transparent: true, depthWrite: false, opacity: 0.5 - dt2 * 0.8 })));
         d.scale.setScalar(0.2 + dt2 * 0.4); d.position.set(aim.x, 0.08, aim.z);
       }
     });
     // At the end, who won, over the field
-    const tEnd = t - f.strikes.length * MELEE_BLOW;
+    const tEnd = t - fightLength(f);
     if (tEnd >= 0 && tEnd < 1.6) {
       const ours = f.side === playerSide;
       const text = f.won ? (ours ? 'Field taken!' : 'Overrun!') : (ours ? 'Charge beaten' : 'Charge beaten off');
@@ -2798,11 +2824,11 @@ const Board = (() => {
   // A blow of Molotov cocktails at time bt into it (seconds): one bottle for each die, thrown in turn from the
   // attacker's bases in a high arc onto the tank, its rag alight. A hit bursts into flame over the tank, with black
   // smoke; a miss smashes on the ground beside it in a smaller fire
-  const MOLOTOV_FLIGHT = 0.45;                    // seconds a bottle is in the air
-  const MOLOTOV_BURN = { hit: 1.5, miss: 0.8 };   // seconds its fire burns
+  const MOLOTOV_FLIGHT = 1.0;                     // seconds a bottle is in the air (Steve: slower, to be seen)
+  const MOLOTOV_BURN = { hit: 2.4, miss: 1.4 };   // seconds its fire burns (Steve: more flame)
   function playMolotovs(f, b, bt, add) {
     // Nothing yet, or all burnt out
-    if (bt < 0 || bt > MELEE_BLOW + MOLOTOV_BURN.hit + 0.3) return;
+    if (bt < 0 || bt > MOLOTOV_BLOW + MOLOTOV_BURN.hit + 0.3) return;
     // Where the tank is
     const spots = b.victims.filter(id => pieces[id]).map(id => pieceCentre({ id, x: f.x, y: f.y }));
     if (!spots.length) return;
@@ -2812,7 +2838,7 @@ const Board = (() => {
     if (!throwers.length) return;
     b.faces.slice(0, 9).forEach((r, i) => {
       // When this bottle lands (with the Hit! or Miss over the tank) and when it was thrown
-      const lands = MELEE_LAND - 0.1 + i * 0.07;
+      const lands = MOLOTOV_LAND - 0.1 + i * MOLOTOV_GAP;
       const thrown = lands - MOLOTOV_FLIGHT;
       // Where it lands: on the tank if it hits, on the ground beside it if not, a little apart for each bottle
       const side = (i % 2 ? 1 : -1) * (0.05 + (i % 3) * 0.04);
@@ -2841,44 +2867,57 @@ const Board = (() => {
   function moloBottle(add, from, to, p) {
     const x = T.MathUtils.lerp(from.x, to.x, p), z = T.MathUtils.lerp(from.z, to.z, p);
     // (a high lob: up and down again)
-    const y = T.MathUtils.lerp(from.y, 0.1, p) + 0.32 * Math.sin(p * Math.PI);
+    const y = T.MathUtils.lerp(from.y, 0.1, p) + 0.45 * Math.sin(p * Math.PI);
     const glass = add(new T.Sprite(new T.SpriteMaterial({ color: 0x2f4a2a, transparent: true, opacity: 0.95, depthWrite: false })));
-    glass.scale.set(0.022, 0.05, 1);
+    glass.scale.set(0.026, 0.06, 1);
     glass.material.rotation = p * 9;
     glass.position.set(x, y, z);
+    // The burning rag: a glow and a tongue of flame streaming off it
     const rag = add(glow('rgba(255,170,60,1)'));
-    rag.scale.setScalar(0.07 + 0.02 * Math.sin(p * 40));
-    rag.position.set(x, y + 0.025, z);
+    rag.scale.setScalar(0.11 + 0.03 * Math.sin(p * 40));
+    rag.position.set(x, y + 0.03, z);
+    const maps = Fire.flameMaps();
+    const tongue = add(new T.Sprite(new T.SpriteMaterial({ map: maps[Math.floor(p * 12) % maps.length], transparent: true, depthWrite: false, toneMapped: false, blending: T.AdditiveBlending })));
+    tongue.scale.set(0.05, 0.1, 1);
+    tongue.position.set(x, y + 0.07, z);
+    // Sparks trailing behind it along the way it came
+    for (let k = 1; k <= 4; k++) {
+      const q = p - k * 0.035;
+      if (q < 0) break;
+      const spark = add(glow('rgba(255,140,40,1)'));
+      spark.scale.setScalar(0.05 * (1 - k / 5));
+      spark.position.set(T.MathUtils.lerp(from.x, to.x, q), T.MathUtils.lerp(from.y, 0.1, q) + 0.45 * Math.sin(q * Math.PI) + 0.03, T.MathUtils.lerp(from.z, to.z, q));
+    }
   }
 
   // Its fire, lt seconds after it landed: a flash, tongues of flame licking up and dying down, black smoke rising
   function moloFire(add, to, lt, hit, i) {
     const burn = hit ? MOLOTOV_BURN.hit : MOLOTOV_BURN.miss;
     if (lt > burn) return;
-    const size = hit ? 1 : 0.6;
+    const size = hit ? 1.4 : 0.85;
     // The flash of the burst
-    if (lt < 0.15) { const fl = add(glow('rgba(255,210,120,1)')); fl.material.depthTest = false; fl.scale.setScalar(0.45 * size); fl.position.set(to.x, 0.1, to.z); }
+    if (lt < 0.2) { const fl = add(glow('rgba(255,210,120,1)')); fl.material.depthTest = false; fl.scale.setScalar(0.6 * size); fl.position.set(to.x, 0.1, to.z); }
     // How strong it burns: up quickly, then dying away
     const strength = Math.min(1, lt / 0.15) * (1 - lt / burn);
     // Tongues of flame, each flickering on its own
     const maps = Fire.flameMaps();
-    const tongues = hit ? 4 : 2;
+    const tongues = hit ? 8 : 4;
     for (let k = 0; k < tongues; k++) {
       const flicker = 0.8 + 0.2 * Math.sin(lt * 23 + k * 2.1 + i);
       const tongue = add(new T.Sprite(new T.SpriteMaterial({ map: maps[(k + i) % maps.length], transparent: true, depthWrite: false, toneMapped: false, blending: T.AdditiveBlending })));
-      const h = 0.22 * size * strength * flicker;
+      const h = 0.26 * size * strength * flicker * (k % 3 === 0 ? 1.25 : 1);
       tongue.scale.set(h * 0.55, h, 1);
-      // (hits sit up on the hull, misses on the ground)
+      // (hits sit up on the hull, spreading over it, misses on the ground)
       const low = hit ? 0.1 : 0.02;
-      tongue.position.set(to.x + (k - (tongues - 1) / 2) * 0.05 * size, low + h / 2, to.z + (k % 2) * 0.03);
+      tongue.position.set(to.x + (k - (tongues - 1) / 2) * 0.04 * size, low + h / 2, to.z + ((k % 3) - 1) * 0.04 * size);
     }
     // A warm glow under it
     const warm = add(glow('rgba(255,110,30,1)'));
-    warm.scale.setScalar(0.3 * size * strength);
+    warm.scale.setScalar(0.4 * size * strength);
     warm.position.set(to.x, hit ? 0.12 : 0.03, to.z);
     // Black smoke, rising and spreading
-    for (let k = 0; k < 3; k++) {
-      const age = lt - k * 0.2;
+    for (let k = 0; k < 5; k++) {
+      const age = lt - k * 0.25;
       if (age < 0) continue;
       const puff = add(new T.Sprite(new T.SpriteMaterial({ map: Fire.smokeMap(), transparent: true, depthWrite: false, opacity: 0.55 * (1 - lt / burn) })));
       puff.scale.setScalar((0.08 + age * 0.18) * size);
@@ -3149,7 +3188,7 @@ const Board = (() => {
     // (a hand-to-hand fight stays as long as its blows take)
     // (the bomber stays until it has flown off, a bomb until its words have faded)
     // (parachutes until the last one has landed and gone)
-    const lasts = f => (f.kind === 'melee' ? (f.strikes.length * MELEE_BLOW + 2) * 1000 : f.kind === 'flyover' ? f.length * 1000 + 200 : f.kind === 'bomb' ? ((f.fall || 0) + 3) * 1000 : f.kind === 'paradrop' ? Chute.lasts(3) * 1000 + 200 : f.kind === 'embark' ? (EMBARK.run + 1) * 1000 : 5000);
+    const lasts = f => (f.kind === 'melee' ? (fightLength(f) + 2.5) * 1000 : f.kind === 'flyover' ? f.length * 1000 + 200 : f.kind === 'bomb' ? ((f.fall || 0) + 3) * 1000 : f.kind === 'paradrop' ? Chute.lasts(3) * 1000 + 200 : f.kind === 'embark' ? (EMBARK.run + 1) * 1000 : 5000);
     // (anything a show made for itself goes with it)
     for (const s of shots) if (now - s.t0 >= lasts(s.f) && s.cleanup) s.cleanup();
     shots = shots.filter(s => now - s.t0 < lasts(s.f));

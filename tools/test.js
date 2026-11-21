@@ -5435,7 +5435,17 @@ check('2026-11-21 fix: the Finnish infantry\'s card says they have Molotov cockt
   assert(pageCode('ui.js', 'const dice = `', ';').includes('${molotov}'), 'the dice line leaves the Molotovs out');
   // Hand to hand: the blow at tanks is marked for the table's bottles and fire (board3d's playMolotovs)
   assert(pageCode('sim.js', 'function handToHand(', 'fight.won =').includes('if (atTanks) a.blow.molotov = true;'), 'the Molotov blow is not marked');
-  assert(pageCode('board3d.js', 'function playMelee(f, t, add) {', 'playMolotovs(f, b, t - k * MELEE_BLOW, add)'), 'hand to hand shows no Molotovs');
+  assert(pageCode('board3d.js', 'function playMelee(f, t, add) {', 'playMolotovs(f, b, t - blowStart(f, k), add)'), 'hand to hand shows no Molotovs');
+  // Heard as glass breaking, and the fire catching on a hit, not as rifles (Steve, 2026-11-21)
+  const played = [];
+  const molotovSounds = vm.runInThisContext(`((Sound, MELEE_LAND, MOLOTOV_LAND, MOLOTOV_GAP) => { const blowLand = b => (b.molotov ? MOLOTOV_LAND : MELEE_LAND); const dieGap = b => (b.molotov ? MOLOTOV_GAP : 0.07); return ${pageCode('board3d.js', 'function molotovSounds(b, wait) {', '\n  }')}; })`)({ play: (n, w) => played.push(n) }, 0.45, 1.15, 0.14);
+  molotovSounds({ molotov: true, faces: [{ hit: true }, { hit: false }] }, 0);
+  assert(played.join() === 'glass,flames,glass', `the bottles sound like ${played.join()}`);
+  assert(pageCode('board3d.js', 'if (b.molotov) {', 'return; }').includes('molotovSounds(b, wait)'), 'a Molotov blow still sounds like rifles');
+  // Slower than a plain blow (Steve: to be seen), the bottles landing later
+  const timing = pageCode('board3d.js', 'const MOLOTOV_BLOW = ', 'const MOLOTOV_GAP');
+  const blow = +/MOLOTOV_BLOW = ([\d.]+)/.exec(timing)[1], land = +/MOLOTOV_LAND = ([\d.]+)/.exec(timing)[1];
+  assert(blow > 1.1 && land > 0.45, `a blow of bottles takes ${blow} s and lands at ${land} s`);
   Sim.newGame(1);
 });
 
