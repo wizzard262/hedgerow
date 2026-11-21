@@ -1744,11 +1744,17 @@ const Sim = (() => {
 
   // The sound a shot makes as it is fired (Steve: a tank's is the bazooka's; the PaK keeps its cannon)
   function fireSound(shooter, weapon, side) {
-    // Tanks, the PaK and the gun bunkers all fire with the bazooka's sound (Steve)
+    // Tanks, the PaK, the 88 and the gun bunkers all fire with the bazooka's sound (Steve)
     if (weapon === 'gun') return 'rocket';
+    // An anti-tank rifle (the Boys, the PTRD, the Lahti) booms like a tank, not a rifle (Steve, 2026-11-21)
+    // (a hull MG's own shot is still a machine gun's)
+    if (shooter && !shooter.hullFire && PIECES[shooter.kind].atRifle) return 'rocket';
     if (weapon === 'mg' && side === 'de') return 'mg42';
     return weapon;
   }
+
+  // The sound a piece's own weapon makes (hand to hand too): a tank's or gun's boom, a rifle's crack, an MG's burst
+  const soundOf = u => fireSound(u, weaponOf(u), u.side);
 
   function fireAt(st, shooter, target, withdraw = false, moving = false, blast = false) {
     // (the T-35's hull machine guns firing on their own, Steve: only their dice)
@@ -4007,7 +4013,7 @@ const Sim = (() => {
   return {
     firesOnTheMove, canAmbush, actAmbush, bestMoveShoot, bomberHeading, bomberAims, bomberLine, bombNeed, bombWhy, bestBomberRun,
     isBunker, isCar, hurtsCars, trainCars, lineSideOf, moveTrains, inFrontOf, bunkerFace, shotOnTheMove, wrecksBeside, isRoad, featuresAt, walkDistance, fireSound, wreckAt, remove, computerSide, isRobot, piecesToAsk, takeCover, enemyOf, gunStats, diceShown, menDiceShown, bomberName, boatKind, armyOf, hedgeWord, inCourtyard, closeRangeOnly, isAtGun, isEmplaced, edgeKey, atCloseRange, closeCells, hailMaryCells,
-    newGame, roll, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, chargeSpots,
+    newGame, roll, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, chargeSpots, soundOf,
     rallyTargets, canAct, canReact, firepower, canCallFire, takesGoal, cannotWin, artilleryTarget, mortarTarget, holdsObjective, roundText, roomFor,
     goalLines, deArmyOf, hullMgTargets, canHullMg, actHullMg, actHoldMg, hullMgDice,
     computerStep, answer, finishRound, startRound, drawToken, endComputerToken, activationOver, passToken, humanCanMove, endRound, canFire, actSkip, actSkipShot, skipSupport,

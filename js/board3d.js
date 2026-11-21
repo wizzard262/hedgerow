@@ -2102,7 +2102,11 @@ const Board = (() => {
     for (const u of st.units) if (pieces[u.id]) pieces[u.id].userData.stops = null;
     for (const u of st.units) {
       if (!pieces[u.id]) continue;
-      marker(u, ':shock', '#9b2a22', '!', u.shocked, 'back');
+      // Shaken: its red marker waits until the shot that shook it (or rallied it) has landed (Steve, 2026-11-21: it
+      // showed before the shot was fired)
+      const h = holding(u.id);
+      const shaken = h && h.shocked !== undefined ? h.shocked : u.shocked;
+      marker(u, ':shock', '#9b2a22', '!', shaken, 'back');
     }
     updateWrecks(st);
     showBoats(st);
@@ -2699,7 +2703,7 @@ const Board = (() => {
     return Math.max(0, latest - performance.now());
   }
 
-  function startMelee(f, t0) {
+  function startMelee(st, f, t0) {
     // When each piece loses each base, from the blows in order
     const steps = {};
     f.strikes.forEach((b, k) => b.losses.forEach((id, j) => (steps[id] = steps[id] || []).push(t0 + (k * MELEE_BLOW + MELEE_LAND + j * 0.08) * 1000)));
@@ -2708,14 +2712,26 @@ const Board = (() => {
     // Everyone in the fight keeps the bases they started with until each is taken, and stays on the table till then
     for (const id of Object.keys(f.before)) {
       const times = steps[id] || [];
-      held[id] = { until: times.length && times.length >= f.before[id] ? times[times.length - 1] + 1 : end, count: f.before[id], visible: true, steps: times };
+      held[id] = { until: times.length && times.length >= f.before[id] ? times[times.length - 1] + 1 : end, count: f.before[id], visible: true, steps: times, shocked: shockShown(id) };
     }
-    // The sounds of each blow: rifles and the thud of blows, a tank's gun for a tank
+    // The sounds of each blow: rifles and the thud of blows, a tank's gun for a tank (the 88, an anti-tank rifle too, Steve
+    // 2026-11-21: a boom, not a rifle's crack)
     f.strikes.forEach((b, k) => {
       const wait = (t0 - performance.now()) / 1000 + k * MELEE_BLOW;
-      Sound.play('rifle', wait);
-      if (b.losses.length) Sound.play('bullets', wait + MELEE_LAND);
+      const sound = meleeSound(st, b);
+      Sound.play(sound, wait);
+      // (a gun's round lands with a burst)
+      if (b.losses.length) Sound.play(sound === 'rocket' ? 'he' : 'bullets', wait + MELEE_LAND);
     });
+  }
+
+  // The sound of one blow in hand to hand: a boom if any of those striking has a gun, otherwise rifles
+  function meleeSound(st, blow) {
+    // Everyone who struck this blow
+    const strikers = blow.strikers.map(id => Sim.unitById(st, id)).filter(Boolean);
+    // Any gun among them: its boom
+    const gun = strikers.some(u => Sim.soundOf(u) === 'rocket');
+    return gun ? 'rocket' : 'rifle';
   }
 
   // Draw one fight's blows at time t (seconds since it began)
@@ -2836,7 +2852,15 @@ const Board = (() => {
       until: Math.max(until, before ? before.until : 0),
       count: before ? before.count : g.userData.bases.filter(b => b.visible).length,
       visible: before ? before.visible : g.visible,
+      // (its shaken marker as it was, until then)
+      shocked: before && before.shocked !== undefined ? before.shocked : shockShown(id),
     };
+  }
+
+  // Is the piece's red shaken marker showing on the table now
+  function shockShown(id) {
+    const t = tokens[id + ':shock'];
+    return !!t && t.visible;
   }
 
   // A mine (Steve): it waits until the piece has got into the minefield, then goes off (or not) under it; the piece
@@ -2847,14 +2871,36 @@ const Board = (() => {
     const stop = ambushStop(st, f);
     const t0 = performance.now() + stop.delay * 1000;
     shots.push({ f, t0, objs: [] });
+    // The move is heard even when the piece never gets out of its field, or the mine kills it (Steve, 2026-11-21)
+    mineMoveSound(st, f);
+    // The mine going off under it: a burst, as the picture shows it
+    if (f.hit) Sound.play('he', stop.delay);
     // It waits there until the mine has gone off, and keeps its men until then
     const until = t0 + (f.hit ? MINE_WAIT.hit : MINE_WAIT.safe) * 1000;
     noteStop(stop, until);
     holdBases(f.to.id, until);
   }
 
+  // A piece stopped by a mine in the field it started from, or killed by one, doesn't change field on the table, so
+  // updatePieces never hears it move: its men run or its tank drives here instead, once for each move
+  function mineMoveSound(st, f) {
+    const g = pieces[f.to.id];
+    const u = Sim.unitById(st, f.to.id);
+    // Already heard on this move (a mine going out, then another going in)
+    if (!g || !u || mineMoveHeard.has(u.id)) return;
+    // Where the table last had it, and where it is now
+    const from = g.userData.field;
+    const now = u.x === null ? null : u.x + ',' + u.y;
+    // It changed field: updatePieces plays its move
+    if (now !== null && now !== from) return;
+    mineMoveHeard.add(u.id);
+    Sound.play(Sim.isTank(u) ? 'tank' : 'run');
+  }
+  let mineMoveHeard = new Set();   // this batch of shots: the pieces whose move has been heard by mineMoveSound
+
   function startShots(st) {
     stopsNow = new Map();
+    mineMoveHeard = new Set();
     for (const f of st.fx) {
       if (seenFx.has(f)) continue;
       seenFx.add(f);
@@ -2882,7 +2928,7 @@ const Board = (() => {
       if (f.kind === 'melee') {
         const t0 = performance.now() + shots.filter(s => performance.now() - s.t0 < 300).length * 180;
         shots.push({ f, t0, objs: [] });
-        startMelee(f, t0);
+        startMelee(st, f, t0);
         continue;
       }
       // A tank or gun turns to face what it fires at, and stays facing it
@@ -2914,10 +2960,13 @@ const Board = (() => {
         // Each tank's gun is heard in turn, and each shell landing; rifles a shot from each base, an MG its five rounds
         // (Steve: as many as the table shows); other weapons once
         const heard = f.weapon === 'gun' ? roundsOf(f) : 1;
+        // (an anti-tank rifle booms like a tank, Steve 2026-11-21: and its round lands with the same burst)
+        const fired = Sim.fireSound(shooter, f.weapon, f.side);
+        const lands = fired === 'rocket' ? 'he' : 'bullets';
         for (let k = 0; k < heard; k++) {
-          Sound.play(Sim.fireSound(shooter, f.weapon, f.side), wait + k * TANK_GAP, false, roundsOf(f));
+          Sound.play(fired, wait + k * TANK_GAP, false, roundsOf(f));
           // (a hit on a tank too, Steve: the same burst as a bazooka's, not the old clang)
-          Sound.play(f.weapon === 'gun' || f.weapon === 'rocket' ? 'he' : 'bullets', wait + k * TANK_GAP + flight);
+          Sound.play(lands, wait + k * TANK_GAP + flight);
         }
       } else if (f.kind === 'shell') {
         // Fire support: the first round of a mission is heard fired and coming in; up to four rounds are heard landing

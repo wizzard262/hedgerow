@@ -328,8 +328,10 @@ const UI = (() => {
   function statePill(u, inCover, shaken) {
     if (u.down && u.acted) return `<span class="pill bad">${inCover}</span>`;
     if (u.ambush) return '<span class="pill ready">🪤 In ambush</span>';
-    if (u.shocked) return `<span class="pill bad">${shaken}</span>`;
-    if (u.acted) return '<span class="pill done">✓ Moved this round</span>';
+    const moved = '<span class="pill done">✓ Moved this round</span>';
+    // Shaken: it says so, and whether it has moved this round as well (Steve, 2026-11-21)
+    if (u.shocked) return `<span class="pill bad">${shaken}</span>${u.acted ? ' ' + moved : ''}`;
+    if (u.acted) return moved;
     return '<span class="pill ready">Ready</span>';
   }
 

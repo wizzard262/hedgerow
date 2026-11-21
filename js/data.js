@@ -755,7 +755,8 @@ const PIECES = {
   aerosan:  { name: 'RF-8-GAZ-98 aerosan', soft: 1.5, hard: 0, he: 0, tank: true, armour: 0, car: true, extraMove: 2 },
   vickers6t: { name: 'Vickers 6-ton', soft: 1, hard: 1, he: 1, tank: true, armour: 0, cutter: true },
   bofors37: { name: 'Bofors 37 mm gun', soft: 1, hard: 2, vsMen: 1, team: true, fixed: true, atGun: true },
-  lahti:    { name: 'Lahti anti-tank rifle team', soft: 0, hard: 1, vsMen: 1, team: true, men: 2, look: 'boys' },
+  // atRifle: an anti-tank rifle, heard with a tank gun's boom, not a rifle's crack (Steve, 2026-11-21)
+  lahti:    { name: 'Lahti anti-tank rifle team', soft: 0, hard: 1, vsMen: 1, team: true, men: 2, look: 'boys', atRifle: true },
   pz38t:    { name: 'Panzer 38(t)', soft: 1.5, hard: 1, he: 1, tank: true, armour: 0, cutter: true },
   jagdpanther: { name: 'Jagdpanther', soft: 1, hard: 3, he: 1, tank: true, armour: 1, cutter: true },
   hetzer:   { name: 'Hetzer', soft: 1, hard: 2, he: 1, tank: true, armour: 1, cutter: true },
@@ -773,7 +774,7 @@ const PIECES = {
   carrier:  { name: 'Universal Carrier', soft: 2, hard: 0, he: 0, tank: true, armour: 0, car: true },   // a Bren on a small open tracked carrier
   // A lorry-load of men for the boats (Steve): no weapons, no orders; it drives itself. big: a corner block, as a tank
   lorry:    { name: 'Lorry', soft: 0, hard: 0, big: true, lorry: true },
-  boys:     { name: 'Boys anti-tank rifle team', soft: 0, hard: 1, vsMen: 1, team: true, men: 2 },
+  boys:     { name: 'Boys anti-tank rifle team', soft: 0, hard: 1, vsMen: 1, team: true, men: 2, atRifle: true },   // atRifle: see lahti
   pz1:      { name: 'Panzer I', soft: 2, hard: 0, he: 0, tank: true, armour: 0, cutter: true },   // two machine guns, no gun: 2 dice at men (Steve, 2026-11-15)
   pz2:      { name: 'Panzer II', soft: 1, hard: 1, he: 1, tank: true, armour: 0, cutter: true, smallGun: true },  // a 2 cm cannon
   pz3:      { name: 'Panzer III', soft: 1.5, hard: 1, he: 1, tank: true, armour: 0, cutter: true },

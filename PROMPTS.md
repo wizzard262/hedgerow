@@ -2052,6 +2052,14 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - Steve: a tank with a second MG can't shoot after it rallied. The rules allowed it (rallying itself uses its move; its hull MGs are a shot of their own) but nothing offered it: after **Rally itself** the menu just closed. Now its red hull-MG targets come up at once with its menu by it (Hull MGs, Hold MG fire) (`offerHullMg` in ui.js)
 - Assumptions: "tanks" includes the T-38 tankettes and the aerosan; the guns off the table don't count as men. Tests 267 pass; no balance runs (Steve). No game screenshot: starting a local web server was blocked this session; the aerosan was checked in a preview render
 
+## 342. Four fixes: minefield sounds, shaken and moved, the shaken marker on time, anti-tank rifles boom (v212)
+
+- Steve: men or tanks moving in the minefield make no noise. A mine going off now bangs as it bursts, and a piece a mine stops in the field it started from (or kills) is heard running or driving (`mineMoveSound` in board3d.js); it was silent because the table only hears a piece that changes field
+- Steve: a shaken piece does not say on its card at the bottom that it has moved. It now shows both badges, Shaken and ✓ Moved this round (`statePill` in ui.js)
+- Steve: a shaken tank either gets taken too soon or does not die from being shaken twice; then: do we sometimes see the token before the shot is fired? Yes: the red shaken marker followed the rules at once, so it showed before the shot that shook it was seen. It now waits until that shot (or the hand to hand) has landed (`shockShown`, `holdBases`, `startMelee`). The rules stay as they are (Steve picked): each hit on a tank not yet shaken shakes it and a coin toss may knock it out; any hit on a shaken tank kills it
+- Steve: anti-tank rifles and the German 88 should boom like a tank, not crack like a rifle. The Boys, the PTRD and the Lahti (`atRifle` in PIECES) now fire with the tank sound and land with its burst (`fireSound` in sim.js); in hand to hand a blow by a tank, a gun or an anti-tank rifle booms too (`meleeSound` in board3d.js; it was always rifles, which is where the 88 cracked)
+- Assumptions: the rules of anti-tank rifles are unchanged (still small arms against a crewed gun); only their sound. Tests: only the new checks, `node tools/test.js "2026-11-21 fix"` (4 pass; the name filter is new), plus the parse and old sound checks; not the full run (Steve). No screenshot or browser check (Steve is waiting to play)
+
 ## Sessions
 
 | # | Date | Length | What we did |

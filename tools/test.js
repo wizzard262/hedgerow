@@ -5,7 +5,10 @@ load('data.js'); load('sim.js'); load('scenery.js');
 const { play, playAsGermans, playRobots } = require('./bot.js');
 
 let failed = 0;
+// node tools/test.js <words>: only the checks whose names contain those words (Steve, 2026-11-21: just the ones for a fix)
+const only = process.argv[2] || '';
 function check(name, fn) {
+  if (only && !name.includes(only)) return;
   try { fn(); console.log('ok   ', name); }
   catch (e) { failed++; console.log('FAIL ', name, '\n      ', e.message); }
 }
@@ -5203,6 +5206,72 @@ check('the Bulge\'s forest says what it is on hover (Steve, 2026-11-16): a pine 
   const pine = fieldWords('orchard', true);
   assert(pine.name === 'Pine forest' && /Tanks can't go in/.test(pine.note) && !/\+1/.test(pine.note), JSON.stringify(pine));
   assert(fieldWords('orchard', false).name === 'Orchard', 'an orchard elsewhere lost its name');
+});
+
+// The fixes of 2026-11-21 (Steve): all their checks have "2026-11-21 fix" in their names (node tools/test.js "2026-11-21 fix")
+check('2026-11-21 fix: anti-tank rifles and the 88 boom like a tank, not a rifle, shooting and hand to hand', () => {
+  for (const [map, kinds] of [['stalingrad', ['boys', 'flak88']], ['dunkirk', ['boys']], ['winterwar', ['lahti']]]) {
+    const g = Sim.newGame(1, 'us', map);
+    for (const kind of kinds) {
+      const u = g.units.find(o => o.kind === kind);
+      assert(u, `${map} has no ${kind}`);
+      assert(Sim.soundOf(u) === 'rocket', `${map}'s ${kind} sounds like ${Sim.soundOf(u)}`);
+    }
+  }
+  // (riflemen and MGs as they were)
+  const g = Sim.newGame(1, 'us', 'stalingrad');
+  assert(Sim.soundOf(g.units.find(u => u.kind === 'company')) === 'rifle', 'the rifles changed');
+  assert(Sim.soundOf(g.units.find(u => u.kind === 'mg42')) === 'mg42', 'the MG 42 changed');
+  // Hand to hand: a blow by the 88 booms, a blow by riflemen cracks (board3d's meleeSound)
+  const meleeSound = vm.runInThisContext(`(${pageCode('board3d.js', 'function meleeSound(st, blow) {', '\n  }')})`);
+  const gun = g.units.find(u => u.kind === 'flak88'), men = g.units.find(u => u.kind === 'company');
+  assert(meleeSound(g, { strikers: [gun.id] }) === 'rocket', 'the 88 cracks like a rifle hand to hand');
+  assert(meleeSound(g, { strikers: [men.id] }) === 'rifle', 'riflemen boom hand to hand');
+  Sim.newGame(1);
+});
+
+check('2026-11-21 fix: a shaken piece that has moved says both on its card', () => {
+  const statePill = vm.runInThisContext(`(${pageCode('ui.js', 'function statePill(u, inCover, shaken) {', '\n  }')})`);
+  const both = statePill({ shocked: true, acted: true }, 'Taking cover', 'Shaken');
+  assert(/Shaken/.test(both) && /Moved this round/.test(both), `a shaken piece that moved says ${both}`);
+  const notYet = statePill({ shocked: true, acted: false }, 'Taking cover', 'Shaken');
+  assert(/Shaken/.test(notYet) && !/Moved/.test(notYet), `a shaken piece that hasn't moved says ${notYet}`);
+  assert(/Moved this round/.test(statePill({ acted: true }, 'Taking cover', 'Shaken')), 'a piece that moved lost its badge');
+});
+
+check('2026-11-21 fix: a mine is heard going off, and a move stopped by a mine is heard', () => {
+  const startMine = pageCode('board3d.js', 'function startMine(st, f) {', '\n  }');
+  assert(/f\.hit\) Sound\.play\('he'/.test(startMine) && /mineMoveSound\(st, f\)/.test(startMine), 'startMine plays no sound');
+  // mineMoveSound: heard once when the piece stays in its field or dies; not when it changed field (updatePieces has it)
+  const played = [];
+  const make = vm.runInThisContext(`((pieces, Sound) => { let mineMoveHeard = new Set(); return ${pageCode('board3d.js', 'function mineMoveSound(st, f) {', '\n  }')}; })`);
+  const g = Sim.newGame(1, 'us', 'stalingrad');
+  const u = g.units.find(o => o.side === 'us' && o.kind === 'company');
+  const tank = g.units.find(o => Sim.isTank(o));
+  const pieces = { [u.id]: { userData: { field: u.x + ',' + u.y } }, [tank.id]: { userData: { field: '0,0' } } };
+  const mineMoveSound = make(pieces, { play: n => played.push(n) });
+  mineMoveSound(g, { to: { id: u.id } });
+  mineMoveSound(g, { to: { id: u.id } });
+  assert(played.join() === 'run', `stopped in its own field it played ${played.join() || 'nothing'}`);
+  // (a tank that drove on into another field: updatePieces hears it)
+  mineMoveSound(g, { to: { id: tank.id } });
+  assert(played.join() === 'run', `a tank that changed field was heard as well: ${played.join()}`);
+  assert(pageCode('board3d.js', 'function startShots(st) {', 'mineMoveHeard = new Set();'), 'the moves heard are never reset');
+  Sim.newGame(1);
+});
+
+check('2026-11-21 fix: a shaken marker waits for the shot that shook it to land', () => {
+  // updatePieces: while the piece is held, the marker shows as it was
+  const marks = pageCode('board3d.js', 'const shaken = h && ',"marker(u, ':shock', '#9b2a22', '!', shaken, 'back');");
+  assert(marks.includes('h && h.shocked !== undefined ? h.shocked : u.shocked'), 'the marker follows the rules at once');
+  // holdBases keeps the marker as it was showing
+  const hold = vm.runInThisContext(`((pieces, tokens, held) => { ${pageCode('board3d.js', 'function shockShown(id) {', '\n  }')}; return ${pageCode('board3d.js', 'function holdBases(id, until) {', '\n  }')}; })`);
+  const held = {};
+  const holdBases = hold({ T1: { visible: true, userData: { bases: [{ visible: true }] } } }, { 'T1:shock': { visible: false } }, held);
+  holdBases('T1', 1e12);
+  assert(held.T1.shocked === false, 'a tank not yet shown shaken is held as shaken');
+  // (and hand to hand)
+  assert(pageCode('board3d.js', 'function startMelee(st, f, t0) {', '\n  }').includes('shocked: shockShown(id)'), 'hand to hand shows shaken at once');
 });
 
 console.log(failed ? `\n${failed} failed` : '\nall passed');
