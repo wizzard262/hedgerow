@@ -2826,6 +2826,7 @@ const Board = (() => {
   // smoke; a miss smashes on the ground beside it in a smaller fire
   const MOLOTOV_FLIGHT = 1.0;                     // seconds a bottle is in the air (Steve: slower, to be seen)
   const MOLOTOV_BURN = { hit: 2.4, miss: 1.4 };   // seconds its fire burns (Steve: more flame)
+  const MOLOTOV_TAIL = 14;                        // glows in a flying bottle's comet tail (Steve)
   function playMolotovs(f, b, bt, add) {
     // Nothing yet, or all burnt out
     if (bt < 0 || bt > MOLOTOV_BLOW + MOLOTOV_BURN.hit + 0.3) return;
@@ -2872,21 +2873,25 @@ const Board = (() => {
     glass.scale.set(0.026, 0.06, 1);
     glass.material.rotation = p * 9;
     glass.position.set(x, y, z);
-    // The burning rag: a glow and a tongue of flame streaming off it, deep red (Steve, 2026-11-21: redder)
-    const rag = add(glow('rgba(235,45,15,1)'));
-    rag.scale.setScalar(0.11 + 0.03 * Math.sin(p * 40));
+    // The burning rag, like a comet (Steve, 2026-11-21: red and orange like the flames, with a tail): a bright orange
+    // head with a tongue of flame, and a long tail streaming back along the way it came, orange near the bottle,
+    // turning red and fading as it thins out
+    const rag = add(glow('rgba(255,120,25,1)'));
+    rag.scale.setScalar(0.12 + 0.03 * Math.sin(p * 40));
     rag.position.set(x, y + 0.03, z);
     const maps = Fire.flameMaps();
-    const tongue = add(new T.Sprite(new T.SpriteMaterial({ map: maps[Math.floor(p * 12) % maps.length], color: 0xff3a18, transparent: true, depthWrite: false, toneMapped: false, blending: T.AdditiveBlending })));
+    const tongue = add(new T.Sprite(new T.SpriteMaterial({ map: maps[Math.floor(p * 12) % maps.length], color: 0xff5a20, transparent: true, depthWrite: false, toneMapped: false, blending: T.AdditiveBlending })));
     tongue.scale.set(0.05, 0.1, 1);
     tongue.position.set(x, y + 0.07, z);
-    // Sparks trailing behind it along the way it came
-    for (let k = 1; k <= 4; k++) {
-      const q = p - k * 0.035;
+    // The tail: for each step back along the lob, a smaller, redder, fainter glow
+    for (let k = 1; k <= MOLOTOV_TAIL; k++) {
+      const q = p - k * 0.018;
       if (q < 0) break;
-      const spark = add(glow('rgba(220,35,10,1)'));
-      spark.scale.setScalar(0.05 * (1 - k / 5));
-      spark.position.set(T.MathUtils.lerp(from.x, to.x, q), T.MathUtils.lerp(from.y, 0.1, q) + 0.45 * Math.sin(q * Math.PI) + 0.03, T.MathUtils.lerp(from.z, to.z, q));
+      const back = k / MOLOTOV_TAIL;
+      const tail = add(glow(back < 0.35 ? 'rgba(255,130,30,1)' : back < 0.7 ? 'rgba(250,75,20,1)' : 'rgba(215,30,10,1)'));
+      tail.material.opacity = 1 - back * 0.85;
+      tail.scale.setScalar(0.1 * (1 - back * 0.8));
+      tail.position.set(T.MathUtils.lerp(from.x, to.x, q), T.MathUtils.lerp(from.y, 0.1, q) + 0.45 * Math.sin(q * Math.PI) + 0.03, T.MathUtils.lerp(from.z, to.z, q));
     }
   }
 
