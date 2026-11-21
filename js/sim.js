@@ -421,7 +421,7 @@ const Sim = (() => {
       // Tanks start on a street (Steve: Paris), never in a courtyard behind the buildings they can't get through
       const street = o => !(st.map.blocks && isTank(u)) || tileType(o.f.x, o.f.y) !== 'court';
       // (no tank starts in the Ardennes' pine forest, Steve: it could never get out)
-      const woods = o => st.map.forest && isTank(u) && tileType(o.f.x, o.f.y) === 'orchard';
+      const woods = o => pineForestFor(u, o.f.x, o.f.y);
       const spot = options.find(o => street(o) && !woods(o) && roomFor(st, u, o.f.x, o.f.y)) || options.find(o => !woods(o) && roomFor(st, u, o.f.x, o.f.y));
       u.x = spot.f.x; u.y = spot.f.y;
       // (its place in the field straight away, so the next piece's room is judged by where this one really stands: by the
@@ -1823,6 +1823,9 @@ const Sim = (() => {
     const result = target.x === null ? (isTank(target) ? 'Destroyed' : 'Wiped out')
       : lost ? (isTank(target) ? `Tank knocked out` : lost > 1 ? `${lost} sections lost` : 'Section lost')
       : target.shocked && !before.shocked ? 'Shaken' : softHits + hardHits ? 'No effect' : 'Missed';
+    // A long tank (the T-35, the King Tiger, the Ferdinand) turns to lie towards what it fired at, where there is room
+    // (Steve, 2026-11-21: they fired sideways). After the dice, so the shot is the one it was offered
+    if (sizeOf(shooter) === 6) lieToward(st, shooter, Math.atan2(-(stood.y - shooter.y), stood.x - shooter.x));
     // What the table shows: the weapon's muzzle flash and tracers from the shooter, and what lands on the target
     st.fx.push({
       from: { id: shooter.id, x: shooter.x, y: shooter.y },
@@ -2027,6 +2030,23 @@ const Sim = (() => {
     const closest = seen.filter(e => Math.abs(far(e) - nearest) < 0.01);
     const e = closest[Math.floor(st.rand() * closest.length)];
     u.aim = Math.atan2(-(e.y - u.y), e.x - u.x);
+    // (a long tank lies that way too, where there is room)
+    if (sizeOf(u) === 6) lieToward(st, u, u.aim);
+  }
+
+  // A long tank (3 by 2 areas) lies along one half of its field: n or s point it east or west, e or w north or south.
+  // It turns onto a half that points it the way wanted (an angle, east 0, north a quarter turn), if that half is free;
+  // with no room it stays as it is (Steve, 2026-11-21: they fired sideways)
+  function lieToward(st, u, angle) {
+    // Mostly east or west: a half across the field; mostly north or south: one up and down it
+    const eastWest = Math.abs(Math.cos(angle)) >= Math.abs(Math.sin(angle));
+    const wanted = eastWest ? ['n', 's'] : ['e', 'w'];
+    // Already lying that way: nothing to do
+    const half = footprint(u)[1];
+    if (wanted.includes(half)) return;
+    // The first of the two halves with room for it
+    const free = wanted.find(h => fitsAt(st, u, u.x, u.y, h));
+    if (free) u.at = free;
   }
 
   // ---------- Close assault ----------
@@ -2377,13 +2397,18 @@ const Sim = (() => {
 
   // What it costs to go from one field into the next (Steve): one move, and CLIMB more for men climbing a hedge bank (it
   // stays standing); barbed wire stops men; tanks drive straight through both. null where it can't go at all
+  // Is this field pine forest a tank can't be in (the Ardennes, Steve): no tank starts, comes on or drives into one
+  function pineForestFor(u, x, y) {
+    return isTank(u) && !!currentMap.forest && tileType(x, y) === 'orchard';
+  }
+
   function stepCost(st, u, fx, fy, x, y) {
     // (nobody goes into the sea: the Americans only leave it)
     if (!inside(x, y) || tileType(x, y) === 'river' || tileType(x, y) === 'sea' || PIECES[u.kind].fixed) return null;
     // Tank traps stop tanks (Steve)
     if (isTank(u) && featuresAt(st, x, y).some(f => FEATURES[f.kind].stopsTanks)) return null;
     // The Ardennes (Steve): no tank gets into the pine forest; they keep to the roads, the fields and the villages
-    if (isTank(u) && currentMap.forest && tileType(x, y) === 'orchard') return null;
+    if (pineForestFor(u, x, y)) return null;
     // Nothing crosses a train (Steve): no going over the railway's side of a field an engine or carriage stands in
     if (trainAcross(st, fx, fy, x, y)) return null;
     if (isTank(u)) return hedge(st, fx, fy, x, y) && !cutter(u) ? null : 1;
@@ -3884,6 +3909,8 @@ const Sim = (() => {
       const x = u.side === 'us' ? k : COLS - 1 - k;
       for (const y of rows) {
         if (['river', 'sea', 'pond'].includes(tileType(x, y))) continue;
+        // (never a tank into the Ardennes' pine forest, Steve 2026-11-21: reinforcements came on in it, stuck)
+        if (pineForestFor(u, x, y)) continue;
         if (at(st, x, y, enemyOf(u.side)).length) continue;
         if (!anchorsFor(u).some(a => fitsAt(st, u, x, y, a))) continue;
         return { x, y };

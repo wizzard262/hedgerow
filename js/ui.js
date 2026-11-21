@@ -113,7 +113,7 @@ const UI = (() => {
     // Move & shoot: only the areas it could fire from are hatched (Steve)
     // (those with a shot at close range differently, Steve)
     // (and those where a Hail Mary is the only shot, in weaker red, Steve)
-    if (view.mode === 'moveShoot') for (const p of marked) { p.cells = Sim.shootCells(st, u, p.x, p.y); p.closeCells = Sim.closeCells(st, u, p.x, p.y); p.hailCells = Sim.hailMaryCells(st, u, p.x, p.y); }
+    if (view.mode === 'moveShoot') for (const p of marked) shotAreas(u, p);
     // Charging: its own field is marked too, to go and line another of its hedges (the old Line a hedge, Steve: implicit)
     if (view.mode === 'charge' && Sim.canAct(st, u) && Sim.lineSides(st, u).length) marked.push({ x: u.x, y: u.y, kind: 'line' });
     // Rallying: every field the captain's voice reaches, faintly, round the pieces he can rally (Steve)
@@ -126,11 +126,21 @@ const UI = (() => {
     return marked;
   }
 
+  // A Move & shoot field's areas, for its hatching: those it could fire from, those at close range, those with only a
+  // Hail Mary. The same for both sides' pieces (Steve, 2026-11-21: the Germans' were hatched all over). Returns the spot
+  function shotAreas(u, p) {
+    p.cells = Sim.shootCells(st, u, p.x, p.y);
+    p.closeCells = Sim.closeCells(st, u, p.x, p.y);
+    p.hailCells = Sim.hailMaryCells(st, u, p.x, p.y);
+    return p;
+  }
+
   // Where a piece could go (Steve: the Germans show the same as yours): red hatching for Move & shoot (fields it could
   // fire from), the rest a Charge; into the enemy's field, a fight
   function moveSpotsFor(u) {
     const enemy = u.side === 'us' ? 'de' : 'us';
-    const shootAfter = Sim.moveShootSpots(st, u).map(p => ({ x: p.x, y: p.y, kind: 'hatch' }));
+    // (area by area, as yours: crossed for close range, pale for a Hail Mary, Steve 2026-11-21)
+    const shootAfter = Sim.moveShootSpots(st, u).map(p => shotAreas(u, { x: p.x, y: p.y, kind: 'hatch' }));
     const charges = Sim.chargeSpots(st, u).filter(p => !shootAfter.some(q => q.x === p.x && q.y === p.y))
       .map(p => ({ x: p.x, y: p.y, kind: Sim.at(st, p.x, p.y, enemy).length ? 'assault' : 'charge' }));
     return shootAfter.concat(charges);

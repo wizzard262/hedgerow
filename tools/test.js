@@ -5324,5 +5324,68 @@ check('2026-11-21 fix: the sniper only shakes the 88 and the PaK, never kills th
   Sim.newGame(1);
 });
 
+check('2026-11-21 fix: a long tank turns to lie towards what it fires at, where there is room', () => {
+  const g = Sim.newGame(1, 'us', 'bulge');
+  const kt = g.units.find(u => u.kind === 'kingtiger');
+  const foe = g.units.find(u => u.side === 'us' && Sim.isTank(u));
+  assert(kt && foe, 'the Bulge has no King Tiger, or no American tank');
+  // Only the two of them on the table, the King Tiger in the middle of the board lying east to west
+  g.units = [kt, foe];
+  g.wrecks = []; g.features = [];
+  kt.x = 5; kt.y = 4; kt.at = 'n';
+  // A target due north: it turns to lie north to south
+  foe.x = 5; foe.y = 1;
+  Sim.fireAt(g, kt, foe);
+  assert(['e', 'w'].includes(Sim.footprint(kt)[1]), `firing north it lies along ${Sim.footprint(kt).join()}`);
+  // A target due east: back to lying east to west
+  if (foe.x === null) { foe.x = 8; foe.platoons = 1; } else foe.x = 8;
+  foe.y = 4;
+  Sim.fireAt(g, kt, foe);
+  assert(['n', 's'].includes(Sim.footprint(kt)[1]), `firing east it lies along ${Sim.footprint(kt).join()}`);
+  // No room to turn (a piece of its own in a north corner of each north-south half): it stays as it is
+  const blocker = { id: 'blk', kind: 'mg42', side: kt.side, x: 5, y: 4, at: 'ne', platoons: 1, quality: 'standard' };
+  const blocker2 = { id: 'blk2', kind: 'mg42', side: kt.side, x: 5, y: 4, at: 'nw', platoons: 1, quality: 'standard' };
+  kt.at = 's';
+  g.units.push(blocker, blocker2);
+  // (they don't stand where it is now)
+  assert(Sim.fitsAt(g, kt, 5, 4, 's'), 'the blockers are in its way already');
+  foe.x = 5; foe.y = 1; foe.platoons = 1;
+  Sim.fireAt(g, kt, foe);
+  assert(Sim.footprint(kt)[1] === 's', `with no room it turned to ${Sim.footprint(kt).join()}`);
+  Sim.newGame(1);
+});
+
+check('2026-11-21 fix: in the Bulge no tank starts or comes on as a reinforcement in the pine forest', () => {
+  const inForest = g => g.units.filter(u => u.x !== null && Sim.isTank(u) && Sim.tileType(u.x, u.y) === 'orchard').map(u => `${u.name} at ${u.x},${u.y}`);
+  // For each of a few games: at the start, then after round 3's reinforcements
+  for (let seed = 1; seed <= 6; seed++) {
+    const g = Sim.newGame(seed, 'none', 'bulge');
+    assert(!inForest(g).length, `seed ${seed} starts with ${inForest(g).join(', ')} in the forest`);
+    Sim.startRound(g);
+    g.bag = { us: 0, de: 0, timer: 0 }; Sim.finishRound(g);
+    g.bag = { us: 0, de: 0, timer: 0 }; Sim.finishRound(g);
+    assert(['TD2', 'TD3', 'T5', 'T6'].some(id => Sim.unitById(g, id)), `seed ${seed}: no reinforcements came`);
+    assert(!inForest(g).length, `seed ${seed}: reinforcements ${inForest(g).join(', ')} came on in the forest`);
+  }
+  Sim.newGame(1);
+});
+
+check('2026-11-21 fix: the computer\'s pieces show their Move & shoot hatching area by area, close range and Hail Mary too', () => {
+  const g = Sim.newGame(1, 'us', 'bulge');
+  // ui.js's moveSpotsFor and shotAreas, with this game as theirs
+  const make = vm.runInThisContext(`((st) => { ${pageCode('ui.js', 'function shotAreas(u, p) {', '\n  }')}; return ${pageCode('ui.js', 'function moveSpotsFor(u) {', '\n  }')}; })`);
+  const moveSpotsFor = make(g);
+  // A German tank with somewhere to move and shoot from
+  const tank = g.units.find(u => u.side === 'de' && Sim.isTank(u) && Sim.moveShootSpots(g, u).length);
+  assert(tank, 'no German tank has a Move & shoot');
+  const hatched = moveSpotsFor(tank).filter(p => p.kind === 'hatch');
+  assert(hatched.length, 'no hatching');
+  for (const p of hatched) {
+    assert(Array.isArray(p.cells) && Array.isArray(p.closeCells) && Array.isArray(p.hailCells), `field ${p.x},${p.y} has no areas`);
+    assert(p.cells.join() === Sim.shootCells(g, tank, p.x, p.y).join(), `field ${p.x},${p.y}: the wrong areas`);
+  }
+  Sim.newGame(1);
+});
+
 console.log(failed ? `\n${failed} failed` : '\nall passed');
 process.exit(failed ? 1 : 0);
