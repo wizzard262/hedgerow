@@ -392,35 +392,35 @@ window.Game = (() => {
     if (st.mode === 'de') return st.lost && !st.draw;
     return st.won;
   }
-  // The battle to play next: won, the one after this in the campaign (after Paris, back to the beach); otherwise this one
-  // again
+  // The battle to play next: won, the one after this in the campaign (after Paris, back to the beach), or the next
+  // bonus battle that can be played (after the last, back to the first, the Winter War, Steve 2026-11-21); otherwise
+  // this one again
   function nextMapId() {
     if (!playerWon()) return st.map.id;
-    const here = CAMPAIGN.indexOf(st.map.id);
-    return CAMPAIGN[(here + 1) % CAMPAIGN.length];
+    return nextInList(st.map.id);
   }
-  // Next battle, or the same one again (Steve: no Play again; lost, you don't go on): the same commanders on each side,
-  // and the map is remembered
-  function nextBattle() {
-    const next = nextMapId();
-    $('#result').hidden = true;
-    chosenMap = next;
-    rememberMap(next);
-    start(undefined, st.mode, next);
+  // The battle after this one in its own list, going round from the end to the start
+  function nextInList(id) {
+    // The campaign, or the bonus battles that have a map
+    const campaign = CAMPAIGN.includes(id);
+    const list = campaign ? CAMPAIGN : BONUS.filter(b => !b.stamp && MAPS.some(m => m.id === b.id)).map(b => b.id);
+    const here = list.indexOf(id);
+    // (a battle in neither list: itself)
+    if (here < 0) return id;
+    return list[(here + 1) % list.length];
   }
 
+  // The end of a battle (Steve, 2026-11-21: no Next battle button): the New game screen, how it ended at its top, the
+  // battle to play next lit, and the same commanders
   function openResult() {
     resultWaiting = false;
     const twoAlike = st.mode === 'both' || st.mode === 'none';
     const ending = parisLiberated() ? PARIS_LIBERATED : st.evac ? evacEnding() : twoAlike ? plainEnding() : st.mode === 'de' ? germanEnding() : americanEnding();
     $('#result-title').textContent = ending.title;
     $('#result-text').textContent = ending.text;
-    // The one button: won, on to the next battle; lost or drawn, this one again (Steve). Named either way
-    const next = MAPS.find(m => m.id === nextMapId());
-    const word = playerWon() ? 'Next battle' : 'Try again';
-    const number = CAMPAIGN.includes(next.id) ? `${CAMPAIGN.indexOf(next.id) + 1}. ` : '';
-    $('#again-btn').textContent = `${word}: ${number}${next.name} ›`;
-    $('#result').hidden = false;
+    // The next battle lit on the screen
+    chosenMap = nextMapId();
+    askSide(true);
   }
 
   // The end of the campaign (Steve: something historically suitable): de Gaulle at the Hôtel de Ville on the evening of
@@ -727,7 +727,9 @@ window.Game = (() => {
   $('#timer-off').onclick = () => { rules.timer = false; lightRules(); };
   $('#order-bag').onclick = () => { rules.order = 'bag'; lightRules(); };
   $('#order-turns').onclick = () => { rules.order = 'turns'; lightRules(); };
-  function askSide() {
+  // ended: a battle has just ended, and how is shown at the top; otherwise that is hidden
+  function askSide(ended = false) {
+    $('#result').hidden = ended !== true;
     const mode = st.mode;
     picked.us = mode === 'us' || mode === 'both' ? 'human' : 'robot';
     picked.de = mode === 'de' || mode === 'both' ? 'human' : 'robot';
@@ -737,7 +739,7 @@ window.Game = (() => {
     $('#newgame [data-close]').hidden = !gameStarted;
     $('#newgame').hidden = false;
   }
-  $('#new-btn').onclick = askSide;
+  $('#new-btn').onclick = () => askSide();
   for (const side of ['us', 'de']) for (const who of ['human', 'robot']) {
     $(`#${side}-${who}`).onclick = () => { picked[side] = who; lightSides(); };
   }
@@ -803,7 +805,6 @@ window.Game = (() => {
     start(undefined, mode);
   };
   $('#newgame [data-close]').onclick = () => { $('#newgame').hidden = true; };
-  $('#again-btn').onclick = nextBattle;
   window.addEventListener('resize', fit);
 
   // ---------- Start ----------

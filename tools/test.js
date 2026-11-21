@@ -5439,5 +5439,23 @@ check('2026-11-21 fix: the Finnish infantry\'s card says they have Molotov cockt
   Sim.newGame(1);
 });
 
+check('2026-11-21 fix: after a battle the New game screen comes up with the next battle lit; bonus battles go round to the Winter War', () => {
+  // main.js's nextInList
+  const nextInList = vm.runInThisContext(`(${pageCode('main.js', 'function nextInList(id) {', '\n  }')})`);
+  // The campaign: one after another, Paris back to the beach
+  for (let k = 0; k < CAMPAIGN.length; k++) assert(nextInList(CAMPAIGN[k]) === CAMPAIGN[(k + 1) % CAMPAIGN.length], `after ${CAMPAIGN[k]} comes ${nextInList(CAMPAIGN[k])}`);
+  // The bonus battles: in date order, the last back to the first
+  const bonus = BONUS.filter(b => !b.stamp && MAPS.some(m => m.id === b.id)).map(b => b.id);
+  assert(bonus[0] === 'winterwar', `the first bonus battle is ${bonus[0]}`);
+  for (let k = 0; k < bonus.length - 1; k++) assert(nextInList(bonus[k]) === bonus[k + 1], `after ${bonus[k]} comes ${nextInList(bonus[k])}`);
+  assert(nextInList(bonus[bonus.length - 1]) === 'winterwar', `after the last bonus battle comes ${nextInList(bonus[bonus.length - 1])}`);
+  // The end opens the New game screen with how it ended, not a Next battle button
+  const openResult = pageCode('main.js', 'function openResult() {', '\n  }');
+  assert(openResult.includes('chosenMap = nextMapId();') && openResult.includes('askSide(true)'), 'the end does not open the battles with the next one lit');
+  const page = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  assert(!page.includes('again-btn'), 'the Next battle button is still on the page');
+  assert(/id="newgame"[\s\S]*id="result"[\s\S]*id="map-choice"/.test(page), 'how it ended is not at the top of the New game screen');
+});
+
 console.log(failed ? `\n${failed} failed` : '\nall passed');
 process.exit(failed ? 1 : 0);

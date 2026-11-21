@@ -137,8 +137,8 @@ async function checkPlayers() {
   }
   console.log('  two humans ends:', await page.textContent('#result-title'), '|', await page.textContent('#result-text'));
   const was = await page.evaluate(() => Game.state.map.id);
-  console.log('  its button:', await page.textContent('#again-btn'));
-  await page.click('#again-btn');
+  console.log('  next lit:', await page.textContent('#newgame .map-card.on b'));
+  await page.click('#start-game');
   await page.waitForTimeout(600);
   const after = await page.evaluate(() => ({ mode: Game.state.mode, map: Game.state.map.id }));
   const wanted = await page.evaluate(id => CAMPAIGN[(CAMPAIGN.indexOf(id) + 1) % CAMPAIGN.length], was);
@@ -176,8 +176,8 @@ async function checkPlayers() {
   console.log('  two robots ends:', await page.textContent('#result-title'), '|', await page.textContent('#result-text'));
   // A draw is not a win: the same battle again (Steve)
   const drawnOn = await page.evaluate(() => Game.state.map.id);
-  console.log('  its button:', await page.textContent('#again-btn'));
-  await page.click('#again-btn');
+  console.log('  next lit:', await page.textContent('#newgame .map-card.on b'));
+  await page.click('#start-game');
   await page.waitForTimeout(500);
   const drawnNext = await page.evaluate(() => Game.state.map.id);
   console.log('  after a draw, the same battle again:', drawnOn, '->', drawnNext, drawnOn === drawnNext ? 'ok' : 'WRONG');

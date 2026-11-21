@@ -140,6 +140,9 @@
   #newgame .card { max-width: 1400px; width: 97vw; max-height: 97vh; overflow: hidden; padding: 12px 16px; }
   #newgame h2 { margin: 0 0 4px; }
   .campaign-head { margin: 0 0 6px; }
+  #result { border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; margin: 0 0 10px; }
+  #result h3 { margin: 2px 0 4px; font-size: 18px; }
+  #result p { margin: 0 0 4px; font-size: 13px; }
   #map-choice { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; }
   .map-card { display: flex; flex-direction: column; align-items: stretch; gap: 2px; padding: 4px; text-align: left; font-size: 12px; line-height: 1.15; }
   .map-card img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 4px; background: rgba(0,0,0,.3); }
@@ -175,7 +178,7 @@
 <aside id="panel">
   <div class="brand">
   <div class="top">
-    <h1>HEDGEROW <span id="ver" style="font-size:11px;color:var(--muted);letter-spacing:0">v218</span> <a id="prompts-link" href="prompts.html" target="_blank" rel="noopener" title="How the game was made, prompt by prompt">Prompts</a></h1>
+    <h1>HEDGEROW <span id="ver" style="font-size:11px;color:var(--muted);letter-spacing:0">v219</span> <a id="prompts-link" href="prompts.html" target="_blank" rel="noopener" title="How the game was made, prompt by prompt">Prompts</a></h1>
     <div class="links"><button id="sound-btn" title="Sound on or off">🔊</button><button id="help-btn">How to play</button><button id="new-btn">New game</button></div>
   </div>
   <div id="clock"></div>
@@ -192,13 +195,12 @@
 
 <main id="board"><div id="banner"></div><div id="label"></div><div id="tip"></div><svg id="menu-tail"><polygon points="0,0 0,0 0,0"/></svg><div id="menu" hidden></div></main>
 
-<div class="modal" id="result" hidden>
-  <div class="card"><h2 id="result-title"></h2><p id="result-text"></p><div class="buttons"><button id="again-btn" class="on">Next battle</button></div></div>
-</div>
 
 <div class="modal" id="newgame" hidden>
   <div class="card">
     <h2>New game</h2>
+    <!-- How the battle just played ended (Steve, 2026-11-21: no Next battle button; the battles, with the next one lit) -->
+    <div id="result" hidden><h3 id="result-title"></h3><p id="result-text"></p></div>
     <p class="campaign-head"><b>The campaign:</b> from the beaches to Paris, summer 1944. Which battle?</p>
     <div id="map-choice"></div>
     <div class="newgame-bottom">
@@ -258,7 +260,7 @@
     </div>
     <div class="help-tab" data-tab="battles" hidden>
     <ul>
-      <li>🗺️ <b>The campaign</b>: the same start also asks which battle. They run in order from the Normandy beaches through the bocage and the farms to Paris, each with its date; play any of them, in any order. When a battle ends and you have won it, <b>Next battle</b> starts the next one in the campaign with the same commanders on each side (after Paris, back to the beach); lost or drawn, <b>Try again</b> plays the same battle again. With two humans or two robots, it goes on when the Americans win. Take Paris and the city celebrates. Each has its own ground, and most change the pieces, the guns or where the sides start: River crossing (bridges the only way over), Crossroads town, Open farmland (few hedges, barns and a duck pond), Paris (a new maze of cobbled streets each game), Train station (tracks everywhere, with engines, carriages, goods wagons, signal boxes, signals, water towers and coal heaps in new places each game; the tracks themselves have no effect) and Deep bocage (hedges nearly everywhere). A café, a barn, or anything on the rails takes two or three areas, along one side of its field or in the middle, and blocks the view as a tank does; so do the station's signal boxes, water towers and coal heaps, one area each; a signal takes an area too, but can be seen past (with one in the middle only smaller pieces can stop there; platoons and tanks go past); a fountain or a pond can't be stood on, but can be seen over. Bombers differ too: on some maps only one side has one, on one map neither. The choice says what each one changes. Five <b>bonus battles</b> sit below the campaign, beside who commands each side, outside the campaign, in date order.</li>
+      <li>🗺️ <b>The campaign</b>: the same start also asks which battle. They run in order from the Normandy beaches through the bocage and the farms to Paris, each with its date; play any of them, in any order. When a battle ends, the New game screen comes up with how it ended at the top and the next battle lit: won, the next one in the campaign (after Paris, back to the beach), or the next bonus battle (after the last, back to the Winter War); lost or drawn, the same battle again. The same commanders are lit; press <b>Start</b>, or pick another. With two humans or two robots, it goes on when the Americans win. Take Paris and the city celebrates. Each has its own ground, and most change the pieces, the guns or where the sides start: River crossing (bridges the only way over), Crossroads town, Open farmland (few hedges, barns and a duck pond), Paris (a new maze of cobbled streets each game), Train station (tracks everywhere, with engines, carriages, goods wagons, signal boxes, signals, water towers and coal heaps in new places each game; the tracks themselves have no effect) and Deep bocage (hedges nearly everywhere). A café, a barn, or anything on the rails takes two or three areas, along one side of its field or in the middle, and blocks the view as a tank does; so do the station's signal boxes, water towers and coal heaps, one area each; a signal takes an area too, but can be seen past (with one in the middle only smaller pieces can stop there; platoons and tanks go past); a fountain or a pond can't be stood on, but can be seen over. Bombers differ too: on some maps only one side has one, on one map neither. The choice says what each one changes. Five <b>bonus battles</b> sit below the campaign, beside who commands each side, outside the campaign, in date order.</li>
       <li>❄️ <b>Winter War</b>, January 1940: a motti on the Raate road. You are the Soviets (or the Finns against them): a column strung out along the one road through deep, snowy pine forest, two T-26s, a T-28 (three turrets: its two machine-gun turrets fire a shot of their own once a round, like the T-35's), two T-38 tankettes, an RF-8-GAZ-98 aerosan (a propeller sled on skis: two fields further, plywood, so machine guns hurt it), three rifle platoons, the Kapitan and a Maxim. The Finns, in white snowsuits, close in from the forest all round: three ski platoons and a section with Suomi submachine guns, the Kapteeni, two Maxims, two Lahti 20 mm anti-tank rifles, a Bofors 37 mm anti-tank gun and their one Vickers 6-ton tank. Tanks and the aerosan can't go into the forest; men can. On skis a piece goes a field further; Soviet men off the road wade through the deep snow a field slower. Finnish platoons can charge a tank hand to hand with Molotov cocktails and satchel charges (5 or more to hit). Few shells, no bombers. Destroy the other side to win; if the Soviets have no men left, only tanks that can't follow the Finns into the forest, the motti is starved out and the Finns win.</li>
       <li>⛵ <b>Dunkirk</b>, 31 May 1940: you are the British (or the Germans against them). Your men don't go to the boats: they hold the sandbagged strongpoints along the front (two more to hit the men in one, one more against shells). From round 2 a lorry a round comes down the coast road from the top, with 1 or 2 sections of men, and drives itself (up to 4 fields a round, no orders or token) to a little ship lying off the beach; the men run out of the back into the boat, and the boats sail at the end of the round. Two or three boats (tugs and cabin cruisers) come in each round, off the top four fields of the beach; the destroyer lies at the bottom with the RAF's bomber above it. 12 sections away within 12 rounds wins (a lorry shot up on the way brings fewer); a German on the coast road or the beach at the end of a round loses, and so does running out of lorries or rounds. The Germans can shoot the lorries: each hit loses a section. The Royal Navy's destroyer fires for the British in place of artillery, with 4 rounds; the British have no mortars, and one run of an RAF Blenheim. The boats come in bow first, pull up alongside the beach, and leave bow first. The count of sections away is written large on the beach above the board; on every other battle the goal is written the same way, on one line in the gap above the board (Capture the village or destroy all of the other side; Hold it, playing the Germans), with the round it must be held to once it is taken. On the Normandy beach the American guns are the battleship USS Texas, out at sea, with 3 rounds, and no mortars. On both, the beach runs on past the top and bottom of the board.</li>
       <li>🏚️ <b>Stalingrad</b>, November 1942: you are the Soviets (or the Germans against them), coming in from the right through a bombed-out city to take the ruins of the Univermag store from the Germans on the left: an open courtyard of four fields with no walls inside, its ruined walls all round the outside. The walls of ruined buildings stand on the edges between fields and work as hedges do: you see over one only from right beside it, men climb through its windows, lining one is cover, and a tank drives through it, leaving rubble. Lines of rubble do the same. A pile of rubble takes one area, and men in its field have one more to hit; a minefield (boards on stakes round it) rolls a die for every piece that goes in, and again as it leaves: 5 or 6 sets off a mine, a hit on it, and the piece stops there, still in the minefield. Getting through, it carries on, so a piece can cross one in a single move with a roll in and a roll out. A piece driven out by a tank runs out without a roll. Each side has a section of submachine gunners (PPSh or MP 40): two bases of three men, 3 dice a base, at close range only. The Germans have an 8.8 cm Flak 36 in a fixed position in the middle of the crossroads behind the store, looking down the street: it never moves, but it can turn (its move), and its gun shield gives it 2 cover against shots from in front, and it fires the whole length of the board (one more needed beyond four fields, as the PaK); the Soviets a T-34, a KV-2 heavy tank (armour 2, slow, its 152 mm shell deadly among men), a Maxim, a PTRD anti-tank rifle and a sniper; against the KV-2 the Germans also have two PaK 40s and a long-gunned Panzer IV F2. Their token is red with a yellow star. <b>Reinforcements</b> (announced in big letters over the table for a few seconds, as paratroopers and supply drops are too) come at the start of round 3, each at its own side's edge of the board, in the field nearest the middle with room for it (one column further in if the edge has none), and can move that round: the Soviets a <b>T-35</b>, the Germans a <b>StuG III Ausf. F</b>. The T-35 is a long five-turreted heavy tank: it takes 3 by 2 areas of its field (lying along one half of it), is slow (one field less), has thin armour, a small 45 mm gun against tanks (one more needed) and a short 76 mm that fires high explosive at men; and once a round, on its token, before or after its move, its small turrets' <b>hull machine guns</b> fire a shot of their own, 2 dice, at men only, at any target in its reach (<b>Hull MGs</b> in its menu; after its move, <b>Hold MG fire</b> ends the token). The StuG is an assault gun: no turret, the long 7.5 cm (2½ dice against tanks), thick front armour (one more to hit), no machine gun.</li>
@@ -276,16 +278,16 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="js/data.js?v=218"></script>
-<script src="js/sim.js?v=218"></script>
-<script src="js/sound.js?v=218"></script>
-<script src="js/models.js?v=218"></script>
-<script src="js/fire.js?v=218"></script>
-<script src="js/chute.js?v=218"></script>
-<script src="js/labels.js?v=218"></script>
-<script src="js/scenery.js?v=218"></script>
-<script src="js/board3d.js?v=218"></script>
-<script src="js/ui.js?v=218"></script>
-<script src="js/main.js?v=218"></script>
+<script src="js/data.js?v=219"></script>
+<script src="js/sim.js?v=219"></script>
+<script src="js/sound.js?v=219"></script>
+<script src="js/models.js?v=219"></script>
+<script src="js/fire.js?v=219"></script>
+<script src="js/chute.js?v=219"></script>
+<script src="js/labels.js?v=219"></script>
+<script src="js/scenery.js?v=219"></script>
+<script src="js/board3d.js?v=219"></script>
+<script src="js/ui.js?v=219"></script>
+<script src="js/main.js?v=219"></script>
 </body>
 </html>
