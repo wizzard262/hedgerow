@@ -5390,5 +5390,32 @@ check('2026-11-21 fix: the computer\'s pieces show their Move & shoot hatching a
   Sim.newGame(1);
 });
 
+check('2026-11-21 fix: men on foot turn to face what they fire at (an MG team, riflemen), until they move', () => {
+  const g = Sim.newGame(1, 'us', 'stalingrad');
+  const mg = g.units.find(u => u.side === 'us' && u.kind === 'mg');
+  const men = g.units.find(u => u.side === 'us' && u.kind === 'company');
+  const foe = g.units.find(u => u.side === 'de' && u.kind === 'company');
+  assert(mg && men && foe, 'missing pieces');
+  // A target due north of each: they face north (a quarter turn)
+  for (const u of [mg, men]) {
+    foe.x = u.x; foe.y = u.y - 1 >= 0 ? u.y - 1 : u.y + 1;
+    Sim.fireAt(g, u, foe);
+    const want = Math.atan2(-(foe.y - u.y), 0);
+    assert(Math.abs(u.faceTo - want) < 1e-9, `${u.name} faces ${u.faceTo}, not ${want}`);
+    if (foe.x === null) { foe.x = 0; foe.platoons = 3; }
+  }
+  // The table: footFacing turns them that way; with nothing fired, the enemy's side
+  const footFacing = vm.runInThisContext(`(${pageCode('board3d.js', 'function footFacing(u, g) {', '\n  }')})`);
+  assert(footFacing(mg, { userData: { face: 0 } }) === mg.faceTo, 'the MG team on the table still faces the enemy side');
+  assert(footFacing({ kind: 'mg', side: 'us' }, { userData: { face: 0 } }) === 0, 'a team that has not fired lost its facing');
+  // Tanks and guns keep their own aim
+  const tank = g.units.find(u => Sim.isTank(u)), gun = g.units.find(u => u.kind === 'flak88');
+  assert(!Sim.facesItsShot(tank) && !Sim.facesItsShot(gun), 'tanks or guns use the men\'s facing');
+  // Moving on: back to facing the enemy's side (step clears it)
+  const stepCode = pageCode('sim.js', 'function step(st, u, x, y', '\n    u.faceTo = null;');
+  assert(stepCode.length > 0, 'a move does not clear the facing');
+  Sim.newGame(1);
+});
+
 console.log(failed ? `\n${failed} failed` : '\nall passed');
 process.exit(failed ? 1 : 0);

@@ -1768,12 +1768,20 @@ const Sim = (() => {
   // The sound a piece's own weapon makes (hand to hand too): a tank's or gun's boom, a rifle's crack, an MG's burst
   const soundOf = u => fireSound(u, weaponOf(u), u.side);
 
+  // A piece on foot that turns to face its shot (faceTo, for the table): not tanks or anti-tank guns (they have aim),
+  // not bunkers (they face one way), not a tank's own hull machine guns
+  function facesItsShot(u) {
+    return !isTank(u) && !isAtGun(u) && !isBunker(u) && !u.hullFire;
+  }
+
   function fireAt(st, shooter, target, withdraw = false, moving = false, blast = false) {
     // (the T-35's hull machine guns firing on their own, Steve: only their dice)
     const f = shooter.hullFire ? hullMgFire(shooter) : firepower(st, shooter);
     const weapon = shooter.hullFire ? 'mg' : weaponOf(shooter);
     // An anti-tank gun swings round onto what it fires at, and stays facing it (Steve: its shield faces that way)
     if (isAtGun(shooter)) shooter.aim = Math.atan2(-(target.y - shooter.y), target.x - shooter.x);
+    // Men on foot turn to face what they fire at too (Steve, 2026-11-21: an MG team fired sideways), until they move
+    if (facesItsShot(shooter)) shooter.faceTo = Math.atan2(-(target.y - shooter.y), target.x - shooter.x);
     // A long tank (the T-35, the King Tiger, the Ferdinand) turns to lie towards what it fires at before it fires, where
     // there is room and it still sees the target from there (Steve, 2026-11-21: they fired sideways; turn first)
     if (sizeOf(shooter) === 6) lieToward(st, shooter, Math.atan2(-(target.y - shooter.y), target.x - shooter.x), target);
@@ -1926,6 +1934,8 @@ const Sim = (() => {
   function step(st, u, x, y, assault = false, fallingBack = false) {
     let how = '';
     u.trail = null;
+    // (moving on, men face the enemy's side again until they next fire)
+    u.faceTo = null;
     // (moving on, a tank tears free of wire it was snagged in)
     u.snag = null;
     // (no mine has stopped it on this step yet)
@@ -4060,7 +4070,7 @@ const Sim = (() => {
   return {
     firesOnTheMove, canAmbush, actAmbush, bestMoveShoot, bomberHeading, bomberAims, bomberLine, bombNeed, bombWhy, bestBomberRun,
     isBunker, isCar, hurtsCars, trainCars, lineSideOf, moveTrains, inFrontOf, bunkerFace, shotOnTheMove, wrecksBeside, isRoad, featuresAt, walkDistance, fireSound, wreckAt, remove, computerSide, isRobot, piecesToAsk, takeCover, enemyOf, gunStats, diceShown, menDiceShown, bomberName, boatKind, armyOf, hedgeWord, inCourtyard, closeRangeOnly, isAtGun, isEmplaced, edgeKey, atCloseRange, closeCells, hailMaryCells,
-    newGame, roll, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, chargeSpots, soundOf,
+    newGame, roll, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, chargeSpots, soundOf, facesItsShot,
     rallyTargets, canAct, canReact, firepower, canCallFire, takesGoal, cannotWin, artilleryTarget, mortarTarget, holdsObjective, roundText, roomFor,
     goalLines, deArmyOf, hullMgTargets, canHullMg, actHullMg, actHoldMg, hullMgDice,
     computerStep, answer, finishRound, startRound, drawToken, endComputerToken, activationOver, passToken, humanCanMove, endRound, canFire, actSkip, actSkipShot, skipSupport,

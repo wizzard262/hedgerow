@@ -1357,7 +1357,9 @@ const Board = (() => {
         // Pulled in a little from the edge, so the bases sit just inside the hedge
         const cx = 0.5 + p.x * reach.platoon, cz = 0.5 + p.y * reach.platoon;
         const spread = [[-0.11, -0.09], [0.11, -0.07], [0, 0.11]].map(([sx, sz]) => [sx * reach.spread, sz * reach.spread]);
-        g.userData.bases.forEach((b, i) => { const [jx, jz, jr] = loose(u, i); b.visible = i < shownStrength(u); aim(b, cx + spread[i][0] + jx, cz + spread[i][1] + jz, g.userData.face + jr); });
+        // (facing what it last fired at, until it moves, Steve 2026-11-21)
+        const facing = footFacing(u, g);
+        g.userData.bases.forEach((b, i) => { const [jx, jz, jr] = loose(u, i); b.visible = i < shownStrength(u); aim(b, cx + spread[i][0] + jx, cz + spread[i][1] + jz, facing + jr); });
       } else if (Sim.isTank(u)) {
         let cx = 0.5 + p.x * reach.tank, cz = 0.5 + p.y * reach.tank;
         // Snagged in wire (Steve): half way through the edge it crossed, the wire dragged round it in a V (see drawSnags)
@@ -1386,7 +1388,8 @@ const Board = (() => {
         });
       } else {
         // The PaK faces the way it last fired (Steve: it turns to shoot); everyone else the enemy's side
-        const facing = Sim.isAtGun(u) && u.aim !== undefined ? u.aim : g.userData.face;
+        // (a team on foot, the MG, the sniper, the captain: what it last fired at, Steve 2026-11-21)
+        const facing = Sim.isAtGun(u) && u.aim !== undefined ? u.aim : footFacing(u, g);
         // (the 88 stands dead in the middle of its crossroads, Steve, whatever areas it takes)
         const centred = Sim.isEmplaced(u);
         aim(g.userData.bases[0], centred ? 0.5 : 0.5 + p.x * reach.small, centred ? 0.5 : 0.5 + p.y * reach.small, facing);
@@ -1396,6 +1399,13 @@ const Board = (() => {
       g.userData.to.y = standsAt(x, y);
     }
   }
+  // The way a piece on foot faces: towards what it last fired at, until it moves (Sim.facesItsShot); otherwise the
+  // enemy's side of the table
+  function footFacing(u, g) {
+    const firedAt = Sim.facesItsShot(u) && typeof u.faceTo === 'number';
+    return firedAt ? u.faceTo : g.userData.face;
+  }
+
   // The way a long tank points: along the half of the field it lies in (n or s: east or west; e or w: north or south),
   // the end nearer the way it would otherwise face
   function alongItsAreas(u, facing) {
@@ -2787,6 +2797,7 @@ const Board = (() => {
   // Tanks (Steve): they turn onto the target first, then each tank fires one shell, one after the other
   const TANK_TURN_RATE = 3;          // how fast a tank turns (higher is quicker; everything else glides at 6)
   const TANK_TURN = 0.9;             // seconds a tank takes to swing round before it fires
+  const MEN_TURN = 0.35;             // seconds men on foot take to turn round before they fire
   const TANK_GAP = 0.45;             // seconds between the two tanks' shells
   // Seconds between one round of a shot and the next: each tank's shell in turn, an MG's burst, a platoon's rifles
   const roundGap = f => (f.weapon === 'gun' ? TANK_GAP : f.weapon === 'mg' ? 0.06 : 0.05);
@@ -2935,7 +2946,8 @@ const Board = (() => {
       const shooter = f.from && st.units.find(u => u.id === f.from.id);
       if (shooter && (Sim.isTank(shooter) || Sim.isAtGun(shooter))) shooter.aim = Math.atan2(-(f.y - f.from.y), f.x - f.from.x);
       // A tank (or the PaK, or the 88) waits while it turns onto the target (Steve)
-      const turning = shooter && (Sim.isTank(shooter) || Sim.isAtGun(shooter)) ? TANK_TURN * 1000 : 0;
+      // (men turn quicker, Steve 2026-11-21)
+      const turning = !shooter ? 0 : Sim.isTank(shooter) || Sim.isAtGun(shooter) ? TANK_TURN * 1000 : Sim.facesItsShot(shooter) ? MEN_TURN * 1000 : 0;
       // How many bases fire it: one round each (Steve)
       f.bases = shooter && pieces[shooter.id] ? pieces[shooter.id].userData.bases.filter(b => b.visible).length : 1;
       // (bombs keep to the plane's own time)
