@@ -2872,19 +2872,19 @@ const Board = (() => {
     glass.scale.set(0.026, 0.06, 1);
     glass.material.rotation = p * 9;
     glass.position.set(x, y, z);
-    // The burning rag: a glow and a tongue of flame streaming off it
-    const rag = add(glow('rgba(255,170,60,1)'));
+    // The burning rag: a glow and a tongue of flame streaming off it, deep red (Steve, 2026-11-21: redder)
+    const rag = add(glow('rgba(235,45,15,1)'));
     rag.scale.setScalar(0.11 + 0.03 * Math.sin(p * 40));
     rag.position.set(x, y + 0.03, z);
     const maps = Fire.flameMaps();
-    const tongue = add(new T.Sprite(new T.SpriteMaterial({ map: maps[Math.floor(p * 12) % maps.length], transparent: true, depthWrite: false, toneMapped: false, blending: T.AdditiveBlending })));
+    const tongue = add(new T.Sprite(new T.SpriteMaterial({ map: maps[Math.floor(p * 12) % maps.length], color: 0xff3a18, transparent: true, depthWrite: false, toneMapped: false, blending: T.AdditiveBlending })));
     tongue.scale.set(0.05, 0.1, 1);
     tongue.position.set(x, y + 0.07, z);
     // Sparks trailing behind it along the way it came
     for (let k = 1; k <= 4; k++) {
       const q = p - k * 0.035;
       if (q < 0) break;
-      const spark = add(glow('rgba(255,140,40,1)'));
+      const spark = add(glow('rgba(220,35,10,1)'));
       spark.scale.setScalar(0.05 * (1 - k / 5));
       spark.position.set(T.MathUtils.lerp(from.x, to.x, q), T.MathUtils.lerp(from.y, 0.1, q) + 0.45 * Math.sin(q * Math.PI) + 0.03, T.MathUtils.lerp(from.z, to.z, q));
     }
