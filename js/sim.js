@@ -2173,6 +2173,13 @@ const Sim = (() => {
     return out;
   }
 
+  // What a piece with Molotov cocktails needs on each die charging a tank (Steve: the Winter War's Finns), or 0 if it
+  // has none: the usual score, MOLOTOV more, elite one less
+  function molotovNeed(u) {
+    if (!u.molotov) return 0;
+    return TO_HIT + MOLOTOV - QUALITY[u.quality || 'standard'].shoot;
+  }
+
   // One side's blow in a hand-to-hand fight: each base of each striker rolls a die needing need(striker); every hit
   // takes a base off one of the victims it can hurt (rifle platoons and tanks first, the teams and the captain last).
   // Returns the lines to report, whether any striker could hurt anyone at all, and the blow for the table: who struck,
@@ -4070,7 +4077,7 @@ const Sim = (() => {
   return {
     firesOnTheMove, canAmbush, actAmbush, bestMoveShoot, bomberHeading, bomberAims, bomberLine, bombNeed, bombWhy, bestBomberRun,
     isBunker, isCar, hurtsCars, trainCars, lineSideOf, moveTrains, inFrontOf, bunkerFace, shotOnTheMove, wrecksBeside, isRoad, featuresAt, walkDistance, fireSound, wreckAt, remove, computerSide, isRobot, piecesToAsk, takeCover, enemyOf, gunStats, diceShown, menDiceShown, bomberName, boatKind, armyOf, hedgeWord, inCourtyard, closeRangeOnly, isAtGun, isEmplaced, edgeKey, atCloseRange, closeCells, hailMaryCells,
-    newGame, roll, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, chargeSpots, soundOf, facesItsShot,
+    newGame, roll, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, chargeSpots, soundOf, facesItsShot, molotovNeed,
     rallyTargets, canAct, canReact, firepower, canCallFire, takesGoal, cannotWin, artilleryTarget, mortarTarget, holdsObjective, roundText, roomFor,
     goalLines, deArmyOf, hullMgTargets, canHullMg, actHullMg, actHoldMg, hullMgDice,
     computerStep, answer, finishRound, startRound, drawToken, endComputerToken, activationOver, passToken, humanCanMove, endRound, canFire, actSkip, actSkipShot, skipSupport,

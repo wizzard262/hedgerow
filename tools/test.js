@@ -5417,5 +5417,20 @@ check('2026-11-21 fix: men on foot turn to face what they fire at (an MG team, r
   Sim.newGame(1);
 });
 
+check('2026-11-21 fix: the Finnish infantry\'s card says they have Molotov cocktails against tanks, with the score', () => {
+  const g = Sim.newGame(1, 'us', 'winterwar');
+  const elite = Sim.unitById(g, 'd1'), plain = Sim.unitById(g, 'd2'), smg = Sim.unitById(g, 'dsmg');
+  // The score each die needs charging a tank: 5+, elite 4+
+  assert(Sim.molotovNeed(plain) === TO_HIT + MOLOTOV, `a ski platoon needs ${Sim.molotovNeed(plain)}`);
+  assert(Sim.molotovNeed(elite) === TO_HIT + MOLOTOV - 1, `the elite platoon needs ${Sim.molotovNeed(elite)}`);
+  assert(Sim.molotovNeed(smg) > 0, 'the Suomi section has no Molotovs');
+  // Nobody else has them
+  assert(!g.units.some(u => !u.molotov && Sim.molotovNeed(u)), 'a piece without Molotovs says it has them');
+  // The card (ui.js) puts the line among its stats
+  const card = pageCode('ui.js', 'const molotov = Sim.molotovNeed(u)', '[strength, dice, armour, molotov, where, status]');
+  assert(card.includes('Molotov cocktails'), 'the card says nothing of Molotovs');
+  Sim.newGame(1);
+});
+
 console.log(failed ? `\n${failed} failed` : '\nall passed');
 process.exit(failed ? 1 : 0);

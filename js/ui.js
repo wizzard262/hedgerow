@@ -667,6 +667,8 @@ const UI = (() => {
     const dice = `🎲 ${Sim.menDiceShown(u, f)} dice vs men${closeOnly}${f.hard ? `, ${Sim.diceShown(f.hard)} vs tanks` : ''}${hull}`;
     // A tank's armour (Steve): what it adds to the score anti-tank dice need
     const armour = Sim.isTank(u) ? `🛡️ Armour +${Sim.armourOf(u)}` : '';
+    // Its anti-tank weapon, if it has no gun for it (Steve, 2026-11-21: the Finns' Molotov cocktails, hand to hand)
+    const molotov = Sim.molotovNeed(u) ? `🔥 Anti-tank: Molotov cocktails, Charge a tank hand to hand (${Sim.molotovNeed(u)}+)` : '';
     const inCover = `Taking cover: +2 cover; ${u.kind === 'captain' ? 'no rallies until next round' : 'the captain can get it up'}`;
     const status = statePill(u, inCover, 'Shaken: +1 to hit, half moves');
     box.append(el('div', 'name', `${u.name}${u.quality === 'elite' ? ' ★' : ''}`));
@@ -676,7 +678,7 @@ const UI = (() => {
     const nation = u.side === st.human && st.mode !== 'none' ? '' : `${adjective(u.side)} · `;
     box.append(el('div', 'sub', `${nation}${kindName(u)}${elite}${Sim.hasCutters(u) && Sim.hedgeWord() === 'hedge' ? ' · hedge cutters' : ''}`));
     const where = `📍 At ${Sim.placeName(u.at)}`;
-    box.append(el('div', 'stats', [strength, dice, armour, where, status].filter(Boolean).map(s => `<span>${s}</span>`).join('')));
+    box.append(el('div', 'stats', [strength, dice, armour, molotov, where, status].filter(Boolean).map(s => `<span>${s}</span>`).join('')));
     // Aboard a boat, or a lorry driving itself: no orders to give
     const own = ownWay(u);
     if (own) box.append(el('div', 'sub', own));
