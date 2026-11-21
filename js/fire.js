@@ -218,5 +218,6 @@ const Fire = (() => {
     });
   }
 
-  return { make, burn, free, scorch };
+  // (flameMaps, smokeMap: for other fires on the table, the Molotov cocktails, Steve 2026-11-21)
+  return { make, burn, free, scorch, flameMaps: flameTextures, smokeMap: smokeTexture };
 })();

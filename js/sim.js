@@ -2145,6 +2145,8 @@ const Sim = (() => {
     for (let exchange = 1; exchange <= HAND_TO_HAND_LIMIT; exchange++) {
       // The attacker strikes first, then whoever is left of the defenders strikes back
       const a = strike(st, attackers, standing(defenders), () => attackNeed);
+      // (Molotov cocktails thrown at tanks, for the table: bottles and fire, Steve 2026-11-21)
+      if (atTanks) a.blow.molotov = true;
       out.push(...a.lines);
       if (a.able) fight.strikes.push(a.blow);
       if (!standing(defenders).length) break;

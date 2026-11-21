@@ -2746,6 +2746,9 @@ const Board = (() => {
 
   // Draw one fight's blows at time t (seconds since it began)
   function playMelee(f, t, add) {
+    // Molotov cocktails at tanks (Steve, 2026-11-21): bottles thrown, and fire on the tank or the ground, which burns on
+    // past the end of the blow
+    f.strikes.forEach((b, k) => { if (b.molotov) playMolotovs(f, b, t - k * MELEE_BLOW, add); });
     f.strikes.forEach((b, k) => {
       const bt = t - k * MELEE_BLOW;
       if (bt < 0 || bt > MELEE_BLOW) return;
@@ -2792,6 +2795,97 @@ const Board = (() => {
       w.position.set(f.x + 0.5, 0.75 + tEnd * 0.15, f.y + 0.5);
     }
   }
+  // A blow of Molotov cocktails at time bt into it (seconds): one bottle for each die, thrown in turn from the
+  // attacker's bases in a high arc onto the tank, its rag alight. A hit bursts into flame over the tank, with black
+  // smoke; a miss smashes on the ground beside it in a smaller fire
+  const MOLOTOV_FLIGHT = 0.45;                    // seconds a bottle is in the air
+  const MOLOTOV_BURN = { hit: 1.5, miss: 0.8 };   // seconds its fire burns
+  function playMolotovs(f, b, bt, add) {
+    // Nothing yet, or all burnt out
+    if (bt < 0 || bt > MELEE_BLOW + MOLOTOV_BURN.hit + 0.3) return;
+    // Where the tank is
+    const spots = b.victims.filter(id => pieces[id]).map(id => pieceCentre({ id, x: f.x, y: f.y }));
+    if (!spots.length) return;
+    const tank = spots.reduce((a, p) => a.add(p), new T.Vector3()).multiplyScalar(1 / spots.length);
+    // Who throws: each of the attacker's bases on the table, in turn
+    const throwers = moloThrowers(b);
+    if (!throwers.length) return;
+    b.faces.slice(0, 9).forEach((r, i) => {
+      // When this bottle lands (with the Hit! or Miss over the tank) and when it was thrown
+      const lands = MELEE_LAND - 0.1 + i * 0.07;
+      const thrown = lands - MOLOTOV_FLIGHT;
+      // Where it lands: on the tank if it hits, on the ground beside it if not, a little apart for each bottle
+      const side = (i % 2 ? 1 : -1) * (0.05 + (i % 3) * 0.04);
+      const to = new T.Vector3(tank.x + side, 0, tank.z + (r.hit ? side * 0.5 : 0.24 + (i % 3) * 0.05));
+      const from = throwers[i % throwers.length];
+      if (bt >= thrown && bt < lands) moloBottle(add, from, to, (bt - thrown) / MOLOTOV_FLIGHT);
+      if (bt >= lands) moloFire(add, to, bt - lands, r.hit, i);
+    });
+  }
+
+  // The world positions of the bases throwing a blow's bottles
+  function moloThrowers(b) {
+    const out = [];
+    for (const id of b.strikers) {
+      const g = pieces[id];
+      if (!g) continue;
+      for (const base of g.userData.bases) {
+        if (!base.visible || !base.userData.to) continue;
+        out.push(new T.Vector3(g.userData.to.x + base.userData.to.x, 0.06, g.userData.to.z + base.userData.to.z));
+      }
+    }
+    return out;
+  }
+
+  // A bottle in flight, p from 0 (thrown) to 1 (landing): the dark glass and its burning rag, tumbling up and over
+  function moloBottle(add, from, to, p) {
+    const x = T.MathUtils.lerp(from.x, to.x, p), z = T.MathUtils.lerp(from.z, to.z, p);
+    // (a high lob: up and down again)
+    const y = T.MathUtils.lerp(from.y, 0.1, p) + 0.32 * Math.sin(p * Math.PI);
+    const glass = add(new T.Sprite(new T.SpriteMaterial({ color: 0x2f4a2a, transparent: true, opacity: 0.95, depthWrite: false })));
+    glass.scale.set(0.022, 0.05, 1);
+    glass.material.rotation = p * 9;
+    glass.position.set(x, y, z);
+    const rag = add(glow('rgba(255,170,60,1)'));
+    rag.scale.setScalar(0.07 + 0.02 * Math.sin(p * 40));
+    rag.position.set(x, y + 0.025, z);
+  }
+
+  // Its fire, lt seconds after it landed: a flash, tongues of flame licking up and dying down, black smoke rising
+  function moloFire(add, to, lt, hit, i) {
+    const burn = hit ? MOLOTOV_BURN.hit : MOLOTOV_BURN.miss;
+    if (lt > burn) return;
+    const size = hit ? 1 : 0.6;
+    // The flash of the burst
+    if (lt < 0.15) { const fl = add(glow('rgba(255,210,120,1)')); fl.material.depthTest = false; fl.scale.setScalar(0.45 * size); fl.position.set(to.x, 0.1, to.z); }
+    // How strong it burns: up quickly, then dying away
+    const strength = Math.min(1, lt / 0.15) * (1 - lt / burn);
+    // Tongues of flame, each flickering on its own
+    const maps = Fire.flameMaps();
+    const tongues = hit ? 4 : 2;
+    for (let k = 0; k < tongues; k++) {
+      const flicker = 0.8 + 0.2 * Math.sin(lt * 23 + k * 2.1 + i);
+      const tongue = add(new T.Sprite(new T.SpriteMaterial({ map: maps[(k + i) % maps.length], transparent: true, depthWrite: false, toneMapped: false, blending: T.AdditiveBlending })));
+      const h = 0.22 * size * strength * flicker;
+      tongue.scale.set(h * 0.55, h, 1);
+      // (hits sit up on the hull, misses on the ground)
+      const low = hit ? 0.1 : 0.02;
+      tongue.position.set(to.x + (k - (tongues - 1) / 2) * 0.05 * size, low + h / 2, to.z + (k % 2) * 0.03);
+    }
+    // A warm glow under it
+    const warm = add(glow('rgba(255,110,30,1)'));
+    warm.scale.setScalar(0.3 * size * strength);
+    warm.position.set(to.x, hit ? 0.12 : 0.03, to.z);
+    // Black smoke, rising and spreading
+    for (let k = 0; k < 3; k++) {
+      const age = lt - k * 0.2;
+      if (age < 0) continue;
+      const puff = add(new T.Sprite(new T.SpriteMaterial({ map: Fire.smokeMap(), transparent: true, depthWrite: false, opacity: 0.55 * (1 - lt / burn) })));
+      puff.scale.setScalar((0.08 + age * 0.18) * size);
+      puff.position.set(to.x + age * 0.04, (hit ? 0.2 : 0.08) + age * 0.35, to.z - age * 0.03);
+    }
+  }
+
   const seenFx = new WeakSet();
 
   // Tanks (Steve): they turn onto the target first, then each tank fires one shell, one after the other

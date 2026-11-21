@@ -5426,9 +5426,16 @@ check('2026-11-21 fix: the Finnish infantry\'s card says they have Molotov cockt
   assert(Sim.molotovNeed(smg) > 0, 'the Suomi section has no Molotovs');
   // Nobody else has them
   assert(!g.units.some(u => !u.molotov && Sim.molotovNeed(u)), 'a piece without Molotovs says it has them');
-  // The card (ui.js) puts the line among its stats
-  const card = pageCode('ui.js', 'const molotov = Sim.molotovNeed(u)', '[strength, dice, armour, molotov, where, status]');
-  assert(card.includes('Molotov cocktails'), 'the card says nothing of Molotovs');
+  // The card (ui.js): "3 vs tanks" on its dice line, a die for each section standing, fewer as sections are lost
+  const molotovText = vm.runInThisContext(`(u => { ${pageCode('ui.js', 'const molotov = Sim.molotovNeed(u)', ": '';")} return molotov; })`);
+  assert(molotovText(plain).includes('🔥 3 vs tanks') && molotovText(plain).includes('5+'), `a full platoon's card says "${molotovText(plain)}"`);
+  plain.platoons = 1;
+  assert(molotovText(plain).includes('🔥 1 vs tanks'), `a platoon of one section says "${molotovText(plain)}"`);
+  assert(molotovText(Sim.unitById(g, 'dat1')) === '', 'the Lahti team says it has Molotovs');
+  assert(pageCode('ui.js', 'const dice = `', ';').includes('${molotov}'), 'the dice line leaves the Molotovs out');
+  // Hand to hand: the blow at tanks is marked for the table's bottles and fire (board3d's playMolotovs)
+  assert(pageCode('sim.js', 'function handToHand(', 'fight.won =').includes('if (atTanks) a.blow.molotov = true;'), 'the Molotov blow is not marked');
+  assert(pageCode('board3d.js', 'function playMelee(f, t, add) {', 'playMolotovs(f, b, t - k * MELEE_BLOW, add)'), 'hand to hand shows no Molotovs');
   Sim.newGame(1);
 });
 
