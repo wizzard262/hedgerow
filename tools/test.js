@@ -5477,8 +5477,18 @@ check('2026-11-21 fix: a machine-gun team can move and lie in ambush on the same
   const spot = Sim.chargeSpots(st, mg).find(p => !Sim.at(st, p.x, p.y, 'de').length);
   assert(spot, 'the MG has nowhere to go');
   assert(Sim.actCharge(st, mg, spot.x, spot.y).ok, 'the MG would not move');
-  assert(mg.mayAmbush && !Sim.activationOver(st), 'no ambush was offered after the move');
-  assert(Sim.actAmbush(st, mg).ok && mg.ambush && Sim.activationOver(st), 'it could not lie in ambush after moving');
+  // (by itself, Steve 2026-11-22: nothing to choose, and the token is done)
+  assert(mg.ambush && !mg.mayAmbush && Sim.activationOver(st), 'the MG did not lie in ambush by itself after moving');
+  // Moving within its field too
+  const st3 = Sim.newGame(3);
+  Sim.startRound(st3);
+  st3.drawn = 'us';
+  const mg3 = st3.units.find(u => u.side === 'us' && u.kind === 'mg');
+  const side = Sim.lineSides(st3, mg3)[0];
+  if (side) {
+    assert(Sim.actLine(st3, mg3, side).ok, 'the MG would not move within its field');
+    assert(mg3.ambush && Sim.activationOver(st3), 'moving within its field, the MG did not lie in ambush');
+  }
   // Other pieces moving to another field still can't
   const st2 = Sim.newGame(3);
   st2.hedges = {}; st2.wire = {};
@@ -5491,10 +5501,10 @@ check('2026-11-21 fix: a machine-gun team can move and lie in ambush on the same
   assert(!Sim.movesThenAmbushes({ kind: 'bunker_mg' }) && !Sim.movesThenAmbushes({ kind: 'company' }), 'a bunker or a platoon counts as an MG team');
   // The computer's MG marching up lies in ambush where it gets to (computerMove)
   const move = pageCode('sim.js', 'function computerMove(st, u, route) {', '\n  }');
-  assert(move.includes('movesThenAmbushes(u) && u.x !== null && !u.shocked') && move.includes('u.ambush = true'), 'the computer\'s MG does not lie in ambush after moving');
-  // Its card says it can
+  assert(move.includes('ambushAfterMoving(u)'), 'the computer\'s MG does not lie in ambush after moving');
+  // Its card says it does
   const card = pageCode('ui.js', 'const mgAmbush = ', ';');
-  assert(card.includes('lie in ambush on the same go') && pageCode('ui.js', 'const mgAmbush = ', '[strength, dice, armour, mgAmbush, where, status]'), 'the card says nothing of it');
+  assert(card.includes('lies in ambush by itself') && pageCode('ui.js', 'const mgAmbush = ', '[strength, dice, armour, mgAmbush, where, status]'), 'the card says nothing of it');
   Sim.newGame(1);
 });
 

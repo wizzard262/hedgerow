@@ -2695,8 +2695,8 @@ const Sim = (() => {
       u.aim = toMiddle ? faceBackTo(u, from) : faceOut(u.at, side);
       u.mayAmbush = true;
     }
-    // A machine-gun team can lie in ambush where it gets to, on the same go (Steve, 2026-11-21)
-    if (movesThenAmbushes(u) && u.x !== null) u.mayAmbush = true;
+    // A machine-gun team lies in ambush where it gets to, on the same go, by itself (Steve, 2026-11-22: it always would)
+    if (ambushAfterMoving(u)) lines.push('and lies in ambush');
     return { ok: true, lines: [lines.join(', ') + '.'] };
   }
 
@@ -2773,6 +2773,15 @@ const Sim = (() => {
   function movesThenAmbushes(u) {
     return MACHINE_GUNS.includes(u.kind) && !PIECES[u.kind].fixed;
   }
+  // After a machine-gun team's move, either side's: it lies in ambush there and then, with nothing to choose (Steve,
+  // 2026-11-22: they never would not). Returns true if it did
+  function ambushAfterMoving(u) {
+    if (!movesThenAmbushes(u) || u.x === null) return false;
+    u.ambush = true;
+    u.mayAmbush = false;
+    u.halfShot = false;
+    return true;
+  }
 
   // Move to another area of its own field (Steve: north hedge to south hedge, say): the piece's move for the round, and
   // it may fire after with nothing more needed for moving (Steve: moving within its square has no Move & shoot penalty).
@@ -2807,6 +2816,8 @@ const Sim = (() => {
     u.halfShot = u.x !== null && firesOnTheMove(u) && targets(st, u, true).length > 0;
     // Or it can lie in ambush on the same go instead (Steve: the PaK first, then every piece moving within its square)
     u.mayAmbush = u.x !== null && (!!PIECES[u.kind].fixed || mayFire(u));
+    // (a machine-gun team does, by itself: it can't fire after moving, Steve 2026-11-22)
+    if (ambushAfterMoving(u)) lines.push('and lies in ambush');
     return { ok: true, lines: [lines.join(', ') + '.'] };
   }
 
@@ -3458,11 +3469,8 @@ const Sim = (() => {
     setTrail(st, u, route);
     // Arriving in sight of an ambush
     springAmbushes(st, u, []);
-    // A machine-gun team lies in ambush where it got to, on the same go, as yours can (Steve, 2026-11-21)
-    if (movesThenAmbushes(u) && u.x !== null && !u.shocked) {
-      u.ambush = true;
-      if (st.computer && st.computer.rep) st.computer.rep.push(`🪤 ${u.name} lies in ambush.`);
-    }
+    // A machine-gun team lies in ambush where it got to, on the same go, as yours does (Steve, 2026-11-21)
+    if (ambushAfterMoving(u) && st.computer && st.computer.rep) st.computer.rep.push(`🪤 ${u.name} lies in ambush.`);
   }
 
   // The German mortar picks the strongest American company next to a German field
