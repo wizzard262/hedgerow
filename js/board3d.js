@@ -2873,14 +2873,14 @@ const Board = (() => {
     glass.scale.set(0.026, 0.06, 1);
     glass.material.rotation = p * 9;
     glass.position.set(x, y, z);
-    // The burning rag, like a comet (Steve, 2026-11-21: red and orange like the flames, with a tail): a bright orange
+    // The burning rag, like a comet (Steve, 2026-11-21: red and orange like the flames, with a tail; then more red): a red-orange
     // head with a tongue of flame, and a long tail streaming back along the way it came, orange near the bottle,
     // turning red and fading as it thins out
-    const rag = add(glow('rgba(255,120,25,1)'));
+    const rag = add(glow('rgba(255,75,18,1)'));
     rag.scale.setScalar(0.12 + 0.03 * Math.sin(p * 40));
     rag.position.set(x, y + 0.03, z);
     const maps = Fire.flameMaps();
-    const tongue = add(new T.Sprite(new T.SpriteMaterial({ map: maps[Math.floor(p * 12) % maps.length], color: 0xff5a20, transparent: true, depthWrite: false, toneMapped: false, blending: T.AdditiveBlending })));
+    const tongue = add(new T.Sprite(new T.SpriteMaterial({ map: maps[Math.floor(p * 12) % maps.length], color: 0xff3412, transparent: true, depthWrite: false, toneMapped: false, blending: T.AdditiveBlending })));
     tongue.scale.set(0.05, 0.1, 1);
     tongue.position.set(x, y + 0.07, z);
     // The tail: for each step back along the lob, a smaller, redder, fainter glow
@@ -2888,7 +2888,7 @@ const Board = (() => {
       const q = p - k * 0.018;
       if (q < 0) break;
       const back = k / MOLOTOV_TAIL;
-      const tail = add(glow(back < 0.35 ? 'rgba(255,130,30,1)' : back < 0.7 ? 'rgba(250,75,20,1)' : 'rgba(215,30,10,1)'));
+      const tail = add(glow(back < 0.25 ? 'rgba(255,95,22,1)' : back < 0.6 ? 'rgba(240,45,14,1)' : 'rgba(195,18,8,1)'));
       tail.material.opacity = 1 - back * 0.85;
       tail.scale.setScalar(0.1 * (1 - back * 0.8));
       tail.position.set(T.MathUtils.lerp(from.x, to.x, q), T.MathUtils.lerp(from.y, 0.1, q) + 0.45 * Math.sin(q * Math.PI) + 0.03, T.MathUtils.lerp(from.z, to.z, q));

@@ -5467,5 +5467,36 @@ check('2026-11-21 fix: after a battle the New game screen comes up with the next
   assert(/id="newgame"[\s\S]*id="result"[\s\S]*id="map-choice"/.test(page), 'how it ended is not at the top of the New game screen');
 });
 
+check('2026-11-21 fix: a machine-gun team can move and lie in ambush on the same go, yours and the computer\'s, and its card says so', () => {
+  // Yours: the .50 cal charges to an empty field, then lies in ambush on the same token
+  const st = Sim.newGame(3);
+  st.hedges = {}; st.wire = {};
+  Sim.startRound(st);
+  st.drawn = 'us';
+  const mg = st.units.find(u => u.side === 'us' && u.kind === 'mg');
+  const spot = Sim.chargeSpots(st, mg).find(p => !Sim.at(st, p.x, p.y, 'de').length);
+  assert(spot, 'the MG has nowhere to go');
+  assert(Sim.actCharge(st, mg, spot.x, spot.y).ok, 'the MG would not move');
+  assert(mg.mayAmbush && !Sim.activationOver(st), 'no ambush was offered after the move');
+  assert(Sim.actAmbush(st, mg).ok && mg.ambush && Sim.activationOver(st), 'it could not lie in ambush after moving');
+  // Other pieces moving to another field still can't
+  const st2 = Sim.newGame(3);
+  st2.hedges = {}; st2.wire = {};
+  const men = Sim.unitById(st2, 'A');
+  const to = Sim.chargeSpots(st2, men).find(p => !Sim.at(st2, p.x, p.y, 'de').length);
+  Sim.actCharge(st2, men, to.x, to.y);
+  assert(!men.mayAmbush, 'a rifle platoon may lie in ambush after a charge');
+  // The rule is for machine-gun teams only, not bunkers
+  assert(Sim.movesThenAmbushes({ kind: 'mg42' }) && Sim.movesThenAmbushes({ kind: 'mg' }), 'the MG 42 or the .50 cal is left out');
+  assert(!Sim.movesThenAmbushes({ kind: 'bunker_mg' }) && !Sim.movesThenAmbushes({ kind: 'company' }), 'a bunker or a platoon counts as an MG team');
+  // The computer's MG marching up lies in ambush where it gets to (computerMove)
+  const move = pageCode('sim.js', 'function computerMove(st, u, route) {', '\n  }');
+  assert(move.includes('movesThenAmbushes(u) && u.x !== null && !u.shocked') && move.includes('u.ambush = true'), 'the computer\'s MG does not lie in ambush after moving');
+  // Its card says it can
+  const card = pageCode('ui.js', 'const mgAmbush = ', ';');
+  assert(card.includes('lie in ambush on the same go') && pageCode('ui.js', 'const mgAmbush = ', '[strength, dice, armour, mgAmbush, where, status]'), 'the card says nothing of it');
+  Sim.newGame(1);
+});
+
 console.log(failed ? `\n${failed} failed` : '\nall passed');
 process.exit(failed ? 1 : 0);

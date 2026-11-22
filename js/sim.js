@@ -2695,6 +2695,8 @@ const Sim = (() => {
       u.aim = toMiddle ? faceBackTo(u, from) : faceOut(u.at, side);
       u.mayAmbush = true;
     }
+    // A machine-gun team can lie in ambush where it gets to, on the same go (Steve, 2026-11-21)
+    if (movesThenAmbushes(u) && u.x !== null) u.mayAmbush = true;
     return { ok: true, lines: [lines.join(', ') + '.'] };
   }
 
@@ -2765,6 +2767,11 @@ const Sim = (() => {
     const pairs = lineSides(st, u).filter(p => p.split('+').includes(wanted));
     if (wanted === 'c') pairs.sort((a, b) => farFromHere(a) - farFromHere(b));
     return pairs[0] || freePlace(st, u, u.x, u.y, side);
+  }
+
+  // A machine-gun team (Steve, 2026-11-21): it can't fire after moving, but it can move and lie in ambush on the same go
+  function movesThenAmbushes(u) {
+    return MACHINE_GUNS.includes(u.kind) && !PIECES[u.kind].fixed;
   }
 
   // Move to another area of its own field (Steve: north hedge to south hedge, say): the piece's move for the round, and
@@ -3451,6 +3458,11 @@ const Sim = (() => {
     setTrail(st, u, route);
     // Arriving in sight of an ambush
     springAmbushes(st, u, []);
+    // A machine-gun team lies in ambush where it got to, on the same go, as yours can (Steve, 2026-11-21)
+    if (movesThenAmbushes(u) && u.x !== null && !u.shocked) {
+      u.ambush = true;
+      if (st.computer && st.computer.rep) st.computer.rep.push(`🪤 ${u.name} lies in ambush.`);
+    }
   }
 
   // The German mortar picks the strongest American company next to a German field
@@ -4079,7 +4091,7 @@ const Sim = (() => {
   return {
     firesOnTheMove, canAmbush, actAmbush, bestMoveShoot, bomberHeading, bomberAims, bomberLine, bombNeed, bombWhy, bestBomberRun,
     isBunker, isCar, hurtsCars, trainCars, lineSideOf, moveTrains, inFrontOf, bunkerFace, shotOnTheMove, wrecksBeside, isRoad, featuresAt, walkDistance, fireSound, wreckAt, remove, computerSide, isRobot, piecesToAsk, takeCover, enemyOf, gunStats, diceShown, menDiceShown, bomberName, boatKind, armyOf, hedgeWord, inCourtyard, closeRangeOnly, isAtGun, isEmplaced, edgeKey, atCloseRange, closeCells, hailMaryCells,
-    newGame, roll, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, chargeSpots, soundOf, facesItsShot, molotovNeed,
+    newGame, roll, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, chargeSpots, soundOf, facesItsShot, molotovNeed, movesThenAmbushes,
     rallyTargets, canAct, canReact, firepower, canCallFire, takesGoal, cannotWin, artilleryTarget, mortarTarget, holdsObjective, roundText, roomFor,
     goalLines, deArmyOf, hullMgTargets, canHullMg, actHullMg, actHoldMg, hullMgDice,
     computerStep, answer, finishRound, startRound, drawToken, endComputerToken, activationOver, passToken, humanCanMove, endRound, canFire, actSkip, actSkipShot, skipSupport,

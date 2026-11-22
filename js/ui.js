@@ -666,6 +666,8 @@ const UI = (() => {
     const hull = Sim.hullMgDice(u) ? `, hull MGs ${Sim.hullMgDice(u)} at men (own shot)` : '';
     // (Molotov cocktails, Steve 2026-11-21: a die for each section still standing, hand to hand)
     const molotov = Sim.molotovNeed(u) ? `, 🔥 ${u.platoons} vs tanks (Molotovs: Charge, hand to hand, ${Sim.molotovNeed(u)}+)` : '';
+    // (a machine-gun team, Steve 2026-11-21: on its card, that it can move and lie in ambush on the same go)
+    const mgAmbush = Sim.movesThenAmbushes(u) ? '🪤 Can move, then lie in ambush on the same go (no shot after moving)' : '';
     const dice = `🎲 ${Sim.menDiceShown(u, f)} dice vs men${closeOnly}${f.hard ? `, ${Sim.diceShown(f.hard)} vs tanks` : ''}${molotov}${hull}`;
     // A tank's armour (Steve): what it adds to the score anti-tank dice need
     const armour = Sim.isTank(u) ? `🛡️ Armour +${Sim.armourOf(u)}` : '';
@@ -678,7 +680,7 @@ const UI = (() => {
     const nation = u.side === st.human && st.mode !== 'none' ? '' : `${adjective(u.side)} · `;
     box.append(el('div', 'sub', `${nation}${kindName(u)}${elite}${Sim.hasCutters(u) && Sim.hedgeWord() === 'hedge' ? ' · hedge cutters' : ''}`));
     const where = `📍 At ${Sim.placeName(u.at)}`;
-    box.append(el('div', 'stats', [strength, dice, armour, where, status].filter(Boolean).map(s => `<span>${s}</span>`).join('')));
+    box.append(el('div', 'stats', [strength, dice, armour, mgAmbush, where, status].filter(Boolean).map(s => `<span>${s}</span>`).join('')));
     // Aboard a boat, or a lorry driving itself: no orders to give
     const own = ownWay(u);
     if (own) box.append(el('div', 'sub', own));
