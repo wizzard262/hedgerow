@@ -2857,7 +2857,10 @@ const Board = (() => {
   // field away): the time for the attacker to run from where the table has it, field by field, into the field it
   // charges (FIELD_TIME a field), and settle there
   const CHARGE_SETTLE = 0.2;         // seconds for the men to settle in among them
-  const CHARGE_IN = 0.3;             // how far into the field charged the attacker stands to fight, in fields from its edge
+  const CHARGE_IN = 0.3;             // with nobody to run up to: how far into the field it stands, from its edge
+  // How far a piece's middle is from its edge, for standing right up against the other side: a platoon or a tank, a
+  // team or the captain
+  const CHARGE_REACH = { big: 0.22, small: 0.13 };
   function chargeRun(f) {
     const g = pieces[f.attacker];
     if (!g || !g.userData.field) return 0;
@@ -2867,9 +2870,10 @@ const Board = (() => {
     return fields * FIELD_TIME.men + CHARGE_SETTLE;
   }
 
-  // The attacker in a fight runs into the field it charged, in among the other side, and stays there until the fight
-  // is over (g.userData.engage, from startShots); then it goes where the fight leaves it: on into the field if it won,
-  // back to its own field if not. Climbing over a hedge on the way in and back
+  // The attacker in a fight runs into the field it charged, right up against the other side (Steve, 2026-11-22: all
+  // hand to hand with the two right next to each other), and stays there until the fight is over (g.userData.engage,
+  // from startShots); then it goes where the fight leaves it: on into the field if it won, back to its own field if
+  // not. Climbing over a hedge on the way in and back
   function runInToFight(st, g) {
     const e = g.userData.engage;
     g.userData.engage = null;
@@ -2877,9 +2881,9 @@ const Board = (() => {
     if (!to) return;
     // Its place in a field, as the table has it arranged now
     const offX = to.x - Math.floor(to.x), offZ = to.z - Math.floor(to.z);
-    // Where it fights: CHARGE_IN inside the field it charged, from the edge it came over, keeping its place along it
-    const into = (from, at, off) => (at > from ? at + CHARGE_IN : at < from ? at + 1 - CHARGE_IN : at + off);
-    const fight = { x: into(e.from.x, e.x, offX), z: into(e.from.y, e.y, offZ), y: 0, holdUntil: e.until };
+    // Where it fights
+    const spot = fightSpot(st, g, e, offX, offZ);
+    const fight = { x: spot.x, z: spot.z, y: 0, holdUntil: e.until };
     // Won, it is already on its way into the field (with its own climb over any hedge)
     const wonIn = Math.floor(to.x) === e.x && Math.floor(to.z) === e.y;
     // Over a hedge between the two fields: up and over it at the edge
@@ -2890,6 +2894,47 @@ const Board = (() => {
     // Not won: back over the hedge to its own field
     if (!wonIn) way.push(...over.slice().reverse());
     g.userData.way = way;
+  }
+
+  // Where the attacker's piece stands (its origin) to fight: its middle right up against the middle of the other side,
+  // coming at them from its place in the field it charged from. With none of them on the table, CHARGE_IN inside the
+  // field, from the edge it came over, keeping its place along it
+  function fightSpot(st, g, e, offX, offZ) {
+    // Its own middle, from its origin: the middle of its bases
+    const mine = middleOfBases(g);
+    // The other side's middle: the middle of each defender still on the table, together
+    const ids = (e.defenders || []).filter(id => pieces[id]);
+    if (!ids.length || !mine) {
+      const into = (from, at, off) => (at > from ? at + CHARGE_IN : at < from ? at + 1 - CHARGE_IN : at + off);
+      return { x: into(e.from.x, e.x, offX), z: into(e.from.y, e.y, offZ) };
+    }
+    const spots = ids.map(id => pieceCentre({ id, x: e.x, y: e.y }));
+    const them = { x: spots.reduce((n, p) => n + p.x, 0) / spots.length, z: spots.reduce((n, p) => n + p.z, 0) / spots.length };
+    // Where it comes from: its middle in the field it charged from
+    const start = { x: e.from.x + offX + mine.x, z: e.from.y + offZ + mine.z };
+    // The way it comes at them
+    let dx = them.x - start.x, dz = them.z - start.z;
+    const length = Math.hypot(dx, dz) || 1;
+    dx /= length; dz /= length;
+    // How far apart the two middles are, standing right up against each other
+    const apart = reachOf(Sim.unitById(st, e.attacker)) + Math.max(...ids.map(id => reachOf(Sim.unitById(st, id))));
+    // Its middle that far short of theirs, so its origin there less its own middle
+    return { x: them.x - dx * apart - mine.x, z: them.z - dz * apart - mine.z };
+  }
+
+  // The middle of a piece's bases on the table, from its origin; null with none showing
+  function middleOfBases(g) {
+    const shown = (g.userData.bases || []).filter(b => b.visible && b.userData.to);
+    if (!shown.length) return null;
+    const x = shown.reduce((n, b) => n + b.userData.to.x, 0) / shown.length;
+    const z = shown.reduce((n, b) => n + b.userData.to.z, 0) / shown.length;
+    return { x, z };
+  }
+
+  // How far a piece's middle is from its edge (CHARGE_REACH)
+  function reachOf(u) {
+    const big = !u || u.kind === 'company' || Sim.isTank(u);
+    return big ? CHARGE_REACH.big : CHARGE_REACH.small;
   }
 
   // The two points where men climb over the hedge between field a and field b, keeping their place offX, offZ
@@ -3129,7 +3174,7 @@ const Board = (() => {
         shots.push({ f, t0, objs: [] });
         startMelee(st, f, t0);
         // (it runs in among them and stays there until the fight is over: see runInToFight)
-        if (pieces[f.attacker]) pieces[f.attacker].userData.engage = { from: f.from, x: f.x, y: f.y, until: t0 + fightLength(f) * 1000 };
+        if (pieces[f.attacker]) pieces[f.attacker].userData.engage = { attacker: f.attacker, from: f.from, x: f.x, y: f.y, defenders: f.defenders, until: t0 + fightLength(f) * 1000 };
         continue;
       }
       // A tank or gun turns to face what it fires at, and stays facing it

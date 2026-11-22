@@ -2076,6 +2076,11 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - Steve: all pieces should face their nearest enemy after a move. Men on foot now turn to their nearest enemy after every move (charging, moving within a field, falling back) and when lying in ambush (`faceNearestEnemy`), as tanks already did; both use `nearestEnemy` in sim.js: the nearest it can see, or with nobody in sight the nearest on the table (tanks used to face the enemy's side then)
 - Assumptions: anti-tank guns and the 88 keep their own aiming rules (they face out of their square). Tests: the new checks and the full run; no balance runs, screenshot or browser check (Steve)
 
+## 345. Hand to hand right up against each other (v231)
+
+- Steve: so all hand to hand should happen with both pieces right next to each other. Yes: the attacker used to stop 0.3 of a field inside the field it charged, wherever the other side stood in it. It now runs right up to them: its middle just short of theirs (the middle of all the defenders), coming at them from its place in the field it charged from, the two touching (`fightSpot` in board3d.js; `CHARGE_REACH`: 0.22 of a field from a platoon's or a tank's middle to its edge, 0.13 for a team or the captain). With nobody left on the table to run up to it still stops just inside the field
+- Assumptions: none. Tests: only the hand-to-hand checks (`node tools/test.js "2026-11-22"`), as it changes only the table, not the rules; no balance runs, screenshot or browser check (Steve)
+
 ## Sessions
 
 | # | Date | Length | What we did |

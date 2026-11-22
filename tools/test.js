@@ -5494,15 +5494,21 @@ check('2026-11-22 fix: in hand to hand the attacker runs into the field it charg
   const FIELD_TIME = { men: 0.5, tank: 0.7 };
   const pieces = {};
   const hedges = new Set();
-  const SimStub = { hedge: (st, ax, ay, bx, by) => hedges.has([ax, ay, bx, by].join()) };
+  const units = { A: { id: 'A', kind: 'company' }, D: { id: 'D', kind: 'company' } };
+  const SimStub = { hedge: (st, ax, ay, bx, by) => hedges.has([ax, ay, bx, by].join()), unitById: (st, id) => units[id], isTank: u => u.kind === 'tank' };
+  // (a piece's middle: its origin plus the middle of its bases)
+  const pieceCentre = u => { const g = pieces[u.id], b = g.userData.bases[0].userData.to; return { x: g.userData.to.x + b.x, z: g.userData.to.z + b.z }; };
   const fn = name => pageCode('board3d.js', `function ${name} {`, '\n  }');
-  const consts = pageCode('board3d.js', 'const CHARGE_SETTLE', 'const CHARGE_IN = 0.3;');
-  const make = vm.runInThisContext(`((pieces, FIELD_TIME, Sim) => { ${consts}
+  const consts = pageCode('board3d.js', 'const CHARGE_SETTLE', 'const CHARGE_REACH = { big: 0.22, small: 0.13 };');
+  const make = vm.runInThisContext(`((pieces, FIELD_TIME, Sim, pieceCentre) => { ${consts}
     ${fn('chargeRun(f)')}
     ${fn('runInToFight(st, g)')}
+    ${fn('fightSpot(st, g, e, offX, offZ)')}
+    ${fn('middleOfBases(g)')}
+    ${fn('reachOf(u)')}
     ${fn('hedgeHop(a, b, offX, offZ)')}
-    return { chargeRun, runInToFight }; })`);
-  const { chargeRun, runInToFight } = make(pieces, FIELD_TIME, SimStub);
+    return { chargeRun, runInToFight, CHARGE_REACH }; })`);
+  const { chargeRun, runInToFight, CHARGE_REACH } = make(pieces, FIELD_TIME, SimStub, pieceCentre);
   // A charge from 2,3 at 3,3, the table still having it at 2,3: one field to run, so the fight waits for it
   pieces.A = { userData: { field: '2,3', to: { x: 2.3, z: 3.6, ry: 0 } } };
   const f = { attacker: 'A', from: { x: 2, y: 3 }, x: 3, y: 3 };
@@ -5527,8 +5533,20 @@ check('2026-11-22 fix: in hand to hand the attacker runs into the field it charg
   runInToFight({}, pieces.A);
   way = pieces.A.userData.way;
   assert(way.length === 2 && way[1].holdUntil === 2, `a won fight's way is ${JSON.stringify(way)}`);
+  // Right up against the other side (Steve, 2026-11-22): the defenders at the far side of 3,3, the attacker's middle
+  // just short of theirs, two reaches apart, coming from its place in 2,3
+  hedges.clear();
+  const base = to => ({ visible: true, userData: { to } });
+  pieces.D = { userData: { to: { x: 3, z: 3, ry: 0 }, bases: [base({ x: 0.8, z: 0.3 })] } };
+  pieces.A = { userData: { field: '2,3', to: { x: 2, z: 3, ry: 0 }, bases: [base({ x: 0.5, z: 0.5 })], engage: { attacker: 'A', from: f.from, x: 3, y: 3, defenders: ['D'], until: 5 } } };
+  runInToFight({}, pieces.A);
+  way = pieces.A.userData.way;
+  const middle = { x: way[0].x + 0.5, z: way[0].z + 0.5 };
+  const apart = Math.hypot(3.8 - middle.x, 3.3 - middle.z);
+  assert(Math.abs(apart - 2 * CHARGE_REACH.big) < 1e-9, `the two middles are ${apart} apart`);
+  assert(middle.x > 3 && way[0].holdUntil === 5, `it fights from ${JSON.stringify(middle)}`);
   // Wired in: the fight is marked on the attacker, used by updatePieces, and the lunge comes from where it really is
-  assert(pageCode('board3d.js', "if (f.kind === 'melee') {", 'continue;').includes('userData.engage = {'), 'the attacker is not sent in');
+  assert(pageCode('board3d.js', "if (f.kind === 'melee') {", 'continue;').includes('defenders: f.defenders'), 'the attacker is not sent at the defenders');
   assert(pageCode('board3d.js', 'function updatePieces(st) {', 'updateWrecks(st);').includes('runInToFight(st, pieces[u.id])'), 'updatePieces does not send it in');
   assert(pageCode('board3d.js', 'function playMelee(f, t, add) {', '// Hit! or Miss').includes('g.position.x + base.userData.to.x'), 'the lunge is from where it will end up');
 });
