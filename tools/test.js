@@ -5552,6 +5552,34 @@ check('2026-11-22 fix: an MG team lying in ambush faces the nearest enemy', () =
   Sim.newGame(1);
 });
 
+check('2026-11-22 fix: every piece faces its nearest enemy after a move, men and tanks', () => {
+  const g = Sim.newGame(1);
+  g.hedges = {}; g.wire = {};
+  const men = Sim.unitById(g, 'A');
+  const tank = g.units.find(u => u.side === 'us' && Sim.isTank(u) && u.x !== null);
+  for (const u of g.units) if (u !== men && u !== tank) u.x = u.y = null;
+  // One German, south of where they go
+  const foe = g.units.find(u => u.side === 'de' && u.kind === 'company');
+  foe.x = 3; foe.y = 7;
+  for (const u of [men, tank]) {
+    u.x = 3; u.y = 2; u.acted = false; u.faceTo = null;
+    g.human = 'us'; g.computer = null; g.drawn = 'us';
+    const spot = Sim.chargeSpots(g, u).find(p => p.x === 3 && p.y === 3);
+    assert(spot, `${u.name} can't move south`);
+    assert(Sim.actCharge(g, u, 3, 3).ok, `${u.name} did not move`);
+    // Facing south (towards y going up the rows: -π/2)
+    const facing = Sim.isTank(u) ? u.aim : u.faceTo;
+    assert(Math.abs(facing + Math.PI / 2) < 1e-9, `${u.name} faces ${facing}, not the German`);
+    u.x = u.y = null;
+  }
+  Sim.newGame(1);
+});
+
+check('2026-11-22 fix: a charge of more than a field that is beaten off shows the way it came on the table', () => {
+  const code = pageCode('sim.js', 'function chargeAlong(st, u, route, side) {', '\n  }');
+  assert(code.includes('route.slice(0, reached + 1)'), 'a charge stopped short glides straight across the fields');
+});
+
 check('2026-11-22 fix: a piece in ambush has orange dashes and a red pulsing circle round it', () => {
   const code = pageCode('board3d.js', 'function markAmbush(u) {', '\n  }');
   assert(code.includes('AMBUSH_DASH') && code.includes('AMBUSH_PULSE'), 'the ambush ring is not both orange dashes and red');

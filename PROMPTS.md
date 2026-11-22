@@ -2070,6 +2070,12 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - Steve: do units who can't start hand to hand, like MGs, still fight back like one regular section? Yes, unchanged: every defender in the field strikes back with a die for each base it has (a team, the captain or a tank has one), 3+ (elite 2+, shaken 4+), and is hit last
 - Assumptions: "show both" means both rings together, not taking turns; "closest enemy" is any enemy on the table, seen or not. Tests: the new checks (`node tools/test.js "2026-11-22"`) and the full run; no balance runs, screenshot or browser check (Steve)
 
+## 344. Long charges fought where they end; every piece faces its nearest enemy after a move (v230)
+
+- Steve: (of the hand-to-hand fix) are you sure? This was over 3 or 4 squares. The Finns on skis charge 3 or 4 fields; the blows used to start at once, while the men were still where they set off. Since v229 the first blow waits for them to get there (half a second a field, `chargeRun`). Also fixed now: a long charge that was beaten off (or left a tank standing) had no way across the fields on the table, so it glided straight over them, hedges and all; it now runs field by field to where it fought from (`chargeAlong` in sim.js sets its trail)
+- Steve: all pieces should face their nearest enemy after a move. Men on foot now turn to their nearest enemy after every move (charging, moving within a field, falling back) and when lying in ambush (`faceNearestEnemy`), as tanks already did; both use `nearestEnemy` in sim.js: the nearest it can see, or with nobody in sight the nearest on the table (tanks used to face the enemy's side then)
+- Assumptions: anti-tank guns and the 88 keep their own aiming rules (they face out of their square). Tests: the new checks and the full run; no balance runs, screenshot or browser check (Steve)
+
 ## Sessions
 
 | # | Date | Length | What we did |

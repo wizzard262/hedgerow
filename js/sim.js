@@ -1934,7 +1934,7 @@ const Sim = (() => {
   function step(st, u, x, y, assault = false, fallingBack = false) {
     let how = '';
     u.trail = null;
-    // (moving on, men face the enemy's side again until they next fire)
+    // (moving on, men stop facing their last shot: they face the nearest enemy once there, below)
     u.faceTo = null;
     // (moving on, a tank tears free of wire it was snagged in)
     u.snag = null;
@@ -1971,8 +1971,10 @@ const Sim = (() => {
     takeCrate(st, u);
     // The way it is facing, for the table (tanks turn to fire, and turn again when they move)
     u.aim = { e: 0, n: Math.PI / 2, w: Math.PI, s: -Math.PI / 2 }[heading];
-    // A tank stops facing the nearest enemy it can see (Steve)
+    // A tank stops facing the nearest enemy it can see (Steve); men on foot face their nearest enemy too (Steve,
+    // 2026-11-22: every piece after a move)
     if (isTank(u)) faceEnemy(st, u);
+    else faceNearestEnemy(st, u);
     // Into a minefield (Steve: Stalingrad): it may set off a mine
     mineCheck(st, u);
     return how;
@@ -2028,20 +2030,32 @@ const Sim = (() => {
   // Which way a tank faces after it moves (Steve): towards the nearest enemy it can see; with none, towards the enemy's
   // side of the board; with two as near as each other, either one at random
   function faceEnemy(st, u) {
-    const seen = st.units.filter(e => e.side !== u.side && e.x !== null && sight(st, u, e));
-    if (!seen.length) {
-      // Nobody in sight: towards the enemy's side (the Americans east, the Germans west)
+    const e = nearestEnemy(st, u);
+    if (!e) {
+      // No enemy on the table: towards the enemy's side (the Americans east, the Germans west)
       u.aim = u.side === 'us' ? 0 : Math.PI;
       return;
     }
-    // The nearest; ties broken at random
-    const far = e => Math.hypot(e.x - u.x, e.y - u.y);
-    const nearest = Math.min(...seen.map(far));
-    const closest = seen.filter(e => Math.abs(far(e) - nearest) < 0.01);
-    const e = closest[Math.floor(st.rand() * closest.length)];
     u.aim = Math.atan2(-(e.y - u.y), e.x - u.x);
     // (a long tank lies that way too, where there is room)
     if (sizeOf(u) === 6) lieToward(st, u, u.aim);
+  }
+
+  // The enemy a piece faces after a move (Steve, 2026-11-22: every piece faces its nearest enemy): the nearest it can
+  // see, or with nobody in sight the nearest on the table. null with no enemy on the table. Ties: broken at random for
+  // a tank (as it always was), the first for men (so turning to face uses none of the game's dice)
+  function nearestEnemy(st, u, atRandom = isTank(u)) {
+    // Every enemy on the table, and those of them it can see
+    const onTable = st.units.filter(e => e.side !== u.side && e.x !== null && !(e.x === u.x && e.y === u.y));
+    const seen = onTable.filter(e => sight(st, u, e));
+    const pool = seen.length ? seen : onTable;
+    if (!pool.length) return null;
+    // The nearest of them
+    const far = e => Math.hypot(e.x - u.x, e.y - u.y);
+    const nearest = Math.min(...pool.map(far));
+    const closest = pool.filter(e => Math.abs(far(e) - nearest) < 0.01);
+    if (!atRandom) return closest[0];
+    return closest[Math.floor(st.rand() * closest.length)];
   }
 
   // A long tank (3 by 2 areas) lies along one half of its field: n or s point it east or west, e or w north or south.
@@ -2684,8 +2698,10 @@ const Sim = (() => {
   function standAt(st, u, side) {
     if (side === undefined || u.x === null) return;
     u.at = freePlace(st, u, u.x, u.y, side);
-    // Where it stands decides what it can see past the hedges: a tank faces the nearest enemy from there (Steve)
+    // Where it stands decides what it can see past the hedges: a tank faces the nearest enemy from there (Steve), and
+    // so do men (Steve, 2026-11-22)
     if (isTank(u)) faceEnemy(st, u);
+    else faceNearestEnemy(st, u);
   }
 
   function actCharge(st, u, x, y, side) {
@@ -2720,6 +2736,12 @@ const Sim = (() => {
     if (u.x === x && u.y === y) { standAt(st, u, side); setTrail(st, u, route); }
     // A mine on its way out of a minefield stopped it short (Steve): the table shows the way it came
     else if (u.mineStop) setTrail(st, u, route.slice(0, -1));
+    // Beaten off, or leaving a tank standing, after a charge of more than a field: the table shows the way it came as
+    // far as the field it fought from (Steve, 2026-11-22: it fought from fields away, gliding straight across)
+    else if (u.x !== null) {
+      const reached = route.findIndex(p => p.x === u.x && p.y === u.y);
+      if (reached >= 0) setTrail(st, u, route.slice(0, reached + 1));
+    }
     // Arriving in an empty field in sight of an ambush (a fight is its own business)
     if (empty && u.x === x && u.y === y) springAmbushes(st, u, lines);
     // Beaten back into a field of friends it passed through: it can't stay there, so it ends back where it started
@@ -2789,19 +2811,14 @@ const Sim = (() => {
     return true;
   }
 
-  // A machine-gun team lying in ambush turns to face the nearest enemy on the table (Steve, 2026-11-22), until it
-  // fires or moves. Not a bunker's MG (it faces one way)
+  // Men on foot after a move, or lying in ambush (Steve, 2026-11-22), turn to face their nearest enemy (nearestEnemy),
+  // until they fire or move. Not tanks or anti-tank guns (they have aim), nor bunkers (they face one way)
   function faceNearestEnemy(st, u) {
-    // Only an MG team on foot, on the table
-    if (!MACHINE_GUNS.includes(u.kind) || !facesItsShot(u) || u.x === null) return;
-    // Every enemy on the table
-    const enemies = st.units.filter(e => e.side !== u.side && e.x !== null);
-    if (!enemies.length) return;
-    // The nearest of them
-    const far = e => Math.hypot(e.x - u.x, e.y - u.y);
-    const nearest = enemies.slice().sort((a, b) => far(a) - far(b))[0];
+    if (!facesItsShot(u) || u.x === null) return;
+    const e = nearestEnemy(st, u);
+    if (!e) return;
     // Facing it, as when it fires
-    u.faceTo = Math.atan2(-(nearest.y - u.y), nearest.x - u.x);
+    u.faceTo = Math.atan2(-(e.y - u.y), e.x - u.x);
   }
 
   // Move to another area of its own field (Steve: north hedge to south hedge, say): the piece's move for the round, and
