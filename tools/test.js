@@ -5449,6 +5449,115 @@ check('2026-11-21 fix: the Finnish infantry\'s card says they have Molotov cockt
   Sim.newGame(1);
 });
 
+check('2026-11-22 fix: a tank can\'t strike back at men throwing Molotovs: one blow of bottles, then they stay back', () => {
+  // For each roll of the dice: all misses, then all hits
+  for (const roll of [0.01, 0.99]) {
+    const g = Sim.newGame(1, 'de', 'winterwar');
+    g.hedges = {}; g.wire = {};
+    const finns = Sim.unitById(g, 'd2');
+    const tank = g.units.find(u => u.side === 'us' && Sim.isTank(u) && u.x !== null);
+    // Just the two of them, side by side on open ground (a tank never stands in the forest)
+    for (const u of g.units) if (u !== finns && u !== tank) u.x = u.y = null;
+    let spot = null;
+    for (let y = 0; y < ROWS && !spot; y++) for (let x = 0; x < COLS - 1 && !spot; x++) {
+      if (Sim.tileType(x, y) !== 'forest' && Sim.tileType(x + 1, y) !== 'forest') spot = { x, y };
+    }
+    tank.x = spot.x + 1; tank.y = spot.y; finns.x = spot.x; finns.y = spot.y;
+    finns.acted = false; finns.shocked = false; finns.platoons = 3;
+    g.human = 'de'; g.computer = null;
+    g.rand = () => roll;
+    const before = g.fx.length;
+    const done = Sim.actCharge(g, finns, tank.x, tank.y);
+    assert(done.ok, 'the Finns could not charge the tank');
+    const fight = g.fx.slice(before).find(f => f.kind === 'melee');
+    assert(fight, 'no hand to hand');
+    // Only the Finns' bottles: the tank never strikes, and the Finns lose nobody
+    assert(fight.strikes.length === 1 && fight.strikes[0].molotov, `the fight has ${fight.strikes.length} blows`);
+    assert(fight.strikes.every(b => b.side === 'de'), 'the tank struck back');
+    assert(finns.platoons === 3, `the Finns lost sections: ${finns.platoons} left`);
+    if (roll < 0.5) {
+      // All missed: the tank is still there, the Finns stay back where they were
+      assert(tank.x !== null && finns.x === spot.x, 'missing every bottle did not leave them apart');
+    } else {
+      // Hits: the tank burns, the Finns take its field
+      assert(tank.x === null && finns.x === spot.x + 1, 'a hit did not take the tank');
+    }
+  }
+  // The table: the first bottle waits until the charging men have run in, and they are thrown from where the men are
+  assert(pageCode('board3d.js', "if (f.kind === 'melee') {", 'startMelee(st, f, t0)').includes('chargeRun(f)'), 'the bottles do not wait for the men');
+  assert(pageCode('board3d.js', 'function moloThrowers(b) {', '\n  }').includes('g.position.x + base.position.x'), 'the bottles fly from where the men will stop');
+  Sim.newGame(1);
+});
+
+check('2026-11-22 fix: in hand to hand the attacker runs into the field it charges, fights there, then goes on or back', () => {
+  // board3d's chargeRun and runInToFight, with the table's pieces stubbed
+  const FIELD_TIME = { men: 0.5, tank: 0.7 };
+  const pieces = {};
+  const hedges = new Set();
+  const SimStub = { hedge: (st, ax, ay, bx, by) => hedges.has([ax, ay, bx, by].join()) };
+  const fn = name => pageCode('board3d.js', `function ${name} {`, '\n  }');
+  const consts = pageCode('board3d.js', 'const CHARGE_SETTLE', 'const CHARGE_IN = 0.3;');
+  const make = vm.runInThisContext(`((pieces, FIELD_TIME, Sim) => { ${consts}
+    ${fn('chargeRun(f)')}
+    ${fn('runInToFight(st, g)')}
+    ${fn('hedgeHop(a, b, offX, offZ)')}
+    return { chargeRun, runInToFight }; })`);
+  const { chargeRun, runInToFight } = make(pieces, FIELD_TIME, SimStub);
+  // A charge from 2,3 at 3,3, the table still having it at 2,3: one field to run, so the fight waits for it
+  pieces.A = { userData: { field: '2,3', to: { x: 2.3, z: 3.6, ry: 0 } } };
+  const f = { attacker: 'A', from: { x: 2, y: 3 }, x: 3, y: 3 };
+  assert(chargeRun(f) >= FIELD_TIME.men, `the fight waits ${chargeRun(f)} s`);
+  // A two-field charge waits longer
+  pieces.A.userData.field = '1,3';
+  assert(chargeRun(f) >= 2 * FIELD_TIME.men, `a two-field charge waits ${chargeRun(f)} s`);
+  // Beaten off: it runs into 3,3, waits there till the fight is over, then back to its own place
+  pieces.A.userData = { field: '2,3', to: { x: 2.3, z: 3.6, ry: 0 }, engage: { from: f.from, x: 3, y: 3, until: 1234 } };
+  runInToFight({}, pieces.A);
+  let way = pieces.A.userData.way;
+  assert(way.length === 1 && way[0].x > 3 && way[0].x < 3.5 && way[0].holdUntil === 1234, `the way in is ${JSON.stringify(way)}`);
+  assert(Math.abs(way[0].z - 3.6) < 1e-9, 'it lost its place in the field');
+  // Over a hedge: up over it on the way in and on the way back
+  hedges.add('2,3,3,3');
+  pieces.A.userData = { field: '2,3', to: { x: 2.3, z: 3.6, ry: 0 }, engage: { from: f.from, x: 3, y: 3, until: 1 } };
+  runInToFight({}, pieces.A);
+  way = pieces.A.userData.way;
+  assert(way.length === 5 && way[0].y > 0 && way[2].holdUntil === 1 && way[4].y > 0, `over the hedge the way is ${JSON.stringify(way)}`);
+  // Won: it is already on its way into the field (with its own climb): the fight point goes on the end, then it stands
+  pieces.A.userData = { field: '3,3', to: { x: 3.5, z: 3.5, ry: 0 }, way: [{ x: 2.9, z: 3.5, y: 0.14 }], engage: { from: f.from, x: 3, y: 3, until: 2 } };
+  runInToFight({}, pieces.A);
+  way = pieces.A.userData.way;
+  assert(way.length === 2 && way[1].holdUntil === 2, `a won fight's way is ${JSON.stringify(way)}`);
+  // Wired in: the fight is marked on the attacker, used by updatePieces, and the lunge comes from where it really is
+  assert(pageCode('board3d.js', "if (f.kind === 'melee') {", 'continue;').includes('userData.engage = {'), 'the attacker is not sent in');
+  assert(pageCode('board3d.js', 'function updatePieces(st) {', 'updateWrecks(st);').includes('runInToFight(st, pieces[u.id])'), 'updatePieces does not send it in');
+  assert(pageCode('board3d.js', 'function playMelee(f, t, add) {', '// Hit! or Miss').includes('g.position.x + base.userData.to.x'), 'the lunge is from where it will end up');
+});
+
+check('2026-11-22 fix: an MG team lying in ambush faces the nearest enemy', () => {
+  const g = Sim.newGame(1);
+  g.hedges = {}; g.wire = {};
+  const mg = g.units.find(u => u.side === 'us' && u.kind === 'mg' && u.x !== null);
+  assert(mg, 'no MG team');
+  for (const u of g.units) if (u !== mg) u.x = u.y = null;
+  mg.x = 4; mg.y = 6; mg.acted = false; mg.faceTo = null;
+  // Two Germans: one further off to the north, one nearer to the east
+  const [far, near] = g.units.filter(u => u.side === 'de' && u.kind === 'company');
+  far.x = 4; far.y = 1; near.x = 6; near.y = 6;
+  g.human = 'us'; g.computer = null; g.drawn = 'us';
+  const done = Sim.actAmbush(g, mg);
+  assert(done.ok, 'the MG could not lie in ambush');
+  assert(Math.abs(mg.faceTo - 0) < 1e-9, `it faces ${mg.faceTo}, not east to the nearest`);
+  // After a move too (ambushAfterMoving): the code turns it
+  assert(pageCode('sim.js', 'function ambushAfterMoving(st, u) {', '\n  }').includes('faceNearestEnemy(st, u)'), 'moving into ambush does not turn it');
+  Sim.newGame(1);
+});
+
+check('2026-11-22 fix: a piece in ambush has orange dashes and a red pulsing circle round it', () => {
+  const code = pageCode('board3d.js', 'function markAmbush(u) {', '\n  }');
+  assert(code.includes('AMBUSH_DASH') && code.includes('AMBUSH_PULSE'), 'the ambush ring is not both orange dashes and red');
+  assert(/AMBUSH_PULSE = 0x[ef][0-9a-f]2[0-9a-f]{3}/.test(pageCode('board3d.js', 'const AMBUSH_DASH', 'let ambushRings')), 'the pulsing circle is not red');
+});
+
 check('2026-11-21 fix: after a battle the New game screen comes up with the next battle lit; bonus battles go round to the Winter War', () => {
   // main.js's nextInList
   const nextInList = vm.runInThisContext(`(${pageCode('main.js', 'function nextInList(id) {', '\n  }')})`);
@@ -5501,7 +5610,7 @@ check('2026-11-21 fix: a machine-gun team can move and lie in ambush on the same
   assert(!Sim.movesThenAmbushes({ kind: 'bunker_mg' }) && !Sim.movesThenAmbushes({ kind: 'company' }), 'a bunker or a platoon counts as an MG team');
   // The computer's MG marching up lies in ambush where it gets to (computerMove)
   const move = pageCode('sim.js', 'function computerMove(st, u, route) {', '\n  }');
-  assert(move.includes('ambushAfterMoving(u)'), 'the computer\'s MG does not lie in ambush after moving');
+  assert(move.includes('ambushAfterMoving(st, u)'), 'the computer\'s MG does not lie in ambush after moving');
   // Its card says it does
   const card = pageCode('ui.js', 'const mgAmbush = ', ';');
   assert(card.includes('lies in ambush by itself') && pageCode('ui.js', 'const mgAmbush = ', '[strength, dice, armour, mgAmbush, where, status]'), 'the card says nothing of it');

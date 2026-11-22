@@ -2150,6 +2150,9 @@ const Sim = (() => {
       out.push(...a.lines);
       if (a.able) fight.strikes.push(a.blow);
       if (!standing(defenders).length) break;
+      // Tanks can't strike back at men throwing Molotovs (Steve, 2026-11-22): one blow of bottles, and a tank still
+      // standing after it is left there, the men staying back beside it
+      if (atTanks) break;
       // Each defender: 3+, elite one less, shaken one more (Steve)
       const d = strike(st, standing(defenders), standing(attackers), s => TO_HIT - QUALITY[s.quality || 'standard'].shoot + (s.shocked ? SHAKEN_SHOOT : 0));
       out.push(...d.lines);
@@ -2578,6 +2581,8 @@ const Sim = (() => {
     if (!canAmbush(st, u)) return { ok: false };
     spend(st, u);
     u.ambush = true;
+    // (an MG team turns to the nearest enemy, Steve 2026-11-22)
+    faceNearestEnemy(st, u);
     // (lying in ambush instead of the shot it could have taken after moving within its field)
     u.halfShot = false;
     u.mayAmbush = false;
@@ -2696,7 +2701,7 @@ const Sim = (() => {
       u.mayAmbush = true;
     }
     // A machine-gun team lies in ambush where it gets to, on the same go, by itself (Steve, 2026-11-22: it always would)
-    if (ambushAfterMoving(u)) lines.push('and lies in ambush');
+    if (ambushAfterMoving(st, u)) lines.push('and lies in ambush');
     return { ok: true, lines: [lines.join(', ') + '.'] };
   }
 
@@ -2775,12 +2780,28 @@ const Sim = (() => {
   }
   // After a machine-gun team's move, either side's: it lies in ambush there and then, with nothing to choose (Steve,
   // 2026-11-22: they never would not). Returns true if it did
-  function ambushAfterMoving(u) {
+  function ambushAfterMoving(st, u) {
     if (!movesThenAmbushes(u) || u.x === null) return false;
     u.ambush = true;
     u.mayAmbush = false;
     u.halfShot = false;
+    faceNearestEnemy(st, u);
     return true;
+  }
+
+  // A machine-gun team lying in ambush turns to face the nearest enemy on the table (Steve, 2026-11-22), until it
+  // fires or moves. Not a bunker's MG (it faces one way)
+  function faceNearestEnemy(st, u) {
+    // Only an MG team on foot, on the table
+    if (!MACHINE_GUNS.includes(u.kind) || !facesItsShot(u) || u.x === null) return;
+    // Every enemy on the table
+    const enemies = st.units.filter(e => e.side !== u.side && e.x !== null);
+    if (!enemies.length) return;
+    // The nearest of them
+    const far = e => Math.hypot(e.x - u.x, e.y - u.y);
+    const nearest = enemies.slice().sort((a, b) => far(a) - far(b))[0];
+    // Facing it, as when it fires
+    u.faceTo = Math.atan2(-(nearest.y - u.y), nearest.x - u.x);
   }
 
   // Move to another area of its own field (Steve: north hedge to south hedge, say): the piece's move for the round, and
@@ -2817,7 +2838,7 @@ const Sim = (() => {
     // Or it can lie in ambush on the same go instead (Steve: the PaK first, then every piece moving within its square)
     u.mayAmbush = u.x !== null && (!!PIECES[u.kind].fixed || mayFire(u));
     // (a machine-gun team does, by itself: it can't fire after moving, Steve 2026-11-22)
-    if (ambushAfterMoving(u)) lines.push('and lies in ambush');
+    if (ambushAfterMoving(st, u)) lines.push('and lies in ambush');
     return { ok: true, lines: [lines.join(', ') + '.'] };
   }
 
@@ -3370,6 +3391,8 @@ const Sim = (() => {
     if (longShot) { computerSays(st, `Hail Mary at ${longShot.name}`); return { shooter: u.id, target: longShot.id }; }
     if (mayFire(u)) {
       u.ambush = true;
+      // (an MG team turns to the nearest enemy, Steve 2026-11-22)
+      faceNearestEnemy(st, u);
       computerSays(st, 'Lies in ambush');
       st.computer.rep.push(`🪤 ${u.name} lies in ambush.`);
     }
@@ -3470,7 +3493,7 @@ const Sim = (() => {
     // Arriving in sight of an ambush
     springAmbushes(st, u, []);
     // A machine-gun team lies in ambush where it got to, on the same go, as yours does (Steve, 2026-11-21)
-    if (ambushAfterMoving(u) && st.computer && st.computer.rep) st.computer.rep.push(`🪤 ${u.name} lies in ambush.`);
+    if (ambushAfterMoving(st, u) && st.computer && st.computer.rep) st.computer.rep.push(`🪤 ${u.name} lies in ambush.`);
   }
 
   // The German mortar picks the strongest American company next to a German field

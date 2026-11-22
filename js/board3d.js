@@ -2110,6 +2110,8 @@ const Board = (() => {
     }
     // (used, or for a piece that never set off)
     for (const u of st.units) if (pieces[u.id]) pieces[u.id].userData.stops = null;
+    // An attacker in hand to hand runs in among the other side for the fight (Steve, 2026-11-22)
+    for (const u of st.units) if (pieces[u.id] && pieces[u.id].userData.engage) runInToFight(st, pieces[u.id]);
     for (const u of st.units) {
       if (!pieces[u.id]) continue;
       // Shaken: its red marker waits until the shot that shook it (or rallied it) has landed (Steve, 2026-11-21: it
@@ -2789,7 +2791,8 @@ const Board = (() => {
         if (!g) continue;
         for (const base of g.userData.bases) {
           if (!base.visible || !base.userData.to) continue;
-          const wx = g.userData.to.x + base.userData.to.x, wz = g.userData.to.z + base.userData.to.z;
+          // (from where it really is: in among them, Steve 2026-11-22)
+          const wx = g.position.x + base.userData.to.x, wz = g.position.z + base.userData.to.z;
           const d = new T.Vector3(aim.x - wx, 0, aim.z - wz);
           if (d.length() < 0.001) continue;
           d.normalize();
@@ -2850,7 +2853,53 @@ const Board = (() => {
     });
   }
 
-  // The world positions of the bases throwing a blow's bottles
+  // How long a fight waits before its first blow (Steve, 2026-11-22: Molotovs were thrown, and fights fought, from a
+  // field away): the time for the attacker to run from where the table has it, field by field, into the field it
+  // charges (FIELD_TIME a field), and settle there
+  const CHARGE_SETTLE = 0.2;         // seconds for the men to settle in among them
+  const CHARGE_IN = 0.3;             // how far into the field charged the attacker stands to fight, in fields from its edge
+  function chargeRun(f) {
+    const g = pieces[f.attacker];
+    if (!g || !g.userData.field) return 0;
+    // From the field the table has it in, to the one it charged from, then one more into the fight
+    const [x, y] = g.userData.field.split(',').map(Number);
+    const fields = Math.abs(x - f.from.x) + Math.abs(y - f.from.y) + 1;
+    return fields * FIELD_TIME.men + CHARGE_SETTLE;
+  }
+
+  // The attacker in a fight runs into the field it charged, in among the other side, and stays there until the fight
+  // is over (g.userData.engage, from startShots); then it goes where the fight leaves it: on into the field if it won,
+  // back to its own field if not. Climbing over a hedge on the way in and back
+  function runInToFight(st, g) {
+    const e = g.userData.engage;
+    g.userData.engage = null;
+    const to = g.userData.to;
+    if (!to) return;
+    // Its place in a field, as the table has it arranged now
+    const offX = to.x - Math.floor(to.x), offZ = to.z - Math.floor(to.z);
+    // Where it fights: CHARGE_IN inside the field it charged, from the edge it came over, keeping its place along it
+    const into = (from, at, off) => (at > from ? at + CHARGE_IN : at < from ? at + 1 - CHARGE_IN : at + off);
+    const fight = { x: into(e.from.x, e.x, offX), z: into(e.from.y, e.y, offZ), y: 0, holdUntil: e.until };
+    // Won, it is already on its way into the field (with its own climb over any hedge)
+    const wonIn = Math.floor(to.x) === e.x && Math.floor(to.z) === e.y;
+    // Over a hedge between the two fields: up and over it at the edge
+    const over = Sim.hedge(st, e.from.x, e.from.y, e.x, e.y) ? hedgeHop(e.from, e, offX, offZ) : [];
+    const way = g.userData.way || [];
+    if (!wonIn) way.push(...over);
+    way.push(fight);
+    // Not won: back over the hedge to its own field
+    if (!wonIn) way.push(...over.slice().reverse());
+    g.userData.way = way;
+  }
+
+  // The two points where men climb over the hedge between field a and field b, keeping their place offX, offZ
+  function hedgeHop(a, b, offX, offZ) {
+    const ex = (a.x + b.x) / 2 + offX, ez = (a.y + b.y) / 2 + offZ;
+    const dx = (b.x - a.x) * 0.12, dz = (b.y - a.y) * 0.12;
+    return [{ x: ex - dx, z: ez - dz, y: 0.14 }, { x: ex + dx, z: ez + dz, y: 0.14 }];
+  }
+
+  // The world positions of the bases throwing a blow's bottles: where each base really is on the table this frame
   function moloThrowers(b) {
     const out = [];
     for (const id of b.strikers) {
@@ -2858,7 +2907,7 @@ const Board = (() => {
       if (!g) continue;
       for (const base of g.userData.bases) {
         if (!base.visible || !base.userData.to) continue;
-        out.push(new T.Vector3(g.userData.to.x + base.userData.to.x, 0.06, g.userData.to.z + base.userData.to.z));
+        out.push(new T.Vector3(g.position.x + base.position.x, 0.06, g.position.z + base.position.z));
       }
     }
     return out;
@@ -3075,9 +3124,12 @@ const Board = (() => {
       if (f.kind === 'bomb' && flight) f.fall = (f.along - flight.start) / FLIGHT.speed + FLIGHT.fall;
       // Hand to hand: its own show, blow by blow
       if (f.kind === 'melee') {
-        const t0 = performance.now() + shots.filter(s => performance.now() - s.t0 < 300).length * 180;
+        // (the blows wait until the attacker has run into the field, Steve 2026-11-22: fights went on from a field away)
+        const t0 = performance.now() + shots.filter(s => performance.now() - s.t0 < 300).length * 180 + chargeRun(f) * 1000;
         shots.push({ f, t0, objs: [] });
         startMelee(st, f, t0);
+        // (it runs in among them and stays there until the fight is over: see runInToFight)
+        if (pieces[f.attacker]) pieces[f.attacker].userData.engage = { from: f.from, x: f.x, y: f.y, until: t0 + fightLength(f) * 1000 };
         continue;
       }
       // A tank or gun turns to face what it fires at, and stays facing it
@@ -3828,27 +3880,37 @@ const Board = (() => {
     return drawingOn;
   }
 
-  // A piece in ambush (Steve): a dashed amber ring under it, slowly pulsing. Either side's, as the table hides nothing
+  // A piece in ambush (Steve): a steady ring of orange dashes under it, and a solid red circle just outside that
+  // pulses (Steve, 2026-11-22: both at once, not plain orange). Either side's, as the table hides nothing
+  const AMBUSH_DASH = 0xffa726;      // the orange dashes
+  const AMBUSH_PULSE = 0xe0281c;     // the red pulsing circle
   let ambushRings = [];
   function markAmbush(u) {
     const p = pieceCentre(u), big = u.kind === 'company' || Sim.isTank(u);
     const inner = big ? 0.3 : 0.17, outer = big ? 0.35 : 0.21;
-    const material = new T.MeshBasicMaterial({ color: 0xffa726, transparent: true, opacity: 0.9, depthWrite: false });
-    const ring = new T.Group();
-    const dashes = 12, each = 2 * Math.PI / dashes;
-    for (let k = 0; k < dashes; k++) {
-      ring.add(at(new T.Mesh(new T.RingGeometry(inner, outer, 6, 1, k * each, each * 0.6), material), 0, 0, 0, -Math.PI / 2, 0, 0));
+    // The orange dashes: twelve, evenly round
+    const dashMaterial = new T.MeshBasicMaterial({ color: AMBUSH_DASH, transparent: true, opacity: 0.95, depthWrite: false });
+    const dashes = new T.Group();
+    const count = 12, each = 2 * Math.PI / count;
+    for (let k = 0; k < count; k++) {
+      dashes.add(at(new T.Mesh(new T.RingGeometry(inner, outer, 6, 1, k * each, each * 0.6), dashMaterial), 0, 0, 0, -Math.PI / 2, 0, 0));
     }
-    at(ring, p.x, 0.007, p.z);
+    at(dashes, p.x, 0.007, p.z);
+    marks.add(dashes);
+    // The red circle, a thin solid ring just outside the dashes
+    const gap = big ? 0.015 : 0.01, width = big ? 0.03 : 0.022;
+    const material = new T.MeshBasicMaterial({ color: AMBUSH_PULSE, transparent: true, opacity: 0.9, depthWrite: false });
+    const ring = at(new T.Mesh(new T.RingGeometry(outer + gap, outer + gap + width, 56), material), p.x, 0.0075, p.z, -Math.PI / 2, 0, 0);
     marks.add(ring);
     ambushRings.push({ ring, material });
   }
-  // One frame of the slow pulse. Returns true while any ring is showing, so the page keeps drawing
+  // One frame of the red circle's pulse (the dashes stay still). Returns true while any ring is showing, so the page
+  // keeps drawing
   function pulseAmbush(now) {
     const wave = Math.sin(now / 450);
     for (const r of ambushRings) {
-      r.ring.scale.setScalar(1 + 0.07 * wave);
-      r.material.opacity = 0.65 + 0.3 * wave;
+      r.ring.scale.setScalar(1 + 0.08 * wave);
+      r.material.opacity = 0.55 + 0.4 * wave;
     }
     return ambushRings.length > 0;
   }
