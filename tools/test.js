@@ -5598,10 +5598,29 @@ check('2026-11-22 fix: a charge of more than a field that is beaten off shows th
   assert(code.includes('route.slice(0, reached + 1)'), 'a charge stopped short glides straight across the fields');
 });
 
-check('2026-11-22 fix: a piece in ambush has orange dashes and a red pulsing circle round it', () => {
-  const code = pageCode('board3d.js', 'function markAmbush(u) {', '\n  }');
-  assert(code.includes('AMBUSH_DASH') && code.includes('AMBUSH_PULSE'), 'the ambush ring is not both orange dashes and red');
-  assert(/AMBUSH_PULSE = 0x[ef][0-9a-f]2[0-9a-f]{3}/.test(pageCode('board3d.js', 'const AMBUSH_DASH', 'let ambushRings')), 'the pulsing circle is not red');
+check('2026-11-23 fix: a piece in ambush has one circle of red and yellow stripes, pulsing', () => {
+  const code = pageCode('board3d.js', 'function stripedRing(inner, outer) {', '\n  }');
+  // A stand-in for three.js: a circle of two triangles a step
+  const T = {
+    RingGeometry: function (inner, outer, steps) {
+      const shape = { attributes: { position: { count: steps * 6 } }, setAttribute: (n, v) => { shape.colours = v; } };
+      this.toNonIndexed = () => shape;
+    },
+    Color: function (hex) { this.r = hex >> 16; this.g = (hex >> 8) & 255; this.b = hex & 255; },
+    Float32BufferAttribute: function (list) { return list; },
+  };
+  const numbers = pageCode('board3d.js', 'const AMBUSH_RED', 'let ambushRings');
+  const stripedRing = vm.runInThisContext(`(T => { ${numbers} = []; return ${code}; })`)(T);
+  const colours = stripedRing(0.3, 0.37).colours;
+  // Each corner red (little green) or yellow (plenty of green), and how often that changes going round
+  const yellow = [];
+  for (let k = 0; k < colours.length; k += 3) yellow.push(colours[k + 1] > 128);
+  const changes = yellow.filter((y, k) => y !== yellow[(k + 1) % yellow.length]).length;
+  assert(changes === 16, `${changes} changes of colour round the circle`);
+  assert(colours.every((c, k) => k % 3 || c > 200), 'a stripe is neither red nor yellow');
+  // The one circle both striped and pulsing
+  assert(pageCode('board3d.js', 'function markAmbush(u) {', '\n  }').includes('stripedRing('), 'the ambush circle is not striped');
+  assert(pageCode('board3d.js', 'function pulseAmbush(now) {', '\n  }').includes('scale.setScalar'), 'it does not pulse');
 });
 
 check('2026-11-21 fix: after a battle the New game screen comes up with the next battle lit; bonus battles go round to the Winter War', () => {

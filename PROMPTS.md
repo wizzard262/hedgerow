@@ -2092,6 +2092,11 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - Steve: the take cover icon on the pieces' pop-up is missing; make it an umbrella? The steel helmet is a newer emoji that doesn't always show. Now ☂️ on the Take cover button, on the Taking cover badge (menu and card) and in How to play; the helmet by Pieces in How to play is 👥
 - Assumptions: the ambush trap icon, as new as the helmet, is left as it is. Tests: only the badge and script checks; no screenshot or browser check (Steve)
 
+## 348. A red and yellow striped, pulsing ambush circle (v234)
+
+- Steve: ambush is not a red yellow striped pulsing circle yet. It was two rings since v229 (still orange dashes, a thin red circle pulsing outside them). Now one thicker circle of 16 red and yellow stripes, the whole of it pulsing, a little faster and further than before (`stripedRing`, `markAmbush`, `pulseAmbush` in board3d.js); its colours aren't dulled by the table's lighting
+- Assumptions: both sides' the same. Tests: only the ambush circle's and the script checks; no screenshot or browser check (Steve)
+
 ## Sessions
 
 | # | Date | Length | What we did |

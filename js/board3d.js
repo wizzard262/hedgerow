@@ -3931,37 +3931,46 @@ const Board = (() => {
     return drawingOn;
   }
 
-  // A piece in ambush (Steve): a steady ring of orange dashes under it, and a solid red circle just outside that
-  // pulses (Steve, 2026-11-22: both at once, not plain orange). Either side's, as the table hides nothing
-  const AMBUSH_DASH = 0xffa726;      // the orange dashes
-  const AMBUSH_PULSE = 0xe0281c;     // the red pulsing circle
+  // A piece in ambush (Steve, 2026-11-23): one circle of red and yellow stripes under it, the whole circle pulsing.
+  // Either side's, as the table hides nothing
+  const AMBUSH_RED = 0xe81414, AMBUSH_YELLOW = 0xffe000;
+  const AMBUSH_STRIPES = 16;         // red and yellow by turns, so an even number
+  const STRIPE_STEPS = 4;            // the straight pieces each stripe's curve is drawn with
   let ambushRings = [];
+  // The circle's shape, each stripe its own colour
+  function stripedRing(inner, outer) {
+    const steps = AMBUSH_STRIPES * STRIPE_STEPS;
+    // (no corners shared between stripes, or their colours would run together)
+    const shape = new T.RingGeometry(inner, outer, steps).toNonIndexed();
+    const corners = shape.attributes.position.count;
+    const cornersAStep = corners / steps;
+    const red = new T.Color(AMBUSH_RED), yellow = new T.Color(AMBUSH_YELLOW);
+    const colours = [];
+    for (let k = 0; k < corners; k++) {
+      const step = Math.floor(k / cornersAStep);
+      const stripe = Math.floor(step / STRIPE_STEPS);
+      const colour = stripe % 2 ? yellow : red;
+      colours.push(colour.r, colour.g, colour.b);
+    }
+    shape.setAttribute('color', new T.Float32BufferAttribute(colours, 3));
+    return shape;
+  }
   function markAmbush(u) {
     const p = pieceCentre(u), big = u.kind === 'company' || Sim.isTank(u);
-    const inner = big ? 0.3 : 0.17, outer = big ? 0.35 : 0.21;
-    // The orange dashes: twelve, evenly round
-    const dashMaterial = new T.MeshBasicMaterial({ color: AMBUSH_DASH, transparent: true, opacity: 0.95, depthWrite: false });
-    const dashes = new T.Group();
-    const count = 12, each = 2 * Math.PI / count;
-    for (let k = 0; k < count; k++) {
-      dashes.add(at(new T.Mesh(new T.RingGeometry(inner, outer, 6, 1, k * each, each * 0.6), dashMaterial), 0, 0, 0, -Math.PI / 2, 0, 0));
-    }
-    at(dashes, p.x, 0.007, p.z);
-    marks.add(dashes);
-    // The red circle, a thin solid ring just outside the dashes
-    const gap = big ? 0.015 : 0.01, width = big ? 0.03 : 0.022;
-    const material = new T.MeshBasicMaterial({ color: AMBUSH_PULSE, transparent: true, opacity: 0.9, depthWrite: false });
-    const ring = at(new T.Mesh(new T.RingGeometry(outer + gap, outer + gap + width, 56), material), p.x, 0.0075, p.z, -Math.PI / 2, 0, 0);
+    const inner = big ? 0.3 : 0.17, outer = big ? 0.37 : 0.23;
+    // (its colours as they are, not dulled by the table's lighting)
+    const material = new T.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 1, depthWrite: false, toneMapped: false });
+    const ring = at(new T.Mesh(stripedRing(inner, outer), material), p.x, 0.0075, p.z, -Math.PI / 2, 0, 0);
     marks.add(ring);
     ambushRings.push({ ring, material });
   }
-  // One frame of the red circle's pulse (the dashes stay still). Returns true while any ring is showing, so the page
-  // keeps drawing
+  // One frame of the pulse: the striped circle swells and shrinks, brightest at its widest. Returns true while any is
+  // showing, so the page keeps drawing
   function pulseAmbush(now) {
-    const wave = Math.sin(now / 450);
+    const wave = Math.sin(now / 300);
     for (const r of ambushRings) {
-      r.ring.scale.setScalar(1 + 0.08 * wave);
-      r.material.opacity = 0.55 + 0.4 * wave;
+      r.ring.scale.setScalar(1 + 0.12 * wave);
+      r.material.opacity = 0.8 + 0.2 * wave;
     }
     return ambushRings.length > 0;
   }
