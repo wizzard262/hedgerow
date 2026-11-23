@@ -356,7 +356,7 @@ const UI = (() => {
 
   // A piece's state as a badge: the first that fits. The menu has the short words, the panel the long ones
   function statePill(u, inCover, shaken) {
-    if (u.down && u.acted) return `<span class="pill bad">${inCover}</span>`;
+    if (u.down && u.acted) return `<span class="pill bad">☂️ ${inCover}</span>`;
     if (u.ambush) return '<span class="pill ready">🪤 In ambush</span>';
     const moved = '<span class="pill done">✓ Moved this round</span>';
     // Shaken: it says so, and whether it has moved this round as well (Steve, 2026-11-21)
@@ -459,7 +459,7 @@ const UI = (() => {
     const menu = document.querySelector('#menu');
     menu.innerHTML = '';
     // Stand fast, or take cover (ids kept for the screenshot tool)
-    const choices = [['ask-stay', '🧍 Stand fast', false], ['ask-pull', '🪖 Take cover', true]];
+    const choices = [['ask-stay', '🧍 Stand fast', false], ['ask-pull', '☂️ Take cover', true]];
     for (const [id, label, pull] of choices) {
       const b = el('button', '', label);
       b.id = id;

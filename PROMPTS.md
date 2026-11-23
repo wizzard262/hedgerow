@@ -2087,6 +2087,11 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - Fixed on the way: a gun that held fire no longer says it fired (`st.fired` is 'held' then), and your own gun says Ready between your tokens, as pieces do
 - Assumptions: their bomber as well; the compass isn't shown for theirs. Tests: only the gun checks (Steve: no full run, that comes later); no balance runs, screenshot or browser check
 
+## 347. An umbrella for taking cover (v233)
+
+- Steve: the take cover icon on the pieces' pop-up is missing; make it an umbrella? The steel helmet is a newer emoji that doesn't always show. Now ☂️ on the Take cover button, on the Taking cover badge (menu and card) and in How to play; the helmet by Pieces in How to play is 👥
+- Assumptions: the ambush trap icon, as new as the helmet, is left as it is. Tests: only the badge and script checks; no screenshot or browser check (Steve)
+
 ## Sessions
 
 | # | Date | Length | What we did |
