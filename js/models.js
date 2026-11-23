@@ -1748,10 +1748,11 @@ const Models = (() => {
         g.add(at(wheel(0.014, 0.03, M.steel), x, 0.03, z));
       }
     }
-    // The turret, angled sides, set a little back; the long 50 mm with its muzzle brake
-    g.add(at(profile([[-0.06, 0], [0.05, 0], [0.042, 0.04], [-0.05, 0.043]], 0.1, paint, 0.004), -0.02, 0.115, 0));
-    g.add(at(box(0.02, 0.026, 0.035, paint), 0.04, 0.135, 0));
-    g.add(at(cyl(0.006, 0.007, 0.22, M.steel, 12), 0.16, 0.137, 0, 0, 0, Math.PI / 2));
+    // The turret, angled sides, forward of the middle as on the real one (Steve, 2026-11-23), the engine deck long behind
+    // it; the long 50 mm, its muzzle brake not far past the nose
+    g.add(at(profile([[-0.06, 0], [0.05, 0], [0.042, 0.04], [-0.05, 0.043]], 0.1, paint, 0.004), 0.035, 0.115, 0));
+    g.add(at(box(0.02, 0.026, 0.035, paint), 0.095, 0.135, 0));
+    g.add(at(cyl(0.006, 0.007, 0.17, M.steel, 12), 0.185, 0.137, 0, 0, 0, Math.PI / 2));
     g.add(at(cyl(0.01, 0.01, 0.014, M.steel, 12), 0.275, 0.137, 0, 0, 0, Math.PI / 2));
     // The aerial at the back, the crosses on the sides
     g.add(at(cyl(0.0015, 0.0015, 0.12, M.steel, 4), -0.15, 0.17, 0.05, 0.15, 0, 0));

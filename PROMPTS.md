@@ -2097,6 +2097,11 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - Steve: ambush is not a red yellow striped pulsing circle yet. It was two rings since v229 (still orange dashes, a thin red circle pulsing outside them). Now one thicker circle of 16 red and yellow stripes, the whole of it pulsing, a little faster and further than before (`stripedRing`, `markAmbush`, `pulseAmbush` in board3d.js); its colours aren't dulled by the table's lighting
 - Assumptions: both sides' the same. Tests: only the ambush circle's and the script checks; no screenshot or browser check (Steve)
 
+## 349. The Puma's turret forward (v235)
+
+- Steve: bring the turret on the Puma forward like it had in real life. It sat a little behind the middle of the hull; it is now forward of the middle, with the long engine deck behind it. The muzzle stays where it was, a little past the nose as on the real one, so more of the gun is over the hull (`puma` in models.js)
+- Assumptions: how far, from the real one's proportions; still a little behind the Sd.Kfz. 231's, as Steve asked then. Tests: only the script check; no screenshot or browser check (Steve)
+
 ## Sessions
 
 | # | Date | Length | What we did |
