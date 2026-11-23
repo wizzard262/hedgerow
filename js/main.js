@@ -226,6 +226,7 @@ window.Game = (() => {
       const more = Board.render(st, {
         same, stateChanged, spots, hover, targets, ready, shooter, mortarAim, aimWhich, guns, blast,
         selected: UI.selected(),
+        chosenGun: UI.chosenGun(),
         hotTarget: aimedAt || hotTarget,
         rallies: UI.rallies(),
         computerMove: (st.computer && st.computer.move) || shownMove,
@@ -495,7 +496,9 @@ window.Game = (() => {
     // Two robots: nothing to command, any piece clicked just shows what it is
     if (st.mode === 'none') {
       const piece = Board.pieceUnder(st, e.clientX, e.clientY);
-      if (piece) { Sound.play('select'); Board.bounce(piece); UI.inspect(piece); changed(); }
+      if (piece) { Sound.play('select'); Board.bounce(piece); UI.inspect(piece); changed(); return; }
+      // Or any gun off the board, either side's
+      if (!lookAtGun('us', e)) lookAtGun('de', e);
       return;
     }
     const enemy = Sim.computerSide(st);
@@ -531,6 +534,11 @@ window.Game = (() => {
       return;
     }
     const f = Board.fieldAt(e.clientX, e.clientY);
+    // The other side's gun off the board (Steve, 2026-11-23): ring it and show what it is, as their pieces are, when the
+    // click is on no piece and isn't the chosen piece's action
+    const onPiece = Board.pieceUnder(st, e.clientX, e.clientY);
+    const onAction = f && UI.actsOn(f.x, f.y);
+    if (!onPiece && !onAction && lookAtGun(enemy, e)) return;
     // Off the table: a gun or the bomber chosen is put down (Steve)
     if (!f) {
       if (UI.dropSupport()) changed();
@@ -548,6 +556,17 @@ window.Game = (() => {
     if (fieldAsks && fieldAsks.length) { askThenFire(fieldAsks, () => clickOnField(f, clicked)); return; }
     clickOnField(f, clicked);
   });
+
+  // A side's gun under the pointer, if there is one: ringed, its card shown, no orders. True if there was one
+  function lookAtGun(side, e) {
+    const gun = Board.gunAt(e.clientX, e.clientY, side);
+    if (!gun) return false;
+    Sound.play('select');
+    Board.bounceGun(side, gun);
+    UI.inspectGun(side, gun);
+    changed();
+    return true;
+  }
 
   // How close to a cross-hair, in pixels, a click must be to shoot rather than charge into that field (Steve)
   const AIM_EXACT = 26;

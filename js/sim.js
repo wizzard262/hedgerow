@@ -249,7 +249,7 @@ const Sim = (() => {
     walkTables.clear();
     const st = {
       seed, mode, human, players, map, features: (map.features || []).map(placedFeature), turn: 1, hedges: {}, wire: {}, openWire: {}, trampled: {}, units: [], wrecks: [], report: [], fx: [],
-      // Each side's guns and bomber: what they have fired this round, and what they have left
+      // Each side's guns and bomber: what they have fired this round (true, or 'held' for one that held fire), and what they have left
       fired: { us: {}, de: {} },
       ammo: {
         us: Object.assign({ mortars: MORTARS.ammo, artillery: ARTILLERY.ammo, bomber: BOMBER.ammo }, map.ammo && map.ammo.us),
@@ -3645,6 +3645,7 @@ const Sim = (() => {
       if (side === 'us') st.computer.mortar = false;
       const t = fieldGun === 'artillery' ? artilleryTarget(st, side) : mortarTarget(st, side);
       computerSays(st, t ? `Shells ${t.name}` : 'Holds fire: no target');
+      if (!t) st.fired[side][fieldGun] = 'held';
       if (t) {
         // (nobody of yours is asked: no taking cover from shells, Steve)
         st.computer.shelling = { which: fieldGun, x: t.x, y: t.y, target: t.id };
@@ -3665,6 +3666,7 @@ const Sim = (() => {
       st.computer.mortar = false;
       const t = mortarTarget(st, 'de');
       computerSays(st, t ? `Mortars ${t.name}` : 'Holds fire: no target');
+      if (!t) st.fired[side].mortars = 'held';
       if (t) {
         const r = plan({ mortar: true, target: t.id });
         if (r) return r;
@@ -3675,6 +3677,7 @@ const Sim = (() => {
       st.computer.bomber = false;
       const run = bestBomberRun(st, side);
       computerSays(st, run ? 'Flies in' : 'Stays away: nothing worth bombing');
+      if (!run) st.fired[side].bomber = 'held';
       if (run) {
         // (nobody of yours is asked: no taking cover from bombs, Steve)
         st.computer.run = { x: run.x, y: run.y };
@@ -3742,7 +3745,7 @@ const Sim = (() => {
 
   function skipSupport(st, which) {
     if (!canFire(st, which)) return { ok: false };
-    st.fired[st.human][which] = true;
+    st.fired[st.human][which] = 'held';
     if (st.tokens) { st.activeId = 'gun:' + which; activated(st, { side: st.human, gun: which }); }
     if (which === 'bomber') return { ok: true, lines: [`⏭️ The ${bomberName(st.human)} stays away this round.`] };
     return { ok: true, lines: [`⏭️ The ${which === 'mortars' ? 'mortars' : 'artillery'} hold fire this round.`] };

@@ -31,7 +31,20 @@ const UI = (() => {
   function selectSupport(which) {
     view.sel = null;
     view.support = which;
+    view.supportSide = st.human;
     view.mode = canFire(which) ? 'fire:' + which : null;
+  }
+  // The other side's gun clicked (Steve, 2026-11-23): ringed on the table and its card shows what it is, as their pieces do
+  function inspectGun(side, which) {
+    view.sel = null;
+    view.mode = null;
+    view.support = which;
+    view.supportSide = side;
+  }
+  // The gun chosen or being looked at, either side's, for its white ring; null if none
+  function chosenGun() {
+    if (!view.support) return null;
+    return { side: view.supportSide, which: view.support };
   }
   // A click off the table (Steve, 2026-11-15: the bomber could not be put down without another gun to pick): the gun
   // chosen is put down, its token still unused. True if there was one
@@ -44,7 +57,7 @@ const UI = (() => {
   // For the rings under the guns
   function supportState() {
     const out = {};
-    for (const which of ['mortars', 'artillery', 'bomber']) out[which] = { ready: canFire(which), chosen: view.support === which, present: st.ammo[st.human][which] > 0 };
+    for (const which of ['mortars', 'artillery', 'bomber']) out[which] = { ready: canFire(which), present: st.ammo[st.human][which] > 0 };
     return out;
   }
   const selected = () => (view.sel ? Sim.unitById(st, view.sel) : null);
@@ -55,18 +68,25 @@ const UI = (() => {
     if (which === 'bomber') return `✈️ ${Sim.bomberName(side)} bomber`;
     return `${GUN_ICONS[which]} ${Sim.gunStats(which, side).name}`;
   }
-  function gunState(which) {
-    if (canFire(which)) return '<span class="pill ready">Ready</span>';
-    if (st.ammo[st.human][which] <= 0) return `<span class="pill bad">${which === 'bomber' ? 'Flown' : 'No rounds'}</span>`;
-    return `<span class="pill done">✓ ${which === 'bomber' ? 'Stayed away' : 'Fired'} this round</span>`;
+  // (either side's, Steve 2026-11-23: st.fired says 'held' for one that held fire)
+  function gunState(side, which) {
+    const bomber = which === 'bomber';
+    // Nothing left
+    if (st.ammo[side][which] <= 0) return `<span class="pill bad">${bomber ? 'Flown' : 'No rounds'}</span>`;
+    const used = st.fired[side][which];
+    // Still to have its go this round
+    if (!used) return '<span class="pill ready">Ready</span>';
+    const held = bomber ? 'Stayed away' : 'Held fire';
+    const fired = bomber ? 'Flown' : 'Fired';
+    return `<span class="pill done">✓ ${used === 'held' ? held : fired} this round</span>`;
   }
   // What the bomber does, one fact a line
-  function bomberFacts() {
-    const runs = st.ammo[st.human].bomber;
+  function bomberFacts(side) {
+    const runs = st.ammo[side].bomber;
     const facts = [`${runs} run${runs === 1 ? '' : 's'} left`];
-    // The compass only spins when it can fly
-    if (canFire('bomber')) facts.push(`🧭 Flies ${COMPASS_POINTS[Sim.bomberHeading(st, st.human)]}`);
-    facts.push(`💣 ${BOMBER.need}+ on each piece under it, yours too`);
+    // The compass only spins when it can fly, and only for your own
+    if (side === st.human && canFire('bomber')) facts.push(`🧭 Flies ${COMPASS_POINTS[Sim.bomberHeading(st, st.human)]}`);
+    facts.push(`💣 ${BOMBER.need}+ on each piece under it, ${side === st.human ? 'yours' : 'theirs'} too`);
     return facts;
   }
 
@@ -395,7 +415,7 @@ const UI = (() => {
     const menu = document.querySelector('#menu');
     menu.innerHTML = '';
     // Its state: ready, out of rounds, or already fired this round
-    menu.append(el('div', 'mhead', `<b>${gunTitle(st.human, which)}</b><span>${gunState(which)}</span>`));
+    menu.append(el('div', 'mhead', `<b>${gunTitle(st.human, which)}</b><span>${gunState(st.human, which)}</span>`));
     // Skip turn: hold fire this round, using the token
     const skip = el('button', '', '⏭️ Skip turn');
     skip.disabled = !canFire(which);
@@ -618,22 +638,27 @@ const UI = (() => {
   function card() {
     const u = selected(), box = $('#card');
     box.innerHTML = '';
-    // A gun chosen: what it is, rounds left, whether it can fire this round, and its Fire button
+    // A gun chosen: what it is, rounds left, whether it can fire this round, and (yours) its Fire button
     if (!u && view.support) {
-      const which = view.support, S = Sim.gunStats(which, st.human);
-      picture(box, st.human, which);
-      box.append(el('div', 'name', gunTitle(st.human, which)));
-      box.append(el('div', 'sub', which === 'bomber' ? 'Off the board' : `${S.name}, off the board`));
+      const which = view.support, side = view.supportSide, S = Sim.gunStats(which, side);
+      // Yours to command, or only looked at (Steve, 2026-11-23: the other side's)
+      const mine = side === st.human && st.mode !== 'none';
+      picture(box, side, which);
+      box.append(el('div', 'name', gunTitle(side, which)));
+      const nation = mine ? '' : `${adjective(side)} · `;
+      box.append(el('div', 'sub', nation + (which === 'bomber' ? 'Off the board' : `${S.name}, off the board`)));
       // What a mission does, one fact a line (Steve): where it can fire, the dice on the field, and the blast round it
       // (German mortars drop on the one piece, Steve: the differences between the sides stay)
-      const onOnePiece = which === 'mortars' && st.human === 'de';
-      const diceFact = onOnePiece ? `🎲 ${S.dice} dice on the one piece` : `🎲 ${S.dice} dice on each ${foes().slice(0, -1)} piece there`;
-      const does = which === 'bomber' ? bomberFacts() : [`${st.ammo[st.human][which]} rounds left`, '🎯 Fires on a piece your troops can see', diceFact];
+      const onOnePiece = which === 'mortars' && side === 'de';
+      const diceFact = onOnePiece ? `🎲 ${S.dice} dice on the one piece` : `🎲 ${S.dice} dice on each ${Sim.sideName(st, Sim.enemyOf(side)).slice(0, -1)} piece there`;
+      const does = which === 'bomber' ? bomberFacts(side) : [`${st.ammo[side][which]} rounds left`, `🎯 Fires on a piece ${mine ? 'your' : 'their'} troops can see`, diceFact];
       // One anti-tank die: artillery as any other hit, mortars only shaking a tank (Steve)
       if (which === 'mortars') does.push(`🛡️ ${S.hard} die on a tank: only shakes it, or kills it if already shaken`);
       if (which === 'artillery') does.push(`🛡️ ${S.hard} die on a tank`);
-      if (which !== 'bomber' && S.splash) does.push(`💥 ${S.splash} die on every piece in the 4 fields next to it, including your own`);
-      box.append(el('div', 'stats', [...does, gunState(which)].map(s => `<span>${s}</span>`).join('')));
+      if (which !== 'bomber' && S.splash) does.push(`💥 ${S.splash} die on every piece in the 4 fields next to it, including ${mine ? 'your' : 'their'} own`);
+      box.append(el('div', 'stats', [...does, gunState(side, which)].map(s => `<span>${s}</span>`).join('')));
+      // The other side's: just what it is, no actions
+      if (!mine) return;
       const acts = el('div'); acts.id = 'actions';
       const fire = el('button', view.mode === 'fire:' + which ? 'on' : '', '🎯 Fire');
       fire.disabled = !canFire(which);
@@ -840,6 +865,6 @@ const UI = (() => {
   return {
     init, setState, update, asksForShot, asksForField, clickField, openMenu, openGunMenu, openAsk, closeMenu, litFieldRects, chargesInto,
     inspect, actsOn, spots, moveSpotsFor, targets, shootTarget, rallies, rallyTarget, view, selected,
-    selectSupport, dropSupport, supportState, flyToken, returnTokens, KIND,
+    selectSupport, inspectGun, chosenGun, dropSupport, supportState, flyToken, returnTokens, KIND,
   };
 })();

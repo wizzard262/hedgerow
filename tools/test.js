@@ -5663,5 +5663,29 @@ check('2026-11-21 fix: a machine-gun team can move and lie in ambush on the same
   Sim.newGame(1);
 });
 
+check('2026-11-23: the opponent guns can be looked at: their state this round, and no orders', () => {
+  const st = { ammo: { de: { mortars: 2, artillery: 0, bomber: 1 } }, fired: { de: {} }, human: 'us' };
+  const gunState = vm.runInThisContext(`(st => (${pageCode('ui.js', 'function gunState(side, which) {', '\n  }')}))`)(st);
+  assert(/Ready/.test(gunState('de', 'mortars')), 'a gun still to fire is not Ready');
+  assert(/No rounds/.test(gunState('de', 'artillery')), 'an empty gun does not say so');
+  st.fired.de = { mortars: true, bomber: 'held' };
+  assert(/Fired this round/.test(gunState('de', 'mortars')), 'a gun that fired does not say so');
+  assert(/Stayed away this round/.test(gunState('de', 'bomber')), 'a bomber that stayed away says it flew');
+  st.fired.de.mortars = 'held';
+  assert(/Held fire this round/.test(gunState('de', 'mortars')), 'a gun that held fire says it fired');
+  // Looking at one picks no piece and starts no shot
+  const view = { sel: 'x', mode: 'go' };
+  const inspectGun = vm.runInThisContext(`(view => (${pageCode('ui.js', 'function inspectGun(side, which) {', '\n  }')}))`)(view);
+  inspectGun('de', 'mortars');
+  assert(view.sel === null && view.mode === null && view.support === 'mortars' && view.supportSide === 'de', JSON.stringify(view));
+  // Skip turn marks your own gun as held, and its go as used
+  const g = Sim.newGame(3, 'us', 'hedges');
+  Sim.startRound(g);
+  g.drawn = 'us'; g.human = 'us'; g.activeId = null; g.computer = null;
+  g.ammo.us.mortars = 2;
+  assert(Sim.skipSupport(g, 'mortars').ok && g.fired.us.mortars === 'held', `skipping left ${g.fired.us.mortars}`);
+  Sim.newGame(1);
+});
+
 console.log(failed ? `\n${failed} failed` : '\nall passed');
 process.exit(failed ? 1 : 0);

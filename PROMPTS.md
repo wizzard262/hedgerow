@@ -2081,6 +2081,12 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - Steve: so all hand to hand should happen with both pieces right next to each other. Yes: the attacker used to stop 0.3 of a field inside the field it charged, wherever the other side stood in it. It now runs right up to them: its middle just short of theirs (the middle of all the defenders), coming at them from its place in the field it charged from, the two touching (`fightSpot` in board3d.js; `CHARGE_REACH`: 0.22 of a field from a platoon's or a tank's middle to its edge, 0.13 for a team or the captain). With nobody left on the table to run up to it still stops just inside the field
 - Assumptions: none. Tests: only the hand-to-hand checks (`node tools/test.js "2026-11-22"`), as it changes only the table, not the rules; no balance runs, screenshot or browser check (Steve)
 
+## 346. The other side's guns can be looked at (v232)
+
+- Steve: allow highlighting on the opponent's artillery and mortars, like their other pieces, to see if they have fired this turn, and their stats. A click on one (the bomber too) hops it, rings it in white and shows its card: rounds left, dice, and Ready, Fired this round, Held fire this round or No rounds; no buttons. Works in the computer's turn too, and for either side's when two robots play (`lookAtGun` in main.js, `inspectGun`, `chosenGun` and `gunState` in ui.js, `gunRings` in board3d.js)
+- Fixed on the way: a gun that held fire no longer says it fired (`st.fired` is 'held' then), and your own gun says Ready between your tokens, as pieces do
+- Assumptions: their bomber as well; the compass isn't shown for theirs. Tests: only the gun checks (Steve: no full run, that comes later); no balance runs, screenshot or browser check
+
 ## Sessions
 
 | # | Date | Length | What we did |

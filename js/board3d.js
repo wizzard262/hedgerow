@@ -258,16 +258,22 @@ const Board = (() => {
     return null;
   }
 
-  // A ring under each of your guns, like the pieces: green if it can still fire this hour, grey if not, white if chosen
-  function gunRings(state, side) {
-    if (!state) return;
-    for (const which of SUPPORT) {
-      const spot = GUNS[side][which], s = state[which];
-      if (!s.present) continue;
-      const colour = s.chosen ? 0xfff6dc : s.ready ? 0x7fd06a : 0x77776f;
-      const ring = new T.Mesh(new T.RingGeometry(0.3, s.chosen ? 0.36 : 0.335, 48), new T.MeshBasicMaterial({ color: colour, transparent: true, opacity: 0.85, depthWrite: false }));
-      at(ring, spot.x, 0.006, spot.z, -Math.PI / 2, 0, 0); marks.add(ring);
+  // One ring under a gun off the board
+  function gunRing(side, which, colour, outer) {
+    const spot = GUNS[side][which];
+    const ring = new T.Mesh(new T.RingGeometry(0.3, outer, 48), new T.MeshBasicMaterial({ color: colour, transparent: true, opacity: 0.85, depthWrite: false }));
+    at(ring, spot.x, 0.006, spot.z, -Math.PI / 2, 0, 0); marks.add(ring);
+  }
+  // A ring under each of your guns, like the pieces: green if it can still fire this hour, grey if not. White under the
+  // one chosen, either side's (chosen: { side, which } or null; Steve, 2026-11-23: the other side's can be looked at)
+  function gunRings(state, side, chosen) {
+    for (const which of state ? SUPPORT : []) {
+      const isChosen = !!chosen && chosen.side === side && chosen.which === which;
+      if (!state[which].present || isChosen) continue;
+      gunRing(side, which, state[which].ready ? 0x7fd06a : 0x77776f, 0.335);
     }
+    // (out of rounds, it isn't on the table)
+    if (chosen && support[chosen.side][chosen.which].model.visible) gunRing(chosen.side, chosen.which, 0xfff6dc, 0.36);
   }
 
   // ---------- The drawn token ----------
@@ -3980,7 +3986,7 @@ const Board = (() => {
     for (const b of view.blast || []) mark(b.x, b.y, b.main ? 'blast' : 'splash', 0.03);
     if (view.flightLine) markFlightLine(view.flightLine);
     showStand(st, view);
-    gunRings(view.guns, st.human);
+    gunRings(view.guns, st.human, view.chosenGun);
     if (view.selected && view.selected.x !== null && pieces[view.selected.id]) {
       const p = pieceCentre(view.selected), big = view.selected.kind === 'company' || Sim.isTank(view.selected);
       const ring = new T.Mesh(new T.RingGeometry(big ? 0.34 : 0.21, big ? 0.39 : 0.25, 56), new T.MeshBasicMaterial({ color: 0xfff6dc, transparent: true, opacity: 0.95, depthWrite: false }));
