@@ -1480,19 +1480,59 @@ const Sim = (() => {
     st.report = ['🤝 The last of both sides went down together. A draw.'];
   }
 
-  // Can the company no longer win: no rifle platoon or captain left to take the village, and German tanks it has nothing left to
-  // hurt with, so it can't destroy every German either (Steve)
+  // Can the attackers truly no longer win (Steve, 2026-11-23)? Nobody left to take the goal (where there is one), no
+  // reinforcements or crate still to come, and a German piece that nothing they have left could ever destroy
   function cannotWin(st) {
+    return !!beyondHarm(st);
+  }
+  // That German piece; null while they could still win
+  function beyondHarm(st) {
     const us = st.units.filter(u => u.side === 'us' && u.x !== null);
-    // No goal on this map: only destroying every German wins, so it is lost once a bunker or tank is left that nothing can hurt
-    if (st.noGoal) return noGoalCannotWin(st, us);
-    if (us.some(u => takesGoal(u))) return false;
-    const tanksLeft = st.units.some(u => u.side === 'de' && u.x !== null && isTank(u));
-    if (!tanksLeft) return false;
-    // Anything still able to hurt a tank: a piece with anti-tank weapons, or fire support with rounds or a run left
-    if (us.some(u => firepower(st, u).hard > 0)) return false;
+    // Someone who can still take the goal
+    if (!st.noGoal && us.some(u => takesGoal(u))) return null;
+    // Something still to come that could change it
+    if (helpToCome(st, us)) return null;
+    const de = st.units.filter(u => u.side === 'de' && u.x !== null);
+    return de.find(target => !canDestroy(st, us, target)) || null;
+  }
+  // Could the attackers still get more: their reinforcements, paratroopers, or a supply crate (an artillery round)
+  // someone of theirs can walk to?
+  function helpToCome(st, us) {
+    const r = st.map.reinforce;
+    if (r && !st.reinforced && st.turn < r.round && (r.us || []).length) return true;
+    const drop = st.airdrop;
+    const dropToCome = !!drop && !drop.done && st.turn < drop.round;
+    if (dropToCome && drop.kind === 'paras') return true;
+    const crateOut = dropToCome || (!!st.crate && !st.crate.taken);
+    return crateOut && us.some(u => !PIECES[u.kind].fixed);
+  }
+  // Could these pieces and their guns ever destroy that German piece, whatever the range and the luck?
+  function canDestroy(st, us, target) {
+    // Artillery and bombs can destroy anything
     const left = st.ammo.us;
-    return left.mortars <= 0 && left.artillery <= 0 && left.bomber <= 0;
+    if (left.artillery > 0 || left.bomber > 0) return true;
+    if (mortarsCanDestroy(left.mortars, target)) return true;
+    return us.some(shooter => pieceCanDestroy(st, shooter, target));
+  }
+  // Mortars only shake a bunker; a tank they shake first, then kill once it is shaken (one die a mission); men any time
+  function mortarsCanDestroy(rounds, target) {
+    if (isBunker(target)) return false;
+    const needed = isTank(target) && !target.shocked ? 2 : 1;
+    return rounds >= needed;
+  }
+  function pieceCanDestroy(st, shooter, target) {
+    // An anti-tank weapon destroys anything
+    const f = firepower(st, shooter);
+    if (f.hard > 0) return true;
+    // Molotov cocktails burn tanks, and riflemen can storm a bunker hand to hand
+    if (isTank(target) && shooter.molotov) return true;
+    if (isBunker(target)) return fightsHandToHand(shooter);
+    // A machine gun hurts an armoured car
+    if (isTank(target)) return isCar(target) && hurtsCars(shooter);
+    // The sniper only pins a crewed gun
+    if (isAtGun(target) && PIECES[shooter.kind].sniper) return false;
+    // Men, and a crewed gun (shaken, then killed): anything that fires
+    return f.soft > 0;
   }
 
   // Have the Germans held out (Steve, 2026-11-15, every battle with a goal, and the beach)? The Americans have nobody left
@@ -1519,16 +1559,34 @@ const Sim = (() => {
     return isCar(target) && hurtsCars(shooter);
   }
 
-  // With no goal: is a German bunker or tank left that nothing American can knock out? Anti-tank weapons on the table,
-  // artillery or a bomber run can; mortars can knock out a tank but only shake a bunker
-  function noGoalCannotWin(st, us) {
-    const hard = st.units.filter(u => u.side === 'de' && u.x !== null && (isTank(u) || isBunker(u)));
-    if (!hard.length) return false;
-    if (us.some(u => firepower(st, u).hard > 0)) return false;
-    const left = st.ammo.us;
-    if (left.artillery > 0 || left.bomber > 0) return false;
-    // Only mortars left: they can still knock out tanks, never bunkers
-    return left.mortars <= 0 || hard.some(u => isBunker(u));
+  // Has the attack failed, with pieces still on the table (Steve, 2026-11-23: there and then, not at the round's end)?
+  // The words for it, or '' while it goes on. Looked at before every token and at the end of the round
+  function attackFailed(st) {
+    // Dunkirk has its own ending
+    if (st.evac) return '';
+    const us = sideName(st, 'us'), de = sideName(st, 'de');
+    const goal = st.objective.name;
+    // (a human playing the Germans wins only by destroying every American piece, Steve; guns off the table don't count)
+    const safe = isRobot(st, 'de') ? beyondHarm(st) : null;
+    if (safe) {
+      if (st.noGoal) return `⌛ Nothing the ${us} have left can destroy ${safe.name}. The attack has failed.`;
+      return `⌛ No rifle platoon or captain of the ${us} is left to take ${goal}, and nothing they have left can destroy ${safe.name}. The attack has failed.`;
+    }
+    // The other way round (Steve, 2026-11-15: as the Germans with nothing left to hurt the last American tank, there
+    // was no way to win): nobody left to take the goal, and nothing German can hurt what is left
+    // (only for a person playing the Germans: against a robot, the Americans may go on while they can still win, Steve
+    // 2026-11-23)
+    if (isRobot(st, 'de') || !germansHoldOut(st)) return '';
+    if (st.noGoal) return `⌛ Nothing the ${de} have left can hurt what is left of the ${us}, and the ${us} cannot take the beach from them. The attack has failed.`;
+    return `⌛ No rifle platoon or captain of the ${us} is left to take ${goal}, and nothing the ${de} have left can hurt what is left of them. The attack has failed.`;
+  }
+  // The game over there and then if it has
+  function endIfFailed(st) {
+    if (st.won || st.lost) return;
+    const failed = attackFailed(st);
+    if (!failed) return;
+    st.lost = true;
+    st.report = [failed];
   }
 
   function remove(st, u) {
@@ -3829,6 +3887,9 @@ const Sim = (() => {
   function drawToken(st) {
     if (st.won || st.lost) return null;
     checkHold(st);
+    // One side can no longer win: over there and then (Steve, 2026-11-23)
+    endIfFailed(st);
+    if (st.lost) return null;
     trimBag(st);
     // The timer can't come out first (Steve): it is only in the draw once a piece's token has been drawn this round
     const pieceTokens = st.bag.us + st.bag.de;
@@ -4058,6 +4119,7 @@ const Sim = (() => {
     const germansLeft = st.units.some(u => u.side === 'de' && u.x !== null);
     checkHold(st);
     const held = holdsObjective(st);
+    const failed = attackFailed(st);
     // Dunkirk (Steve): the boats sail with whoever is aboard, then the count decides
     if (st.evac) {
       sailBoats(st, rep);
@@ -4073,20 +4135,9 @@ const Sim = (() => {
     } else if (!st.units.some(u => u.side === 'us' && u.x !== null)) {
       st.lost = true;
       rep.unshift('💀 Nothing is left of the company. The attack has failed.');
-    } else if (isRobot(st, 'de') && cannotWin(st)) {
-      // (a human playing the Germans wins only by destroying every American piece, Steve; guns off the table don't count)
+    } else if (failed) {
       st.lost = true;
-      rep.unshift(st.noGoal
-        ? '⌛ Nothing is left that can knock out the last German bunkers or tanks. The attack has failed.'
-        : '⌛ No rifle platoon or captain is left to take the village, and nothing is left that can hurt the German tanks. The attack has failed.');
-    } else if (germansHoldOut(st)) {
-      // The other way round (Steve, 2026-11-15: as the Germans with nothing left to hurt the last American tank, there
-      // was no way to win): nobody left to take the goal, and nothing German can hurt what is left
-      st.lost = true;
-      const us = sideName(st, 'us');
-      rep.unshift(st.noGoal
-        ? `⌛ Nothing the Germans have left can hurt what is left of the ${us}, and the ${us} cannot take the beach from them. The attack has failed.`
-        : `⌛ No rifle platoon or captain of the ${us} is left to take ${st.objective.name}, and nothing the Germans have left can hurt what is left of them. The attack has failed.`);
+      rep.unshift(failed);
     } else if (TURNS && st.turn >= TURNS) {
       st.lost = true;
       rep.unshift(st.noGoal ? `⌛ After ${TURNS} rounds the attack has run out of time.` : `⌛ After ${TURNS} rounds the attack has run out of time short of ${st.objective.name}.`);
@@ -4143,7 +4194,7 @@ const Sim = (() => {
     firesOnTheMove, canAmbush, actAmbush, bestMoveShoot, bomberHeading, bomberAims, bomberLine, bombNeed, bombWhy, bestBomberRun,
     isBunker, isCar, hurtsCars, trainCars, lineSideOf, moveTrains, inFrontOf, bunkerFace, shotOnTheMove, wrecksBeside, isRoad, featuresAt, walkDistance, fireSound, wreckAt, remove, computerSide, isRobot, piecesToAsk, takeCover, enemyOf, gunStats, diceShown, menDiceShown, bomberName, boatKind, armyOf, hedgeWord, inCourtyard, closeRangeOnly, isAtGun, isEmplaced, edgeKey, atCloseRange, closeCells, hailMaryCells,
     newGame, roll, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, chargeSpots, soundOf, facesItsShot, molotovNeed, movesThenAmbushes,
-    rallyTargets, canAct, canReact, firepower, canCallFire, takesGoal, cannotWin, artilleryTarget, mortarTarget, holdsObjective, roundText, roomFor,
+    rallyTargets, canAct, canReact, firepower, canCallFire, takesGoal, cannotWin, attackFailed, artilleryTarget, mortarTarget, holdsObjective, roundText, roomFor,
     goalLines, deArmyOf, hullMgTargets, canHullMg, actHullMg, actHoldMg, hullMgDice,
     computerStep, answer, finishRound, startRound, drawToken, endComputerToken, activationOver, passToken, humanCanMove, endRound, canFire, actSkip, actSkipShot, skipSupport,
     smallTarget, menDice, armourOf, shotNeed, mayFire, shootCells, tokensHome, captainCanRally, fireAt, wholeDice: dice,

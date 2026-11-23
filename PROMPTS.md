@@ -2102,6 +2102,12 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - Steve: bring the turret on the Puma forward like it had in real life. It sat a little behind the middle of the hull; it is now forward of the middle, with the long engine deck behind it. The muzzle stays where it was, a little past the nose as on the real one, so more of the gun is over the hull (`puma` in models.js)
 - Assumptions: how far, from the real one's proportions; still a little behind the Sd.Kfz. 231's, as Steve asked then. Tests: only the script check; no screenshot or browser check (Steve)
 
+## 350. The attackers lose at once when they truly can't win (v236)
+
+- Steve: no anti-tank left plus no goal-capturing pieces (is it only an infantry squad or the captain?); but on Crossroads, as the Americans, the game did not end. Yes, only a rifle platoon or the captain takes the goal. It ended only at a round's end, only with a German tank or armoured car left, and only with every shell gone; so a dead Puma or a spare mortar round kept it going. Asked when to lose, Steve picked: **only if you truly can't win**, at once
+- Now (`beyondHarm`, `canDestroy`, `attackFailed` in sim.js): no one to take the goal (where there is one), no reinforcements or crate to come, and a German piece nothing left could ever destroy. Machine guns hurt an armoured car; the sniper only pins a crewed gun; one mortar round can't kill a tank that isn't shaken, two can; riflemen can storm a bunker. Looked at before every token. The Germans' holding out (v194) is now only for a person playing them: against a robot, an American tank they can't hurt may go on and win
+- Assumptions: each German piece is judged on its own (one artillery round counts as able to destroy any of them, however many are left). As before, it isn't used when a person plays the Germans, two humans included: they must destroy every American. Tests: the new check and those that draw tokens or end rounds; no balance run, screenshot or browser check (Steve)
+
 ## Sessions
 
 | # | Date | Length | What we did |

@@ -1413,18 +1413,18 @@ check('endings: one bomb on the last of both sides is a draw, whoever it hits fi
   }
 });
 
-check('endings: no rifle platoon and nothing to hurt the German tanks loses at the end of the round; otherwise it goes on', () => {
+check('endings: no rifle platoon and nothing to hurt the German tanks loses; otherwise it goes on', () => {
   const noAmmo = st => { st.ammo.us.mortars = 0; st.ammo.us.artillery = 0; st.ammo.us.bomber = 0; };
   // A sniper against a tank, nothing left off the board: lost
   const lost = tableWith({ sn1: [0, 0], dt1: [11, 7] });
   noAmmo(lost);
   Sim.endRound(lost);
   assert(lost.lost && !lost.draw, 'it played on with no way to win');
-  // A round of mortars left, a bazooka, a rifle platoon, or no German tanks: it goes on
+  // Two rounds of mortars left (one only shakes a tank, Steve 2026-11-23), a bazooka, a rifle platoon, or no German tanks: it goes on
   const rounds = tableWith({ sn1: [0, 0], dt1: [11, 7] });
-  noAmmo(rounds); rounds.ammo.us.mortars = 1;
+  noAmmo(rounds); rounds.ammo.us.mortars = 2;
   Sim.endRound(rounds);
-  assert(!rounds.lost, 'lost with a mortar round left');
+  assert(!rounds.lost, 'lost with two mortar rounds left');
   const zook = tableWith({ bz1: [0, 0], dt1: [11, 7] });
   noAmmo(zook);
   Sim.endRound(zook);
@@ -5703,6 +5703,66 @@ check('2026-11-23: the opponent guns can be looked at: their state this round, a
   g.drawn = 'us'; g.human = 'us'; g.activeId = null; g.computer = null;
   g.ammo.us.mortars = 2;
   assert(Sim.skipSupport(g, 'mortars').ok && g.fired.us.mortars === 'held', `skipping left ${g.fired.us.mortars}`);
+  Sim.newGame(1);
+});
+
+check('2026-11-23: the attackers lose at once when they truly cannot win, and only then', () => {
+  // Crossroads town with only these pieces left; the crate long gone
+  const table = (keep, ammo = {}, map = 'town') => {
+    const st = Sim.newGame(3, 'us', map);
+    Sim.startRound(st);
+    if (st.airdrop) st.airdrop.done = true;
+    for (const u of st.units) if (!keep.includes(u.kind)) u.x = u.y = null;
+    st.ammo.us = Object.assign({ mortars: 0, artillery: 0, bomber: 0 }, ammo);
+    return st;
+  };
+  // (only the Americans' own pieces of a kind both sides have)
+  const noUs = (st, kinds) => { for (const u of st.units) if (u.side === 'us' && kinds.includes(u.kind)) u.x = u.y = null; return st; };
+  // Machine guns hurt men and the Puma, and kill a PaK once it is shaken: it goes on
+  const mg = noUs(table(['mg', 'mg42', 'pak', 'puma']), []);
+  assert(!Sim.cannotWin(mg), 'a machine gun could still destroy them all');
+  // The sniper hurts men, but only pins a PaK, and nothing on a Puma
+  assert(!Sim.cannotWin(table(['sniper', 'mg42'])), 'the sniper could still kill the MG teams');
+  assert(Sim.cannotWin(table(['sniper', 'mg42', 'pak'])), 'the sniper can never destroy a PaK');
+  assert(Sim.cannotWin(table(['sniper', 'puma'])), 'the sniper can never destroy a Puma');
+  // Shells: artillery destroys anything; one mortar round only shakes a tank, two can kill it, one if it is shaken
+  assert(!Sim.cannotWin(table(['sniper', 'puma'], { artillery: 1 })), 'an artillery round could destroy the Puma');
+  assert(Sim.cannotWin(table(['sniper', 'puma'], { mortars: 1 })), 'one mortar round cannot destroy a Puma');
+  assert(!Sim.cannotWin(table(['sniper', 'puma'], { mortars: 2 })), 'two mortar rounds could destroy the Puma');
+  const shaken = table(['sniper', 'puma'], { mortars: 1 });
+  shaken.units.find(u => u.kind === 'puma').shocked = true;
+  assert(!Sim.cannotWin(shaken), 'one mortar round could destroy a shaken Puma');
+  // Someone to take the goal, an anti-tank weapon, or a crate to fetch: it goes on
+  const withCaptain = table(['sniper', 'puma']);
+  withCaptain.units.find(u => u.side === 'us' && u.kind === 'captain').x = 1;
+  assert(!Sim.cannotWin(withCaptain), 'the captain could still take the goal');
+  assert(!Sim.cannotWin(table(['bazooka', 'puma'])), 'the bazooka could still destroy the Puma');
+  const crate = table(['sniper', 'puma']);
+  crate.crate = { x: 5, y: 4, taken: null };
+  assert(!Sim.cannotWin(crate), 'the crate could still give an artillery round');
+  crate.crate.taken = 'de';
+  assert(Sim.cannotWin(crate), 'a crate the Germans took kept it going');
+  // At once, before the next token, not at the end of the round
+  const st = table(['sniper', 'puma']);
+  assert(Sim.drawToken(st) === null && st.lost && !st.won && /Puma/.test(st.report[0]), `it played on: ${st.report[0]}`);
+  // A Sherman the Germans have nothing to hurt with can still win it
+  const sherman = table(['sherman', 'mg42']);
+  sherman.ammo.de = { mortars: 0, artillery: 0, bomber: 0 };
+  assert(!Sim.attackFailed(sherman), 'lost though the Sherman could still destroy every German');
+  // Playing the Germans: they must still destroy every American
+  const german = Sim.newGame(3, 'de', 'town');
+  Sim.startRound(german);
+  for (const u of german.units) if (!['sniper', 'puma'].includes(u.kind)) u.x = u.y = null;
+  german.ammo.us = { mortars: 0, artillery: 0, bomber: 0 };
+  assert(!Sim.attackFailed(german), 'a German player won without destroying the last American');
+  // The beach: riflemen can storm a bunker, a machine gun cannot
+  const beach = kind => {
+    const b = table(['bunker_mg'], {}, 'beach');
+    b.units.find(u => u.side === 'us' && u.kind === kind).x = 1;
+    return b;
+  };
+  assert(!Sim.cannotWin(beach('company')), 'riflemen could still storm the bunkers');
+  assert(Sim.cannotWin(beach('mg')), 'a machine gun cannot destroy a bunker');
   Sim.newGame(1);
 });
 
