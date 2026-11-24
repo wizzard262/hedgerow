@@ -2108,6 +2108,13 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - Now (`beyondHarm`, `canDestroy`, `attackFailed` in sim.js): no one to take the goal (where there is one), no reinforcements or crate to come, and a German piece nothing left could ever destroy. Machine guns hurt an armoured car; the sniper only pins a crewed gun; one mortar round can't kill a tank that isn't shaken, two can; riflemen can storm a bunker. Looked at before every token. The Germans' holding out (v194) is now only for a person playing them: against a robot, an American tank they can't hurt may go on and win
 - Assumptions: each German piece is judged on its own (one artillery round counts as able to destroy any of them, however many are left). As before, it isn't used when a person plays the Germans, two humans included: they must destroy every American. Tests: the new check and those that draw tokens or end rounds; no balance run, screenshot or browser check (Steve)
 
+## 351. Take cover on its own token; the machine gun's dice checked (v237)
+
+- Steve: take cover is always an option (holding the goal, say). Any piece that could take cover under fire can now do it as its move, without being fired on: ☂️ Take cover in its pop-up menu, between Ambush and Skip turn. It uses the token; +2 to hit it until the round ends; the captain can get it up, as ever. Not tanks, bunkers or men aboard, nor a piece that has moved (`canTakeCover`, `actTakeCover` in sim.js)
+- The computer too, both sides: a platoon or the captain holding the goal, with no shot and nothing better to do, takes cover if an enemy could fire on it, rather than a Hail Mary or an ambush (`computerCoversGoal`)
+- Steve: I think the German MG shot 6 dice. Checked: every German MG (MG 42, MG 34, the MG bunker) rolls 5. A Hail Mary (7 or more needed) that throws a 6 throws that die again, so 6 dice can lie on the table; nothing to fix. The MP 40 section rolls 6 (two bases of three), as set
+- Assumptions: "always" means on its own token; under fire, a piece that has already moved still can't. The captain taking cover gives up his rallies. Tests: only the new checks, `node tools/test.js "2026-11-24"` (3 pass); no full run, balance run, screenshot or browser check (Steve)
+
 ## Sessions
 
 | # | Date | Length | What we did |

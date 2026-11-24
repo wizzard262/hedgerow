@@ -381,7 +381,7 @@ const UI = (() => {
       menu.append(el('div', 'mhead', `<b>${u.name}${u.quality === 'elite' ? ' ★' : ''}</b><span>${state}</span>`));
       // Moving and shooting are done by clicking the lit areas and red targets, so the menu only ever has Skip and Rally
       // (Steve: never Move & shoot, not even its shot after the move)
-      const acts = actionButtons(u).filter(a => ['ambush', 'skip', 'skipShot', 'rally', 'selfRally', 'hullMg', 'holdMg'].includes(a.mode));
+      const acts = actionButtons(u).filter(a => ['ambush', 'cover', 'skip', 'skipShot', 'rally', 'selfRally', 'hullMg', 'holdMg'].includes(a.mode));
       for (const a of acts) {
         const b = el('button', '', a.label);
         b.disabled = !a.ok; b.title = a.title || '';
@@ -540,6 +540,9 @@ const UI = (() => {
     const canSkip = Sim.canAct(st, u) || (u.kind === 'captain' && Sim.canRally(st, u));
     // Any piece can lie in ambush instead (Steve): it gives up its move and waits, until it fires or the round ends
     b.push({ mode: 'ambush', label: '🪤 Ambush', ok: Sim.canAmbush(st, u), title: 'Give up its move and wait: it fires as soon as an enemy moves or shoots in its sight, if it can hit on 6 or less. Ends with the round', run: () => Sim.actAmbush(st, u) });
+    // Anyone who could take cover under fire can do it on its own token too (Steve, 2026-11-24: holding the goal, say)
+    const ducks = !Sim.isTank(u) && !PIECES[u.kind].fixed;
+    if (ducks) b.push({ mode: 'cover', label: '☂️ Take cover', ok: Sim.canTakeCover(st, u), title: 'Give up its move: its men get down, and every shot or shell at it needs two more for the rest of the round', run: () => Sim.actTakeCover(st, u) });
     // (the PaK just moved within its field has used its move: it has No ambush instead, below)
     if (!u.mayAmbush) b.push({ mode: 'skip', label: '⏭️ Skip turn', ok: canSkip, title: 'Give up its move this round (the token is used)', run: () => Sim.actSkip(st, u) });
     // The PaK has just moved within its field and needn't lie in ambush: the token is done
@@ -712,8 +715,8 @@ const UI = (() => {
     // The enemy's piece: just what it is (Steve), no actions
     if (u.side !== st.human || st.mode === 'none' || own) return;
     const acts = el('div'); acts.id = 'actions'; acts.style.marginTop = '6px';
-    // (Ambush is in the piece's pop-up menu only, Steve: the panel has no room for a fifth button)
-    for (const a of actionButtons(u).filter(o => o.mode !== 'ambush')) {
+    // (Ambush and Take cover are in the piece's pop-up menu only, Steve: the panel has no room for more buttons)
+    for (const a of actionButtons(u).filter(o => !['ambush', 'cover'].includes(o.mode))) {
       const btn = el('button', view.mode === a.mode ? 'on' : '', a.label);
       btn.disabled = !a.ok; btn.title = a.title;
       btn.onclick = () => { if (a.run) { a.run(); view.mode = null; } else view.mode = view.mode === a.mode ? null : a.mode; refresh(); };

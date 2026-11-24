@@ -603,7 +603,8 @@ const TURNS = 0;                 // rounds allowed (0: no limit for now, Steve)
 const START_DATE = 'Tue 11 July 1944';
 
 // Reacting (Steve): a piece fired on can take cover. Its men get down where they are: every shot or shell at it needs
-// two more for the rest of the round, but it misses its move unless the captain gets it up
+// two more for the rest of the round, but it misses its move unless the captain gets it up. It can also take cover as its
+// move, on its own token, without being fired on (Steve, 2026-11-24)
 const TAKE_COVER = 2;
 // Molotov cocktails (Steve, 2026-11-16: the Winter War): Finnish infantry charging a tank need this many more on the dice
 // in hand to hand (5+), as they have to get right up to it

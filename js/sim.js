@@ -1951,6 +1951,34 @@ const Sim = (() => {
     return u.x !== null && !isTank(u) && !PIECES[u.kind].fixed && !u.spentNext && !u.down && !u.acted;
   }
 
+  // Can this piece take cover on its own token, without being fired on (Steve, 2026-11-24: holding the goal, say): whoever
+  // could take cover under fire, with its move still to make
+  function canTakeCover(st, u) {
+    return canAct(st, u) && canReact(st, u);
+  }
+
+  // Take cover as its move: it uses the token, and its men stay down for the rest of the round
+  function actTakeCover(st, u) {
+    if (!canTakeCover(st, u)) return { ok: false };
+    // Its move and its token are used
+    spend(st, u);
+    // Its men get down
+    u.down = true;
+    // The captain gives up any rallies he has left too, as when he skips
+    if (u.kind === 'captain') u.skipped = true;
+    return { ok: true, lines: [`☂️ ${u.name} takes cover.`] };
+  }
+
+  // Should the computer's piece take cover on its own token: it is holding the goal, and an enemy could fire on it now
+  function computerCoversGoal(st, u) {
+    // Whoever can't take cover under fire can't here either (its own token has already counted as its move)
+    const ableToDuck = !isTank(u) && !PIECES[u.kind].fixed && !u.down && !u.auto && !isAboard(st, u);
+    const inGoal = u.x === st.objective.x && u.y === st.objective.y;
+    if (!ableToDuck || !inGoal || !takesGoal(u)) return false;
+    // Somebody with a shot at it from where they stand
+    return st.units.some(e => e.side !== u.side && e.x !== null && targets(st, e).includes(u));
+  }
+
   // The score a shot needs, the Panther's armour included
   function shotNeed(st, shooter, target, moving = false) {
     return needFor(st, shooter, target, moving) + armourOf(target);
@@ -3462,6 +3490,13 @@ const Sim = (() => {
   // Nothing better to do: a Hail Mary, if it has anyone in reach. No one in reach and nowhere to go: it lies in wait.
   // Returns any shot it plans
   function computerLastResort(st, u) {
+    // Holding the goal under an enemy's guns: its men get down (Steve, 2026-11-24)
+    if (computerCoversGoal(st, u)) {
+      u.down = true;
+      computerSays(st, 'Takes cover');
+      st.computer.rep.push(`☂️ ${u.name} takes cover.`);
+      return null;
+    }
     const longShot = targets(st, u)[0];
     if (longShot) { computerSays(st, `Hail Mary at ${longShot.name}`); return { shooter: u.id, target: longShot.id }; }
     if (mayFire(u)) {
@@ -4191,7 +4226,7 @@ const Sim = (() => {
   }
 
   return {
-    firesOnTheMove, canAmbush, actAmbush, bestMoveShoot, bomberHeading, bomberAims, bomberLine, bombNeed, bombWhy, bestBomberRun,
+    firesOnTheMove, canAmbush, actAmbush, canTakeCover, actTakeCover, bestMoveShoot, bomberHeading, bomberAims, bomberLine, bombNeed, bombWhy, bestBomberRun,
     isBunker, isCar, hurtsCars, trainCars, lineSideOf, moveTrains, inFrontOf, bunkerFace, shotOnTheMove, wrecksBeside, isRoad, featuresAt, walkDistance, fireSound, wreckAt, remove, computerSide, isRobot, piecesToAsk, takeCover, enemyOf, gunStats, diceShown, menDiceShown, bomberName, boatKind, armyOf, hedgeWord, inCourtyard, closeRangeOnly, isAtGun, isEmplaced, edgeKey, atCloseRange, closeCells, hailMaryCells,
     newGame, roll, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, chargeSpots, soundOf, facesItsShot, molotovNeed, movesThenAmbushes,
     rallyTargets, canAct, canReact, firepower, canCallFire, takesGoal, cannotWin, attackFailed, artilleryTarget, mortarTarget, holdsObjective, roundText, roomFor,

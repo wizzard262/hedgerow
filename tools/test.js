@@ -5766,5 +5766,73 @@ check('2026-11-23: the attackers lose at once when they truly cannot win, and on
   Sim.newGame(1);
 });
 
+check('2026-11-24 fix: any piece can take cover on its own token, not tanks, not after moving; +2', () => {
+  // A platoon and an MG team on the table, no bag
+  const st = tableWith({ A: [0, 5], mg1: [2, 5], d1: [8, 5] });
+  const A = Sim.unitById(st, 'A');
+  assert(Sim.canTakeCover(st, A), 'a platoon not fired on could not take cover');
+  assert(Sim.actTakeCover(st, A).ok && A.down && A.acted, 'it did not get down, or kept its move');
+  assert(!Sim.actTakeCover(st, A).ok, 'it took cover twice');
+  // One that has moved can't
+  const mg = Sim.unitById(st, 'mg1');
+  mg.acted = true;
+  assert(!Sim.canTakeCover(st, mg), 'a piece that had moved could take cover');
+  // The shot at it needs two more
+  const d1 = Sim.unitById(st, 'd1');
+  const down = Sim.shotNeed(st, d1, A);
+  A.down = false;
+  assert(down - Sim.shotNeed(st, d1, A) === 2, 'taking cover was not +2');
+  // A tank can't
+  const tanks = tableWith({ T1: [0, 5], d1: [8, 5] });
+  assert(!Sim.canTakeCover(tanks, Sim.unitById(tanks, 'T1')), 'a tank could take cover');
+  // With the bag: only on your own token, and it uses it
+  const bag = tableWith({ A: [0, 5], d1: [9, 1] });
+  Sim.startRound(bag);
+  const bagA = Sim.unitById(bag, 'A');
+  bag.drawn = 'de';
+  assert(!Sim.canTakeCover(bag, bagA), 'it took cover on a German token');
+  bag.drawn = 'us';
+  assert(Sim.actTakeCover(bag, bagA).ok && Sim.activationOver(bag), 'the token was not used');
+  // In its pop-up menu
+  assert(pageCode('ui.js', 'function openMenu(', 'menu.append(b)').includes("'cover'"), 'not in the pop-up menu');
+});
+
+check('2026-11-24 fix: the computer holding the goal takes cover when an enemy could fire on it and it has no shot', () => {
+  // A Sherman beside a German platoon in the goal, which can't hurt it
+  const st = Sim.newGame(1);
+  st.hedges = {}; st.wire = {};
+  const tank = st.units.find(u => u.side === 'us' && Sim.isTank(u) && u.x !== null);
+  const men = st.units.find(u => u.side === 'de' && u.kind === 'company');
+  for (const u of st.units) if (u !== tank && u !== men) u.x = u.y = null;
+  men.x = st.objective.x; men.y = st.objective.y; men.reserve = true; men.shocked = false;
+  tank.x = men.x - 1; tank.y = men.y;
+  assert(Sim.targets(st, tank).includes(men), 'the tank has no shot at them: the check is set up wrong');
+  st.ammo.de = { mortars: 0, artillery: 0, bomber: 0 };
+  startGermanRound(st);
+  Sim.computerStep(st);
+  assert(men.down, 'they did not take cover');
+  Sim.newGame(1);
+});
+
+check('2026-11-24 fix: a machine gun rolls five dice; only a 6 in a Hail Mary adds a die', () => {
+  const st = tableWith({ A: [2, 5], dmg1: [8, 5] });
+  const A = Sim.unitById(st, 'A'), mg = Sim.unitById(st, 'dmg1');
+  let rerolls = 0;
+  for (let i = 0; i < 400; i++) {
+    // Next to each other, then across the table (and in cover, for the Hail Marys)
+    A.x = 2; A.y = 5; A.platoons = 3; A.shocked = false; A.down = i % 2 === 1;
+    mg.x = i % 3 === 0 ? 3 : 9; mg.y = 5; mg.shocked = i % 4 === 1;
+    st.fx = [];
+    // (on the move every other time: one more needed, so Hail Marys come up)
+    Sim.fireAt(st, mg, A, false, i % 2 === 1);
+    const shot = st.fx.find(f => f.faces && f.from && f.from.id === mg.id);
+    const again = shot.faces.filter(f => f.lead).length;
+    rerolls += again;
+    assert(shot.faces.length - again === 5, `it rolled ${shot.faces.length - again} dice`);
+    assert(!again || shot.need > 6, 'a die was rolled again without a Hail Mary');
+  }
+  assert(rerolls, 'no Hail Marys came up: the check is set up wrong');
+});
+
 console.log(failed ? `\n${failed} failed` : '\nall passed');
 process.exit(failed ? 1 : 0);
