@@ -2128,6 +2128,11 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - Steve: a piece subject to ambush should continue its move or shoot if it survives. Until now a piece shaken or losing a section stopped in the field where it was seen. Now only being wiped out stops it: it carries on with its move, its charge (into hand to hand too) or its shot, both sides (`springAmbushes`, `followRoute` in sim.js). Being shaken still counts as ever: one more needed for the shot after the move, and in hand to hand
 - Assumptions: shaken on the way, it goes as far as it set out to, not half as far; a charge into the enemy still goes in to fight. Tests: the ambush and wire checks only, three changed and one new; no full run, balance run, screenshot or browser check (Steve)
 
+## 354. Men face only enemies they can shoot at (v240)
+
+- Steve: when turning to face the closest target, men do not face a tank (unless they are an anti-tank gun, Molotovs, a bazooka and so on); they only face enemies they can shoot at. Men turning after a move, or into ambush, now look only at enemies their weapons can hurt, or a tank if they carry Molotovs (`worthFacing`, `weaponsHurt` in sim.js, the second shared with `targets`). A machine gun faces an armoured car, as it can hurt one; riflemen don't
+- Assumptions: the nearest such enemy in sight, or with none in sight the nearest on the table, as before; with none at all, they face the enemy's side after a move. Tanks are unchanged: they still face the nearest enemy of any kind. Tests: the new check and those on facing and targets; no full run, screenshot or browser check (Steve)
+
 ## Sessions
 
 | # | Date | Length | What we did |

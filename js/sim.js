@@ -1997,8 +1997,16 @@ const Sim = (() => {
     // A bunker only fires out of its front (Steve)
     const frontOnly = isBunker(shooter);
     // (a machine gun can fire on an armoured car, Steve: its armour is thin)
-    return st.units.filter(t => t.side !== shooter.side && t.x !== null && !t.aboard && (!isTank(t) || f.hard > 0 || (isCar(t) && hurtsCars(shooter)))
+    return st.units.filter(t => t.side !== shooter.side && t.x !== null && !t.aboard && weaponsHurt(shooter, t, f)
       && (!closeOnly || atCloseRange(shooter, t)) && (!frontOnly || inFrontOf(shooter, t)) && !!sight(st, shooter, t));
+  }
+
+  // Can a piece's weapons hurt this enemy at all, wherever it is? Men: anyone's. A tank: anti-tank weapons only, and an
+  // armoured car a machine gun too. f: the shooter's firepower
+  function weaponsHurt(shooter, t, f) {
+    if (!isTank(t)) return true;
+    if (f.hard > 0) return true;
+    return isCar(t) && hurtsCars(shooter);
   }
 
   // Can only shoot at close range: the captain, and a section of submachine gunners (Steve)
@@ -2129,10 +2137,12 @@ const Sim = (() => {
 
   // The enemy a piece faces after a move (Steve, 2026-11-22: every piece faces its nearest enemy): the nearest it can
   // see, or with nobody in sight the nearest on the table. null with no enemy on the table. Ties: broken at random for
-  // a tank (as it always was), the first for men (so turning to face uses none of the game's dice)
+  // a tank (as it always was), the first for men (so turning to face uses none of the game's dice). Men only face enemies
+  // they can hurt (Steve, 2026-11-24): not a tank, unless they have an anti-tank weapon or Molotovs
   function nearestEnemy(st, u, atRandom = isTank(u)) {
     // Every enemy on the table, and those of them it can see
-    const onTable = st.units.filter(e => e.side !== u.side && e.x !== null && !(e.x === u.x && e.y === u.y));
+    const others = st.units.filter(e => e.side !== u.side && e.x !== null && !(e.x === u.x && e.y === u.y));
+    const onTable = isTank(u) ? others : others.filter(e => worthFacing(st, u, e));
     const seen = onTable.filter(e => sight(st, u, e));
     const pool = seen.length ? seen : onTable;
     if (!pool.length) return null;
@@ -2142,6 +2152,15 @@ const Sim = (() => {
     const closest = pool.filter(e => Math.abs(far(e) - nearest) < 0.01);
     if (!atRandom) return closest[0];
     return closest[Math.floor(st.rand() * closest.length)];
+  }
+
+  // Would men turn to face this enemy: one their weapons can hurt, or a tank they have Molotovs for
+  function worthFacing(st, u, e) {
+    const f = firepower(st, u);
+    // Anyone with no weapons of their own faces nobody
+    const armed = f.soft + f.hard > 0;
+    if (armed && weaponsHurt(u, e, f)) return true;
+    return isTank(e) && !!molotovNeed(u);
   }
 
   // A long tank (3 by 2 areas) lies along one half of its field: n or s point it east or west, e or w north or south.

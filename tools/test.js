@@ -5874,5 +5874,34 @@ check('2026-11-24 bubbles: the red bubbles keep clear of the grey word bubble an
   assert(pageCode('main.js', 'const more = Board.render', 'requestAnimationFrame(frame)').includes('clearRedBubbles()'), 'the page never looks again');
 });
 
+check('2026-11-24 facing: men turn to the nearest enemy they can hurt, not a tank unless they have anti-tank weapons or Molotovs', () => {
+  // A German tank just to the east, German men further off to the south
+  const facing = (id, tankKind, molotov) => {
+    const g = Sim.newGame(1);
+    g.hedges = {}; g.wire = {};
+    const u = Sim.unitById(g, id);
+    const tank = g.units.find(o => o.side === 'de' && Sim.isTank(o));
+    const men = g.units.find(o => o.side === 'de' && o.kind === 'company');
+    for (const o of g.units) if (![u, tank, men].includes(o)) o.x = o.y = null;
+    if (tankKind) tank.kind = tankKind;
+    u.molotov = molotov;
+    u.x = 4; u.y = 4; u.acted = false; u.faceTo = null;
+    tank.x = 5; tank.y = 4; men.x = 4; men.y = 7;
+    g.human = 'us'; g.computer = null; g.drawn = 'us';
+    assert(Sim.actAmbush(g, u).ok, `${id} could not lie in ambush`);
+    return u.faceTo;
+  };
+  const east = 0, south = -Math.PI / 2;
+  const faces = (got, want) => Math.abs(got - want) < 1e-9;
+  assert(faces(facing('A'), south), 'riflemen faced a tank');
+  assert(faces(facing('mg1'), south), 'a machine gun faced a tank');
+  assert(faces(facing('bz1'), east), 'a bazooka did not face the tank');
+  assert(faces(facing('A', null, true), east), 'men with Molotovs did not face the tank');
+  // An armoured car: a machine gun hurts it, rifles don't
+  assert(faces(facing('mg1', 'puma'), east), 'a machine gun did not face an armoured car');
+  assert(faces(facing('A', 'puma'), south), 'riflemen faced an armoured car');
+  Sim.newGame(1);
+});
+
 console.log(failed ? `\n${failed} failed` : '\nall passed');
 process.exit(failed ? 1 : 0);
