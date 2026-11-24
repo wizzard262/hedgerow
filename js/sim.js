@@ -2472,7 +2472,7 @@ const Sim = (() => {
     u.fired = true;
     const goal = route[route.length - 1];
     const lines = followRoute(st, u, route);
-    // Snagged on wire on the way, or stopped by an ambush: it stays there, and fires from there if it can (Steve)
+    // Snagged on wire on the way (it stays there, and fires from there if it can, Steve), or killed by an ambush
     if (u.snagged) return lines;
     const how = step(st, u, goal.x, goal.y);
     lines.push(...takeMineLines(st));
@@ -2692,10 +2692,10 @@ const Sim = (() => {
   }
 
   // A piece has just moved or shot in the open: every enemy lying in ambush that can see it and hit it on 6 or less fires
-  // now, once. Returns true if that stops it moving: wiped out, shaken, or losing men. passing: it is on its way through
+  // now, once. Returns true if that stops it: wiped out. Shaken or losing men, it carries on with its move, its charge or
+  // its shot (Steve, 2026-11-24: it used to stop there). passing: it is on its way through
   // this field, not lining any hedge in it
   function springAmbushes(st, mover, lines, passing = false) {
-    let stopped = false;
     // (the computer's moves are reported on its list)
     const report = isRobot(st, mover.side) && st.computer ? st.computer.rep : lines;
     const place = mover.at;
@@ -2709,29 +2709,29 @@ const Sim = (() => {
       // Only what it can see, and hurt, and hit on 6 or less: otherwise it keeps waiting
       if (!targets(st, a).includes(mover) || shotNeed(st, a, mover) > MAX_NEED) continue;
       a.ambush = false;
-      const wasShaken = mover.shocked, strength = mover.platoons, shotsBefore = st.fx.length;
+      const shotsBefore = st.fx.length;
       report.push(`🪤 ${a.name} springs its ambush on ${mover.name}: ${fireAt(st, a, mover).join(', ')}`);
       // These shots land where it is now, not where it is going (the table)
       for (let k = shotsBefore; k < st.fx.length; k++) st.fx[k].midMove = true;
-      if (mover.x === null || mover.platoons < strength || (mover.shocked && !wasShaken)) stopped = true;
       // Firing gives it away in turn, to any ambush of the other side that can see it (Steve: shooting sets one off).
       // Each fires once, so the chain ends
       if (a.x !== null) springAmbushes(st, a, report);
     }
     if (passing && mover.x !== null) mover.at = place;
-    return stopped;
+    // Only wiped out is it stopped
+    return mover.x === null;
   }
 
   // Go along a route's fields up to (not into) its goal, cutting, flattening or climbing on the way. Returns the lines to report
   // A tank that flattens barbed wire on the way can get snagged (Steve: WIRE_SNAG): it stops in that field (unless it
-  // is a field of friends it can only pass through), u.snagged says so, and its move goes no further. An ambush that
-  // shakes it stops it the same way (Steve), or kills it
+  // is a field of friends it can only pass through), u.snagged says so, and its move goes no further. An ambush on
+  // the way stops it only by wiping it out (Steve, 2026-11-24)
   function followRoute(st, u, route) {
     const lines = [];
     u.snagged = false;
     // Setting off in sight of an ambush: it fires straight away (Steve: as soon as it can)
-    let halted = springAmbushes(st, u, lines);
-    if (halted) {
+    const killed = springAmbushes(st, u, lines);
+    if (killed) {
       u.snagged = true;
       setTrail(st, u, []);
       return lines;
@@ -2754,11 +2754,9 @@ const Sim = (() => {
       // Blown up by a mine on the way: nothing more
       if (u.x === null) { u.snagged = true; break; }
       // Seen from here: any ambush fires
-      if (springAmbushes(st, u, lines, true)) halted = true;
+      springAmbushes(st, u, lines, true);
       // Dead: nothing more
       if (u.x === null) { u.snagged = true; break; }
-      // Shaken in a field of friends it can only pass through: it stops at the first one it can
-      if (halted && !p.pass) u.snagged = true;
       // A mine went off under it (Steve): it stops in the minefield, the one it was leaving or the one it went into
       if (u.mineStop) u.snagged = true;
       // How far it got: into this field, or (a mine on its way out) still in the one before
@@ -2814,7 +2812,7 @@ const Sim = (() => {
     // The fields before the goal are crossed on the way
     const home = { x: u.x, y: u.y, at: u.at };
     lines.push(...followRoute(st, u, route));
-    // Snagged on wire on the way, or stopped by an ambush: it gets no further
+    // Snagged on wire on the way, or killed by an ambush: it gets no further
     if (u.snagged) return lines;
     const empty = !at(st, x, y, enemyOf(u.side)).length;
     lines.push(...charge(st, u, x, y));
@@ -3397,7 +3395,7 @@ const Sim = (() => {
     const noWire = o => !wire(st, u.x, u.y, o.x, o.y);
     if (inHamlet && !u.shocked && fightsHandToHand(u) && adjacent(u, st.objective) && noWire(st.objective)) {
       computerSays(st, `Charges into ${st.objective.name}`);
-      // Setting off in sight of an ambush: stopped, it gets no further
+      // Setting off in sight of an ambush: killed, it gets no further
       if (springAmbushes(st, u, [])) return null;
       rep.push('🔺 ' + charge(st, u, st.objective.x, st.objective.y).join(', ') + '.');
       return null;

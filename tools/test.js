@@ -1225,14 +1225,14 @@ check('ambush: any piece can go into it, not after moving; it uses the token; a 
   assert(!Sim.canAmbush(bag, Sim.unitById(bag, 'A')), 'it went into ambush on a German token');
 });
 
-check('ambush: fires as soon as an enemy comes into sight along its move; a shaken piece stops there and can still shoot', () => {
+check('ambush: fires as soon as an enemy comes into sight along its move; a shaken piece carries on and can still shoot (Steve, 2026-11-24)', () => {
   const { st, d1 } = ambushOnLane({ A: [2, 5] }, 7);
   const A = Sim.unitById(st, 'A');
   st.rand = HIGH;
-  // Two fields along the lane: seen from the first (four fields from the ambush), shaken, and stops
+  // Two fields along the lane: seen from the first (four fields from the ambush), shaken, and goes on
   const r = Sim.actMoveShoot(st, A, 4, 5);
   assert(r.ok, 'the move was refused');
-  assert(A.x === 3 && A.shocked, `it ended at ${A.x} (shaken: ${A.shocked})`);
+  assert(A.x === 4 && A.shocked, `it ended at ${A.x} (shaken: ${A.shocked})`);
   assert(!d1.ambush && d1.acted, 'the ambush did not end, or the piece could act again');
   const shot = st.fx.find(f => f.from && f.from.id === 'd1');
   assert(shot && shot.midMove && shot.x === 3, 'the shot was not at the field it was seen in');
@@ -1250,13 +1250,13 @@ check('ambush: a miss and it carries on; it fires only once', () => {
   assert(!d1.ambush, 'the ambush went on');
 });
 
-check('ambush: a charge stopped short gets no fight; a piece killed on the way stays dead', () => {
+check('ambush: a charge shot at still goes in to fight; a piece killed on the way stays dead (Steve, 2026-11-24)', () => {
   const { st } = ambushOnLane({ A: [4, 5] }, 7);
   const A = Sim.unitById(st, 'A');
   st.rand = HIGH;
   // Charging the ambusher itself: shaken as it sets off, already in sight
   assert(Sim.actCharge(st, A, 7, 5).ok, 'the charge was refused');
-  assert(A.x === 4 && A.shocked && !st.fx.some(f => f.kind === 'melee'), `it reached ${A.x}`);
+  assert(st.fx.some(f => f.from && f.from.id === 'd1') && st.fx.some(f => f.kind === 'melee'), `it got no fight, at ${A.x}`);
   assert(!A.halfShot, 'a charge got a shot');
   // A team already shaken: this hit kills it, and it doesn't come back at the goal
   const two = ambushOnLane({ bz1: [3, 5] }, 7);
@@ -1267,7 +1267,7 @@ check('ambush: a charge stopped short gets no fight; a piece killed on the way s
   assert(bz.x === null, `the team is at ${bz.x}`);
 });
 
-check('ambush: shaken in a field of friends it can only pass through, it stops at the next field it can', () => {
+check('ambush: shaken in a field of friends it can only pass through, it goes on to where it was sent', () => {
   // A tank fills the field, so the platoon can only pass through
   const { st } = ambushOnLane({ A: [2, 5], T1: [3, 4] }, 7);
   const A = Sim.unitById(st, 'A'), T1 = Sim.unitById(st, 'T1');
@@ -1275,7 +1275,20 @@ check('ambush: shaken in a field of friends it can only pass through, it stops a
   st.rand = HIGH;
   assert(!Sim.roomFor(st, A, 3, 5), 'there is room beside the tank');
   assert(Sim.actMoveShoot(st, A, 4, 5).ok, 'the move was refused');
-  assert(A.x === 4, `it ended at ${A.x}`);
+  assert(A.x === 4 && A.shocked, `it ended at ${A.x} (shaken: ${A.shocked})`);
+});
+
+check('ambush: losing a section on the way, it still gets where it was sent (Steve, 2026-11-24)', () => {
+  const { st } = ambushOnLane({ A: [2, 5] }, 7);
+  const A = Sim.unitById(st, 'A');
+  // Already shaken, so the hit costs a section (and it goes only one field)
+  A.shocked = true;
+  st.rand = HIGH;
+  const before = A.platoons;
+  const spot = A.x + 1;
+  assert(Sim.actCharge(st, A, spot, 5).ok, 'the charge was refused');
+  assert(A.x === spot, `it ended at ${A.x}`);
+  assert(A.platoons < before, 'it lost nobody: the check is set up wrong');
 });
 
 check('ambush: it waits rather than fire at 7 or more, or at what it cannot hurt', () => {
@@ -2419,7 +2432,7 @@ check('a German piece with a shot from where it stands takes that, without movin
   assert(shot && shot.need === Sim.needFor(st, u, A), 'it paid for moving');
 });
 
-check('an ambush can stop a German Move & shoot, and it goes no further', () => {
+check('an ambush on a German Move & shoot: it goes no further than it could', () => {
   let touched = 0;
   for (let seed = 1; seed <= 40; seed++) {
     const { st, u } = moveShootBoard(seed, 'company');
