@@ -3,7 +3,7 @@
 // go; the choice with the least in the way wins, nearest its own target when all else is equal
 const Labels = (() => {
   // What each thing in the way costs: the first two are what Steve asked for, so they outweigh everything but the screen
-  const COST = { offScreen: 100000, boxOnTarget: 10000, arrowOnTarget: 10000, boxOnOwn: 3000, boxOnBox: 2000, arrowOnBox: 1000, arrowCross: 800, far: 0.1 };
+  const COST = { offScreen: 100000, boxOnTarget: 10000, arrowOnTarget: 10000, boxOnOther: 10000, boxOnOwn: 3000, boxOnBox: 2000, arrowOnBox: 1000, arrowCross: 800, far: 0.1 };
   // Bubbles keep this many pixels clear of each other and of the targets
   const CLEAR = 6;
 
@@ -40,12 +40,14 @@ const Labels = (() => {
     return pointToSegment(circle, start, end) < circle.r;
   }
 
-  // What one spot costs its target, given where the others' bubbles are now
-  function costOf(items, chosen, i, option, bounds) {
+  // What one spot costs its target, given where the others' bubbles are now. others: boxes of something else already on
+  // the page (the grey word bubble, the dice's tags: Steve, 2026-11-24, they covered the red bubbles)
+  function costOf(items, chosen, i, option, bounds, others) {
     const item = items[i], box = option.box, start = option.mid;
     let cost = COST.far * Math.hypot(item.aim.x - start.x, item.aim.y - start.y);
     if (box.x < bounds.x || box.y < bounds.y || box.x + box.w > bounds.x + bounds.w || box.y + box.h > bounds.y + bounds.h) cost += COST.offScreen;
     for (const c of item.circles) if (boxOnCircle(box, c, CLEAR)) cost += COST.boxOnOwn;
+    for (const o of others) if (boxOnBox(box, o, CLEAR)) cost += COST.boxOnOther;
     items.forEach((other, j) => {
       if (j === i) return;
       for (const c of other.circles) {
@@ -66,14 +68,14 @@ const Labels = (() => {
 
   // The spot chosen for each item: one at a time, left to right, then each looks again now the others are placed,
   // until nobody wants to move (a few goes at most)
-  function placeInOrder(items, bounds, order) {
+  function placeInOrder(items, bounds, order, others) {
     const chosen = items.map(() => null);
     for (let go = 0; go < 8; go++) {
       let moved = false;
       for (const i of order) {
-        let best = chosen[i], bestCost = best === null ? Infinity : costOf(items, chosen, i, items[i].options[best], bounds);
+        let best = chosen[i], bestCost = best === null ? Infinity : costOf(items, chosen, i, items[i].options[best], bounds, others);
         items[i].options.forEach((option, n) => {
-          const cost = costOf(items, chosen, i, option, bounds);
+          const cost = costOf(items, chosen, i, option, bounds, others);
           if (cost < bestCost - 1e-6) { best = n; bestCost = cost; }
         });
         if (best !== chosen[i]) { chosen[i] = best; moved = true; }
@@ -85,7 +87,7 @@ const Labels = (() => {
 
   // Try the targets in several orders (who chooses first matters most in a tight cluster, the ones in the middle above
   // all) and keep whichever leaves the least in the way
-  function place(items, bounds) {
+  function place(items, bounds, others = []) {
     const all = items.map((_, i) => i);
     const midX = items.reduce((n, o) => n + o.aim.x, 0) / items.length, midY = items.reduce((n, o) => n + o.aim.y, 0) / items.length;
     const crowded = i => items.filter(o => Math.hypot(o.aim.x - items[i].aim.x, o.aim.y - items[i].aim.y) < 120).length;
@@ -99,8 +101,8 @@ const Labels = (() => {
     ];
     let best = null, bestCost = Infinity;
     for (const order of orders) {
-      const chosen = placeInOrder(items, bounds, order);
-      const cost = items.reduce((n, item, i) => n + costOf(items, chosen, i, item.options[chosen[i]], bounds), 0);
+      const chosen = placeInOrder(items, bounds, order, others);
+      const cost = items.reduce((n, item, i) => n + costOf(items, chosen, i, item.options[chosen[i]], bounds, others), 0);
       if (cost < bestCost) { best = chosen; bestCost = cost; }
     }
     return best;
@@ -188,7 +190,7 @@ const Labels = (() => {
     return across > 0 && down > 0 ? across * down : 0;
   }
 
-  return { place, problems, spread, menuSpot };
+  return { place, problems, spread, menuSpot, boxOnBox, boxOnCircle };
 })();
 
 if (typeof module !== 'undefined') module.exports = Labels;

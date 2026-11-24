@@ -482,7 +482,22 @@ const UI = (() => {
     // clear of them too (Steve: the menu covered a target's red bubble)
     requestAnimationFrame(() => requestAnimationFrame(() => { if (!menu.hidden) placeMenuNow(menu, left, top, box, extra); }));
   }
+  // Where the menu was last placed from, to place it again if a red bubble turns up under it
+  let menuPlaced = null;
+  // A red score bubble has come up under the menu (Steve, 2026-11-24): the menu moves clear of it
+  function keepMenuClear() {
+    const menu = document.querySelector('#menu');
+    if (!menu || menu.hidden || !menuPlaced) return;
+    const { left, top, box, extra } = menuPlaced;
+    if (onARedBubble(menu, box)) placeMenuNow(menu, left, top, box, extra);
+  }
+  // Is this box on the page (the menu, the hover box) over a red score bubble? box: the table's own on the page
+  function onARedBubble(el, box) {
+    const mine = { x: el.offsetLeft, y: el.offsetTop, w: el.offsetWidth, h: el.offsetHeight };
+    return redBubbleRects(box, Board.shownLabels()).some(b => Labels.boxOnBox(mine, b));
+  }
   function placeMenuNow(menu, left, top, box, extra) {
+    menuPlaced = { left, top, box, extra };
     const w = menu.offsetWidth, h = menu.offsetHeight;
     // What it must not cover: each lit field, the targets, pieces to rally and score bubbles (these matter most), and
     // the piece itself
@@ -498,7 +513,13 @@ const UI = (() => {
   // The fields lit up for the chosen piece (moves, charges, targets, the pieces the captain can rally) and the targets'
   // score bubbles, as boxes on the screen inside the table's box
   // How much it matters to keep each kind clear (Steve: the menu covered pieces to rally and targets)
-  const MENU_WEIGHT = { field: 1, important: 4 };
+  // (Steve, 2026-11-24: with every field round it lit it still covered a red bubble, as a small bubble counted for less
+  // than a big field: now any field goes first)
+  const MENU_WEIGHT = { field: 1, important: 40 };
+  // These targets' red score bubbles, as boxes inside the table's box
+  function redBubbleRects(box, list) {
+    return list.map(t => Board.labelBox(t)).map(b => ({ ...b, x: b.x - box.left, y: b.y - box.top, weight: MENU_WEIGHT.important }));
+  }
   function litFieldRects(box) {
     const aims = targets();
     // A field as a box on the screen: its four corners on the table, seen through the camera
@@ -510,8 +531,10 @@ const UI = (() => {
     const fields = spots().map(f => rect(f, MENU_WEIGHT.field));
     // The targets and the pieces to rally, counted more
     const pieces = aims.concat(rallies()).map(f => rect(f, MENU_WEIGHT.important));
-    // Each target's score bubble, moved into the table's box
-    const bubbles = aims.filter(t => t.needNow).map(t => Board.labelBox(t)).map(b => ({ ...b, x: b.x - box.left, y: b.y - box.top, weight: MENU_WEIGHT.important }));
+    // Each target's score bubble, and any other on the table now (the computer's aim, Steve 2026-11-24)
+    const scored = aims.filter(t => t.needNow);
+    const alsoShown = Board.shownLabels().filter(t => !scored.includes(t));
+    const bubbles = redBubbleRects(box, scored.concat(alsoShown));
     return fields.concat(pieces, bubbles);
   }
 
@@ -866,7 +889,7 @@ const UI = (() => {
   }
 
   return {
-    init, setState, update, asksForShot, asksForField, clickField, openMenu, openGunMenu, openAsk, closeMenu, litFieldRects, chargesInto,
+    init, setState, update, asksForShot, asksForField, clickField, openMenu, openGunMenu, openAsk, closeMenu, litFieldRects, keepMenuClear, onARedBubble, chargesInto,
     inspect, actsOn, spots, moveSpotsFor, targets, shootTarget, rallies, rallyTarget, view, selected,
     selectSupport, inspectGun, chosenGun, dropSupport, supportState, flyToken, returnTokens, KIND,
   };

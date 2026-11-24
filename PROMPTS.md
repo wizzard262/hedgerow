@@ -2115,6 +2115,14 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - Steve: I think the German MG shot 6 dice. Checked: every German MG (MG 42, MG 34, the MG bunker) rolls 5. A Hail Mary (7 or more needed) that throws a 6 throws that die again, so 6 dice can lie on the table; nothing to fix. The MP 40 section rolls 6 (two bases of three), as set
 - Assumptions: "always" means on its own token; under fire, a piece that has already moved still can't. The captain taking cover gives up his rallies. Tests: only the new checks, `node tools/test.js "2026-11-24"` (3 pass); no full run, balance run, screenshot or browser check (Steve)
 
+## 352. Nothing over the red score bubbles (v238)
+
+- Steve: sometimes the grey info box for a piece obscures the red boxes showing the shooting opportunity. Three boxes could, so all three are fixed:
+  - The grey word bubble over the computer's piece ("MG 42 Team · Fires on ..."): drawn over the red bubbles, and they took no notice of it. It is now placed first, hangs below its piece if over it would hide a target's cross-hair, and the red bubbles keep clear of it and of the tags over the dice (`computerMoveMark`, `spriteBox`, `diceTagBoxes`, `buildMarks` in board3d.js; `others` in `Labels.place`)
+  - The piece's pop-up menu: a small red bubble counted for less than a big lit field, so with lit fields all round it could cover one. Any red bubble, target or piece to rally now counts for far more (`MENU_WEIGHT` in ui.js)
+  - The box shown on hover: it took no notice of the computer's targets. The menu and the hover box now keep clear of every red bubble on the table, and move if one comes up under them (`keepMenuClear`, `redBubbleRects` in ui.js; `clearRedBubbles`, `placeTip` in main.js)
+- Assumptions: which box he meant (the grey one over the computer's piece first; the pop-up menu and the hover box got the fix too). Tests: the new check and those on bubbles, menus and hover; no full run, screenshot or browser check (Steve)
+
 ## Sessions
 
 | # | Date | Length | What we did |

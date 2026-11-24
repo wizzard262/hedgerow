@@ -2467,10 +2467,12 @@ const Board = (() => {
     }
   }
 
-  function markTargets(list, hot) {
+  // others: the boxes on the page the score bubbles keep clear of (the grey word bubble, the dice's tags)
+  function markTargets(list, hot, others = []) {
     const pulse = 1 + 0.08 * Math.sin(performance.now() / 180);
     // Where each score bubble goes, all together, so none covers another target or another bubble (Steve)
-    placeLabels(list.filter(u => u.needNow));
+    labelled = list.filter(u => u.needNow);
+    placeLabels(labelled, others);
     for (const u of list) {
       const p = pieceCentre(u), big = u.kind === 'company' || Sim.isTank(u), lit = hot && hot.id === u.id;
       const ring = new T.Mesh(new T.RingGeometry(big ? 0.26 : 0.17, big ? 0.32 : 0.22, 48), new T.MeshBasicMaterial({ color: 0xe8352a, transparent: true, opacity: 0.9, depthWrite: false }));
@@ -2508,18 +2510,37 @@ const Board = (() => {
     return anchor.clone().addScaledVector(up, l.scale.y * 0.5 * (farHalf ? -1 : 1));
   }
 
-  // The box a bubble covers on the page, from its tail's spot (farHalf: the bubble hangs below its tail)
-  function bubbleBox(u, anchor, farHalf) {
-    const l = needLabel(u.needNow, u.needWhy || [], !farHalf);
-    // The bubble faces the camera: it spreads along the camera's right, and up from its tail (or down, in the far half)
+  // The box a word bubble or a tag covers on the page. It faces the camera: it spreads along the camera's right and up
+  // from its position, which is its `center` (0 to 1 across and up it)
+  function spriteBox(sprite) {
     camera.updateMatrixWorld();
     const right = new T.Vector3().setFromMatrixColumn(camera.matrixWorld, 0), up = new T.Vector3().setFromMatrixColumn(camera.matrixWorld, 1);
-    const tall = l.scale.y * (farHalf ? -1 : 1);
-    const corners = [[-0.5, 0], [0.5, 0], [-0.5, 1], [0.5, 1]].map(([a, b]) => anchor.clone().addScaledVector(right, a * l.scale.x).addScaledVector(up, b * tall));
+    const corners = [[0, 0], [1, 0], [0, 1], [1, 1]].map(([a, b]) => {
+      const across = (a - sprite.center.x) * sprite.scale.x;
+      const high = (b - sprite.center.y) * sprite.scale.y;
+      return sprite.position.clone().addScaledVector(right, across).addScaledVector(up, high);
+    });
     const pts = corners.map(v => screenPoint(v.x, v.z, v.y));
     const xs = pts.map(q => q.x), ys = pts.map(q => q.y);
-    l.material.dispose();
     return { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) };
+  }
+
+  // The box a score bubble covers on the page, from its tail's spot (farHalf: the bubble hangs below its tail)
+  function bubbleBox(u, anchor, farHalf) {
+    const l = needLabel(u.needNow, u.needWhy || [], !farHalf);
+    l.position.copy(anchor);
+    const box = spriteBox(l);
+    l.material.dispose();
+    return box;
+  }
+
+  // The targets whose red score bubbles are on the table now, so the menu and the hover box can keep clear of them
+  let labelled = [];
+  const shownLabels = () => labelled.filter(u => u.x !== null);
+
+  // The tags over the dice on the table (Steve: they covered the red bubbles): a sprite apiece among the dice
+  function diceTagBoxes() {
+    return dice.filter(d => d.isSprite && d.userData.diceTag).map(spriteBox);
   }
 
   // The box a target's score bubble covers on the page, so the piece menu can keep clear of it
@@ -2534,10 +2555,10 @@ const Board = (() => {
   const LABEL_RINGS = [1.1, 1.6, 2.2, 2.9, 3.6];
   const LABEL_ANGLES = 16;
   let labelKey = '', labelReport = null;
-  function placeLabels(list) {
+  function placeLabels(list, others = []) {
     if (!list.length) { labelPlaces = new Map(); reticleNudges = new Map(); labelKey = ''; labelReport = null; return; }
     const r = renderer.domElement.getBoundingClientRect();
-    const key = [r.width, r.height, ...list.map(u => { const p = pieceCentre(u); return [u.id, p.x.toFixed(2), p.z.toFixed(2), u.needNow, (u.needWhy || []).join('/')].join(':'); })].join('|');
+    const key = [r.width, r.height, ...list.map(u => { const p = pieceCentre(u); return [u.id, p.x.toFixed(2), p.z.toFixed(2), u.needNow, (u.needWhy || []).join('/')].join(':'); }), ...others.map(b => [b.x, b.y, b.w, b.h].map(Math.round).join(','))].join('|');
     if (key === labelKey) return;
     labelKey = key;
     camera.updateMatrixWorld();
@@ -2573,7 +2594,7 @@ const Board = (() => {
       }
       return { id: u.id, aim, circles, options };
     });
-    const chosen = Labels.place(items, { x: r.left, y: r.top, w: r.width, h: r.height });
+    const chosen = Labels.place(items, { x: r.left, y: r.top, w: r.width, h: r.height }, others);
     labelPlaces = new Map();
     items.forEach((item, i) => { const o = item.options[chosen[i]]; labelPlaces.set(item.id, { anchor: o.anchor, farHalf: o.farHalf }); });
     labelReport = Labels.problems(items, chosen);
@@ -3659,6 +3680,7 @@ const Board = (() => {
     tag.center.x = out * screenRight() > 0 ? 0 : 1;
     tag.position.copy(anchor);
     tag.renderOrder = 6;
+    tag.userData.diceTag = true;
     keepInSide(tag);
     scene.add(tag);
     dice.push(tag);
@@ -3809,7 +3831,8 @@ const Board = (() => {
 
   // The German move on show: an orange ring under the piece (or their gun off the board) and a grey word bubble over it
   // with its name and what it does, e.g. "1. Fallschirmjäger-Zug · Fires on 2nd Platoon"
-  function computerMoveMark(st, m) {
+  // Returns the bubble's box on the page, or null if there is none. targets: the pieces its red cross-hairs are on
+  function computerMoveMark(st, m, targets = []) {
     let spot, name, big;
     // (the move remembers its side: it stays on show after its token has ended)
     const side = m.side || Sim.computerSide(st);
@@ -3820,21 +3843,45 @@ const Board = (() => {
     } else {
       // A piece: gone from the table (wiped out in a fight) means nothing to ring
       const u = Sim.unitById(st, m.id);
-      if (!u || u.x === null || !pieces[u.id]) return;
+      if (!u || u.x === null || !pieces[u.id]) return null;
       spot = pieceCentre(u); name = u.name; big = u.kind === 'company' || Sim.isTank(u);
     }
     const ring = new T.Mesh(new T.RingGeometry(big ? 0.36 : 0.22, big ? 0.42 : 0.27, 56), new T.MeshBasicMaterial({ color: 0xff8a2a, transparent: true, opacity: 0.95, depthWrite: false }));
     at(ring, spot.x, 0.01, spot.z, -Math.PI / 2, 0, 0); marks.add(ring);
     // The ring shows as soon as it is picked; the word bubble once it has chosen what to do
-    if (!m.what) return;
+    if (!m.what) return null;
     // Over the piece, or below it when over it would go off the top of the screen (Steve)
     const over = new T.Vector3(m.gun ? spot.x - 1.1 : spot.x, 0.32, spot.z);
-    const below = offTop(over);
-    const bubble = diceTag([name, m.what], side, below);
-    // A gun's bubble sits a little in from the table's edge, so it stays on the screen
-    if (below) bubble.position.set(over.x, 0.05, spot.z + 0.3); else bubble.position.copy(over);
-    keepInSide(bubble);
+    const under = new T.Vector3(over.x, 0.05, spot.z + 0.3 * screenUp() * -1);
+    const makeBubble = below => {
+      const b = diceTag([name, m.what], side, below);
+      // A gun's bubble sits a little in from the table's edge, so it stays on the screen
+      b.position.copy(below ? under : over);
+      keepInSide(b);
+      return b;
+    };
+    const mustHang = offTop(over);
+    let bubble = makeBubble(mustHang);
+    // Over it would cover a target's cross-hair and below wouldn't: it goes below (Steve, 2026-11-24)
+    if (!mustHang && covers(bubble, targets)) {
+      const hanging = makeBubble(true);
+      const better = !covers(hanging, targets);
+      // (the one not used is let go)
+      (better ? bubble : hanging).material.dispose();
+      if (better) bubble = hanging;
+    }
     bubble.renderOrder = 7; marks.add(bubble);
+    return spriteBox(bubble);
+  }
+  // Does a word bubble cover any of these pieces' cross-hairs?
+  const CROSS_HAIR = 22;             // about a cross-hair's radius on the page, in pixels
+  function covers(bubble, targets) {
+    const box = spriteBox(bubble);
+    return targets.some(t => {
+      const spot = reticleHome(t);
+      const onPage = screenPoint(spot.x, spot.z, spot.y);
+      return Labels.boxOnCircle(box, { x: onPage.x, y: onPage.y, r: CROSS_HAIR });
+    });
   }
 
   // view: { spots: [{ x, y, kind }], selected: piece, hover: { x, y }, blast: [{ x, y, main }], computerMove: { id | gun, what } }. dt: seconds since the last frame.
@@ -3870,7 +3917,7 @@ const Board = (() => {
       if (pieces[id]) { scene.remove(pieces[id]); freeObject(pieces[id]); delete pieces[id]; }
     }
     diceDue = null; diceComing = [];
-    labelKey = ''; reticleNudges = new Map();
+    labelKey = ''; reticleNudges = new Map(); labelled = [];
     marksReady = false; shadowStale = true;
     clearDice(true);
   }
@@ -4001,10 +4048,14 @@ const Board = (() => {
       const ring = new T.Mesh(new T.RingGeometry(big ? 0.34 : 0.21, big ? 0.39 : 0.25, 56), new T.MeshBasicMaterial({ color: 0xfff6dc, transparent: true, opacity: 0.95, depthWrite: false }));
       at(ring, p.x, 0.009, p.z, -Math.PI / 2, 0, 0); marks.add(ring);
     }
-    if (view.targets && view.targets.length) markTargets(view.targets, view.hotTarget);
+    // The German piece or gun moving now: a ring round it and a word bubble saying what it does (Steve). Made first, so
+    // the red score bubbles can keep clear of it
+    const aimedOn = (view.targets || []).filter(u => u.x !== null && pieces[u.id]);
+    const greyBubble = view.computerMove ? computerMoveMark(st, view.computerMove, aimedOn) : null;
+    const inTheWay = diceTagBoxes().concat(greyBubble ? [greyBubble] : []);
+    labelled = [];
+    if (view.targets && view.targets.length) markTargets(view.targets, view.hotTarget, inTheWay);
     if (view.rallies && view.rallies.length) markRallies(view.rallies);
-    // The German piece or gun moving now: a ring round it and a word bubble saying what it does (Steve)
-    if (view.computerMove) computerMoveMark(st, view.computerMove);
     // Shooting: a line of sight from the shooter to each target it can see
     if (view.shooter && view.shooter.x !== null && pieces[view.shooter.id]) sightLines(view.shooter, view.targets || [], view.hotTarget);
     // German mortars ranging on a piece: a line from their mortar off the board
@@ -4134,7 +4185,7 @@ const Board = (() => {
   return {
     whereNow, reset, diceLeft, labelReport: () => labelReport, init, resize, render, fieldAt, pieceAt,
     pieceUnder, portrait, bounce, bounceGun, busyFor, settledIn, gunAt, targetAt, screenPoint, pieceScreen,
-    labelBox, clearDice, respinCompass, flyToken, clearToken, returnTokens, fireworks: startFireworks,
+    labelBox, shownLabels, clearDice, respinCompass, flyToken, clearToken, returnTokens, fireworks: startFireworks,
     canvas: () => renderer.domElement,
   };
 })();

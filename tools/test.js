@@ -5834,5 +5834,32 @@ check('2026-11-24 fix: a machine gun rolls five dice; only a 6 in a Hail Mary ad
   assert(rerolls, 'no Hail Marys came up: the check is set up wrong');
 });
 
+check('2026-11-24 bubbles: the red bubbles keep clear of the grey word bubble and the dice tags; the menu and hover box keep clear of them', () => {
+  const Labels = require('../js/labels.js');
+  const bounds = { x: 0, y: 0, w: 1600, h: 820 };
+  // One target, a ring of spots round it, and a grey bubble over all of the near ones on its right
+  const options = [];
+  for (const ring of [90, 140, 200, 260]) for (let k = 0; k < 16; k++) {
+    const a = k / 16 * Math.PI * 2, mx = 700 + ring * Math.cos(a), my = 400 + ring * Math.sin(a);
+    options.push({ mid: { x: mx, y: my }, box: { x: mx - 45, y: my - 35, w: 90, h: 70 } });
+  }
+  const item = { id: 1, aim: { x: 700, y: 400 }, circles: [{ x: 700, y: 400, r: 22 }], options };
+  // Where it goes with nothing in the way, then with a grey bubble on that very spot
+  const free = options[Labels.place([item], bounds)[0]].box;
+  const grey = { x: free.x - 10, y: free.y - 10, w: 300, h: 60 };
+  const moved = options[Labels.place([item], bounds, [grey])[0]].box;
+  assert(Labels.boxOnBox(free, grey) && !Labels.boxOnBox(moved, grey), 'the red bubble stayed under the grey one');
+  // The menu, with no clear spot: fields to move to go before a red bubble, as ui.js weighs them
+  const weights = pageCode('ui.js', 'const MENU_WEIGHT = {', '};');
+  const important = Number(/important: (\d+)/.exec(weights)[1]);
+  const lit = [{ x: 0, y: 0, w: 1600, h: 800, weight: 1 }, { x: 0, y: 0, w: 800, h: 800, weight: 1 }, { x: 900, y: 360, w: 90, h: 70, weight: important }];
+  const menu = Labels.menuSpot({ w: 160, h: 90 }, { x: 800, y: 400 }, lit, { width: 1600, height: 800 });
+  assert(!Labels.boxOnBox(menu, lit[2]), 'the menu covered a red bubble');
+  // Wired in: the grey bubble is made first and its box handed to the red ones; the page looks again after each change
+  const marks = pageCode('board3d.js', 'function buildMarks(st, view) {', 'view.hotTarget, inTheWay)');
+  assert(marks.indexOf('computerMoveMark(') < marks.indexOf('markTargets('), 'the grey bubble is placed after the red ones');
+  assert(pageCode('main.js', 'const more = Board.render', 'requestAnimationFrame(frame)').includes('clearRedBubbles()'), 'the page never looks again');
+});
+
 console.log(failed ? `\n${failed} failed` : '\nall passed');
 process.exit(failed ? 1 : 0);

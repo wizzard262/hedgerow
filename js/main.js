@@ -235,6 +235,8 @@ window.Game = (() => {
         flightLine: flightLineNow(),
       });
       if (more) dirty = true;
+      // Red score bubbles just put on the table: the menu and the hover box move off any they cover (Steve, 2026-11-24)
+      if (!same) clearRedBubbles();
       const p = Board.screenPoint(st.objective.x + 0.5, st.objective.y, 0.35), r = board.getBoundingClientRect();
       // No goal on this map (Steve: the beach): no label for it
       $('#label').style.display = st.noGoal ? 'none' : '';
@@ -665,9 +667,26 @@ window.Game = (() => {
     tip.innerHTML = `<b>${village || words.name}</b>${words.note ? `<br><span style="color:var(--muted)">${words.note}</span>` : ''}${lines.length ? '<br>' + lines.join('<br>') : ''}`;
     const r = board.getBoundingClientRect();
     tip.style.display = 'block';
+    tipPointer = { x: e.clientX - r.left, y: e.clientY - r.top };
+    placeTip(r);
+  }
+
+  // The piece's menu and the hover box, placed again if a red score bubble is now under them
+  function clearRedBubbles() {
+    UI.keepMenuClear();
+    const tip = $('#tip');
+    const tipShows = tip.style.display === 'block' && tipPointer;
+    if (!tipShows) return;
+    const r = board.getBoundingClientRect();
+    if (UI.onARedBubble(tip, r)) placeTip(r);
+  }
+
+  // Where the hover box goes, for the pointer it was opened by
+  let tipPointer = null;
+  function placeTip(r) {
+    const tip = $('#tip'), pointer = tipPointer;
     // Beside the pointer, but clear of the fields lit for the chosen piece, its targets and the pieces to rally (Steve:
     // it covered them): the same search as the piece's menu (Labels.menuSpot)
-    const pointer = { x: e.clientX - r.left, y: e.clientY - r.top };
     const lit = UI.litFieldRects(r);
     if (!lit.length) {
       Object.assign(tip.style, { left: Math.min(r.width - 290, pointer.x + 14) + 'px', top: pointer.y + 14 + 'px' });
