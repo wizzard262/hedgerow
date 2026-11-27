@@ -52,7 +52,8 @@ async function checkPlayers() {
     });
     await page.mouse.click(p.x, p.y);
     await page.waitForTimeout(400);
-    const skip = page.locator('#menu button', { hasText: 'Skip turn' });
+    // (Skip turn shows only when it can neither lie in ambush nor take cover, Steve 2026-11-27: else Ambush ends its go)
+    const skip = page.locator('#menu button:not([disabled])', { hasText: /Skip turn|Ambush/ });
     if (await skip.count()) await skip.first().click();
     await page.waitForTimeout(1200);
   }

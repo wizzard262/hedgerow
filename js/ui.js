@@ -559,15 +559,16 @@ const UI = (() => {
 
   function actionButtons(u) {
     const b = actionButtonsFor(u);
-    // Everyone can skip a turn (Steve): it gives up its move this round, using the token
-    const canSkip = Sim.canAct(st, u) || (u.kind === 'captain' && Sim.canRally(st, u));
+    // Skip turn gives up its move this round, using the token; only when it can neither lie in ambush nor take cover
+    // (Steve, 2026-11-27: those are always better). The guns keep theirs, on their own card
+    const canSkip = Sim.offersSkip(st, u);
     // Any piece can lie in ambush instead (Steve): it gives up its move and waits, until it fires or the round ends
     b.push({ mode: 'ambush', label: '🪤 Ambush', ok: Sim.canAmbush(st, u), title: 'Give up its move and wait: it fires as soon as an enemy moves or shoots in its sight, if it can hit on 6 or less. Ends with the round', run: () => Sim.actAmbush(st, u) });
     // Anyone who could take cover under fire can do it on its own token too (Steve, 2026-11-24: holding the goal, say)
     const ducks = !Sim.isTank(u) && !PIECES[u.kind].fixed;
     if (ducks) b.push({ mode: 'cover', label: '☂️ Take cover', ok: Sim.canTakeCover(st, u), title: 'Give up its move: its men get down, and every shot or shell at it needs two more for the rest of the round', run: () => Sim.actTakeCover(st, u) });
     // (the PaK just moved within its field has used its move: it has No ambush instead, below)
-    if (!u.mayAmbush) b.push({ mode: 'skip', label: '⏭️ Skip turn', ok: canSkip, title: 'Give up its move this round (the token is used)', run: () => Sim.actSkip(st, u) });
+    if (!u.mayAmbush && canSkip) b.push({ mode: 'skip', label: '⏭️ Skip turn', ok: true, title: 'Give up its move this round (the token is used)', run: () => Sim.actSkip(st, u) });
     // The PaK has just moved within its field and needn't lie in ambush: the token is done
     if (u.mayAmbush && !u.halfShot) b.push({ mode: 'skipShot', label: '⏭️ No ambush', ok: true, title: 'Don\'t lie in ambush; the token is used', run: () => Sim.actSkipShot(st, u) });
     // Moved with Move & shoot and not wanting to fire (Steve: no Pass button): skip the shot, and the token is done
@@ -762,7 +763,7 @@ const UI = (() => {
     const theirToken = st.drawn ? `${adjective(st.drawn)} token: a ${adjective(st.drawn)} piece moves…` : '';
     // Two humans (Steve): whose token it is, as they share the screen
     const yours = st.mode === 'both' ? `${adjective(st.human)} player, your token` : 'Your token';
-    const myToken = st.activeId ? 'Finish its move (or Skip in its menu).' : `${yours}: pick one piece and give it its move (or Skip turn in its menu).`;
+    const myToken = st.activeId ? 'Finish its move (or Skip in its menu).' : `${yours}: pick one piece and give it its move (or Ambush or Take cover in its menu).`;
     const noAction = computerToken ? theirToken : st.drawn === st.human ? myToken : 'Drawing a token…';
     const text = !view.mode ? noAction
       : view.mode === 'fire:bomber' ? 'Point anywhere on the board to see the line; click to send the bomber through.'

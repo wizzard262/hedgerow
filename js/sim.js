@@ -3856,6 +3856,20 @@ const Sim = (() => {
     if (u.kind === 'captain') u.skipped = true;
     return { ok: true, lines: [`⏭️ ${u.name} holds its ground this round.`] };
   }
+  // Is Skip turn on offer to a person for this piece (Steve, 2026-11-27)? Only when it could skip and can neither lie in
+  // ambush nor take cover, as those are always better: a captain part way through his rallies, a piece with no shot
+  // left, a tank or gun that can't fire. (The robots and the off-board guns are not affected)
+  function offersSkip(st, u) {
+    // Able to skip at all: its move still to make, or a captain with rallies to give up
+    const able = canAct(st, u) || (u.kind === 'captain' && canRally(st, u));
+    if (!able) return false;
+    // Ambush is better
+    if (canAmbush(st, u)) return false;
+    // So is taking cover, for a piece that can
+    const ducks = !isTank(u) && !PIECES[u.kind].fixed;
+    if (ducks && canTakeCover(st, u)) return false;
+    return true;
+  }
   // Moved with Move & shoot but not firing after all (Steve: no Pass button): the shot is given up and the token is done
   function actSkipShot(st, u) {
     if (!u || (!u.halfShot && !u.mayAmbush)) return { ok: false };
@@ -4280,7 +4294,7 @@ const Sim = (() => {
     isBunker, isCar, hurtsCars, trainCars, lineSideOf, moveTrains, inFrontOf, bunkerFace, shotOnTheMove, wrecksBeside, isRoad, featuresAt, walkDistance, fireSound, wreckAt, remove, computerSide, isRobot, piecesToAsk, takeCover, enemyOf, gunStats, diceShown, menDiceShown, bomberName, boatKind, armyOf, hedgeWord, inCourtyard, closeRangeOnly, isAtGun, isEmplaced, edgeKey, atCloseRange, closeCells, hailMaryCells,
     newGame, roll, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, chargeSpots, soundOf, facesItsShot, molotovNeed, movesThenAmbushes,
     rallyTargets, canAct, canReact, firepower, canCallFire, takesGoal, cannotWin, attackFailed, artilleryTarget, mortarTarget, holdsObjective, roundText, roomFor,
-    goalLines, deArmyOf, hullMgTargets, canHullMg, actHullMg, actHoldMg, hullMgDice, traitLines,
+    goalLines, deArmyOf, hullMgTargets, canHullMg, actHullMg, actHoldMg, hullMgDice, traitLines, offersSkip,
     computerStep, answer, finishRound, startRound, drawToken, endComputerToken, activationOver, passToken, humanCanMove, endRound, canFire, actSkip, actSkipShot, skipSupport,
     smallTarget, menDice, armourOf, shotNeed, mayFire, shootCells, tokensHome, captainCanRally, fireAt, wholeDice: dice,
     actShoot, actMoveShoot, moveShootSpots, chargeRoutes, DIRS, needWhy, shellNeed, shellWhy, shellFields,

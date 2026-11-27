@@ -5942,5 +5942,26 @@ check('2026-11-27: the anti-tank guns lie in ambush by themselves after moving (
   Sim.newGame(1);
 });
 
+check('2026-11-27: Skip turn is offered only when a piece can neither lie in ambush nor take cover; the guns keep theirs', () => {
+  const st = tableWith({ A: [2, 5], T1: [1, 5], cap: [0, 6], B: [0, 4], d1: [9, 3] });
+  Sim.startRound(st);
+  st.human = 'us'; st.computer = null; st.drawn = 'us';
+  const A = Sim.unitById(st, 'A'), tank = Sim.unitById(st, 'T1'), cap = Sim.unitById(st, 'cap'), B = Sim.unitById(st, 'B');
+  // A rifle platoon and a tank on their token: ambush (and cover) are better, so no Skip turn
+  assert(Sim.canAmbush(st, A) && !Sim.offersSkip(st, A), 'a rifle platoon was offered Skip turn');
+  assert(Sim.canAmbush(st, tank) && !Sim.offersSkip(st, tank), 'a tank was offered Skip turn');
+  // The captain after a charge, with rallies left: no ambush or cover now, so Skip turn is how he stops
+  B.shocked = true;
+  const spot = Sim.chargeSpots(st, cap).find(p => p.x === 1 && p.y === 6) || Sim.chargeSpots(st, cap)[0];
+  assert(Sim.actCharge(st, cap, spot.x, spot.y).ok && Sim.canRally(st, cap), 'the captain could not charge, or had no rally left');
+  assert(Sim.offersSkip(st, cap), 'the captain part way through his rallies had no Skip turn');
+  // The menu (ui.js) shows Skip turn only then; the off-board guns' card keeps its own Skip turn
+  assert(pageCode('ui.js', 'const canSkip = Sim.offersSkip(st, u);', "if (!u.mayAmbush && canSkip) b.push({ mode: 'skip'"), 'the menu does not use offersSkip');
+  assert(pageCode('ui.js', "const skip = el('button', '', '⏭️ Skip turn');", 'skip.onclick = () => skipGun(which);'), 'the guns lost their Skip turn');
+  // The other side's token: nothing to skip
+  st.drawn = 'de';
+  assert(!Sim.offersSkip(st, A), 'Skip turn was offered off its token');
+});
+
 console.log(failed ? `\n${failed} failed` : '\nall passed');
 process.exit(failed ? 1 : 0);

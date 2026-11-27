@@ -2151,6 +2151,12 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - Now `movesThenAmbushes` in sim.js takes in every `atGun` piece (the PaK 40, the Finns' Bofors 37 mm, the 8.8 cm Flak), so after its move (the PaK and the Bofors within their field or across a village) or the 88's turn it lies in ambush there and then, the token over, "and lies in ambush" in the report. Their cards say so ("After moving…", the 88 "After turning…"); How to play says so under Ambush and Sharing a field
 - Assumptions: no "No ambush" choice is left for them (as with the MG team); bunkers and everything else are unchanged. Tests: two PaK checks changed to the new rule, a new check for all three guns; filtered runs (ambush, PaK, 88, machine-gun, computer, help) pass; no full run, balance run, screenshot or browser check (Steve)
 
+## 358. Skip turn only when there's nothing better (v244)
+
+- Steve: is Skip turn pointless? Don't we always really want to ambush or take cover? I think if ambush or take cover are an option, Skip turn can go, except for those with limited shots: bomber, artillery, mortar
+- Now a piece's menu (and its card) shows ⏭️ Skip turn only when it could skip and can neither lie in ambush nor take cover (`offersSkip` in sim.js): a captain part way through his rallies after a charge, say. The mortars, artillery and bomber keep their Skip turn on their own card. The robots are unchanged. How to play and the hint under the board say Ambush or Take cover instead
+- Assumptions: Skip turn is hidden, not greyed out, when it isn't on offer; staying hidden from enemy ambushes (the one thing Skip did that Ambush doesn't) is given up, as Steve chose. tools/check-page.js passes a piece with Ambush when there's no Skip turn. Tests: a new check; filtered runs (Skip, captain, menu, help, token, ambush, PaK) pass; no full run, balance run, screenshot or browser check (Steve)
+
 ## Sessions
 
 | # | Date | Length | What we did |
