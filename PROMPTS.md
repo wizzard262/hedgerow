@@ -2133,6 +2133,12 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - Steve: when turning to face the closest target, men do not face a tank (unless they are an anti-tank gun, Molotovs, a bazooka and so on); they only face enemies they can shoot at. Men turning after a move, or into ambush, now look only at enemies their weapons can hurt, or a tank if they carry Molotovs (`worthFacing`, `weaponsHurt` in sim.js, the second shared with `targets`). A machine gun faces an armoured car, as it can hurt one; riflemen don't
 - Assumptions: the nearest such enemy in sight, or with none in sight the nearest on the table, as before; with none at all, they face the enemy's side after a move. Tanks are unchanged: they still face the nearest enemy of any kind. Tests: the new check and those on facing and targets; no full run, screenshot or browser check (Steve)
 
+## 355. The defenders win at once when the attackers can't hurt them (v241)
+
+- Steve, in the Winter War as the Finns: I've got a tank left, he's only got infantry; surely I've won, he's got nothing to destroy it with. The game went on: a person playing the Germans (or the Finns) had to destroy every piece of the other side (his rule of 2026-11-06, kept in v236). Asked, Steve picked: win at once, in every battle
+- Now the v236 check (`beyondHarm` in sim.js) is used whoever commands either side, two humans included: no one of theirs to take the goal (where there is one), nothing still to come, and a piece of yours nothing they have left, shells and bombers included, could ever destroy. Looked at before every token. The two humans' end screen names the 'de' side by its own name (the Finns win, not the Germans)
+- Assumptions: as before, each of your pieces is judged on its own, and one Soviet mortar round can't kill a tank, two can. Tests: the changed and new checks, filtered runs (German, win, two humans, Winter, the 2026-11-23 check) all pass; no full run, balance run, screenshot or browser check (Steve)
+
 ## Sessions
 
 | # | Date | Length | What we did |

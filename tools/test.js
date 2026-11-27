@@ -2782,11 +2782,11 @@ check('playing the Germans: killing every American piece wins, whatever guns and
   assert(st.lost && !st.won && !st.draw, 'the Germans did not win with only guns left against them');
 });
 
-check('playing the Germans: an American piece left means no win yet, even with nothing that can hurt your tanks', () => {
+check('playing the Germans (Steve, 2026-11-27): nothing American left that can hurt your tank is a win, pieces left or not', () => {
   const st = tableAsGermans({ mg1: [1, 1], dt1: [9, 3] });
   st.ammo.us.mortars = st.ammo.us.artillery = st.ammo.us.bomber = 0;
   Sim.finishRound(st);
-  assert(!st.won && !st.lost, 'the game ended with an American piece still on the table');
+  assert(!st.won && st.lost, 'the game went on though nothing American could destroy the tank');
   // Playing the Americans the same table is a loss, as it always was
   const us = tableWith({ mg1: [1, 1], dt1: [9, 3] });
   us.ammo.us.mortars = us.ammo.us.artillery = us.ammo.us.bomber = 0;
@@ -3313,7 +3313,7 @@ check('two humans: the other player is asked about a shot, never shells or bombs
   assert(!Sim.piecesToAsk(one, 'shot', 3, 5, target).length, 'a robot was asked');
 });
 
-check('two humans: taking cover counts in the dice, and the German must still destroy every American', () => {
+check('two humans: taking cover counts in the dice, and the German wins once nothing American can hurt him', () => {
   const st = tableWith({ A: [1, 5], d2: [3, 5] });
   st.mode = 'both';
   st.players = { us: 'human', de: 'human' };
@@ -3336,13 +3336,13 @@ check('two humans: taking cover counts in the dice, and the German must still de
   again.drawn = 'us';
   Sim.actShoot(again, Sim.unitById(again, 'A'), shaken);
   assert(!shaken.down, 'a human\'s piece took cover by itself');
-  // No American platoon, nothing to hurt a tank: still no end, the German has to finish it
+  // No American platoon, nothing to hurt a tank: the attack has failed (Steve, 2026-11-27)
   const last = tableWith({ mg1: [1, 1], dt1: [9, 3] });
   last.mode = 'both';
   last.players = { us: 'human', de: 'human' };
   last.ammo.us = { mortars: 0, artillery: 0, bomber: 0 };
   Sim.finishRound(last);
-  assert(!last.won && !last.lost, 'the game ended with an American piece still on the table');
+  assert(!last.won && last.lost, 'the game went on though nothing American could destroy the tank');
 });
 
 check('moving within its own field, the shot after needs nothing more for moving (Steve); out of it, one more', () => {
@@ -5762,12 +5762,26 @@ check('2026-11-23: the attackers lose at once when they truly cannot win, and on
   const sherman = table(['sherman', 'mg42']);
   sherman.ammo.de = { mortars: 0, artillery: 0, bomber: 0 };
   assert(!Sim.attackFailed(sherman), 'lost though the Sherman could still destroy every German');
-  // Playing the Germans: they must still destroy every American
+  // Playing the Germans (Steve, 2026-11-27): they win at once too, with a piece nothing American can destroy
   const german = Sim.newGame(3, 'de', 'town');
   Sim.startRound(german);
+  if (german.airdrop) german.airdrop.done = true;
   for (const u of german.units) if (!['sniper', 'puma'].includes(u.kind)) u.x = u.y = null;
   german.ammo.us = { mortars: 0, artillery: 0, bomber: 0 };
-  assert(!Sim.attackFailed(german), 'a German player won without destroying the last American');
+  assert(/Puma/.test(Sim.attackFailed(german)), 'a German player had to destroy the last American');
+  // The Winter War as the Finns: their Vickers left against Soviet riflemen only, no shells; it ends there and then
+  const finns = Sim.newGame(3, 'de', 'winterwar');
+  Sim.startRound(finns);
+  for (const u of finns.units) if (!(u.side === 'de' && u.kind === 'vickers6t') && !(u.side === 'us' && u.kind === 'company')) u.x = u.y = null;
+  finns.ammo.us = { mortars: 0, artillery: 0, bomber: 0 };
+  assert(finns.units.some(u => u.side === 'de' && u.x !== null) && finns.units.some(u => u.side === 'us' && u.x !== null), 'the Vickers or the Soviet riflemen missing');
+  assert(Sim.drawToken(finns) === null && finns.lost && !finns.won, `the Finns played on: ${finns.report && finns.report[0]}`);
+  // A Soviet mortar round or two still to come could destroy it: it goes on
+  const shells = Sim.newGame(3, 'de', 'winterwar');
+  Sim.startRound(shells);
+  for (const u of shells.units) if (!(u.side === 'de' && u.kind === 'vickers6t') && !(u.side === 'us' && u.kind === 'company')) u.x = u.y = null;
+  shells.ammo.us = { mortars: 2, artillery: 0, bomber: 0 };
+  assert(!Sim.attackFailed(shells), 'the Finns won though two Soviet mortar rounds could destroy the Vickers');
   // The beach: riflemen can storm a bunker, a machine gun cannot
   const beach = kind => {
     const b = table(['bunker_mg'], {}, 'beach');

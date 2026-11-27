@@ -445,7 +445,8 @@ window.Game = (() => {
   // How it ended with no one player to win or lose it: two humans, or two robots
   function plainEnding() {
     if (st.draw) return { title: '🤝 A draw', text: st.report[0] };
-    if (st.lost) return { title: '🏆 The Germans win', text: st.report[0] };
+    // (the 'de' side by its own name: the Finns in the Winter War)
+    if (st.lost) return { title: `🏆 The ${Sim.sideName(st, 'de')} win`, text: st.report[0] };
     const germansLeft = st.units.some(u => u.side === 'de' && u.x !== null);
     const us = Sim.sideName(st, 'us');
     return { title: germansLeft ? `🏆 The ${us} take ${st.objective.name}` : `🏆 The ${us} win`, text: st.report[0] };

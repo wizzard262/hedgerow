@@ -1566,8 +1566,10 @@ const Sim = (() => {
     if (st.evac) return '';
     const us = sideName(st, 'us'), de = sideName(st, 'de');
     const goal = st.objective.name;
-    // (a human playing the Germans wins only by destroying every American piece, Steve; guns off the table don't count)
-    const safe = isRobot(st, 'de') ? beyondHarm(st) : null;
+    // A German piece nothing of theirs can ever destroy: the attack has failed, whoever commands either side (Steve,
+    // 2026-11-27: as the Finns, his last tank against Soviet riflemen with nothing to hurt it, he had won; before, a
+    // person playing the Germans had to destroy every American piece)
+    const safe = beyondHarm(st);
     if (safe) {
       if (st.noGoal) return `⌛ Nothing the ${us} have left can destroy ${safe.name}. The attack has failed.`;
       return `⌛ No rifle platoon or captain of the ${us} is left to take ${goal}, and nothing they have left can destroy ${safe.name}. The attack has failed.`;
