@@ -2969,29 +2969,17 @@ check('the German computer\'s PaK moves within its field only when that gives it
   assert(gun.at === place, 'it moved with a shot from where it stood');
 });
 
-check('the PaK can move within its field and lie in ambush on the same go, or not', () => {
-  const setUp = () => {
-    const st = tableAsGermans({ pak1: [9, 3], A: [0, 0], d2: [11, 0] });
-    const pak = Sim.unitById(st, 'pak1');
-    pak.at = 'n+c';
-    Sim.startRound(st);
-    st.drawn = 'de';
-    assert(Sim.actLine(st, pak, 'se').ok, 'the PaK would not move');
-    return { st, pak };
-  };
-  // Moved: the token stays open, with the ambush on offer and nothing else
-  const { st, pak } = setUp();
-  assert(pak.mayAmbush && !Sim.activationOver(st), 'the token ended before the ambush was offered');
-  assert(Sim.canAmbush(st, pak) && Sim.actAmbush(st, pak).ok, 'it could not lie in ambush after moving');
-  assert(pak.ambush && Sim.activationOver(st), 'the ambush did not end the token');
-  // Not wanted: the token ends with no ambush
-  const no = setUp();
-  assert(Sim.actSkipShot(no.st, no.pak).ok && !no.pak.ambush && Sim.activationOver(no.st), 'turning it down did not end the token');
-  assert(!Sim.canAmbush(no.st, no.pak), 'the offer stayed open');
-  // The token passing takes the offer with it
-  const passed = setUp();
-  Sim.passToken(passed.st);
-  assert(!passed.pak.mayAmbush, 'the offer outlived the token');
+check('the PaK moving within its field lies in ambush there by itself, on the same go (Steve, 2026-11-27: before, it was offered)', () => {
+  const st = tableAsGermans({ pak1: [9, 3], A: [0, 0], d2: [11, 0] });
+  const pak = Sim.unitById(st, 'pak1');
+  pak.at = 'n+c';
+  Sim.startRound(st);
+  st.drawn = 'de';
+  const moved = Sim.actLine(st, pak, 'se');
+  assert(moved.ok, 'the PaK would not move');
+  // In ambush with nothing left to choose, and the token over
+  assert(pak.ambush && !pak.mayAmbush && !pak.halfShot && Sim.activationOver(st), 'it did not lie in ambush by itself');
+  assert(moved.lines[0].includes('lies in ambush'), `the report says "${moved.lines[0]}"`);
   // Not only the PaK now (Steve): a platoon moving within its field can fire or lie in ambush too
   const other = tableAsGermans({ d2: [9, 3], A: [0, 0] });
   const d2 = Sim.unitById(other, 'd2');
@@ -3383,11 +3371,10 @@ check('the PaK in a village of two or four fields can move all round it; anywher
   assert(!Sim.moveShootSpots(st, pak).length, 'it could fire after moving');
   Sim.startRound(st);
   st.drawn = 'de';
-  // Across the corner, straight there, facing the way clicked, its move used, and the ambush on offer
+  // Across the corner, straight there, facing the way clicked, its move used, and in ambush by itself (Steve, 2026-11-27)
   assert(Sim.actCharge(st, pak, 7, 3, 'nw').ok, 'it would not go across the village');
-  assert(pak.x === 7 && pak.y === 3 && pak.acted && pak.mayAmbush && !pak.halfShot, 'it did not arrive as it should');
+  assert(pak.x === 7 && pak.y === 3 && pak.acted && pak.ambush && !pak.mayAmbush && !pak.halfShot, 'it did not arrive as it should');
   assert(pak.at.split('+').includes('nw') && Math.abs(pak.aim - 3 * Math.PI / 4) < 1e-9, `it stands at ${pak.at} facing ${pak.aim}`);
-  assert(Sim.actAmbush(st, pak).ok && pak.ambush, 'it could not lie in ambush after going there');
   // To the middle of another field: it faces back the way it came
   const back = tableAsGermans({ pak1: [8, 4], A: [0, 0] });
   const gun = Sim.unitById(back, 'pak1');
@@ -5933,6 +5920,26 @@ check('2026-11-27: a piece\'s card lists what marks it out at the bottom (small 
   // The card (ui.js) shows them at the bottom, under the buttons, and no longer says hedge cutters
   assert(pageCode('ui.js', 'const traitList = Sim.traitLines(u);', 'box.insertBefore(acts, traitList.length ? traits : null);'), 'the card does not show the markers at the bottom');
   assert(!fs.readFileSync(path.join(__dirname, '..', 'js', 'ui.js'), 'utf8').includes("' · hedge cutters'"), 'the card still says hedge cutters');
+});
+
+check('2026-11-27: the anti-tank guns lie in ambush by themselves after moving (the 88 after turning), as the machine-gun teams do', () => {
+  // Which pieces do: the machine-gun teams, the PaK, the Bofors and the 88; not the riflemen, tanks or bunkers
+  for (const kind of ['mg', 'mg42', 'pak', 'bofors37', 'flak88']) assert(Sim.movesThenAmbushes({ kind }), `${kind} does not lie in ambush by itself`);
+  for (const kind of ['company', 'sherman', 'bunker_mg', 'bunker_gun', 'bazooka']) assert(!Sim.movesThenAmbushes({ kind }), `${kind} lies in ambush by itself`);
+  // The 88 at Stalingrad, turned by a person playing the Germans: in ambush, the token over, the report says so
+  const g = Sim.newGame(1, 'de', 'stalingrad');
+  const gun = g.units.find(u => u.kind === 'flak88');
+  Sim.startRound(g);
+  g.human = 'de'; g.computer = null; g.drawn = 'de';
+  const turned = Sim.actLine(g, gun, 'n');
+  assert(turned.ok, 'the 88 would not turn');
+  assert(gun.ambush && !gun.mayAmbush && Sim.activationOver(g), 'the 88 did not lie in ambush by itself after turning');
+  assert(turned.lines[0].includes('turns to face north, and lies in ambush'), `the report says "${turned.lines[0]}"`);
+  // Its card says after turning, the PaK's after moving
+  const cardLine = vm.runInThisContext(`(u => { ${pageCode('ui.js', 'const movedWord = ', ";\n")} return ${pageCode('ui.js', 'Sim.movesThenAmbushes(u) ?', ": '';").replace(/;$/, '')}; })`);
+  assert(cardLine(gun).includes('After turning it lies in ambush by itself'), `the 88's card says "${cardLine(gun)}"`);
+  assert(cardLine({ kind: 'pak' }).includes('After moving it lies in ambush by itself'), `the PaK's card says "${cardLine({ kind: 'pak' })}"`);
+  Sim.newGame(1);
 });
 
 console.log(failed ? `\n${failed} failed` : '\nall passed');

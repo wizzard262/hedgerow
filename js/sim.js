@@ -2901,9 +2901,14 @@ const Sim = (() => {
     return pairs[0] || freePlace(st, u, u.x, u.y, side);
   }
 
-  // A machine-gun team (Steve, 2026-11-21): it can't fire after moving, but it can move and lie in ambush on the same go
+  // A machine-gun team (Steve, 2026-11-21): it can't fire after moving, but it can move and lie in ambush on the same go.
+  // The anti-tank guns too (Steve, 2026-11-27): the PaK 40 and the Bofors after moving, the 88 after turning
   function movesThenAmbushes(u) {
-    return MACHINE_GUNS.includes(u.kind) && !PIECES[u.kind].fixed;
+    // A machine-gun team that can move (not a bunker)
+    const mgTeam = MACHINE_GUNS.includes(u.kind) && !PIECES[u.kind].fixed;
+    // A crewed anti-tank gun
+    const atGun = !!PIECES[u.kind].atGun;
+    return mgTeam || atGun;
   }
   // After a machine-gun team's move, either side's: it lies in ambush there and then, with nothing to choose (Steve,
   // 2026-11-22: they never would not). Returns true if it did
@@ -2939,7 +2944,11 @@ const Sim = (() => {
       spend(st, u);
       u.aim = FACING[way];
       u.mayAmbush = true;
-      return { ok: true, lines: [`↪️ ${u.name} turns to face ${SIDE_NAMES[way[0]] || way}${way.length > 1 ? (way[1] === 'e' ? '-east' : '-west') : ''}.`] };
+      // The words for its turn
+      const turned = `↪️ ${u.name} turns to face ${SIDE_NAMES[way[0]] || way}${way.length > 1 ? (way[1] === 'e' ? '-east' : '-west') : ''}`;
+      // It lies in ambush facing that way, by itself (Steve, 2026-11-27)
+      const ambushed = ambushAfterMoving(st, u);
+      return { ok: true, lines: [ambushed ? `${turned}, and lies in ambush.` : `${turned}.`] };
     }
     const to = isPak ? pakPlaceFor(st, u, side) : freePlace(st, u, u.x, u.y, side);
     if (to === u.at || !lineSides(st, u).includes(to)) return { ok: false };

@@ -2145,6 +2145,12 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - Now `traitLines` in sim.js gives one line for each marker in PIECES: small gun (needs 1 more to hit a tank), fast or slow (fields more or fewer on a Move & shoot or a Charge), extra MG turrets (their own shot, with their dice), armoured car (what wheels mean), long (3 × 2 areas). The card (ui.js) shows them at the very bottom, under the buttons, small and grey above a thin line; a piece with none shows nothing. "· hedge cutters" is gone from the line under the name
 - Assumptions: armour stays where it was on the card (🛡️ Armour +N), not repeated; the bazooka and Panzerschreck teams say fast too (they have the same extra field); skis are left out (not a PIECES marker). Tests: the new check and those on the card and cutters pass; no full run, screenshot or browser check (Steve)
 
+## 357. The anti-tank guns lie in ambush by themselves after moving (v243)
+
+- Steve: does it make sense that if the PaK 40 moves it always ambushes? (it can't fire after moving, so the ambush is all it can do; the MG team already does it by itself). Asked, he picked yes, always, both sides; then, asked which others: the PaK, the Bofors and the 88
+- Now `movesThenAmbushes` in sim.js takes in every `atGun` piece (the PaK 40, the Finns' Bofors 37 mm, the 8.8 cm Flak), so after its move (the PaK and the Bofors within their field or across a village) or the 88's turn it lies in ambush there and then, the token over, "and lies in ambush" in the report. Their cards say so ("After moving…", the 88 "After turning…"); How to play says so under Ambush and Sharing a field
+- Assumptions: no "No ambush" choice is left for them (as with the MG team); bunkers and everything else are unchanged. Tests: two PaK checks changed to the new rule, a new check for all three guns; filtered runs (ambush, PaK, 88, machine-gun, computer, help) pass; no full run, balance run, screenshot or browser check (Steve)
+
 ## Sessions
 
 | # | Date | Length | What we did |

@@ -718,7 +718,9 @@ const UI = (() => {
     // (Molotov cocktails, Steve 2026-11-21: a die for each section still standing, hand to hand)
     const molotov = Sim.molotovNeed(u) ? `, 🔥 ${u.platoons} vs tanks (Molotovs: Charge, hand to hand, ${Sim.molotovNeed(u)}+)` : '';
     // (a machine-gun team, Steve 2026-11-21: on its card, that it can move and lie in ambush on the same go)
-    const mgAmbush = Sim.movesThenAmbushes(u) ? '🪤 After moving it lies in ambush by itself (no shot after moving)' : '';
+    // (the anti-tank guns too, Steve 2026-11-27; the 88 never moves, it turns)
+    const movedWord = PIECES[u.kind].emplaced ? 'turning' : 'moving';
+    const mgAmbush = Sim.movesThenAmbushes(u) ? `🪤 After ${movedWord} it lies in ambush by itself (no shot after ${movedWord})` : '';
     const dice = `🎲 ${Sim.menDiceShown(u, f)} dice vs men${closeOnly}${f.hard ? `, ${Sim.diceShown(f.hard)} vs tanks` : ''}${molotov}${hull}`;
     // A tank's armour (Steve): what it adds to the score anti-tank dice need
     const armour = Sim.isTank(u) ? `🛡️ Armour +${Sim.armourOf(u)}` : '';
