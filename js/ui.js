@@ -729,12 +729,17 @@ const UI = (() => {
     const eliteName = u.side === 'de' ? 'Fallschirmjäger' : Sim.armyOf(st) === 'us' ? 'Rangers' : 'Guards';
     const elite = u.quality === 'elite' ? ` · <b class="elite">Elite</b> (${eliteName}: −1 to hit)` : '';
     const nation = u.side === st.human && st.mode !== 'none' ? '' : `${adjective(u.side)} · `;
-    box.append(el('div', 'sub', `${nation}${kindName(u)}${elite}${Sim.hasCutters(u) && Sim.hedgeWord() === 'hedge' ? ' · hedge cutters' : ''}`));
+    // (no "hedge cutters" here, Steve 2026-11-27: every tank drives through hedges)
+    box.append(el('div', 'sub', `${nation}${kindName(u)}${elite}`));
     const where = `📍 At ${Sim.placeName(u.at)}`;
     box.append(el('div', 'stats', [strength, dice, armour, mgAmbush, where, status].filter(Boolean).map(s => `<span>${s}</span>`).join('')));
     // Aboard a boat, or a lorry driving itself: no orders to give
     const own = ownWay(u);
     if (own) box.append(el('div', 'sub', own));
+    // What marks it out (Steve, 2026-11-27: small gun, fast and so on), one line each, at the very bottom of the card
+    const traitList = Sim.traitLines(u);
+    const traits = el('div', 'traits', traitList.map(s => `<div>${s}</div>`).join(''));
+    if (traitList.length) box.append(traits);
     // The enemy's piece: just what it is (Steve), no actions
     if (u.side !== st.human || st.mode === 'none' || own) return;
     const acts = el('div'); acts.id = 'actions'; acts.style.marginTop = '6px';
@@ -745,7 +750,8 @@ const UI = (() => {
       btn.onclick = () => { if (a.run) { a.run(); view.mode = null; } else view.mode = view.mode === a.mode ? null : a.mode; refresh(); };
       acts.append(btn);
     }
-    box.append(acts);
+    // The buttons go above the markers, so these stay at the bottom
+    box.insertBefore(acts, traitList.length ? traits : null);
   }
 
   function hint() {

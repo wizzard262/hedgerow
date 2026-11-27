@@ -2139,6 +2139,12 @@ How the game was made: each prompt, what was built, and the assumptions made.
 - Now the v236 check (`beyondHarm` in sim.js) is used whoever commands either side, two humans included: no one of theirs to take the goal (where there is one), nothing still to come, and a piece of yours nothing they have left, shells and bombers included, could ever destroy. Looked at before every token. The two humans' end screen names the 'de' side by its own name (the Finns win, not the Germans)
 - Assumptions: as before, each of your pieces is judged on its own, and one Soviet mortar round can't kill a tank, two can. Tests: the changed and new checks, filtered runs (German, win, two humans, Winter, the 2026-11-23 check) all pass; no full run, balance run, screenshot or browser check (Steve)
 
+## 356. A piece's card says what marks it out (v242)
+
+- Steve: is the Stuart the same as the Sherman 75mm? (the same dice and armour, but a small gun and fast). Then: put the markers (small gun, fast and so on) at the bottom of each piece's card, and drop "hedge cutters": every tank drives through hedges
+- Now `traitLines` in sim.js gives one line for each marker in PIECES: small gun (needs 1 more to hit a tank), fast or slow (fields more or fewer on a Move & shoot or a Charge), extra MG turrets (their own shot, with their dice), armoured car (what wheels mean), long (3 × 2 areas). The card (ui.js) shows them at the very bottom, under the buttons, small and grey above a thin line; a piece with none shows nothing. "· hedge cutters" is gone from the line under the name
+- Assumptions: armour stays where it was on the card (🛡️ Armour +N), not repeated; the bazooka and Panzerschreck teams say fast too (they have the same extra field); skis are left out (not a PIECES marker). Tests: the new check and those on the card and cutters pass; no full run, screenshot or browser check (Steve)
+
 ## Sessions
 
 | # | Date | Length | What we did |

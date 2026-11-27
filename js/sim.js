@@ -4031,6 +4031,28 @@ const Sim = (() => {
   // Besides its move or shot, once a round on its token, before or after, it can fire its small turrets' machine guns:
   // their own dice (PIECES hullMg), at men only, at any piece in its reach, a different target if it likes
   const hullMgDice = u => (u && PIECES[u.kind] && PIECES[u.kind].hullMg) || 0;
+
+  // What marks this piece out (Steve, 2026-11-27: at the bottom of its card, as "small gun, fast" on the Stuart), one
+  // line each. Armour is on the card already; hedge cutters are left out (every tank has them)
+  function traitLines(u) {
+    // The piece's markers in PIECES
+    const p = PIECES[u.kind];
+    const lines = [];
+    // A light cannon: one more needed against any tank
+    if (p.smallGun) lines.push(`🔫 Small gun: needs ${SMALL_GUN} more to hit a tank`);
+    // Fields more or fewer on a Move & shoot or a Charge
+    const extra = p.extraMove || 0;
+    const fields = n => `${n} field${n > 1 ? 's' : ''}`;
+    if (extra > 0) lines.push(`⚡ Fast: ${fields(extra)} further on a Move & shoot or a Charge`);
+    if (extra < 0) lines.push(`🐢 Slow: ${fields(-extra)} less on a Move & shoot or a Charge`);
+    // Small machine-gun turrets with their own shot
+    if (p.hullMg) lines.push(`🔫 Extra MG turrets: their own shot at men once a round (${p.hullMg} dice)`);
+    // On wheels
+    if (p.car) lines.push('🛞 Armoured car: can\'t drive through hedges, quicker on roads, stuck in wire half the time, machine guns can hurt it');
+    // Three areas by two
+    if (p.long) lines.push('📏 Long: takes 3 × 2 areas');
+    return lines;
+  }
   const hullMgFire = u => ({ soft: hullMgDice(u), hard: 0, men: hullMgDice(u), he: 0 });
   // Who they can fire on: anyone it could shoot but a tank
   function hullMgTargets(st, u) {
@@ -4249,7 +4271,7 @@ const Sim = (() => {
     isBunker, isCar, hurtsCars, trainCars, lineSideOf, moveTrains, inFrontOf, bunkerFace, shotOnTheMove, wrecksBeside, isRoad, featuresAt, walkDistance, fireSound, wreckAt, remove, computerSide, isRobot, piecesToAsk, takeCover, enemyOf, gunStats, diceShown, menDiceShown, bomberName, boatKind, armyOf, hedgeWord, inCourtyard, closeRangeOnly, isAtGun, isEmplaced, edgeKey, atCloseRange, closeCells, hailMaryCells,
     newGame, roll, inside, tileType, hedge, at, unitById, isTank, isTeam, adjacent, sees, targets, chargeSpots, soundOf, facesItsShot, molotovNeed, movesThenAmbushes,
     rallyTargets, canAct, canReact, firepower, canCallFire, takesGoal, cannotWin, attackFailed, artilleryTarget, mortarTarget, holdsObjective, roundText, roomFor,
-    goalLines, deArmyOf, hullMgTargets, canHullMg, actHullMg, actHoldMg, hullMgDice,
+    goalLines, deArmyOf, hullMgTargets, canHullMg, actHullMg, actHoldMg, hullMgDice, traitLines,
     computerStep, answer, finishRound, startRound, drawToken, endComputerToken, activationOver, passToken, humanCanMove, endRound, canFire, actSkip, actSkipShot, skipSupport,
     smallTarget, menDice, armourOf, shotNeed, mayFire, shootCells, tokensHome, captainCanRally, fireAt, wholeDice: dice,
     actShoot, actMoveShoot, moveShootSpots, chargeRoutes, DIRS, needWhy, shellNeed, shellWhy, shellFields,

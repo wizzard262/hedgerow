@@ -5917,5 +5917,23 @@ check('2026-11-24 facing: men turn to the nearest enemy they can hurt, not a tan
   Sim.newGame(1);
 });
 
+check('2026-11-27: a piece\'s card lists what marks it out at the bottom (small gun, fast, slow, MG turrets, armoured car, long), never hedge cutters', () => {
+  const marks = kind => Sim.traitLines({ kind }).join(' | ');
+  // The Stuart: a small gun and fast
+  assert(marks('stuart').includes('Small gun: needs 1 more to hit a tank') && marks('stuart').includes('Fast: 1 field further'), `the Stuart says "${marks('stuart')}"`);
+  // The Sherman 75mm: nothing to mark out
+  assert(marks('sherman') === '', `the Sherman says "${marks('sherman')}"`);
+  // Slow, long, the T-35's turrets, an armoured car, the aerosan's two fields
+  assert(marks('kingtiger').includes('Slow: 1 field less') && marks('kingtiger').includes('Long'), `the King Tiger says "${marks('kingtiger')}"`);
+  assert(marks('t35').includes('Extra MG turrets') && marks('t35').includes('(2 dice)'), `the T-35 says "${marks('t35')}"`);
+  assert(marks('puma').includes('Armoured car'), `the Puma says "${marks('puma')}"`);
+  assert(marks('aerosan').includes('Fast: 2 fields further'), `the aerosan says "${marks('aerosan')}"`);
+  // Every piece, and none says hedge cutters
+  assert(!Object.keys(PIECES).some(kind => /cutter/i.test(marks(kind))), 'a piece says hedge cutters');
+  // The card (ui.js) shows them at the bottom, under the buttons, and no longer says hedge cutters
+  assert(pageCode('ui.js', 'const traitList = Sim.traitLines(u);', 'box.insertBefore(acts, traitList.length ? traits : null);'), 'the card does not show the markers at the bottom');
+  assert(!fs.readFileSync(path.join(__dirname, '..', 'js', 'ui.js'), 'utf8').includes("' · hedge cutters'"), 'the card still says hedge cutters');
+});
+
 console.log(failed ? `\n${failed} failed` : '\nall passed');
 process.exit(failed ? 1 : 0);
